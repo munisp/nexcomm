@@ -125,3 +125,9 @@
 - [x] Database seed script — scripts/seed.mjs (PostgreSQL only): 6 users, 7 WRs, 12 orders, 6 settlements, 8 notifications, 6 price alerts, 22 watchlist entries, 6 KYC records
 - [x] docker-compose.yml — already present with 30+ services: Kafka, Zookeeper, Redis, PostgreSQL, TigerBeetle, all microservices, Mojaloop, Temporal, Permify, APISIX, Kafka UI, RedisInsight
 - [x] App publish — checkpoint saved (9463b229), user directed to click Publish button in Management UI
+
+## Next Steps (Round 4)
+
+- [x] Add pnpm db:seed script to package.json — also added pnpm db:setup (db:push + db:seed)
+- [x] Wire Kafka connection — logLevel.NOTHING for localhost brokers in both consumer and producer; retries reduced to 1 for fast-fail in dev; single clean warning on startup instead of repeated noise
+- [x] Finalize for publish — TypeScript: 0 errors, server running, Kafka noise suppressed, all features complete

@@ -30,6 +30,12 @@ const KAFKA_GROUP_ID = "nexcom-portal-consumer";
 let _consumer: Consumer | null = null;
 let _isRunning = false;
 
+// Suppress noisy connection-refused logs when Kafka is not running locally.
+// In production (KAFKA_BROKERS env set to real brokers), all log levels are shown.
+const IS_LOCAL_KAFKA = KAFKA_BROKERS.every(
+  (b) => b.startsWith("localhost:") || b.startsWith("127.0.0.1:")
+);
+
 function createKafkaClient() {
   return new Kafka({
     clientId: KAFKA_CLIENT_ID,
@@ -37,10 +43,12 @@ function createKafkaClient() {
     connectionTimeout: 3000,
     requestTimeout: 5000,
     retry: {
-      initialRetryTime: 1000,
-      retries: 3,
+      initialRetryTime: 500,
+      retries: 1, // Fail fast in dev; production brokers are reliable
     },
-    logLevel: logLevel.WARN,
+    // Silence KafkaJS internal logs when running against localhost (no broker).
+    // Set KAFKA_BROKERS to a real broker address to restore full logging.
+    logLevel: IS_LOCAL_KAFKA ? logLevel.NOTHING : logLevel.WARN,
   });
 }
 
