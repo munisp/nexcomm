@@ -13,7 +13,6 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Wallet,
-  TrendingUp,
   AlertCircle,
   ArrowUpRight,
   ArrowDownLeft,
@@ -26,6 +25,7 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  PlusCircle,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -267,6 +267,287 @@ function CropInsuranceForm({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
+// ─── Loan Application Form ────────────────────────────────────────────────────
+
+function LoanApplicationForm({ onSuccess }: { onSuccess: () => void }) {
+  const [form, setForm] = useState({
+    inputType: "SEEDS" as "SEEDS" | "FERTILIZER" | "PESTICIDE" | "HERBICIDE" | "EQUIPMENT" | "IRRIGATION" | "STORAGE" | "CASH",
+    inputDescription: "",
+    requestedValueNgn: "",
+    tenorMonths: 6,
+    repaymentMethod: "HARVEST_DEDUCTION" as "HARVEST_DEDUCTION" | "MONTHLY" | "LUMP_SUM",
+    notes: "",
+  });
+
+  const applyLoan = trpc.banking.applyLoan.useMutation({
+    onSuccess: (data) => {
+      toast.success("Loan Application Submitted", {
+        description: `Your loan application #${data.loanId} has been received and is under review.`,
+      });
+      onSuccess();
+    },
+    onError: (err) => {
+      toast.error("Application Failed", { description: err.message });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.requestedValueNgn || parseFloat(form.requestedValueNgn) <= 0) {
+      toast.error("Please enter a valid loan amount.");
+      return;
+    }
+    applyLoan.mutate({
+      inputType: form.inputType,
+      inputDescription: form.inputDescription,
+      requestedValueNgn: parseFloat(form.requestedValueNgn),
+      tenorMonths: form.tenorMonths,
+      repaymentMethod: form.repaymentMethod,
+      notes: form.notes || undefined,
+    });
+  };
+
+  // Interest rate estimate
+  const rateMap: Record<string, number> = {
+    SEEDS: 0.09,
+    FERTILIZER: 0.09,
+    PESTICIDE: 0.10,
+    HERBICIDE: 0.10,
+    EQUIPMENT: 0.12,
+    IRRIGATION: 0.11,
+    STORAGE: 0.11,
+    CASH: 0.14,
+  };
+  const principal = parseFloat(form.requestedValueNgn) || 0;
+  const annualRate = rateMap[form.inputType] ?? 0.10;
+  const monthlyRate = annualRate / 12;
+  const totalInterest = principal * monthlyRate * form.tenorMonths;
+  const monthlyPayment = form.repaymentMethod === "MONTHLY" && form.tenorMonths > 0
+    ? (principal + totalInterest) / form.tenorMonths
+    : 0;
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label>Input Type *</Label>
+          <Select
+            value={form.inputType}
+            onValueChange={(v) => setForm((f) => ({ ...f, inputType: v as typeof form.inputType }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(["SEEDS", "FERTILIZER", "PESTICIDE", "HERBICIDE", "EQUIPMENT", "IRRIGATION", "STORAGE", "CASH"] as const).map((t) => (
+                <SelectItem key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Requested Amount (₦) *</Label>
+          <Input
+            type="number"
+            min="10000"
+            step="1000"
+            placeholder="e.g. 500000"
+            value={form.requestedValueNgn}
+            onChange={(e) => setForm((f) => ({ ...f, requestedValueNgn: e.target.value }))}
+            required
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Tenor (months) *</Label>
+          <Input
+            type="number"
+            min={1}
+            max={24}
+            value={form.tenorMonths}
+            onChange={(e) => setForm((f) => ({ ...f, tenorMonths: parseInt(e.target.value) || 6 }))}
+            required
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Repayment Method *</Label>
+          <Select
+            value={form.repaymentMethod}
+            onValueChange={(v) => setForm((f) => ({ ...f, repaymentMethod: v as typeof form.repaymentMethod }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="HARVEST_DEDUCTION">Harvest Deduction</SelectItem>
+              <SelectItem value="MONTHLY">Monthly Installments</SelectItem>
+              <SelectItem value="LUMP_SUM">Lump Sum at Maturity</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Description of Inputs Needed *</Label>
+        <Textarea
+          placeholder="Describe the agricultural inputs you need (minimum 10 characters)..."
+          value={form.inputDescription}
+          onChange={(e) => setForm((f) => ({ ...f, inputDescription: e.target.value }))}
+          rows={3}
+          required
+        />
+        <p className="text-xs text-muted-foreground">{form.inputDescription.length}/500 characters</p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Additional Notes (optional)</Label>
+        <Textarea
+          placeholder="Any additional information to support your application..."
+          value={form.notes}
+          onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+          rows={2}
+        />
+      </div>
+
+      {/* Loan Cost Preview */}
+      {principal > 0 && (
+        <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
+          <p className="font-semibold text-foreground">Loan Cost Estimate (NEXCOM Agri-Finance)</p>
+          <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+            <span>Principal:</span>
+            <span className="text-right font-medium text-foreground">{fmt(principal)}</span>
+            <span>Annual Rate:</span>
+            <span className="text-right">{(annualRate * 100).toFixed(0)}% p.a.</span>
+            <span>Total Interest ({form.tenorMonths}mo):</span>
+            <span className="text-right text-amber-600">{fmt(totalInterest)}</span>
+            <span className="font-semibold text-foreground">Total Repayment:</span>
+            <span className="text-right font-bold text-foreground">{fmt(principal + totalInterest)}</span>
+            {form.repaymentMethod === "MONTHLY" && monthlyPayment > 0 && (
+              <>
+                <span>Monthly Payment:</span>
+                <span className="text-right font-medium">{fmt(monthlyPayment)}</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <Button type="submit" className="w-full" disabled={applyLoan.isPending}>
+        {applyLoan.isPending ? "Submitting Application..." : "Submit Loan Application"}
+      </Button>
+    </form>
+  );
+}
+
+// ─── Insurance Claim Form ─────────────────────────────────────────────────────
+
+function InsuranceClaimForm({ policyId, onSuccess }: { policyId: number; onSuccess: () => void }) {
+  const [form, setForm] = useState({
+    lossType: "DROUGHT" as "DROUGHT" | "FLOOD" | "PEST" | "DISEASE" | "FIRE" | "THEFT" | "OTHER",
+    affectedAreaHectares: "",
+    estimatedLossNgn: "",
+    incidentDate: "",
+    description: "",
+  });
+
+  const submitClaim = trpc.banking.submitInsuranceClaim.useMutation({
+    onSuccess: (data) => {
+      toast.success("Claim Submitted", {
+        description: `Your claim reference is ${data.claimRef}. Our team will review it within 5 business days.`,
+      });
+      onSuccess();
+    },
+    onError: (err) => {
+      toast.error("Submission Failed", { description: err.message });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (form.description.length < 20) {
+      toast.error("Please provide at least 20 characters in the description.");
+      return;
+    }
+    submitClaim.mutate({
+      policyId,
+      lossType: form.lossType,
+      affectedAreaHectares: parseFloat(form.affectedAreaHectares) || 0,
+      estimatedLossNgn: parseFloat(form.estimatedLossNgn) || 0,
+      incidentDate: form.incidentDate,
+      description: form.description,
+      evidenceUrls: [],
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label>Loss Type *</Label>
+          <Select
+            value={form.lossType}
+            onValueChange={(v) => setForm((f) => ({ ...f, lossType: v as typeof form.lossType }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(["DROUGHT", "FLOOD", "PEST", "DISEASE", "FIRE", "THEFT", "OTHER"] as const).map((t) => (
+                <SelectItem key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Incident Date *</Label>
+          <Input
+            type="date"
+            value={form.incidentDate}
+            onChange={(e) => setForm((f) => ({ ...f, incidentDate: e.target.value }))}
+            required
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Affected Area (hectares) *</Label>
+          <Input
+            type="number"
+            min="0.1"
+            step="0.1"
+            placeholder="e.g. 1.5"
+            value={form.affectedAreaHectares}
+            onChange={(e) => setForm((f) => ({ ...f, affectedAreaHectares: e.target.value }))}
+            required
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Estimated Loss (₦) *</Label>
+          <Input
+            type="number"
+            min="1000"
+            placeholder="e.g. 250000"
+            value={form.estimatedLossNgn}
+            onChange={(e) => setForm((f) => ({ ...f, estimatedLossNgn: e.target.value }))}
+            required
+          />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Description of Loss *</Label>
+        <Textarea
+          placeholder="Describe the incident and loss in detail (minimum 20 characters)..."
+          value={form.description}
+          onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+          rows={4}
+          required
+        />
+        <p className="text-xs text-muted-foreground">{form.description.length}/2000 characters</p>
+      </div>
+      <Button type="submit" className="w-full" disabled={submitClaim.isPending}>
+        {submitClaim.isPending ? "Submitting Claim..." : "Submit Insurance Claim"}
+      </Button>
+    </form>
+  );
+}
+
 // ─── Transaction History ──────────────────────────────────────────────────────
 
 function TransactionHistory({ accountId }: { accountId: string }) {
@@ -290,49 +571,52 @@ function TransactionHistory({ accountId }: { accountId: string }) {
   if (txns.length === 0) {
     return (
       <div className="text-center py-10 text-muted-foreground">
-        <FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />
-        <p>No transactions found</p>
+        <FileText className="mx-auto mb-2 h-8 w-8 opacity-30" />
+        <p className="text-sm">No transactions found</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-1">
-      {txns.map((tx) => (
-        <div
-          key={tx.id}
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted/50 transition-colors"
-        >
+    <div className="space-y-2">
+      {txns.map((txn) => {
+        const isCredit = txn.type === "CREDIT";
+        const amount = parseFloat(String(txn.amount ?? 0));
+        return (
           <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-              tx.type === "CREDIT"
-                ? "bg-green-100 text-green-600 dark:bg-green-900/30"
-                : "bg-red-100 text-red-600 dark:bg-red-900/30"
-            }`}
+            key={txn.id}
+            className="flex items-center justify-between rounded-lg border px-4 py-3 hover:bg-muted/30 transition-colors"
           >
-            {tx.type === "CREDIT" ? (
-              <ArrowDownLeft className="h-4 w-4" />
-            ) : (
-              <ArrowUpRight className="h-4 w-4" />
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{tx.narrative}</p>
-            <p className="text-xs text-muted-foreground">{fmtDate(tx.valueDate)} · {tx.reference}</p>
-          </div>
-          <div className="text-right shrink-0">
-            <p
-              className={`text-sm font-semibold ${
-                tx.type === "CREDIT" ? "text-green-600" : "text-red-600"
+            <div className="flex items-center gap-3">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                  isCredit
+                    ? "bg-green-100 text-green-600 dark:bg-green-900/30"
+                    : "bg-red-100 text-red-600 dark:bg-red-900/30"
+                }`}
+              >
+                {isCredit ? (
+                  <ArrowDownLeft className="h-4 w-4" />
+                ) : (
+                  <ArrowUpRight className="h-4 w-4" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium">{txn.narrative ?? txn.type}</p>
+                <p className="text-xs text-muted-foreground">{fmtDate(txn.valueDate)}</p>
+              </div>
+            </div>
+            <span
+              className={`font-semibold ${
+                isCredit ? "text-green-600" : "text-red-600"
               }`}
             >
-              {tx.type === "CREDIT" ? "+" : "-"}
-              {fmt(tx.amount)}
-            </p>
-            <p className="text-xs text-muted-foreground">Bal: {fmt(tx.balanceAfter)}</p>
+              {isCredit ? "+" : "-"}
+              {fmt(amount)}
+            </span>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -340,51 +624,61 @@ function TransactionHistory({ accountId }: { accountId: string }) {
 // ─── Repayment Schedule ───────────────────────────────────────────────────────
 
 function RepaymentSchedule({ loanId }: { loanId: number }) {
-  const { data: schedule, isLoading } = trpc.banking.getRepaymentSchedule.useQuery({ loanId });
+  const { data, isLoading } = trpc.banking.getRepaymentSchedule.useQuery({ loanId });
 
-  if (isLoading) return <Skeleton className="h-40 w-full" />;
-  if (!schedule || schedule.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-4">No schedule available</p>;
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-10 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  const schedule = (Array.isArray(data) ? data : []) as Array<{ installment: number; dueDate: string; principal: number; interest: number; total: number; balance: number; status: string }>;
+  if (schedule.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-4">
+        No repayment schedule available yet
+      </p>
+    );
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b text-muted-foreground text-xs">
-            <th className="py-2 text-left">#</th>
-            <th className="py-2 text-left">Due Date</th>
-            <th className="py-2 text-right">Principal</th>
-            <th className="py-2 text-right">Interest</th>
-            <th className="py-2 text-right">Total</th>
-            <th className="py-2 text-right">Balance</th>
-            <th className="py-2 text-center">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {schedule.map((row) => (
-            <tr key={row.installment} className="border-b last:border-0 hover:bg-muted/30">
-              <td className="py-2 text-muted-foreground">{row.installment}</td>
-              <td className="py-2">{fmtDate(row.dueDate)}</td>
-              <td className="py-2 text-right">{fmt(row.principal)}</td>
-              <td className="py-2 text-right text-muted-foreground">{fmt(row.interest)}</td>
-              <td className="py-2 text-right font-medium">{fmt(row.total)}</td>
-              <td className="py-2 text-right text-muted-foreground">{fmt(row.balance)}</td>
-              <td className="py-2 text-center">
-                {row.status === "OVERDUE" ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-red-600">
-                    <XCircle className="h-3 w-3" /> Overdue
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" /> Pending
-                  </span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-2">
+      {schedule.map((item, i) => {
+        const isPaid = item.status === "PAID";
+        const isOverdue = item.status === "OVERDUE";
+        return (
+          <div
+            key={i}
+            className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
+              isPaid
+                ? "bg-green-50 dark:bg-green-900/10"
+                : isOverdue
+                ? "bg-red-50 dark:bg-red-900/10"
+                : "bg-muted/30"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {isPaid ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              ) : isOverdue ? (
+                <XCircle className="h-4 w-4 text-red-500" />
+              ) : (
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              )}
+              <span>
+                Installment {i + 1} — Due {fmtDate(item.dueDate)}
+              </span>
+            </div>
+            <span className="font-medium">
+              {fmt(item.total)}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -395,6 +689,8 @@ export default function BankingDashboard() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
   const [insuranceOpen, setInsuranceOpen] = useState(false);
+  const [loanApplyOpen, setLoanApplyOpen] = useState(false);
+  const [claimPolicyId, setClaimPolicyId] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -417,6 +713,29 @@ export default function BankingDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
+          {/* Apply for Loan */}
+          <Dialog open={loanApplyOpen} onOpenChange={setLoanApplyOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <Banknote className="h-4 w-4" />
+                Apply for Loan
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Input Financing Loan Application</DialogTitle>
+              </DialogHeader>
+              <LoanApplicationForm
+                onSuccess={() => {
+                  setLoanApplyOpen(false);
+                  utils.banking.listLoans.invalidate();
+                  utils.banking.getDashboard.invalidate();
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+
+          {/* Apply for Insurance */}
           <Dialog open={insuranceOpen} onOpenChange={setInsuranceOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2">
@@ -436,6 +755,7 @@ export default function BankingDashboard() {
               />
             </DialogContent>
           </Dialog>
+
           <Button
             variant="ghost"
             size="icon"
@@ -592,6 +912,32 @@ export default function BankingDashboard() {
 
         {/* ── Loans Tab ── */}
         <TabsContent value="loans" className="mt-4">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-muted-foreground">
+              Your input financing loans and repayment schedules
+            </p>
+            <Dialog open={loanApplyOpen} onOpenChange={setLoanApplyOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-2">
+                  <PlusCircle className="h-4 w-4" />
+                  Apply for Loan
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Input Financing Loan Application</DialogTitle>
+                </DialogHeader>
+                <LoanApplicationForm
+                  onSuccess={() => {
+                    setLoanApplyOpen(false);
+                    utils.banking.listLoans.invalidate();
+                    utils.banking.getDashboard.invalidate();
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
+
           {loansLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -603,8 +949,8 @@ export default function BankingDashboard() {
               <Banknote className="mx-auto mb-3 h-10 w-10 opacity-30" />
               <p className="font-medium">No loans found</p>
               <p className="text-sm mt-1">Apply for an input financing loan to get started</p>
-              <Button variant="outline" className="mt-4" asChild>
-                <a href="/input-financing">Apply for Input Loan</a>
+              <Button variant="outline" className="mt-4" onClick={() => setLoanApplyOpen(true)}>
+                Apply for Input Loan
               </Button>
             </div>
           ) : (
@@ -783,9 +1129,37 @@ export default function BankingDashboard() {
                             </span>
                           </div>
                         </div>
-                        <div className="text-right text-xs text-muted-foreground shrink-0">
-                          <p>Submitted</p>
-                          <p>{fmtDate(String(app.submittedAt ?? ""))}</p>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <div className="text-right text-xs text-muted-foreground">
+                            <p>Submitted</p>
+                            <p>{fmtDate(String(app.submittedAt ?? ""))}</p>
+                          </div>
+                          {/* File a Claim button for active/approved policies */}
+                          {["APPROVED", "ACTIVE"].includes(String(app.status ?? "")) && (
+                            <Dialog
+                              open={claimPolicyId === Number(app.id)}
+                              onOpenChange={(open) => setClaimPolicyId(open ? Number(app.id) : null)}
+                            >
+                              <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-1">
+                                  <FileText className="h-3 w-3" />
+                                  File Claim
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-lg">
+                                <DialogHeader>
+                                  <DialogTitle>Submit Insurance Claim</DialogTitle>
+                                </DialogHeader>
+                                <InsuranceClaimForm
+                                  policyId={Number(app.id)}
+                                  onSuccess={() => {
+                                    setClaimPolicyId(null);
+                                    utils.banking.listInsuranceApplications.invalidate();
+                                  }}
+                                />
+                              </DialogContent>
+                            </Dialog>
+                          )}
                         </div>
                       </div>
                     </CardContent>

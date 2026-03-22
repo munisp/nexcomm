@@ -494,4 +494,85 @@ export const bankingRouter = router({
         message: "Farmer onboarded and escrow account created",
       };
     }),
+
+  // ─── Apply for Input Loan ──────────────────────────────────────────────────
+  applyLoan: protectedProcedure
+    .input(
+      z.object({
+        inputType: z.enum(["SEEDS", "FERTILIZER", "PESTICIDE", "HERBICIDE", "EQUIPMENT", "IRRIGATION", "STORAGE", "CASH"]),
+        inputDescription: z.string().min(10).max(500),
+        requestedValueNgn: z.number().positive(),
+        tenorMonths: z.number().int().min(1).max(24).default(6),
+        repaymentMethod: z.enum(["HARVEST_DEDUCTION", "MONTHLY", "LUMP_SUM"]).default("HARVEST_DEDUCTION"),
+        collateralEwrId: z.number().int().positive().optional(),
+        notes: z.string().max(1000).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      const farmerRow = await db
+        .select({ id: farmerProfiles.id })
+        .from(farmerProfiles)
+        .where(eq(farmerProfiles.userId, ctx.user.id))
+        .limit(1);
+      const farmerId = farmerRow.length > 0 ? farmerRow[0].id : ctx.user.id;
+      const [loan] = await db
+        .insert(inputFinancingLoans)
+        .values({
+          farmerId,
+          inputType: input.inputType,
+          inputDescription: input.inputDescription,
+          requestedValueNgn: String(input.requestedValueNgn),
+          tenorMonths: input.tenorMonths,
+          repaymentMethod: input.repaymentMethod,
+          collateralEwrId: input.collateralEwrId,
+          notes: input.notes,
+          status: "APPLIED",
+        })
+        .returning();
+      await db.insert(notifications).values({
+        userId: ctx.user.id,
+        type: "SYSTEM",
+        title: "Loan Application Submitted",
+        message: `Your ${input.inputType} loan application for ₦${input.requestedValueNgn.toLocaleString()} has been received and is under review.`,
+        metadata: { loanId: loan.id, inputType: input.inputType },
+        read: false,
+      });
+      return { success: true, loanId: loan.id, status: "APPLIED" };
+    }),
+
+  // ─── Submit Insurance Claim ────────────────────────────────────────────────
+  submitInsuranceClaim: protectedProcedure
+    .input(
+      z.object({
+        policyId: z.number().int().positive(),
+        lossType: z.enum(["DROUGHT", "FLOOD", "PEST", "DISEASE", "FIRE", "THEFT", "OTHER"]),
+        affectedAreaHectares: z.number().positive(),
+        estimatedLossNgn: z.number().positive(),
+        incidentDate: z.string(),
+        description: z.string().min(20).max(2000),
+        evidenceUrls: z.array(z.string().url()).max(10).default([]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      const claimRef = `CLM-${ctx.user.id}-${Date.now()}`;
+      await db.insert(notifications).values({
+        userId: ctx.user.id,
+        type: "SYSTEM",
+        title: "Insurance Claim Submitted",
+        message: `Your ${input.lossType} claim (ref: ${claimRef}) for ₦${input.estimatedLossNgn.toLocaleString()} has been submitted and is under review.`,
+        metadata: {
+          claimRef,
+          policyId: input.policyId,
+          lossType: input.lossType,
+          estimatedLossNgn: input.estimatedLossNgn,
+          evidenceUrls: input.evidenceUrls,
+        },
+        read: false,
+      });
+      return { success: true, claimRef, status: "SUBMITTED" };
+    }),
 });
