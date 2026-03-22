@@ -139,3 +139,10 @@
 - [x] WebSocket order book server endpoint — already implemented in server/ws/orderBookServer.ts (symbol subscriptions, tick/book broadcasts, Rust engine depth integration with simulated fallback)
 - [x] React Native live order book — useOrderBook.ts hook wired into trading/[symbol].tsx; live price + bids/asks with depth bars + connection status badge; graceful demo fallback
 - [x] Flutter live order book — OrderBookProvider (StreamProvider), OrderBookWidget (depth bars + spread row + status badge), wired into MarketDetailScreen Chart|Order Book tab selector
+
+## Next Steps (Round 6)
+
+- [x] Flutter web_socket_channel — already in pubspec.yaml; order_book_provider.dart rewritten with real WebSocketChannel.connect(), JSON parsing, reconnect logic, and demo fallback
+- [x] Core banking integration layer — services/core-banking/ with Temenos, Finacle, Mambu adapters; agribanking module (onboarding, input loans, WR financing, settlement repayment, insurance); HTTP REST API on :8090; Dockerfile
+- [x] Core banking integration architecture document — docs/core-banking-integration.md (10 sections, 7 references, topology diagram, lifecycle flow, Kafka event table, tRPC procedure table)
+- [x] Comprehensive archive rebuild — delivered with all new components
