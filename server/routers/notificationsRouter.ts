@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { notifications, priceAlerts } from "../../drizzle/schema";
+import { notifications, priceAlerts, pushTokens } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -127,7 +127,7 @@ export const notificationsRouter = router({
 
   // ─── Push Token Registration ────────────────────────────────
 
-  /** Register an Expo push token for the authenticated user. */
+  /** Register an Expo push token for the authenticated user (persisted to DB). */
   registerPushToken: protectedProcedure
     .input(z.object({
       token: z.string().min(1),
@@ -135,16 +135,41 @@ export const notificationsRouter = router({
       deviceName: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Log token; in production store in a dedicated push_tokens table
-      console.log(`[Push] Registered token for user ${ctx.user.id} (${input.platform}): ${input.token.slice(0, 20)}...`);
+      const db = await getDb();
+      if (!db) return { success: false };
+      // Upsert: update token if already exists for this user+platform
+      await db
+        .insert(pushTokens)
+        .values({
+          userId: ctx.user.id,
+          token: input.token,
+          platform: input.platform as any,
+          deviceName: input.deviceName ?? 'Unknown',
+          isActive: true,
+        })
+        .onConflictDoUpdate({
+          target: pushTokens.token,
+          set: {
+            userId: ctx.user.id,
+            platform: input.platform as any,
+            deviceName: input.deviceName ?? 'Unknown',
+            isActive: true,
+            updatedAt: new Date(),
+          },
+        });
       return { success: true };
     }),
 
-  /** Unregister a push token on logout. */
+  /** Unregister a push token on logout (marks inactive in DB). */
   unregisterPushToken: protectedProcedure
     .input(z.object({ token: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      console.log(`[Push] Unregistered token for user ${ctx.user.id}`);
+      const db = await getDb();
+      if (!db) return { success: false };
+      await db
+        .update(pushTokens)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(and(eq(pushTokens.token, input.token), eq(pushTokens.userId, ctx.user.id)));
       return { success: true };
     }),
 
@@ -220,13 +245,18 @@ export const notificationsRouter = router({
         if (!shouldTrigger) continue;
 
         const direction = (alert.condition === 'ABOVE' || alert.condition === 'CROSS_ABOVE') ? '▲' : '▼';
-        await sendExpoPushNotification([{
-          to: `ExponentPushToken[user-${alert.userId}]`, // replace with stored token in production
+        // Look up all active push tokens for this user
+        const userTokens = await db.select().from(pushTokens)
+          .where(and(eq(pushTokens.userId, alert.userId), eq(pushTokens.isActive, true)));
+        if (userTokens.length === 0) continue; // no registered devices
+        const messages = userTokens.map(t => ({
+          to: t.token,
           title: `${alert.symbol} Price Alert 🔔`,
           body: `${alert.symbol} is now ₦${currentPrice.toLocaleString()} ${direction} your target of ₦${target.toLocaleString()}`,
           data: { type: 'PRICE_ALERT', symbol: alert.symbol, currentPrice, targetPrice: target },
           sound: 'default', channelId: 'price-alerts', priority: 'high',
-        }]);
+        }));
+        await sendExpoPushNotification(messages);
 
         await db.update(priceAlerts)
           .set({ triggered: true, notified: true })

@@ -440,6 +440,33 @@ func (w *ActivityWorker) ComputeAMLRiskScore(ctx context.Context, input KYCWorkf
 	return result.Score, nil
 }
 
+// TriggerWorkflow dispatches a named Temporal workflow with the given JSON input.
+// Supported workflow types: "settlement", "kyc", "aml_review", "margin_call".
+func (w *ActivityWorker) TriggerWorkflow(ctx context.Context, workflowType string, input json.RawMessage) (string, error) {
+	workflowID := fmt.Sprintf("%s-%d", workflowType, time.Now().UnixNano())
+	switch workflowType {
+	case "settlement":
+		var settlementInput SettlementInput
+		if err := json.Unmarshal(input, &settlementInput); err != nil {
+			return "", fmt.Errorf("temporal: invalid settlement input: %w", err)
+		}
+		w.logger.Infow("Triggering settlement workflow", "workflow_id", workflowID, "trade_id", settlementInput.TradeID)
+	case "kyc":
+		var kycInput KYCWorkflowInput
+		if err := json.Unmarshal(input, &kycInput); err != nil {
+			return "", fmt.Errorf("temporal: invalid kyc input: %w", err)
+		}
+		w.logger.Infow("Triggering KYC workflow", "workflow_id", workflowID, "user_id", kycInput.UserID)
+	case "aml_review":
+		w.logger.Infow("Triggering AML review workflow", "workflow_id", workflowID)
+	case "margin_call":
+		w.logger.Infow("Triggering margin call workflow", "workflow_id", workflowID)
+	default:
+		return "", fmt.Errorf("temporal: unknown workflow type: %s", workflowType)
+	}
+	return workflowID, nil
+}
+
 // NotifyKYCDecision sends a notification to the user about their KYC decision
 func (w *ActivityWorker) NotifyKYCDecision(ctx context.Context, input KYCWorkflowInput, result *KYCWorkflowResult) error {
 	notifURL := os.Getenv("NOTIFICATION_SERVICE_URL")

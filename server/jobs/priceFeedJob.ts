@@ -1,12 +1,13 @@
 /**
  * priceFeedJob.ts
- * Polls Yahoo Finance every 5 minutes for live commodity futures prices
- * and upserts them into the live_prices table.
+ * Polls Yahoo Finance every 5 minutes for live commodity futures prices,
+ * upserts them into the live_prices table, then evaluates price alerts
+ * and dispatches Expo push notifications for triggered alerts.
  */
 import { callDataApi } from "../_core/dataApi";
 import { getDb } from "../db";
-import { livePrices } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { livePrices, priceAlerts, pushTokens } from "../../drizzle/schema";
+import { eq, and } from "drizzle-orm";
 
 // Mapping: NEXCOM symbol → Yahoo Finance futures symbol + metadata
 const PRICE_FEED_MAP: Array<{
@@ -77,6 +78,66 @@ async function fetchYahooPrice(yahooSymbol: string): Promise<{
   }
 }
 
+// ─── Alert Evaluation & Push Notifications ──────────────────────────────────
+
+async function evaluatePriceAlerts(prices: Record<string, number>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const activeAlerts = await db.select().from(priceAlerts).where(eq(priceAlerts.triggered, false));
+  let triggeredCount = 0;
+
+  for (const alert of activeAlerts) {
+    const currentPrice = prices[alert.symbol];
+    if (currentPrice === undefined) continue;
+
+    const target = parseFloat(String(alert.targetPrice));
+    let shouldTrigger = false;
+    if (alert.condition === "ABOVE" || alert.condition === "CROSS_ABOVE") shouldTrigger = currentPrice >= target;
+    else if (alert.condition === "BELOW" || alert.condition === "CROSS_BELOW") shouldTrigger = currentPrice <= target;
+    if (!shouldTrigger) continue;
+
+    // Look up active push tokens for this user
+    const tokens = await db.select().from(pushTokens)
+      .where(and(eq(pushTokens.userId, alert.userId), eq(pushTokens.isActive, true)));
+
+    if (tokens.length > 0) {
+      const direction = (alert.condition === "ABOVE" || alert.condition === "CROSS_ABOVE") ? "▲" : "▼";
+      const messages = tokens.map(t => ({
+        to: t.token,
+        title: `${alert.symbol} Price Alert 🔔`,
+        body: `${alert.symbol} is now ₦${currentPrice.toLocaleString()} ${direction} your target of ₦${target.toLocaleString()}`,
+        data: { type: "PRICE_ALERT", symbol: alert.symbol, currentPrice, targetPrice: target },
+        sound: "default",
+        channelId: "price-alerts",
+        priority: "high",
+      }));
+      try {
+        await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json", "Accept-Encoding": "gzip, deflate" },
+          body: JSON.stringify(messages),
+        });
+      } catch (err) {
+        console.error("[PriceFeed] Push notification dispatch failed:", err);
+      }
+    }
+
+    // Mark alert as triggered
+    await db.update(priceAlerts)
+      .set({ triggered: true, notified: true })
+      .where(eq(priceAlerts.id, alert.id));
+    triggeredCount++;
+    console.log(`[PriceFeed] Alert triggered: ${alert.symbol} ${alert.condition} ${target} (current: ${currentPrice})`);
+  }
+
+  if (triggeredCount > 0) {
+    console.log(`[PriceFeed] ${triggeredCount} price alert(s) triggered and notifications sent`);
+  }
+}
+
+// ─── Main Price Feed Job ─────────────────────────────────────────────────────
+
 export async function runPriceFeedJob(): Promise<void> {
   const db = await getDb();
   if (!db) {
@@ -86,6 +147,7 @@ export async function runPriceFeedJob(): Promise<void> {
 
   let updated = 0;
   let fallback = 0;
+  const currentPrices: Record<string, number> = {};
 
   for (const entry of PRICE_FEED_MAP) {
     try {
@@ -96,6 +158,8 @@ export async function runPriceFeedJob(): Promise<void> {
       }
 
       const price = priceData?.price ?? entry.basePriceFallback;
+      currentPrices[entry.symbol] = price;
+
       const previousClose = priceData?.previousClose ?? null;
       const change = previousClose != null ? price - previousClose : null;
       const changePct = previousClose != null && previousClose !== 0
@@ -141,6 +205,11 @@ export async function runPriceFeedJob(): Promise<void> {
   }
 
   console.log(`[PriceFeed] Updated ${updated} live prices, ${fallback} fallback prices`);
+
+  // Evaluate price alerts after each feed cycle
+  evaluatePriceAlerts(currentPrices).catch(err =>
+    console.error("[PriceFeed] Alert evaluation failed:", err)
+  );
 }
 
 let _priceFeedInterval: ReturnType<typeof setInterval> | null = null;

@@ -1,0 +1,9 @@
+{
+  "query": "\nDO $$ BEGIN\n  CREATE TYPE push_platform AS ENUM ('ios', 'android', 'web');\nEXCEPTION WHEN duplicate_object THEN NULL;\nEND $$;\n\nCREATE TABLE IF NOT EXISTS push_tokens (\n  id SERIAL PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  token VARCHAR(512) NOT NULL UNIQUE,\n  platform push_platform NOT NULL,\n  device_name VARCHAR(128) NOT NULL DEFAULT 'Unknown',\n  is_active BOOLEAN NOT NULL DEFAULT true,\n  created_at TIMESTAMP NOT NULL DEFAULT NOW(),\n  updated_at TIMESTAMP NOT NULL DEFAULT NOW()\n);\n\nCREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id);\nCREATE INDEX IF NOT EXISTS idx_push_tokens_token ON push_tokens(token);\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2t5rixfHAYLQmtB.5315d4d6da10 --database TWM5ZVegrZm24G2Y3WgoyD --execute \nDO $$ BEGIN\n  CREATE TYPE push_platform AS ENUM ('ios', 'android', 'web');\nEXCEPTION WHEN duplicate_object THEN NULL;\nEND $$;\n\nCREATE TABLE IF NOT EXISTS push_tokens (\n  id SERIAL PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  token VARCHAR(512) NOT NULL UNIQUE,\n  platform push_platform NOT NULL,\n  device_name VARCHAR(128) NOT NULL DEFAULT 'Unknown',\n  is_active BOOLEAN NOT NULL DEFAULT true,\n  created_at TIMESTAMP NOT NULL DEFAULT NOW(),\n  updated_at TIMESTAMP NOT NULL DEFAULT NOW()\n);\n\nCREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id);\nCREATE INDEX IF NOT EXISTS idx_push_tokens_token ON push_tokens(token);\n",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1064 (42000) at line 2: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 11 near \"BEGIN",
+    "  CREATE TYPE push_platform AS ENUM ('ios', 'android', 'web')\""
+  ]
+}

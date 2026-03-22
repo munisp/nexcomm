@@ -1,11 +1,12 @@
 // Package main is the entry point for the NEXCOM Middleware Hub.
 // This service orchestrates all middleware integrations: Kafka, Dapr, Redis,
-// Temporal, TigerBeetle, Lakehouse, and APISIX configuration.
+// Temporal, TigerBeetle, Lakehouse, APISIX, and Fluvio streaming.
 // Exposes HTTP endpoints for health checks, event ingestion, and control.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/nexcom-exchange/middleware-hub/internal/apisix"
 	"github.com/nexcom-exchange/middleware-hub/internal/dapr"
+	"github.com/nexcom-exchange/middleware-hub/internal/fluvio"
 	"github.com/nexcom-exchange/middleware-hub/internal/kafka"
 	"github.com/nexcom-exchange/middleware-hub/internal/lakehouse"
 	"github.com/nexcom-exchange/middleware-hub/internal/redis"
@@ -33,6 +35,7 @@ type Hub struct {
 	tigerbeetle *tigerbeetle.Client
 	lakehouse   *lakehouse.Writer
 	apisix      *apisix.Client
+	fluvio      *fluvio.Client
 	activities  *temporal.ActivityWorker
 	logger      *zap.SugaredLogger
 }
@@ -53,6 +56,7 @@ func main() {
 		tigerbeetle: tigerbeetle.NewClient(logger),
 		lakehouse:   lakehouse.NewWriter(logger),
 		apisix:      apisix.NewClient(logger),
+		fluvio:      fluvio.NewClient(fluvio.DefaultConfig()),
 		activities:  temporal.NewActivityWorker(logger),
 		logger:      logger,
 	}
@@ -78,9 +82,10 @@ func main() {
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		ctx := c.Request.Context()
+		fluvioOK := hub.fluvio.HealthCheck(ctx) == nil
 		status := map[string]interface{}{
 			"service":   "nexcom-middleware-hub",
-			"version":   "1.0.0",
+			"version":   "1.1.0",
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 			"components": map[string]bool{
 				"kafka":       hub.kafka.HealthCheck(ctx),
@@ -89,6 +94,7 @@ func main() {
 				"tigerbeetle": hub.tigerbeetle.HealthCheck(ctx),
 				"lakehouse":   hub.lakehouse.HealthCheck(ctx),
 				"apisix":      hub.apisix.HealthCheck(ctx),
+				"fluvio":      fluvioOK,
 			},
 		}
 		c.JSON(http.StatusOK, status)
@@ -116,16 +122,40 @@ func main() {
 				logger.Warnw("Dapr publish failed", "error", err)
 			}
 
+			// Publish real-time tick to Fluvio for low-latency consumers
+			if err := hub.fluvio.PublishMarketTick(ctx, fluvio.MarketTickEvent{
+				Symbol:    event.Symbol,
+				Price:     event.Price,
+				Volume:    event.Quantity,
+				Timestamp: event.Timestamp,
+				Source:    "trade",
+			}); err != nil {
+				logger.Warnw("Fluvio market tick publish failed", "error", err)
+			}
+
+			// Publish trade confirmation to Fluvio
+			if err := hub.fluvio.PublishTradeConfirm(ctx, fluvio.TradeConfirmEvent{
+				TradeID:   event.TradeID,
+				Symbol:    event.Symbol,
+				BuyerID:   event.UserID,
+				Price:     event.Price,
+				Quantity:  event.Quantity,
+				Value:     event.Total,
+				Timestamp: event.Timestamp,
+			}); err != nil {
+				logger.Warnw("Fluvio trade confirm publish failed", "error", err)
+			}
+
 			// Write to Lakehouse Bronze layer
 			eventMap := map[string]interface{}{
-				"trade_id":   event.TradeID,
-				"symbol":     event.Symbol,
-				"side":       event.Side,
-				"quantity":   event.Quantity,
-				"price":      event.Price,
-				"total":      event.Total,
-				"user_id":    event.UserID,
-				"timestamp":  event.Timestamp,
+				"trade_id":  event.TradeID,
+				"symbol":    event.Symbol,
+				"side":      event.Side,
+				"quantity":  event.Quantity,
+				"price":     event.Price,
+				"total":     event.Total,
+				"user_id":   event.UserID,
+				"timestamp": event.Timestamp,
 			}
 			if err := hub.lakehouse.WriteTradeEvent(ctx, eventMap); err != nil {
 				logger.Warnw("Lakehouse write failed", "error", err)
@@ -179,6 +209,11 @@ func main() {
 				logger.Warnw("Kafka KYC publish failed", "error", err)
 			}
 
+			// Publish KYC event to Fluvio
+			if err := hub.fluvio.ProduceJSON(ctx, fluvio.TopicKYCEvents, fmt.Sprintf("%d", event.UserID), event); err != nil {
+				logger.Warnw("Fluvio KYC event publish failed", "error", err)
+			}
+
 			// Cache KYC status in Redis
 			if err := hub.redis.SetKYCStatus(ctx, event.UserID, event.Status, event.RiskLevel); err != nil {
 				logger.Warnw("Redis KYC cache failed", "error", err)
@@ -199,6 +234,11 @@ func main() {
 			// Publish to Kafka
 			if err := hub.kafka.PublishAMLFlag(ctx, event); err != nil {
 				logger.Warnw("Kafka AML publish failed", "error", err)
+			}
+
+			// Publish AML event to Fluvio
+			if err := hub.fluvio.ProduceJSON(ctx, fluvio.TopicAMLEvents, event.FlagID, event); err != nil {
+				logger.Warnw("Fluvio AML event publish failed", "error", err)
 			}
 
 			// Write to Lakehouse
@@ -249,7 +289,51 @@ func main() {
 			c.JSON(http.StatusOK, gin.H{"status": "published"})
 		})
 
-		// Redis cache endpoints
+		// ─── Fluvio streaming endpoints ──────────────────────────────────────
+
+		// Publish a market tick directly to Fluvio
+		api.POST("/stream/tick", func(c *gin.Context) {
+			var tick fluvio.MarketTickEvent
+			if err := c.ShouldBindJSON(&tick); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			tick.Timestamp = time.Now().UTC()
+			ctx := c.Request.Context()
+			if err := hub.fluvio.PublishMarketTick(ctx, tick); err != nil {
+				logger.Warnw("Fluvio tick publish failed", "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			// Also update Redis price cache
+			_ = hub.redis.SetPrice(ctx, redis.PriceTick{
+				Symbol:    tick.Symbol,
+				Price:     tick.Price,
+				Timestamp: tick.Timestamp,
+			})
+			c.JSON(http.StatusOK, gin.H{"status": "streamed", "symbol": tick.Symbol})
+		})
+
+		// Consume records from a Fluvio topic (for debugging / admin)
+		api.GET("/stream/consume", func(c *gin.Context) {
+			topic := c.DefaultQuery("topic", fluvio.TopicMarketTicks)
+			var offset int64
+			fmt.Sscanf(c.DefaultQuery("offset", "0"), "%d", &offset)
+			ctx := c.Request.Context()
+			resp, err := hub.fluvio.Consume(ctx, fluvio.ConsumeRequest{
+				Topic:    topic,
+				Offset:   offset,
+				MaxBytes: 65536,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, resp)
+		})
+
+		// ─── Redis cache endpoints ────────────────────────────────────────────
+
 		api.GET("/cache/orderbook/:symbol", func(c *gin.Context) {
 			symbol := c.Param("symbol")
 			ctx := c.Request.Context()
@@ -316,6 +400,28 @@ func main() {
 			})
 		})
 
+		// TigerBeetle transfer
+		api.POST("/ledger/transfer", func(c *gin.Context) {
+			var req struct {
+				TransferID    uint64  `json:"transfer_id"`
+				DebitAccount  uint64  `json:"debit_account"`
+				CreditAccount uint64  `json:"credit_account"`
+				Amount        uint64  `json:"amount"`
+				Ledger        uint32  `json:"ledger"`
+				Code          uint16  `json:"code"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			ctx := c.Request.Context()
+			if err := hub.tigerbeetle.CreateTransfer(ctx, req.TransferID, req.DebitAccount, req.CreditAccount, req.Amount, req.Ledger, req.Code); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "transferred", "transfer_id": req.TransferID})
+		})
+
 		// Dapr state store
 		api.GET("/state/:key", func(c *gin.Context) {
 			key := c.Param("key")
@@ -341,6 +447,25 @@ func main() {
 				return
 			}
 			c.JSON(http.StatusOK, gin.H{"status": "saved"})
+		})
+
+		// Temporal workflow trigger
+		api.POST("/workflow/trigger", func(c *gin.Context) {
+			var req struct {
+				WorkflowType string          `json:"workflow_type"`
+				Input        json.RawMessage `json:"input"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			ctx := c.Request.Context()
+			workflowID, err := hub.activities.TriggerWorkflow(ctx, req.WorkflowType, req.Input)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "triggered", "workflow_id": workflowID})
 		})
 	}
 

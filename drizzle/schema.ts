@@ -2543,3 +2543,21 @@ export const fieldVisits = pgTable("field_visits", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 export type FieldVisit = typeof fieldVisits.$inferSelect;
+
+// ============================================================
+// Push Notification Tokens
+// ============================================================
+export const pushPlatformEnum = pgEnum("push_platform", ["ios", "android", "web"]);
+
+export const pushTokens = pgTable("push_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  token: varchar("token", { length: 512 }).notNull().unique(),
+  platform: pushPlatformEnum("platform").notNull(),
+  deviceName: varchar("device_name", { length: 128 }).default("Unknown").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type PushToken = typeof pushTokens.$inferSelect;
+export type InsertPushToken = typeof pushTokens.$inferInsert;
