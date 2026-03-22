@@ -1,0 +1,51 @@
+##############################################################################
+# NEXCOM Exchange - Kubernetes Namespaces
+# Logical separation of platform components
+##############################################################################
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+    environment: production
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom-infra
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+    tier: infrastructure
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom-security
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+    tier: security
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom-data
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+    tier: data-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom-monitoring
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+    tier: monitoring
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom-workflows
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+    tier: workflows

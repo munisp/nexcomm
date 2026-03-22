@@ -1,0 +1,158 @@
+---
+# =============================================================================
+# NEXCOM Commodity Exchange — Wazuh Agent DaemonSet
+# Deploys Wazuh agent on every Kubernetes node for:
+#   - File integrity monitoring (FIM)
+#   - System call monitoring
+#   - Log collection from all pods
+#   - Container runtime monitoring
+# =============================================================================
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: wazuh-agent
+  namespace: wazuh
+  labels:
+    app: wazuh-agent
+    app.kubernetes.io/part-of: nexcom-security
+spec:
+  selector:
+    matchLabels:
+      app: wazuh-agent
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: wazuh-agent
+        app.kubernetes.io/part-of: nexcom-security
+    spec:
+      serviceAccountName: wazuh-agent-sa
+      hostPID: true      # Required for process monitoring
+      hostNetwork: true  # Required for network monitoring
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+        # Run on all nodes including control plane
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+      containers:
+        - name: wazuh-agent
+          image: wazuh/wazuh-agent:4.9.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true  # Required for syscall monitoring and FIM
+          env:
+            - name: WAZUH_MANAGER
+              value: wazuh-manager-service.wazuh.svc.cluster.local
+            - name: WAZUH_MANAGER_PORT
+              value: "1514"
+            - name: WAZUH_AGENT_GROUP
+              value: "nexcom-kubernetes"
+            - name: WAZUH_REGISTRATION_SERVER
+              value: wazuh-manager-service.wazuh.svc.cluster.local
+            - name: WAZUH_REGISTRATION_PORT
+              value: "1515"
+            - name: WAZUH_REGISTRATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wazuh-agent-credentials
+                  key: registration-password
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            # Host filesystem access for FIM
+            - name: host-root
+              mountPath: /rootfs
+              readOnly: true
+            # Kubernetes logs
+            - name: var-log
+              mountPath: /var/log
+              readOnly: true
+            # Container runtime logs
+            - name: var-lib-docker
+              mountPath: /var/lib/docker
+              readOnly: true
+            # Kubernetes audit logs
+            - name: k8s-audit-log
+              mountPath: /var/log/kubernetes/audit
+              readOnly: true
+            # Wazuh agent config
+            - name: wazuh-agent-config
+              mountPath: /var/ossec/etc/ossec.conf
+              subPath: ossec.conf
+              readOnly: true
+            # Wazuh agent data (persistent per node)
+            - name: wazuh-agent-data
+              mountPath: /var/ossec/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: host-root
+          hostPath:
+            path: /
+        - name: var-log
+          hostPath:
+            path: /var/log
+        - name: var-lib-docker
+          hostPath:
+            path: /var/lib/docker
+        - name: k8s-audit-log
+          hostPath:
+            path: /var/log/kubernetes/audit
+            type: DirectoryOrCreate
+        - name: wazuh-agent-config
+          configMap:
+            name: wazuh-agent-config
+        - name: wazuh-agent-data
+          hostPath:
+            path: /var/ossec/data
+            type: DirectoryOrCreate
+
+---
+# ServiceAccount: Wazuh Agent
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wazuh-agent-sa
+  namespace: wazuh
+
+---
+# ClusterRole: Wazuh Agent needs to read pod/node info
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wazuh-agent-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "namespaces", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+
+---
+# ClusterRoleBinding: Bind role to service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wazuh-agent-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: wazuh-agent-role
+subjects:
+  - kind: ServiceAccount
+    name: wazuh-agent-sa
+    namespace: wazuh

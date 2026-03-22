@@ -1,0 +1,42 @@
+##############################################################################
+# NEXCOM Exchange - Temporal Dynamic Configuration
+# Workflow engine runtime tuning parameters
+##############################################################################
+
+# Increase history size limit for complex trading workflows
+limit.maxIDLength:
+  - value: 255
+    constraints: {}
+
+history.maximumSignalCountPerExecution:
+  - value: 10000
+    constraints: {}
+
+# Workflow execution timeout for long-running settlement processes
+limit.maxWorkflowExecutionTimeoutSeconds:
+  - value: 86400
+    constraints: {}
+
+# Archive completed workflows for audit compliance
+system.archivalState:
+  - value: "enabled"
+    constraints: {}
+
+# Search attribute configuration for trading queries
+system.enableActivityEagerExecution:
+  - value: true
+    constraints: {}
+
+# Worker tuning for high-throughput trading workflows
+worker.maxConcurrentActivityTaskPollers:
+  - value: 16
+    constraints: {}
+
+worker.maxConcurrentWorkflowTaskPollers:
+  - value: 16
+    constraints: {}
+
+# Retention for regulatory compliance (7 years for financial records)
+system.defaultVisibilityArchivalState:
+  - value: "enabled"
+    constraints: {}

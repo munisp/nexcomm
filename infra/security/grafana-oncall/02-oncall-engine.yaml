@@ -1,0 +1,233 @@
+---
+# =============================================================================
+# NEXCOM — Grafana OnCall Engine + Celery Workers
+# grafana/oncall:latest — open-source incident response platform
+# https://github.com/grafana/oncall
+# =============================================================================
+
+# ─── OnCall secrets ──────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-oncall-secret
+  namespace: monitoring
+  labels:
+    app: grafana-oncall
+type: Opaque
+stringData:
+  # Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
+  SECRET_KEY: "CHANGEME_generate_with_python3_secrets_token_hex_32"
+  # Grafana URL for OAuth callback (update with your actual Grafana URL)
+  GRAFANA_API_URL: "http://grafana.monitoring.svc.cluster.local:3000"
+  # Database
+  DATABASE_HOST: "grafana-oncall-postgres.monitoring.svc.cluster.local"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "oncall"
+  DATABASE_USER: "oncall"
+  DATABASE_PASSWORD: "oncall_secure_2026_CHANGEME"
+  # Redis
+  REDIS_URI: "redis://grafana-oncall-redis.monitoring.svc.cluster.local:6379/0"
+  # Slack integration (optional — leave empty to disable)
+  SLACK_CLIENT_ID: ""
+  SLACK_CLIENT_SECRET: ""
+  SLACK_SIGNING_SECRET: ""
+  # Telegram integration (optional)
+  TELEGRAM_TOKEN: ""
+---
+# ─── OnCall ConfigMap ─────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-oncall-config
+  namespace: monitoring
+  labels:
+    app: grafana-oncall
+data:
+  # Base URL where OnCall is reachable from the internet (for webhooks)
+  BASE_URL: "https://oncall.nexcom.exchange"
+  # Celery concurrency
+  CELERY_WORKER_CONCURRENCY: "2"
+  CELERY_WORKER_MAX_TASKS_PER_CHILD: "100"
+  # Feature flags
+  FEATURE_SLACK_INTEGRATION_ENABLED: "true"
+  FEATURE_TELEGRAM_INTEGRATION_ENABLED: "false"
+  FEATURE_MOBILE_APP_INTEGRATION_ENABLED: "true"
+  FEATURE_LIVE_SETTINGS_ENABLED: "true"
+  # Logging
+  DJANGO_LOG_LEVEL: "WARNING"
+---
+# ─── OnCall Engine Deployment ─────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-oncall-engine
+  namespace: monitoring
+  labels:
+    app: grafana-oncall
+    component: engine
+    app.kubernetes.io/part-of: nexcom-observability
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: grafana-oncall
+      component: engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: grafana-oncall
+        component: engine
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics/"
+    spec:
+      serviceAccountName: grafana-oncall
+      initContainers:
+        - name: migrate
+          image: grafana/oncall:latest
+          command: ["python", "manage.py", "migrate", "--noinput"]
+          envFrom:
+            - secretRef:
+                name: grafana-oncall-secret
+            - configMapRef:
+                name: grafana-oncall-config
+      containers:
+        - name: oncall
+          image: grafana/oncall:latest
+          command: ["python", "manage.py", "runserver", "0.0.0.0:8080"]
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - secretRef:
+                name: grafana-oncall-secret
+            - configMapRef:
+                name: grafana-oncall-config
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /health/
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /health/
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+---
+# ─── Celery Beat (scheduler) ──────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-oncall-celery-beat
+  namespace: monitoring
+  labels:
+    app: grafana-oncall
+    component: celery-beat
+spec:
+  replicas: 1  # MUST be 1 — only one beat scheduler
+  selector:
+    matchLabels:
+      app: grafana-oncall
+      component: celery-beat
+  template:
+    metadata:
+      labels:
+        app: grafana-oncall
+        component: celery-beat
+    spec:
+      containers:
+        - name: celery-beat
+          image: grafana/oncall:latest
+          command: ["celery", "-A", "engine", "beat", "-l", "info"]
+          envFrom:
+            - secretRef:
+                name: grafana-oncall-secret
+            - configMapRef:
+                name: grafana-oncall-config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+---
+# ─── Celery Worker ────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-oncall-celery-worker
+  namespace: monitoring
+  labels:
+    app: grafana-oncall
+    component: celery-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: grafana-oncall
+      component: celery-worker
+  template:
+    metadata:
+      labels:
+        app: grafana-oncall
+        component: celery-worker
+    spec:
+      containers:
+        - name: celery-worker
+          image: grafana/oncall:latest
+          command:
+            - celery
+            - -A
+            - engine
+            - worker
+            - --loglevel=warning
+            - --concurrency=2
+            - -Q
+            - "default,critical,important,long,slack,telegram,webhook,retry,celery"
+          envFrom:
+            - secretRef:
+                name: grafana-oncall-secret
+            - configMapRef:
+                name: grafana-oncall-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+# ─── OnCall Service ───────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-oncall
+  namespace: monitoring
+  labels:
+    app: grafana-oncall
+spec:
+  selector:
+    app: grafana-oncall
+    component: engine
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

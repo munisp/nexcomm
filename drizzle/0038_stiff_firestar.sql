@@ -1,0 +1,1 @@
+ALTER TABLE "warehouse_messages" ADD COLUMN "read_at" timestamp;

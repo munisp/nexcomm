@@ -1,0 +1,1 @@
+ALTER TABLE "circuit_breaker_events" ALTER COLUMN "rule_id" DROP NOT NULL;

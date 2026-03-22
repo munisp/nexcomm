@@ -1,0 +1,40 @@
+---
+# ─── KEDA TriggerAuthentication — Kafka SASL/TLS credentials ─────────────────
+# References the nexcom-kafka-credentials Secret (created separately via:
+#   kubectl create secret generic nexcom-kafka-credentials \
+#     --from-literal=bootstrapServers="broker1:9092,broker2:9092,broker3:9092" \
+#     --from-literal=saslUsername="nexcom" \
+#     --from-literal=saslPassword="<password>" \
+#     -n nexcom
+# )
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: kafka-trigger-auth
+  namespace: nexcom
+spec:
+  secretTargetRef:
+    - parameter: bootstrapServers
+      name: nexcom-kafka-credentials
+      key: bootstrapServers
+    - parameter: username
+      name: nexcom-kafka-credentials
+      key: saslUsername
+    - parameter: password
+      name: nexcom-kafka-credentials
+      key: saslPassword
+---
+# ─── KEDA TriggerAuthentication — Redis credentials ──────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-trigger-auth
+  namespace: nexcom
+spec:
+  secretTargetRef:
+    - parameter: address
+      name: nexcom-redis-credentials
+      key: address
+    - parameter: password
+      name: nexcom-redis-credentials
+      key: password

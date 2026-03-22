@@ -1,0 +1,1 @@
+ALTER TABLE "order_amendments" ADD COLUMN "is_bulk" boolean DEFAULT false NOT NULL;

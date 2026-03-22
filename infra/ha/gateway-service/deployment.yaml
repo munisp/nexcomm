@@ -1,0 +1,242 @@
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXCOM Exchange — Go Gateway Service HA Deployment
+#
+# HA Contract:
+#   • minReplicas: 3 (stateless — all replicas are active)
+#   • PodDisruptionBudget: maxUnavailable=1
+#   • KEDA scales 3→15 based on HTTP RPS (Prometheus) + Kafka lag
+#   • Rolling update: maxSurge=2, maxUnavailable=0
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexcom-gateway
+  namespace: nexcom-engines
+  labels:
+    app: nexcom-gateway
+    app.kubernetes.io/name: gateway
+    app.kubernetes.io/component: api-gateway
+    app.kubernetes.io/part-of: nexcom-exchange
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nexcom-gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 2
+  template:
+    metadata:
+      labels:
+        app: nexcom-gateway
+        app.kubernetes.io/part-of: nexcom-exchange
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "gateway-service"
+        dapr.io/app-port: "8200"
+    spec:
+      serviceAccountName: nexcom-engine
+      terminationGracePeriodSeconds: 15
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: nexcom-gateway
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: nexcom-gateway
+                topologyKey: topology.kubernetes.io/zone
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: nexcom-gateway
+
+      containers:
+        - name: gateway
+          image: nexcom/gateway-service:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8200
+            - name: metrics
+              containerPort: 9090
+
+          env:
+            - name: PORT
+              value: "8200"
+            - name: MATCHING_ENGINE_URL
+              value: "http://nexcom-matching-engine.nexcom-engines.svc.cluster.local:8080"
+            - name: SETTLEMENT_ENGINE_URL
+              value: "http://nexcom-settlement-engine.nexcom-engines.svc.cluster.local:8005"
+            - name: TRADING_ENGINE_URL
+              value: "http://nexcom-trading-engine.nexcom-engines.svc.cluster.local:8001"
+            - name: RISK_MANAGEMENT_URL
+              value: "http://nexcom-risk-management.nexcom-engines.svc.cluster.local:8004"
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: nexcom-engine-config
+            - secretRef:
+                name: nexcom-engine-secrets
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 3
+            failureThreshold: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 2
+
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      priorityClassName: nexcom-critical
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexcom-gateway
+  namespace: nexcom-engines
+  labels:
+    app: nexcom-gateway
+spec:
+  selector:
+    app: nexcom-gateway
+  ports:
+    - name: http
+      port: 8200
+      targetPort: http
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nexcom-gateway-pdb
+  namespace: nexcom-engines
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nexcom-gateway
+
+---
+# ── KEDA ScaledObject: Gateway Service ───────────────────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: nexcom-gateway-scaler
+  namespace: nexcom-engines
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexcom-gateway
+  minReplicaCount: 3
+  maxReplicaCount: 15
+  pollingInterval: 10
+  cooldownPeriod: 30
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 3
+              periodSeconds: 10
+        scaleDown:
+          stabilizationWindowSeconds: 120
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 30
+  triggers:
+    # HTTP RPS via Prometheus
+    - type: prometheus
+      metadata:
+        serverAddress: "http://prometheus.monitoring.svc.cluster.local:9090"
+        metricName: "nexcom_gateway_requests_per_second"
+        query: |
+          sum(rate(http_requests_total{job="nexcom-gateway"}[1m]))
+        # Scale out when RPS > 500 per replica
+        threshold: "500"
+
+    # Kafka lag on gateway.events topic
+    - type: kafka
+      metadata:
+        bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+        consumerGroup: "gateway-events"
+        topic: "gateway.events"
+        lagThreshold: "1000"
+        offsetResetPolicy: "latest"
+      authenticationRef:
+        name: nexcom-kafka-trigger-auth
+
+    # CPU fallback
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"

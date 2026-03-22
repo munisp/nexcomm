@@ -1,0 +1,282 @@
+---
+# =============================================================================
+# NEXCOM Commodity Exchange — Wazuh Alert Integrations
+# Grafana OnCall (open-source PagerDuty alternative) + Slack
+#
+# Alert routing:
+#   Level 10+ (P0/P1 Critical) → Grafana OnCall → escalation policy → mobile push
+#   Level 7+  (P2/P3 Medium)   → Grafana OnCall → Slack #nexcom-security-alerts
+#
+# Apply after Wazuh Manager is running:
+#   kubectl apply -f wazuh-alert-integrations.yaml
+#   kubectl rollout restart statefulset/wazuh-manager -n wazuh
+#
+# Prerequisites:
+#   1. Deploy Grafana OnCall: kubectl apply -f ../grafana-oncall/
+#   2. Create Webhook integration in OnCall UI → copy the token
+#   3. Update ONCALL_WEBHOOK_URL below with the real token
+# =============================================================================
+
+# ─── Secret: Grafana OnCall webhook token ────────────────────────────────────
+# After creating a Webhook integration in Grafana OnCall, the URL format is:
+#   https://oncall.nexcom.exchange/integrations/v1/webhook/<TOKEN>/
+# Store only the TOKEN here; the full URL is assembled in the integration script.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wazuh-oncall-token
+  namespace: wazuh
+  labels:
+    app: wazuh-manager
+    app.kubernetes.io/part-of: nexcom-security
+type: Opaque
+stringData:
+  # Replace with the token from: Grafana OnCall → Integrations → Wazuh SIEM → Webhook URL
+  # kubectl create secret generic wazuh-oncall-token -n wazuh \
+  #   --from-literal=token=<YOUR_ONCALL_WEBHOOK_TOKEN>
+  token: "CHANGEME_AFTER_CREATING_ONCALL_INTEGRATION"
+  # Full webhook URL (assembled for convenience)
+  webhook-url: "https://oncall.nexcom.exchange/integrations/v1/webhook/CHANGEME_AFTER_CREATING_ONCALL_INTEGRATION/"
+
+---
+# ─── Secret: Slack webhook URL (secondary channel) ───────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wazuh-slack
+  namespace: wazuh
+  labels:
+    app: wazuh-manager
+    app.kubernetes.io/part-of: nexcom-security
+type: Opaque
+stringData:
+  # Slack incoming webhook for #nexcom-security-alerts
+  # Obtain from: Slack → Apps → Incoming Webhooks → Add to Workspace
+  # kubectl create secret generic wazuh-slack -n wazuh \
+  #   --from-literal=webhook-url=https://hooks.slack.com/services/T.../B.../xxx
+  webhook-url: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+
+---
+# ─── ConfigMap: Wazuh ossec.conf integration stanzas ─────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wazuh-alert-integrations-config
+  namespace: wazuh
+  labels:
+    app: wazuh-manager
+    app.kubernetes.io/part-of: nexcom-security
+data:
+  integrations.conf: |
+    <!-- ================================================================
+         NEXCOM Alert Integrations — appended to ossec.conf
+         Grafana OnCall replaces PagerDuty (open-source, self-hosted)
+         ================================================================ -->
+
+    <!-- Grafana OnCall: Critical and High alerts (level 10+) -->
+    <!-- Covers: container escape (15), admin privilege escalation (14),
+         SQL injection (12), PostgreSQL RLS violation (12), K8s secret
+         access (10), brute force (10), data exfiltration (10) -->
+    <!-- custom-oncall.py is installed by wazuh-install-oncall-integration Job -->
+    <integration>
+      <name>custom-oncall</name>
+      <hook_url>$(ONCALL_WEBHOOK_URL)</hook_url>
+      <level>10</level>
+      <alert_format>json</alert_format>
+    </integration>
+
+    <!-- Grafana OnCall: All medium+ alerts (level 7+) -->
+    <!-- OnCall routing rules determine Slack vs mobile push per severity -->
+    <integration>
+      <name>custom-oncall</name>
+      <hook_url>$(ONCALL_WEBHOOK_URL)</hook_url>
+      <level>7</level>
+      <alert_format>json</alert_format>
+    </integration>
+
+    <!-- Slack direct: NEXCOM-specific trading anomaly rules (any level) -->
+    <!-- Fires immediately for market manipulation, KYC fraud, unusual orders -->
+    <integration>
+      <name>slack</name>
+      <hook_url>$(SLACK_WEBHOOK_URL)</hook_url>
+      <group>nexcom_trading,market_manipulation,nexcom_kyc,fraud</group>
+      <alert_format>json</alert_format>
+    </integration>
+
+    <!-- Slack direct: Medium alerts (level 7-9) as secondary channel -->
+    <integration>
+      <name>slack</name>
+      <hook_url>$(SLACK_WEBHOOK_URL)</hook_url>
+      <level>7</level>
+      <max_log>165</max_log>
+      <alert_format>json</alert_format>
+    </integration>
+
+  # Shell script to inject secrets into ossec.conf at runtime
+  inject-secrets.sh: |
+    #!/bin/sh
+    set -e
+    CONF=/var/ossec/etc/ossec.conf
+    ONCALL_URL=$(cat /etc/wazuh-secrets/oncall-webhook 2>/dev/null || echo "NOT_SET")
+    SLACK_URL=$(cat /etc/wazuh-secrets/slack-webhook 2>/dev/null || echo "NOT_SET")
+    sed -i "s|\$(ONCALL_WEBHOOK_URL)|${ONCALL_URL}|g" ${CONF}
+    sed -i "s|\$(SLACK_WEBHOOK_URL)|${SLACK_URL}|g" ${CONF}
+    echo "[Wazuh] Alert integrations configured."
+    echo "[Wazuh] Grafana OnCall: $([ "${ONCALL_URL}" != "NOT_SET" ] && echo 'ACTIVE' || echo 'NOT CONFIGURED')"
+    echo "[Wazuh] Slack: $([ "${SLACK_URL}" != "NOT_SET" ] && echo 'ACTIVE' || echo 'NOT CONFIGURED')"
+
+---
+# ─── Job: Apply alert integration config to running Wazuh Manager ─────────────
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wazuh-configure-integrations
+  namespace: wazuh
+  labels:
+    app.kubernetes.io/part-of: nexcom-security
+  annotations:
+    description: "Injects Grafana OnCall and Slack integration config into Wazuh Manager"
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: wazuh-manager-sa
+      containers:
+        - name: configure-integrations
+          image: wazuh/wazuh-manager:4.7.3
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              CONF=/var/ossec/etc/ossec.conf
+
+              # Install custom-oncall.py integration script
+              cp /tmp/custom-oncall.py /var/ossec/integrations/custom-oncall.py
+              chmod 750 /var/ossec/integrations/custom-oncall.py
+              chown root:wazuh /var/ossec/integrations/custom-oncall.py
+
+              # Append integration config if not already present
+              if ! grep -q "custom-oncall" ${CONF}; then
+                cat >> ${CONF} << 'INTEGRATION_EOF'
+              <!-- Grafana OnCall: Critical/High alerts (level 10+) -->
+              <integration>
+                <name>custom-oncall</name>
+                <hook_url>ONCALL_URL_PLACEHOLDER</hook_url>
+                <level>10</level>
+                <alert_format>json</alert_format>
+              </integration>
+              <!-- Grafana OnCall: Medium alerts (level 7+) -->
+              <integration>
+                <name>custom-oncall</name>
+                <hook_url>ONCALL_URL_PLACEHOLDER</hook_url>
+                <level>7</level>
+                <alert_format>json</alert_format>
+              </integration>
+              <!-- Slack: Trading anomaly groups -->
+              <integration>
+                <name>slack</name>
+                <hook_url>SLACK_URL_PLACEHOLDER</hook_url>
+                <group>nexcom_trading,market_manipulation,nexcom_kyc,fraud</group>
+                <alert_format>json</alert_format>
+              </integration>
+              INTEGRATION_EOF
+              fi
+
+              # Inject actual secrets
+              ONCALL_URL=$(cat /etc/wazuh-secrets/oncall-webhook 2>/dev/null || echo "NOT_CONFIGURED")
+              SLACK_URL=$(cat /etc/wazuh-secrets/slack-webhook 2>/dev/null || echo "NOT_CONFIGURED")
+              sed -i "s|ONCALL_URL_PLACEHOLDER|${ONCALL_URL}|g" ${CONF}
+              sed -i "s|SLACK_URL_PLACEHOLDER|${SLACK_URL}|g" ${CONF}
+
+              # Reload Wazuh Manager
+              /var/ossec/bin/ossec-control reload
+              echo "✅ Alert integrations applied successfully"
+              echo "Grafana OnCall: ${ONCALL_URL:0:40}... ($([ "${ONCALL_URL}" != "NOT_CONFIGURED" ] && echo 'ACTIVE' || echo 'NOT SET'))"
+              echo "Slack: $([ "${SLACK_URL}" != "NOT_CONFIGURED" ] && echo 'ACTIVE' || echo 'NOT SET')"
+          volumeMounts:
+            - name: wazuh-manager-data
+              mountPath: /var/ossec
+            - name: oncall-script
+              mountPath: /tmp/custom-oncall.py
+              subPath: custom-oncall.py
+            - name: oncall-secret
+              mountPath: /etc/wazuh-secrets/oncall-webhook
+              subPath: webhook-url
+              readOnly: true
+            - name: slack-secret
+              mountPath: /etc/wazuh-secrets/slack-webhook
+              subPath: webhook-url
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: wazuh-manager-data
+          persistentVolumeClaim:
+            claimName: wazuh-manager-data
+        - name: oncall-script
+          configMap:
+            name: wazuh-oncall-integration
+            items:
+              - key: custom-oncall.py
+                path: custom-oncall.py
+        - name: oncall-secret
+          secret:
+            secretName: wazuh-oncall-token
+        - name: slack-secret
+          secret:
+            secretName: wazuh-slack
+
+---
+# ─── PrometheusRule: Alert on Wazuh Manager being down ───────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: wazuh-availability
+  namespace: wazuh
+  labels:
+    app: wazuh-manager
+    app.kubernetes.io/part-of: nexcom-security
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: wazuh.availability
+      interval: 30s
+      rules:
+        - alert: WazuhManagerDown
+          expr: up{job="wazuh-manager"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: "Wazuh Manager is down"
+            description: "Wazuh Manager has been unreachable for more than 2 minutes. NEXCOM SIEM is not collecting security events."
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/wazuh-manager-down"
+
+        - alert: WazuhAgentDisconnected
+          expr: wazuh_agents_disconnected > 0
+          for: 5m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: "{{ $value }} Wazuh agent(s) disconnected"
+            description: "One or more Kubernetes nodes have lost their Wazuh agent connection. Security monitoring is incomplete."
+
+        - alert: WazuhHighAlertRate
+          expr: rate(wazuh_alerts_total{level=~"1[0-9]"}[5m]) > 10
+          for: 1m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: "High rate of critical Wazuh alerts"
+            description: "More than 10 critical security alerts per minute detected. Possible active attack in progress."

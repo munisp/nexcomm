@@ -1,0 +1,36 @@
+##############################################################################
+# NEXCOM Exchange - Dapr State Store Component (Redis)
+# Distributed state management for microservices
+##############################################################################
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: nexcom-statestore
+  namespace: nexcom
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: "redis:6379"
+    - name: redisPassword
+      secretKeyRef:
+        name: nexcom-redis-secret
+        key: password
+    - name: actorStateStore
+      value: "true"
+    - name: keyPrefix
+      value: "nexcom"
+    - name: enableTLS
+      value: "false"
+    - name: queryIndexes
+      value: |
+        [
+          { "name": "ordersBySymbol", "indexes": [{"key": "symbol", "type": "STRING"}] },
+          { "name": "positionsByUser", "indexes": [{"key": "userId", "type": "STRING"}] }
+        ]
+scopes:
+  - trading-engine
+  - risk-management
+  - settlement
+  - market-data

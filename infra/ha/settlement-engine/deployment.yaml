@@ -1,0 +1,247 @@
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXCOM Exchange — Rust Settlement Engine HA Deployment
+#
+# HA Contract:
+#   • minReplicas: 2 (active-passive; only leader processes settlements)
+#   • PodDisruptionBudget: minAvailable=1
+#   • Leader election via Kubernetes Lease
+#   • KEDA scales 2→10 based on settlements.pending Kafka topic lag
+#   • TigerBeetle and Mojaloop connections with retry/circuit-breaker
+#   • Rolling update: maxSurge=1, maxUnavailable=0
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexcom-settlement-engine
+  namespace: nexcom-engines
+  labels:
+    app: nexcom-settlement-engine
+    app.kubernetes.io/name: settlement-engine
+    app.kubernetes.io/component: settlement
+    app.kubernetes.io/part-of: nexcom-exchange
+  annotations:
+    nexcom.io/ha-mode: "active-passive-leader-election"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nexcom-settlement-engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: nexcom-settlement-engine
+        app.kubernetes.io/part-of: nexcom-exchange
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "settlement-engine"
+        dapr.io/app-port: "8005"
+    spec:
+      serviceAccountName: nexcom-engine
+      terminationGracePeriodSeconds: 60  # Longer for settlement finality
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: nexcom-settlement-engine
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: nexcom-settlement-engine
+                topologyKey: topology.kubernetes.io/zone
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: nexcom-settlement-engine
+
+      initContainers:
+        - name: wait-for-kafka
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z kafka-0.kafka-headless.kafka.svc.cluster.local 9092; do sleep 2; done"]
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "50m", memory: "32Mi" }
+
+      containers:
+        - name: settlement-engine
+          image: nexcom/settlement-engine:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8005
+            - name: metrics
+              containerPort: 9090
+
+          env:
+            - name: PORT
+              value: "8005"
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: LEADER_LEASE_NAME
+              value: "nexcom-settlement-engine-leader"
+            # TigerBeetle cluster addresses
+            - name: TIGERBEETLE_ADDRESSES
+              value: "tigerbeetle-0.tigerbeetle.tigerbeetle.svc.cluster.local:3001,tigerbeetle-1.tigerbeetle.tigerbeetle.svc.cluster.local:3001,tigerbeetle-2.tigerbeetle.tigerbeetle.svc.cluster.local:3001"
+            # Mojaloop hub
+            - name: MOJALOOP_HUB_URL
+              value: "http://central-ledger.mojaloop.svc.cluster.local:3001"
+          envFrom:
+            - configMapRef:
+                name: nexcom-engine-config
+            - secretRef:
+                name: nexcom-engine-secrets
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 24   # 120s for TigerBeetle connection
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 3
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          lifecycle:
+            preStop:
+              exec:
+                # Drain in-flight settlements before shutdown
+                command: ["/bin/sh", "-c", "curl -s -X POST http://localhost:8005/admin/drain && sleep 55"]
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      priorityClassName: nexcom-critical
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexcom-settlement-engine
+  namespace: nexcom-engines
+  labels:
+    app: nexcom-settlement-engine
+spec:
+  selector:
+    app: nexcom-settlement-engine
+  ports:
+    - name: http
+      port: 8005
+      targetPort: http
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nexcom-settlement-engine-pdb
+  namespace: nexcom-engines
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: nexcom-settlement-engine
+
+---
+# ── KEDA ScaledObject: Settlement Engine ─────────────────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: nexcom-settlement-engine-scaler
+  namespace: nexcom-engines
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexcom-settlement-engine
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  pollingInterval: 30
+  cooldownPeriod: 120   # Longer cooldown — settlement is stateful
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 30
+        scaleDown:
+          stabilizationWindowSeconds: 600  # 10 min — don't scale down mid-cycle
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 120
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+        consumerGroup: "settlement-engine-trades"
+        topic: "settlements.pending"
+        lagThreshold: "100"
+        offsetResetPolicy: "latest"
+      authenticationRef:
+        name: nexcom-kafka-trigger-auth
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "75"

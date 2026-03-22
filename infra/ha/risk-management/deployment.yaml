@@ -1,0 +1,213 @@
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXCOM Exchange — Go Risk Management Service HA Deployment
+#
+# HA Contract:
+#   • minReplicas: 2 (active-active; all replicas evaluate risk independently)
+#   • PodDisruptionBudget: maxUnavailable=1
+#   • KEDA scales 2→8 based on risk.events Kafka lag + Redis queue
+#   • Risk decisions are idempotent — duplicate evaluation is safe
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexcom-risk-management
+  namespace: nexcom-engines
+  labels:
+    app: nexcom-risk-management
+    app.kubernetes.io/name: risk-management
+    app.kubernetes.io/component: risk
+    app.kubernetes.io/part-of: nexcom-exchange
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nexcom-risk-management
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: nexcom-risk-management
+        app.kubernetes.io/part-of: nexcom-exchange
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "risk-management"
+        dapr.io/app-port: "8004"
+    spec:
+      serviceAccountName: nexcom-engine
+      terminationGracePeriodSeconds: 15
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: nexcom-risk-management
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: risk-management
+          image: nexcom/risk-management:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8004
+            - name: metrics
+              containerPort: 9090
+
+          env:
+            - name: PORT
+              value: "8004"
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: nexcom-engine-config
+            - secretRef:
+                name: nexcom-engine-secrets
+
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 3
+            failureThreshold: 10
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 2
+
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "800m"
+              memory: "512Mi"
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      priorityClassName: nexcom-critical
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexcom-risk-management
+  namespace: nexcom-engines
+  labels:
+    app: nexcom-risk-management
+spec:
+  selector:
+    app: nexcom-risk-management
+  ports:
+    - name: http
+      port: 8004
+      targetPort: http
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nexcom-risk-management-pdb
+  namespace: nexcom-engines
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nexcom-risk-management
+
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: nexcom-risk-management-scaler
+  namespace: nexcom-engines
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexcom-risk-management
+  minReplicaCount: 2
+  maxReplicaCount: 8
+  pollingInterval: 15
+  cooldownPeriod: 60
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 180
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+        consumerGroup: "risk-management-events"
+        topic: "risk.events"
+        lagThreshold: "200"
+        offsetResetPolicy: "latest"
+      authenticationRef:
+        name: nexcom-kafka-trigger-auth
+    - type: redis-sentinel
+      metadata:
+        addresses: "redis-sentinel-0.redis-sentinel.redis.svc.cluster.local:26379,redis-sentinel-1.redis-sentinel.redis.svc.cluster.local:26379,redis-sentinel-2.redis-sentinel.redis.svc.cluster.local:26379"
+        sentinelMaster: "nexcom-master"
+        listName: "risk-evaluation-queue"
+        listLength: "500"
+      authenticationRef:
+        name: nexcom-redis-trigger-auth
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "75"

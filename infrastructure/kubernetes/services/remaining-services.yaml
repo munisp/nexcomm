@@ -1,0 +1,395 @@
+##############################################################################
+# NEXCOM Exchange - Remaining Service Kubernetes Deployments
+##############################################################################
+
+# --- Risk Management ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risk-management
+  namespace: nexcom
+  labels:
+    app: risk-management
+    tier: core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: risk-management
+  template:
+    metadata:
+      labels:
+        app: risk-management
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "risk-management"
+        dapr.io/app-port: "8004"
+    spec:
+      containers:
+        - name: risk-management
+          image: nexcom/risk-management:latest
+          ports:
+            - containerPort: 8004
+          env:
+            - name: PORT
+              value: "8004"
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-management
+  namespace: nexcom
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8004
+      targetPort: 8004
+  selector:
+    app: risk-management
+---
+# --- Settlement ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: settlement
+  namespace: nexcom
+  labels:
+    app: settlement
+    tier: core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: settlement
+  template:
+    metadata:
+      labels:
+        app: settlement
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "settlement"
+        dapr.io/app-port: "8005"
+    spec:
+      containers:
+        - name: settlement
+          image: nexcom/settlement:latest
+          ports:
+            - containerPort: 8005
+          env:
+            - name: PORT
+              value: "8005"
+            - name: TIGERBEETLE_ADDRESS
+              value: "tigerbeetle:3000"
+            - name: MOJALOOP_HUB_URL
+              value: "http://mojaloop-adapter:4001"
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8005
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: settlement
+  namespace: nexcom
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8005
+      targetPort: 8005
+  selector:
+    app: settlement
+---
+# --- User Management ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-management
+  namespace: nexcom
+  labels:
+    app: user-management
+    tier: core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user-management
+  template:
+    metadata:
+      labels:
+        app: user-management
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "user-management"
+        dapr.io/app-port: "8006"
+    spec:
+      containers:
+        - name: user-management
+          image: nexcom/user-management:latest
+          ports:
+            - containerPort: 8006
+          env:
+            - name: PORT
+              value: "8006"
+            - name: KEYCLOAK_URL
+              value: "http://keycloak:8080"
+            - name: KEYCLOAK_REALM
+              value: "nexcom"
+            - name: POSTGRES_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-db-secret
+                  key: connection-string
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8006
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-management
+  namespace: nexcom
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8006
+      targetPort: 8006
+  selector:
+    app: user-management
+---
+# --- AI/ML Service ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-ml
+  namespace: nexcom
+  labels:
+    app: ai-ml
+    tier: analytics
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-ml
+  template:
+    metadata:
+      labels:
+        app: ai-ml
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "ai-ml"
+        dapr.io/app-port: "8007"
+    spec:
+      containers:
+        - name: ai-ml
+          image: nexcom/ai-ml:latest
+          ports:
+            - containerPort: 8007
+          env:
+            - name: PORT
+              value: "8007"
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+            - name: POSTGRES_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-db-secret
+                  key: connection-string
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "1"
+            limits:
+              memory: "4Gi"
+              cpu: "4"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8007
+            initialDelaySeconds: 30
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-ml
+  namespace: nexcom
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8007
+      targetPort: 8007
+  selector:
+    app: ai-ml
+---
+# --- Notification Service ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification
+  namespace: nexcom
+  labels:
+    app: notification
+    tier: core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: notification
+  template:
+    metadata:
+      labels:
+        app: notification
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "notification"
+        dapr.io/app-port: "8008"
+    spec:
+      containers:
+        - name: notification
+          image: nexcom/notification:latest
+          ports:
+            - containerPort: 8008
+          env:
+            - name: PORT
+              value: "8008"
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8008
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification
+  namespace: nexcom
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8008
+      targetPort: 8008
+  selector:
+    app: notification
+---
+# --- Blockchain Service ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blockchain
+  namespace: nexcom
+  labels:
+    app: blockchain
+    tier: core
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: blockchain
+  template:
+    metadata:
+      labels:
+        app: blockchain
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "blockchain"
+        dapr.io/app-port: "8009"
+    spec:
+      containers:
+        - name: blockchain
+          image: nexcom/blockchain:latest
+          ports:
+            - containerPort: 8009
+          env:
+            - name: PORT
+              value: "8009"
+            - name: ETHEREUM_RPC_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-blockchain-secret
+                  key: ethereum-rpc-url
+            - name: POLYGON_RPC_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-blockchain-secret
+                  key: polygon-rpc-url
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8009
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blockchain
+  namespace: nexcom
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8009
+      targetPort: 8009
+  selector:
+    app: blockchain

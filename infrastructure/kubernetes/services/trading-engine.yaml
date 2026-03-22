@@ -1,0 +1,108 @@
+##############################################################################
+# NEXCOM Exchange - Trading Engine Kubernetes Deployment
+##############################################################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-engine
+  namespace: nexcom
+  labels:
+    app: trading-engine
+    app.kubernetes.io/part-of: nexcom-exchange
+    tier: core
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: trading-engine
+  template:
+    metadata:
+      labels:
+        app: trading-engine
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "trading-engine"
+        dapr.io/app-port: "8001"
+        dapr.io/app-protocol: "http"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: [trading-engine]
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: trading-engine
+          image: nexcom/trading-engine:latest
+          ports:
+            - containerPort: 8001
+              name: http
+          env:
+            - name: PORT
+              value: "8001"
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+            - name: POSTGRES_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-db-secret
+                  key: connection-string
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-engine
+  namespace: nexcom
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8001
+      targetPort: 8001
+  selector:
+    app: trading-engine
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: trading-engine-hpa
+  namespace: nexcom
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: trading-engine
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

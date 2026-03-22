@@ -1,0 +1,38 @@
+# NEXCOM Exchange - Integration Test Docker Compose
+# Starts gateway + matching-engine + ingestion-engine for integration testing
+version: "3.8"
+
+services:
+  gateway:
+    build:
+      context: ../../services/gateway
+      dockerfile: Dockerfile
+    container_name: nexcom-test-gateway
+    ports:
+      - "9000:8000"
+    environment:
+      PORT: "8000"
+      ENVIRONMENT: development
+      KAFKA_BROKERS: ""
+      REDIS_URL: ""
+      MATCHING_ENGINE_URL: http://matching-engine:8010
+      INGESTION_ENGINE_URL: http://ingestion-engine:8005
+    networks:
+      - test-network
+
+  matching-engine:
+    build:
+      context: ../../services/matching-engine
+      dockerfile: Dockerfile
+    container_name: nexcom-test-matching-engine
+    ports:
+      - "9010:8010"
+    environment:
+      PORT: "8010"
+      RUST_LOG: nexcom_matching_engine=info
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge

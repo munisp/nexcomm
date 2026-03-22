@@ -1,0 +1,140 @@
+##############################################################################
+# NEXCOM Exchange - Alert Rules
+# Defines monitoring alerts for critical exchange operations
+##############################################################################
+
+groups:
+  - name: trading-alerts
+    rules:
+      - alert: HighOrderLatency
+        expr: histogram_quantile(0.99, rate(order_processing_duration_seconds_bucket[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          team: trading
+        annotations:
+          summary: "Order processing latency exceeds 50ms (p99)"
+          description: "The 99th percentile order processing latency is {{ $value }}s"
+
+      - alert: MatchingEngineDown
+        expr: up{job="trading-engine"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: trading
+        annotations:
+          summary: "Trading engine is down"
+
+      - alert: HighOrderRejectionRate
+        expr: rate(orders_rejected_total[5m]) / rate(orders_placed_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: trading
+        annotations:
+          summary: "Order rejection rate exceeds 10%"
+
+      - alert: CircuitBreakerTriggered
+        expr: circuit_breaker_status == 1
+        for: 0s
+        labels:
+          severity: critical
+          team: trading
+        annotations:
+          summary: "Circuit breaker triggered for {{ $labels.symbol }}"
+
+  - name: settlement-alerts
+    rules:
+      - alert: SettlementBacklog
+        expr: settlement_pending_count > 1000
+        for: 5m
+        labels:
+          severity: warning
+          team: settlement
+        annotations:
+          summary: "Settlement backlog exceeds 1000 pending"
+
+      - alert: SettlementFailureRate
+        expr: rate(settlement_failed_total[15m]) / rate(settlement_initiated_total[15m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: settlement
+        annotations:
+          summary: "Settlement failure rate exceeds 5%"
+
+      - alert: TigerBeetleDown
+        expr: up{job="tigerbeetle"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: settlement
+        annotations:
+          summary: "TigerBeetle ledger is down"
+
+  - name: infrastructure-alerts
+    rules:
+      - alert: KafkaConsumerLag
+        expr: kafka_consumer_group_lag > 10000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Kafka consumer lag exceeds 10k for {{ $labels.group }}"
+
+      - alert: PostgresConnectionPoolExhausted
+        expr: pg_stat_activity_count / pg_settings_max_connections > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "PostgreSQL connection pool > 90% utilized"
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Redis memory usage exceeds 85%"
+
+      - alert: HighAPIErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "API 5xx error rate exceeds 5% for {{ $labels.service }}"
+
+  - name: security-alerts
+    rules:
+      - alert: HighAuthFailureRate
+        expr: rate(auth_failures_total[5m]) > 50
+        for: 2m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Authentication failure rate exceeds 50/min"
+
+      - alert: SuspiciousTradingPattern
+        expr: anomaly_detection_alerts_total > 0
+        for: 0s
+        labels:
+          severity: warning
+          team: compliance
+        annotations:
+          summary: "Anomaly detected: {{ $labels.alert_type }}"
+
+      - alert: WAFBlockRate
+        expr: rate(waf_blocked_requests_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "WAF blocking more than 100 requests/min"

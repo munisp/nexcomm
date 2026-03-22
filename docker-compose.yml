@@ -1,0 +1,742 @@
+# NEXCOM Exchange — Unified Docker Compose
+# Runs all platform services together for local development and staging.
+# Usage: docker compose up -d
+# Production: use deployment/kubernetes/ manifests instead.
+
+version: "3.9"
+
+networks:
+  nexcom:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  tigerbeetle_data:
+  lakehouse_data:        # Shared Delta Lake / Parquet storage for Bronze/Silver/Gold layers
+  mojaloop_mysql_data:   # Mojaloop Central Hub MySQL data (hub-internal, separate from NEXCOM PostgreSQL)
+  opensearch_data:       # OpenSearch full-text search index
+  temporal_data:         # Temporal workflow persistence (PostgreSQL-backed)
+  permify_data:          # Permify RBAC policy store
+  apisix_data:           # APISIX etcd config store
+
+services:
+  # ─── Infrastructure ────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nexcom
+      POSTGRES_USER: nexcom
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexcom_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks: [nexcom]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexcom"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks: [nexcom]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks: [nexcom]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on: [zookeeper]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "29092:29092"
+    networks: [nexcom]
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  tigerbeetle:
+    image: ghcr.io/tigerbeetle/tigerbeetle:0.16.73
+    command: >
+      sh -c "tigerbeetle format --cluster=0 --replica=0 --replica-count=1 /data/0_0.tigerbeetle 2>/dev/null || true
+             tigerbeetle start --addresses=0.0.0.0:3001 /data/0_0.tigerbeetle"
+    volumes:
+      - tigerbeetle_data:/data
+    ports:
+      - "3001:3001"
+    networks: [nexcom]
+
+  # ─── Core Exchange Services ────────────────────────────────────────────────
+
+  portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      MATCHING_ENGINE_URL: http://matching-engine:8080
+      SETTLEMENT_ENGINE_URL: http://settlement-engine:8005
+      GATEWAY_URL: http://gateway:8200
+      RISK_SERVICE_URL: http://risk-management:8004
+      KYC_SERVICE_URL: http://kyc-service:8003
+      NOTIFICATION_SERVICE_URL: http://notification:8008
+      ANALYTICS_SERVICE_URL: http://analytics:8006
+      ANALYTICS_ENGINE_URL: http://analytics-engine:8011
+      USER_MANAGEMENT_URL: http://user-management:8012
+      MOJALOOP_ADAPTER_URL: http://mojaloop-adapter:4001
+      AI_ML_SERVICE_URL: http://ai-ml:8007
+      AIML_SERVICE_URL: http://ai-ml:8007
+      INGESTION_SERVICE_URL: http://ingestion-engine:8009
+      BLOCKCHAIN_SERVICE_URL: http://blockchain:8010
+      TIGERBEETLE_ADDRESSES: tigerbeetle:3001
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [nexcom]
+
+  matching-engine:
+    build:
+      context: matching-engine
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8080"
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      # Matching engine publishes to nexcom.order.filled, nexcom.order.cancelled,
+      # nexcom.order.placed, nexcom.trade.executed — consumed by ingestion-engine
+      # Bronze layer for Lakehouse ingestion
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka: { condition: service_healthy }
+    networks: [nexcom]
+
+  settlement-engine:
+    build:
+      context: settlement-engine
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8005"
+      TIGERBEETLE_ADDRESSES: tigerbeetle:3001
+      KAFKA_BROKERS: kafka:9092
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      # Settlement engine publishes to nexcom.settlement.completed,
+      # nexcom.settlement.failed, nexcom.payment.processed — consumed by
+      # ingestion-engine Bronze layer for Lakehouse ingestion
+    ports:
+      - "8005:8005"
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    networks: [nexcom]
+
+  gateway:
+    build:
+      context: gateway-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8200"
+      MATCHING_ENGINE_URL: http://matching-engine:8080
+      SETTLEMENT_ENGINE_URL: http://settlement-engine:8005
+      RISK_SERVICE_URL: http://risk-management:8004
+      KYC_SERVICE_URL: http://kyc-service:8003
+      ANALYTICS_SERVICE_URL: http://analytics:8006
+      ANALYTICS_ENGINE_URL: http://analytics-engine:8011
+      USER_MANAGEMENT_URL: http://user-management:8012
+      MOJALOOP_ADAPTER_URL: http://mojaloop-adapter:4001
+      AIML_SERVICE_URL: http://ai-ml:8007
+      INGESTION_ENGINE_URL: http://ingestion-engine:8009
+      TIGERBEETLE_ADDRESSES: tigerbeetle:3001
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8200:8200"
+    depends_on:
+      kafka: { condition: service_healthy }
+    networks: [nexcom]
+
+  risk-management:
+    build:
+      context: services/risk-management
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8004"
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+    ports:
+      - "8004:8004"
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [nexcom]
+
+  kyc-service:
+    build:
+      context: services/kyc-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8003"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [nexcom]
+
+  notification:
+    build:
+      context: services/notification
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8008"
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+    ports:
+      - "8008:8008"
+    networks: [nexcom]
+
+  # ─── Data Platform (Lakehouse + AI/ML) ────────────────────────────────────
+
+  ingestion-engine:
+    build:
+      context: services/ingestion-engine
+      dockerfile: Dockerfile
+    volumes:
+      - lakehouse_data:/data/lakehouse   # Shared Delta Lake storage
+    environment:
+      PORT: "8009"
+      KAFKA_BROKERS: kafka:9092
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      LAKEHOUSE_BASE_PATH: /data/lakehouse
+      # Consumes: nexcom.order.filled, nexcom.order.cancelled, nexcom.order.placed,
+      #           nexcom.trade.executed, nexcom.settlement.completed,
+      #           nexcom.settlement.failed, nexcom.payment.processed,
+      #           nexcom.market.data, nexcom.alternative (sentiment/weather)
+      # Writes: Bronze → Silver → Gold Delta Lake tables
+    ports:
+      - "8009:8009"
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    networks: [nexcom]
+
+  analytics:
+    build:
+      context: services/analytics
+      dockerfile: Dockerfile
+    volumes:
+      - lakehouse_data:/data/lakehouse   # Read-only access to Gold layer
+    environment:
+      PORT: "8006"
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      LAKEHOUSE_BASE_PATH: /data/lakehouse
+      AIML_SERVICE_URL: http://ai-ml:8007
+      INGESTION_ENGINE_URL: http://ingestion-engine:8009
+    ports:
+      - "8006:8006"
+    depends_on:
+      postgres: { condition: service_healthy }
+      ingestion-engine:
+        condition: service_started
+    networks: [nexcom]
+
+  ai-ml:
+    build:
+      context: services/ai-ml
+      dockerfile: Dockerfile
+    volumes:
+      - lakehouse_data:/data/lakehouse   # Read Gold layer feature store
+    environment:
+      PORT: "8007"
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      LAKEHOUSE_BASE_PATH: /data/lakehouse
+      INGESTION_ENGINE_URL: http://ingestion-engine:8009
+    ports:
+      - "8007:8007"
+    depends_on:
+      ingestion-engine:
+        condition: service_started
+    networks: [nexcom]
+
+  blockchain:
+    build:
+      context: services/blockchain
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8010"
+      KAFKA_BROKERS: kafka:9092
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+    ports:
+      - "8010:8010"
+    networks: [nexcom]
+
+  trading-engine:
+    build:
+      context: services/trading-engine
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8001"
+      KAFKA_BROKERS: kafka:9092
+      MATCHING_ENGINE_URL: http://matching-engine:8080
+    ports:
+      - "8001:8001"
+    networks: [nexcom]
+
+  analytics-engine:
+    build:
+      context: services/analytics-engine
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8011"
+      MATCHING_ENGINE_URL: http://matching-engine:8080
+      INGESTION_ENGINE_URL: http://ingestion-engine:8009
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+    ports:
+      - "8011:8011"
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [nexcom]
+
+  user-management:
+    build:
+      context: services/user-management
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8012"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
+    ports:
+      - "8012:8012"
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [nexcom]
+
+  # ─── Mojaloop DFSP Adapter (Go) ───────────────────────────────────────────
+  mojaloop-adapter:
+    build:
+      context: services/mojaloop-adapter
+      dockerfile: Dockerfile
+    environment:
+      PORT: "4001"
+      DFSP_ID: "nexcom-exchange"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      MOJALOOP_HUB_URL: ${MOJALOOP_HUB_URL:-http://central-ledger:3001}
+      MOJALOOP_ALS_URL: ${MOJALOOP_ALS_URL:-http://account-lookup-service:4002}
+      CALLBACK_URL: http://mojaloop-adapter:4001/callbacks
+      LOG_LEVEL: info
+      DB_MAX_CONNS: "20"
+      READ_TIMEOUT_SEC: "30"
+      WRITE_TIMEOUT_SEC: "30"
+    ports:
+      - "4001:4001"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      postgres: { condition: service_healthy }
+      central-ledger: { condition: service_healthy }
+    networks: [nexcom]
+
+  # ─── Mojaloop Central Hub Services ────────────────────────────────────────
+  # NOTE: Mojaloop Central Hub requires MySQL as an upstream dependency.
+  # NEXCOM Exchange uses PostgreSQL exclusively for all application data.
+  # This MySQL instance is isolated to Mojaloop inter-service communication
+  # and is NEVER accessed by NEXCOM application code (portal, routers, services).
+  mojaloop-mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MOJALOOP_MYSQL_ROOT_PASSWORD:-mojaloop_root}
+      MYSQL_USER: mojaloop
+      MYSQL_PASSWORD: ${MOJALOOP_MYSQL_PASSWORD:-mojaloop_pass}
+      MYSQL_DATABASE: central_ledger
+    volumes:
+      - mojaloop_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pmojaloop_root"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks: [nexcom]
+
+  central-ledger:
+    image: mojaloop/central-ledger:v17.3.3
+    environment:
+      CLEDGER_DATABASE_URI: mysql://mojaloop:${MOJALOOP_MYSQL_PASSWORD:-mojaloop_pass}@mojaloop-mysql:3306/central_ledger
+      CLEDGER_KAFKA_HOST: kafka
+      CLEDGER_KAFKA_PORT: "9092"
+      LOG_LEVEL: info
+      HOSTNAME: central-ledger
+    ports:
+      - "3001:3001"
+    depends_on:
+      mojaloop-mysql: { condition: service_healthy }
+      kafka: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks: [nexcom]
+
+  ml-api-adapter:
+    image: mojaloop/ml-api-adapter:v14.0.5
+    environment:
+      ML_API_ADAPTER_KAFKA_HOST: kafka
+      ML_API_ADAPTER_KAFKA_PORT: "9092"
+      ML_API_ADAPTER_CENTRAL_LEDGER_URL: http://central-ledger:3001
+      LOG_LEVEL: info
+    ports:
+      - "3000:3000"
+    depends_on:
+      central-ledger: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks: [nexcom]
+
+  account-lookup-service:
+    image: mojaloop/account-lookup-service:v14.2.2
+    environment:
+      ALS_DATABASE_URI: mysql://mojaloop:${MOJALOOP_MYSQL_PASSWORD:-mojaloop_pass}@mojaloop-mysql:3306/central_ledger
+      ALS_CENTRAL_LEDGER_URL: http://central-ledger:3001
+      LOG_LEVEL: info
+    ports:
+      - "4002:4002"
+    depends_on:
+      mojaloop-mysql: { condition: service_healthy }
+      central-ledger: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks: [nexcom]
+
+  quoting-service:
+    image: mojaloop/quoting-service:v15.5.0
+    environment:
+      QS_DATABASE_URI: mysql://mojaloop:${MOJALOOP_MYSQL_PASSWORD:-mojaloop_pass}@mojaloop-mysql:3306/central_ledger
+      QS_CENTRAL_LEDGER_URL: http://central-ledger:3001
+      QS_KAFKA_HOST: kafka
+      QS_KAFKA_PORT: "9092"
+      LOG_LEVEL: info
+    ports:
+      - "3002:3002"
+    depends_on:
+      mojaloop-mysql: { condition: service_healthy }
+      central-ledger: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks: [nexcom]
+
+  central-settlement:
+    image: mojaloop/central-settlement:v16.0.0
+    environment:
+      CS_DATABASE_URI: mysql://mojaloop:${MOJALOOP_MYSQL_PASSWORD:-mojaloop_pass}@mojaloop-mysql:3306/central_ledger
+      CS_CENTRAL_LEDGER_URL: http://central-ledger:3001
+      CS_KAFKA_HOST: kafka
+      CS_KAFKA_PORT: "9092"
+      LOG_LEVEL: info
+    ports:
+      - "3007:3007"
+    depends_on:
+      mojaloop-mysql: { condition: service_healthy }
+      central-ledger: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks: [nexcom]
+
+  # ─── OpenSearch (Full-Text Search + Postgres CDC Sync) ─────────────────────
+
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    container_name: nexcom-opensearch
+    environment:
+      - cluster.name=nexcom-search
+      - node.name=nexcom-opensearch-node1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - plugins.security.disabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qE 'green|yellow'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks: [nexcom]
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.13.0
+    container_name: nexcom-opensearch-dashboards
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    ports:
+      - "5601:5601"
+    depends_on:
+      opensearch: { condition: service_healthy }
+    networks: [nexcom]
+
+  opensearch-sync:
+    build:
+      context: ./services/opensearch-sync
+      dockerfile: Dockerfile
+    container_name: nexcom-opensearch-sync
+    environment:
+      POSTGRES_URL: postgres://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      OPENSEARCH_URL: http://opensearch:9200
+      SYNC_INTERVAL_SECONDS: "30"
+      LOG_LEVEL: info
+    depends_on:
+      postgres: { condition: service_healthy }
+      opensearch: { condition: service_healthy }
+    restart: unless-stopped
+    networks: [nexcom]
+
+  # ─── Temporal Workflow Engine ──────────────────────────────────────────────
+
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: nexcom-temporal
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=nexcom
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-nexcom_dev}
+      - POSTGRES_SEEDS=postgres
+      - ENABLE_ES=false
+    ports:
+      - "7233:7233"
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7233 || true"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 90s
+    networks: [nexcom]
+
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    container_name: nexcom-temporal-ui
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: "http://localhost:8080"
+    ports:
+      - "8233:8080"
+    depends_on:
+      - temporal
+    networks: [nexcom]
+
+  temporal-worker:
+    build:
+      context: ./services/middleware-hub
+      dockerfile: Dockerfile
+    container_name: nexcom-temporal-worker
+    command: ["/app/middleware-hub", "--mode=worker"]
+    environment:
+      TEMPORAL_HOST: temporal:7233
+      TEMPORAL_NAMESPACE: nexcom
+      TEMPORAL_TASK_QUEUE: nexcom-main
+      POSTGRES_URL: postgres://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      TIGERBEETLE_ADDRESS: tigerbeetle:3001
+      DAPR_HTTP_PORT: "3500"
+      LOG_LEVEL: info
+    depends_on:
+      - temporal
+      - kafka
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks: [nexcom]
+
+  # ─── Permify RBAC Engine ───────────────────────────────────────────────────
+
+  permify:
+    image: ghcr.io/permify/permify:v0.9.6
+    container_name: nexcom-permify
+    command:
+      - serve
+      - --database-engine=postgres
+      - --database-uri=postgres://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      - --database-pool-max=10
+      - --grpc-port=3478
+      - --http-port=3476
+      - --log-level=info
+    ports:
+      - "3476:3476"
+      - "3478:3478"
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3476/healthz || true"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [nexcom]
+
+  # ─── Permify schema init (runs once after Permify is healthy) ─────────────
+  # Run with: docker compose --profile init up permify-init
+  permify-init:
+    build:
+      context: .                           # project root so permify.perm is in scope
+      dockerfile: infra/permify/Dockerfile
+    container_name: nexcom-permify-init
+    restart: on-failure                    # retry if Permify isn't ready yet
+    environment:
+      PERMIFY_HOST: permify
+      PERMIFY_HTTP_PORT: "3476"
+      PERMIFY_TENANT_ID: t1
+      SCHEMA_FILE: /app/permify.perm
+    depends_on:
+      permify:
+        condition: service_healthy         # wait for Permify's own healthcheck
+    networks: [nexcom]
+    profiles: ["init"]                     # opt-in: not started by default
+
+  # ─── APISIX API Gateway + etcd ─────────────────────────────────────────────
+
+  etcd:
+    image: bitnami/etcd:3.5.12
+    container_name: nexcom-etcd
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+    volumes:
+      - apisix_data:/bitnami/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [nexcom]
+
+  apisix:
+    image: apache/apisix:3.9.1-debian
+    container_name: nexcom-apisix
+    volumes:
+      - ./services/middleware-hub/internal/apisix/apisix.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ./services/middleware-hub/internal/apisix/nexcom-routes.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+    environment:
+      APISIX_STAND_ALONE: "true"
+    ports:
+      - "9080:9080"
+      - "9443:9443"
+      - "9091:9091"
+    depends_on:
+      etcd: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9091/apisix/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [nexcom]
+
+  # ─── Dapr Placement Service ────────────────────────────────────────────────
+
+  dapr-placement:
+    image: daprio/dapr:1.13.4
+    container_name: nexcom-dapr-placement
+    command: ["./placement", "-port", "50006"]
+    ports:
+      - "50006:50006"
+    networks: [nexcom]
+
+  portal-dapr:
+    image: daprio/daprd:1.13.4
+    container_name: nexcom-portal-dapr
+    command:
+      - ./daprd
+      - --app-id=nexcom-portal
+      - --app-port=3000
+      - --dapr-http-port=3500
+      - --dapr-grpc-port=50001
+      - --placement-host-address=dapr-placement:50006
+      - --components-path=/components
+      - --log-level=info
+    volumes:
+      - ./services/middleware-hub/dapr/components:/components:ro
+    depends_on:
+      - dapr-placement
+      - kafka
+      - redis
+    network_mode: "service:portal"

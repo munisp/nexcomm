@@ -1,0 +1,84 @@
+##############################################################################
+# NEXCOM Exchange - Dapr Configuration
+# Global Dapr runtime configuration
+##############################################################################
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: nexcom-dapr-config
+  namespace: nexcom
+spec:
+  tracing:
+    samplingRate: "1"
+    otel:
+      endpointAddress: "opensearch:4317"
+      isSecure: false
+      protocol: grpc
+  metrics:
+    enabled: true
+    rules:
+      - name: nexcom_dapr_metrics
+        labels:
+          - name: method
+            regex:
+              ".*"
+  logging:
+    apiLogging:
+      enabled: true
+      obfuscateURLs: false
+  accessControl:
+    defaultAction: deny
+    trustDomain: "nexcom.exchange"
+    policies:
+      - appId: trading-engine
+        defaultAction: allow
+        trustDomain: "nexcom.exchange"
+        namespace: "nexcom"
+        operations:
+          - name: /api/v1/*
+            httpVerb: ["GET", "POST", "PUT"]
+            action: allow
+      - appId: settlement
+        defaultAction: allow
+        trustDomain: "nexcom.exchange"
+        namespace: "nexcom"
+        operations:
+          - name: /api/v1/settlement/*
+            httpVerb: ["GET", "POST"]
+            action: allow
+      - appId: risk-management
+        defaultAction: allow
+        trustDomain: "nexcom.exchange"
+        namespace: "nexcom"
+        operations:
+          - name: /api/v1/risk/*
+            httpVerb: ["GET", "POST"]
+            action: allow
+      - appId: market-data
+        defaultAction: allow
+        trustDomain: "nexcom.exchange"
+        namespace: "nexcom"
+      - appId: user-management
+        defaultAction: allow
+        trustDomain: "nexcom.exchange"
+        namespace: "nexcom"
+      - appId: notification
+        defaultAction: allow
+        trustDomain: "nexcom.exchange"
+        namespace: "nexcom"
+      - appId: ai-ml
+        defaultAction: allow
+        trustDomain: "nexcom.exchange"
+        namespace: "nexcom"
+      - appId: blockchain
+        defaultAction: allow
+        trustDomain: "nexcom.exchange"
+        namespace: "nexcom"
+  appHttpPipeline:
+    handlers:
+      - name: ratelimit
+        type: middleware.http.ratelimit
+        version: v1
+      - name: oauth2
+        type: middleware.http.oauth2
+        version: v1

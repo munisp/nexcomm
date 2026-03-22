@@ -1,0 +1,84 @@
+##############################################################################
+# NEXCOM Exchange - OpenAppSec WAF Policy
+# ML-based web application firewall for API protection
+##############################################################################
+
+policies:
+  - name: nexcom-exchange-policy
+    mode: prevent-learn
+    practices:
+      - name: web-application-best-practice
+        type: WebApplication
+        parameters:
+          - name: MinimumConfidence
+            value: "high"
+          - name: MaxBodySize
+            value: "10485760"  # 10MB for KYC document uploads
+    triggers:
+      - name: log-all-events
+        type: Log
+        parameters:
+          - name: LogServerAddress
+            value: "http://opensearch:9200"
+          - name: Format
+            value: "json"
+
+    # Custom rules for exchange-specific threats
+    custom-rules:
+      # Protect against order manipulation
+      - name: rate-limit-order-placement
+        condition:
+          uri: "/api/v1/orders"
+          method: "POST"
+        action: "detect"
+        rate-limit:
+          requests: 100
+          period: 60
+
+      # Protect against credential stuffing on auth
+      - name: rate-limit-auth
+        condition:
+          uri: "/api/v1/auth/login"
+          method: "POST"
+        action: "prevent"
+        rate-limit:
+          requests: 10
+          period: 300
+
+      # Block common exploit patterns
+      - name: block-sql-injection
+        condition:
+          parameter: "*"
+          pattern: "(?i)(union|select|insert|update|delete|drop|exec|execute|xp_|sp_)"
+        action: "prevent"
+
+      # Protect WebSocket connections
+      - name: websocket-protection
+        condition:
+          uri: "/ws/*"
+          method: "GET"
+        action: "detect"
+        rate-limit:
+          requests: 50
+          period: 60
+
+    # Trusted sources (internal services, monitoring)
+    exceptions:
+      - name: internal-services
+        condition:
+          sourceIP:
+            - "10.0.0.0/8"
+            - "172.16.0.0/12"
+        action: "accept"
+
+      - name: health-checks
+        condition:
+          uri: "/health"
+        action: "accept"
+
+      - name: metrics
+        condition:
+          uri: "/metrics"
+          sourceIP:
+            - "10.0.0.0/8"
+        action: "accept"

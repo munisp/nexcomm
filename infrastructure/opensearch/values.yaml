@@ -1,0 +1,55 @@
+##############################################################################
+# NEXCOM Exchange - OpenSearch Cluster Helm Values
+# Search, analytics, log aggregation, and observability
+##############################################################################
+
+clusterName: nexcom-opensearch
+
+replicas: 3
+
+opensearchJavaOpts: "-Xms2g -Xmx2g"
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 4Gi
+  limits:
+    cpu: "2"
+    memory: 8Gi
+
+persistence:
+  enabled: true
+  size: 100Gi
+  storageClass: gp3
+
+config:
+  opensearch.yml: |
+    cluster.name: nexcom-opensearch
+    network.host: 0.0.0.0
+
+    # Index lifecycle management
+    plugins.index_state_management.enabled: true
+
+    # Performance tuning for financial data
+    indices.memory.index_buffer_size: "30%"
+    thread_pool.write.queue_size: 1000
+    thread_pool.search.queue_size: 1000
+
+# Index templates for NEXCOM Exchange
+extraEnvs:
+  - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: nexcom-opensearch-secret
+        key: admin-password
+
+dashboards:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi

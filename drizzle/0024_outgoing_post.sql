@@ -1,0 +1,20 @@
+CREATE TABLE "mojaloop_dead_letter" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"transfer_id" varchar(64) NOT NULL,
+	"payer_fsp_id" varchar(64) NOT NULL,
+	"payee_fsp_id" varchar(64) NOT NULL,
+	"payer_identifier" varchar(128) NOT NULL,
+	"payee_identifier" varchar(128) NOT NULL,
+	"amount" numeric(18, 6) NOT NULL,
+	"currency" varchar(8) NOT NULL,
+	"status" varchar(32) DEFAULT 'FAILED' NOT NULL,
+	"error_message" text,
+	"retry_count" integer DEFAULT 0 NOT NULL,
+	"last_retry_at" timestamp,
+	"resolved" boolean DEFAULT false NOT NULL,
+	"resolved_at" timestamp,
+	"resolved_by" varchar(128),
+	"raw_payload" json,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);

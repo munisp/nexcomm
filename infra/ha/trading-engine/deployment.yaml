@@ -1,0 +1,213 @@
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXCOM Exchange — Go Trading Engine HA Deployment
+#
+# HA Contract:
+#   • minReplicas: 2 (active-active; stateless order routing)
+#   • PodDisruptionBudget: maxUnavailable=1
+#   • KEDA scales 2→12 based on trades.executed Kafka lag + CPU
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexcom-trading-engine
+  namespace: nexcom-engines
+  labels:
+    app: nexcom-trading-engine
+    app.kubernetes.io/name: trading-engine
+    app.kubernetes.io/component: trading
+    app.kubernetes.io/part-of: nexcom-exchange
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nexcom-trading-engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: nexcom-trading-engine
+        app.kubernetes.io/part-of: nexcom-exchange
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "trading-engine"
+        dapr.io/app-port: "8001"
+    spec:
+      serviceAccountName: nexcom-engine
+      terminationGracePeriodSeconds: 20
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: nexcom-trading-engine
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: nexcom-trading-engine
+                topologyKey: topology.kubernetes.io/zone
+
+      containers:
+        - name: trading-engine
+          image: nexcom/trading-engine:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8001
+            - name: metrics
+              containerPort: 9090
+
+          env:
+            - name: PORT
+              value: "8001"
+            - name: MATCHING_ENGINE_URL
+              value: "http://nexcom-matching-engine.nexcom-engines.svc.cluster.local:8080"
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: nexcom-engine-config
+            - secretRef:
+                name: nexcom-engine-secrets
+
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 3
+            failureThreshold: 10
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 2
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      priorityClassName: nexcom-critical
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexcom-trading-engine
+  namespace: nexcom-engines
+  labels:
+    app: nexcom-trading-engine
+spec:
+  selector:
+    app: nexcom-trading-engine
+  ports:
+    - name: http
+      port: 8001
+      targetPort: http
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nexcom-trading-engine-pdb
+  namespace: nexcom-engines
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nexcom-trading-engine
+
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: nexcom-trading-engine-scaler
+  namespace: nexcom-engines
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexcom-trading-engine
+  minReplicaCount: 2
+  maxReplicaCount: 12
+  pollingInterval: 15
+  cooldownPeriod: 60
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 180
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+        consumerGroup: "trading-engine-trades"
+        topic: "trades.executed"
+        lagThreshold: "300"
+        offsetResetPolicy: "latest"
+      authenticationRef:
+        name: nexcom-kafka-trigger-auth
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"

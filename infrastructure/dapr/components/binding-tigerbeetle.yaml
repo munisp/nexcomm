@@ -1,0 +1,21 @@
+##############################################################################
+# NEXCOM Exchange - Dapr Output Binding for TigerBeetle
+# Financial ledger integration via Dapr binding
+##############################################################################
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: nexcom-ledger
+  namespace: nexcom
+spec:
+  type: bindings.http
+  version: v1
+  metadata:
+    - name: url
+      value: "http://settlement:8005/api/v1/ledger"
+    - name: method
+      value: "POST"
+scopes:
+  - trading-engine
+  - settlement
+  - risk-management

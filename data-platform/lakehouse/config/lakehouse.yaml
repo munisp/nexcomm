@@ -1,0 +1,165 @@
+##############################################################################
+# NEXCOM Exchange - Lakehouse Configuration
+# Defines storage layers, table schemas, and processing pipelines
+##############################################################################
+
+storage:
+  backend: s3  # MinIO in dev, S3 in production
+  bucket: nexcom-lakehouse
+  region: us-east-1
+  endpoint: ${MINIO_ENDPOINT:http://minio:9000}
+
+layers:
+  bronze:
+    path: s3://nexcom-lakehouse/bronze/
+    format: parquet
+    retention_days: 90
+    tables:
+      - name: raw_trades
+        source: kafka://nexcom.trades.executed
+        partition_by: [date, symbol]
+      - name: raw_market_ticks
+        source: kafka://nexcom.marketdata.ticks
+        partition_by: [date, symbol]
+      - name: raw_orders
+        source: kafka://nexcom.orders.placed
+        partition_by: [date, symbol]
+      - name: raw_user_events
+        source: kafka://nexcom.users.events
+        partition_by: [date]
+      - name: raw_settlement_events
+        source: kafka://nexcom.settlement.completed
+        partition_by: [date]
+
+  silver:
+    path: s3://nexcom-lakehouse/silver/
+    format: delta
+    retention_days: 365
+    tables:
+      - name: trades
+        source: bronze.raw_trades
+        dedup_key: trade_id
+        quality_checks:
+          - not_null: [trade_id, symbol, price, quantity, buyer_id, seller_id]
+          - positive: [price, quantity]
+      - name: market_data
+        source: bronze.raw_market_ticks
+        dedup_key: [symbol, timestamp]
+        gap_fill: true
+        gap_fill_method: forward_fill
+      - name: orders
+        source: bronze.raw_orders
+        dedup_key: order_id
+      - name: settlements
+        source: bronze.raw_settlement_events
+        dedup_key: settlement_id
+
+  gold:
+    path: s3://nexcom-lakehouse/gold/
+    format: delta
+    retention_days: 730
+    tables:
+      - name: ohlcv_1m
+        source: silver.market_data
+        aggregation: ohlcv
+        interval: 1m
+      - name: ohlcv_1h
+        source: silver.market_data
+        aggregation: ohlcv
+        interval: 1h
+      - name: ohlcv_1d
+        source: silver.market_data
+        aggregation: ohlcv
+        interval: 1d
+      - name: daily_trading_summary
+        source: silver.trades
+        aggregation: daily_summary
+      - name: portfolio_analytics
+        source: [silver.trades, silver.orders]
+        aggregation: portfolio
+      - name: risk_metrics
+        source: [silver.trades, silver.market_data]
+        aggregation: risk
+      - name: geospatial_supply_chain
+        source: [silver.trades, external.warehouse_locations]
+        aggregation: geospatial
+
+# Flink streaming jobs
+flink:
+  jobs:
+    - name: trade-aggregation
+      source: kafka://nexcom.trades.executed
+      sink: delta://silver.trades
+      parallelism: 4
+      checkpoint_interval_ms: 10000
+
+    - name: market-data-ingestion
+      source: kafka://nexcom.marketdata.ticks
+      sink: delta://silver.market_data
+      parallelism: 8
+      checkpoint_interval_ms: 5000
+
+    - name: ohlcv-realtime
+      source: delta://silver.market_data
+      sink: delta://gold.ohlcv_1m
+      parallelism: 4
+      window_size: 1m
+
+# Spark batch jobs
+spark:
+  jobs:
+    - name: daily-analytics
+      schedule: "0 2 * * *"  # 2 AM daily
+      source: silver.*
+      sink: gold.daily_trading_summary
+      resources:
+        driver_memory: 4g
+        executor_memory: 8g
+        num_executors: 4
+
+    - name: portfolio-rebalance
+      schedule: "0 */6 * * *"  # Every 6 hours
+      source: [silver.trades, silver.orders]
+      sink: gold.portfolio_analytics
+
+    - name: risk-computation
+      schedule: "*/30 * * * *"  # Every 30 minutes
+      source: [silver.trades, silver.market_data]
+      sink: gold.risk_metrics
+
+# Ray ML training
+ray:
+  cluster:
+    head_resources:
+      cpu: 4
+      memory: 8Gi
+    worker_resources:
+      cpu: 8
+      memory: 16Gi
+      count: 3
+  jobs:
+    - name: price-forecasting-training
+      schedule: "0 4 * * 0"  # Weekly Sunday 4 AM
+      source: gold.ohlcv_1d
+      model_output: s3://nexcom-lakehouse/models/price-forecast/
+
+    - name: anomaly-detection-training
+      schedule: "0 3 * * *"  # Daily 3 AM
+      source: silver.trades
+      model_output: s3://nexcom-lakehouse/models/anomaly-detection/
+
+# Sedona geospatial
+sedona:
+  jobs:
+    - name: supply-chain-mapping
+      schedule: "0 6 * * *"  # Daily 6 AM
+      source:
+        trades: silver.trades
+        warehouses: external.warehouse_locations
+        routes: external.transport_routes
+      sink: gold.geospatial_supply_chain
+      operations:
+        - spatial_join
+        - distance_calculation
+        - route_optimization
+        - cluster_analysis

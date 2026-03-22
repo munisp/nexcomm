@@ -1,0 +1,150 @@
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXCOM Exchange — Prometheus ServiceMonitors for all 5 engine services
+#
+# Prerequisites:
+#   - Prometheus Operator (kube-prometheus-stack) installed
+#   - Each engine exposes /metrics on its service port
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── Matching Engine ──────────────────────────────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: matching-engine-monitor
+  namespace: nexcom
+  labels:
+    app: matching-engine
+    release: kube-prometheus-stack   # must match Prometheus operator's serviceMonitorSelector
+spec:
+  selector:
+    matchLabels:
+      app: matching-engine
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+  namespaceSelector:
+    matchNames:
+      - nexcom
+
+---
+# ─── Settlement Engine ────────────────────────────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: settlement-engine-monitor
+  namespace: nexcom
+  labels:
+    app: settlement-engine
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: settlement-engine
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - nexcom
+
+---
+# ─── Gateway Service ──────────────────────────────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gateway-service-monitor
+  namespace: nexcom
+  labels:
+    app: gateway-service
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: gateway-service
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - nexcom
+
+---
+# ─── Trading Engine ───────────────────────────────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: trading-engine-monitor
+  namespace: nexcom
+  labels:
+    app: trading-engine
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: trading-engine
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - nexcom
+
+---
+# ─── Risk Management ──────────────────────────────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: risk-management-monitor
+  namespace: nexcom
+  labels:
+    app: risk-management
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: risk-management
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - nexcom
+
+---
+# ─── NEXCOM Node.js Portal (Express server) ───────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nexcom-portal-monitor
+  namespace: nexcom
+  labels:
+    app: nexcom-portal
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: nexcom-portal
+  endpoints:
+    - port: http
+      path: /api/ha/status/metrics   # our custom Prometheus endpoint
+      interval: 30s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - nexcom

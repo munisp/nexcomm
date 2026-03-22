@@ -1,0 +1,141 @@
+---
+# =============================================================================
+# NEXCOM — Grafana OnCall Dependencies
+# PostgreSQL (dedicated instance for OnCall) + Redis
+# =============================================================================
+
+# ─── PostgreSQL for Grafana OnCall ───────────────────────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-oncall-postgres-secret
+  namespace: monitoring
+  labels:
+    app: grafana-oncall-postgres
+type: Opaque
+stringData:
+  POSTGRES_DB: oncall
+  POSTGRES_USER: oncall
+  # Replace with a strong password before deploying to production
+  POSTGRES_PASSWORD: "oncall_secure_2026_CHANGEME"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-oncall-postgres-pvc
+  namespace: monitoring
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: grafana-oncall-postgres
+  namespace: monitoring
+  labels:
+    app: grafana-oncall-postgres
+spec:
+  serviceName: grafana-oncall-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana-oncall-postgres
+  template:
+    metadata:
+      labels:
+        app: grafana-oncall-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: grafana-oncall-postgres-secret
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "oncall", "-d", "oncall"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-oncall-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-oncall-postgres
+  namespace: monitoring
+spec:
+  selector:
+    app: grafana-oncall-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  clusterIP: None  # headless for StatefulSet DNS
+
+# ─── Redis for Grafana OnCall (task queue + caching) ─────────────────────────
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-oncall-redis
+  namespace: monitoring
+  labels:
+    app: grafana-oncall-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana-oncall-redis
+  template:
+    metadata:
+      labels:
+        app: grafana-oncall-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-oncall-redis
+  namespace: monitoring
+spec:
+  selector:
+    app: grafana-oncall-redis
+  ports:
+    - port: 6379
+      targetPort: 6379

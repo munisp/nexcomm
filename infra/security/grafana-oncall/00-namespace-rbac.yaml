@@ -1,0 +1,51 @@
+---
+# =============================================================================
+# NEXCOM Commodity Exchange — Grafana OnCall
+# Open-source on-call alerting (replaces PagerDuty)
+# Namespace, RBAC, and ServiceAccount
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/part-of: nexcom-observability
+    nexcom.io/tier: security
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-oncall
+  namespace: monitoring
+  labels:
+    app: grafana-oncall
+    app.kubernetes.io/part-of: nexcom-observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: grafana-oncall
+  labels:
+    app: grafana-oncall
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: grafana-oncall
+  labels:
+    app: grafana-oncall
+subjects:
+  - kind: ServiceAccount
+    name: grafana-oncall
+    namespace: monitoring
+roleRef:
+  kind: ClusterRole
+  name: grafana-oncall
+  apiGroup: rbac.authorization.k8s.io

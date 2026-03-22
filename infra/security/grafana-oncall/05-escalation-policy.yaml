@@ -1,0 +1,187 @@
+---
+# =============================================================================
+# NEXCOM — Grafana OnCall Escalation Policy Seed
+# Applied via the OnCall API after initial setup.
+# Run: kubectl apply -f 05-escalation-policy.yaml
+#      kubectl exec -n monitoring deploy/grafana-oncall-engine -- python manage.py shell < /tmp/seed-policy.py
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-oncall-policy-seed
+  namespace: monitoring
+  labels:
+    app: grafana-oncall
+data:
+  # Django management command script to seed escalation policies via OnCall API
+  seed-policy.py: |
+    """
+    Seeds Grafana OnCall with NEXCOM-specific escalation policies.
+    Run once after initial deployment:
+      kubectl exec -n monitoring deploy/grafana-oncall-engine -- \
+        python manage.py shell < /tmp/seed-policy.py
+    """
+    import os
+    import requests
+
+    BASE = os.environ.get("BASE_URL", "http://localhost:8080")
+    GRAFANA_URL = os.environ.get("GRAFANA_API_URL", "http://grafana:3000")
+    ADMIN_USER = "admin"
+    ADMIN_PASS = os.environ.get("GF_SECURITY_ADMIN_PASSWORD", "nexcom_grafana_CHANGEME_2026")
+
+    session = requests.Session()
+    session.auth = (ADMIN_USER, ADMIN_PASS)
+
+    def api(method, path, **kwargs):
+        url = f"{GRAFANA_URL}/api/plugins/grafana-oncall-app/resources{path}"
+        resp = session.request(method, url, **kwargs)
+        resp.raise_for_status()
+        return resp.json()
+
+    # ── Create on-call schedule ───────────────────────────────────────────────
+    print("Creating NEXCOM Security On-Call schedule...")
+    try:
+        schedule = api("POST", "/api/v1/schedules/", json={
+            "name": "NEXCOM Security On-Call",
+            "type": "web",
+            "time_zone": "Africa/Lagos",
+            "slack": {"channel_id": ""},  # fill in Slack channel ID
+        })
+        schedule_id = schedule["id"]
+        print(f"  Schedule created: {schedule_id}")
+    except Exception as e:
+        print(f"  Schedule creation failed (may already exist): {e}")
+        schedule_id = None
+
+    # ── Create escalation chain ───────────────────────────────────────────────
+    print("Creating P0/P1 escalation chain...")
+    try:
+        chain = api("POST", "/api/v1/escalation_chains/", json={
+            "name": "NEXCOM P0-P1 Critical Escalation",
+        })
+        chain_id = chain["id"]
+        print(f"  Chain created: {chain_id}")
+
+        # Step 1: Notify on-call (0 min delay)
+        api("POST", "/api/v1/escalation_policies/", json={
+            "escalation_chain": chain_id,
+            "step": 0,
+            "type": "notify_on_call_from_schedule",
+            "notify_on_call_from_schedule": schedule_id,
+            "important": True,
+        })
+        # Step 2: Wait 5 minutes, then notify again
+        api("POST", "/api/v1/escalation_policies/", json={
+            "escalation_chain": chain_id,
+            "step": 1,
+            "type": "wait",
+            "duration": 300,
+        })
+        api("POST", "/api/v1/escalation_policies/", json={
+            "escalation_chain": chain_id,
+            "step": 2,
+            "type": "notify_on_call_from_schedule",
+            "notify_on_call_from_schedule": schedule_id,
+            "important": True,
+        })
+        # Step 3: Wait 10 more minutes, then notify all team members
+        api("POST", "/api/v1/escalation_policies/", json={
+            "escalation_chain": chain_id,
+            "step": 3,
+            "type": "wait",
+            "duration": 600,
+        })
+        api("POST", "/api/v1/escalation_policies/", json={
+            "escalation_chain": chain_id,
+            "step": 4,
+            "type": "notify_whole_channel",
+        })
+        print("  Escalation steps created")
+    except Exception as e:
+        print(f"  Escalation chain creation failed: {e}")
+
+    # ── Create P2/P3 escalation chain ─────────────────────────────────────────
+    print("Creating P2/P3 medium escalation chain...")
+    try:
+        chain_p2 = api("POST", "/api/v1/escalation_chains/", json={
+            "name": "NEXCOM P2-P3 Medium Escalation",
+        })
+        chain_p2_id = chain_p2["id"]
+        api("POST", "/api/v1/escalation_policies/", json={
+            "escalation_chain": chain_p2_id,
+            "step": 0,
+            "type": "notify_on_call_from_schedule",
+            "notify_on_call_from_schedule": schedule_id,
+            "important": False,
+        })
+        api("POST", "/api/v1/escalation_policies/", json={
+            "escalation_chain": chain_p2_id,
+            "step": 1,
+            "type": "wait",
+            "duration": 900,  # 15 minutes
+        })
+        api("POST", "/api/v1/escalation_policies/", json={
+            "escalation_chain": chain_p2_id,
+            "step": 2,
+            "type": "notify_on_call_from_schedule",
+            "notify_on_call_from_schedule": schedule_id,
+            "important": True,
+        })
+        print(f"  P2/P3 chain created: {chain_p2_id}")
+    except Exception as e:
+        print(f"  P2/P3 chain creation failed: {e}")
+
+    print("\nEscalation policy seeding complete.")
+    print("Next steps:")
+    print("  1. Open https://grafana.nexcom.exchange → OnCall → Schedules")
+    print("  2. Add team members to the on-call schedule")
+    print("  3. Configure Slack channel in the schedule settings")
+    print("  4. Install the Grafana OnCall mobile app for push notifications")
+
+  # Helm values override for grafana-oncall chart (alternative to manual YAML)
+  helm-values.yaml: |
+    # Grafana OnCall Helm chart values
+    # helm repo add grafana https://grafana.github.io/helm-charts
+    # helm install grafana-oncall grafana/oncall \
+    #   --namespace monitoring \
+    #   --values helm-values.yaml
+    oncall:
+      image:
+        tag: latest
+      env:
+        BASE_URL: "https://oncall.nexcom.exchange"
+        SECRET_KEY: "CHANGEME_generate_with_python3_secrets_token_hex_32"
+      externalGrafana:
+        url: "https://grafana.nexcom.exchange"
+      database:
+        type: postgresql
+      externalPostgresql:
+        host: grafana-oncall-postgres.monitoring.svc.cluster.local
+        port: 5432
+        db: oncall
+        user: oncall
+        password: oncall_secure_2026_CHANGEME
+      externalRedis:
+        host: grafana-oncall-redis.monitoring.svc.cluster.local
+        port: 6379
+    grafana:
+      enabled: false  # We deploy Grafana separately
+    postgresql:
+      enabled: false  # We use our own PostgreSQL
+    redis:
+      enabled: false  # We use our own Redis
+    ingress:
+      enabled: true
+      annotations:
+        kubernetes.io/ingress.class: nginx
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+      hosts:
+        - host: oncall.nexcom.exchange
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: oncall-tls
+          hosts:
+            - oncall.nexcom.exchange

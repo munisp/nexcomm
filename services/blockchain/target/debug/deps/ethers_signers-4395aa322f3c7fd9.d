@@ -1,0 +1,9 @@
+/home/ubuntu/nexcom-farmer-portal/services/blockchain/target/debug/deps/ethers_signers-4395aa322f3c7fd9.d: /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/lib.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/wallet/mod.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/wallet/mnemonic.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/wallet/private_key.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/../README.md
+
+/home/ubuntu/nexcom-farmer-portal/services/blockchain/target/debug/deps/libethers_signers-4395aa322f3c7fd9.rmeta: /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/lib.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/wallet/mod.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/wallet/mnemonic.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/wallet/private_key.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/../README.md
+
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/lib.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/wallet/mod.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/wallet/mnemonic.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/wallet/private_key.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ethers-signers-2.0.14/src/../README.md:

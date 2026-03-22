@@ -1,0 +1,281 @@
+---
+# =============================================================================
+# NEXCOM Commodity Exchange — PgBouncer Kubernetes Deployment
+# Transaction-mode connection pooler for PostgreSQL
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom-db
+  labels:
+    app.kubernetes.io/part-of: nexcom
+
+---
+# ConfigMap: PgBouncer configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  namespace: nexcom-db
+  labels:
+    app: pgbouncer
+    app.kubernetes.io/part-of: nexcom
+data:
+  pgbouncer.ini: |
+    [databases]
+    nexcom = host=postgres-service port=5432 dbname=nexcom
+    nexcom_read = host=postgres-replica-service port=5432 dbname=nexcom
+
+    [pgbouncer]
+    pool_mode = transaction
+    max_client_conn = 10000
+    default_pool_size = 100
+    min_pool_size = 10
+    reserve_pool_size = 20
+    reserve_pool_timeout = 3
+    max_db_connections = 150
+    server_idle_timeout = 600
+    query_timeout = 30
+    transaction_timeout = 60
+    auth_type = scram-sha-256
+    auth_file = /etc/pgbouncer/userlist.txt
+    admin_users = pgbouncer_admin
+    stats_users = pgbouncer_monitor,pgbouncer_admin
+    client_tls_sslmode = require
+    client_tls_cert_file = /etc/pgbouncer/tls/server.crt
+    client_tls_key_file = /etc/pgbouncer/tls/server.key
+    client_tls_ca_file = /etc/pgbouncer/tls/ca.crt
+    server_tls_sslmode = require
+    server_tls_ca_file = /etc/pgbouncer/tls/ca.crt
+    listen_addr = *
+    listen_port = 5432
+    tcp_keepalive = 1
+    server_reset_query = DISCARD ALL
+    server_check_query = SELECT 1
+    server_check_delay = 30
+    ignore_startup_parameters = extra_float_digits,options
+    log_connections = 1
+    log_disconnections = 1
+    stats_period = 60
+
+---
+# Deployment: PgBouncer
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  namespace: nexcom-db
+  labels:
+    app: pgbouncer
+    app.kubernetes.io/part-of: nexcom
+spec:
+  replicas: 2  # Two replicas for HA; both connect to the same PostgreSQL
+  selector:
+    matchLabels:
+      app: pgbouncer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+        app.kubernetes.io/part-of: nexcom
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9127"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: pgbouncer-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70  # postgres user
+        fsGroup: 70
+      containers:
+        - name: pgbouncer
+          image: bitnami/pgbouncer:1.23.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: pgbouncer
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: PGBOUNCER_DATABASE
+              value: nexcom
+            - name: POSTGRESQL_HOST
+              value: postgres-service
+            - name: POSTGRESQL_PORT
+              value: "5432"
+            - name: POSTGRESQL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: PGBOUNCER_POOL_MODE
+              value: transaction
+            - name: PGBOUNCER_MAX_CLIENT_CONN
+              value: "10000"
+            - name: PGBOUNCER_DEFAULT_POOL_SIZE
+              value: "100"
+          volumeMounts:
+            - name: pgbouncer-config
+              mountPath: /bitnami/pgbouncer/conf
+              readOnly: true
+            - name: pgbouncer-tls
+              mountPath: /etc/pgbouncer/tls
+              readOnly: true
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+        # Sidecar: pgbouncer_exporter for Prometheus metrics
+        - name: pgbouncer-exporter
+          image: prometheuscommunity/pgbouncer-exporter:v0.8.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: metrics
+              containerPort: 9127
+              protocol: TCP
+          env:
+            - name: DATA_SOURCE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: pgbouncer-exporter-credentials
+                  key: dsn
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+      volumes:
+        - name: pgbouncer-config
+          configMap:
+            name: pgbouncer-config
+        - name: pgbouncer-tls
+          secret:
+            secretName: pgbouncer-tls-secret
+
+---
+# Service: PgBouncer (ClusterIP — internal only)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer-service
+  namespace: nexcom-db
+  labels:
+    app: pgbouncer
+    app.kubernetes.io/part-of: nexcom
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9127"
+spec:
+  type: ClusterIP
+  selector:
+    app: pgbouncer
+  ports:
+    - name: pgbouncer
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+    - name: metrics
+      port: 9127
+      targetPort: 9127
+      protocol: TCP
+
+---
+# ServiceAccount: PgBouncer
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pgbouncer-sa
+  namespace: nexcom-db
+  labels:
+    app: pgbouncer
+
+---
+# PodDisruptionBudget: ensure at least 1 PgBouncer is always available
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pgbouncer-pdb
+  namespace: nexcom-db
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: pgbouncer
+
+---
+# NetworkPolicy: only allow nexcom namespace to connect to PgBouncer
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pgbouncer-network-policy
+  namespace: nexcom-db
+spec:
+  podSelector:
+    matchLabels:
+      app: pgbouncer
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow connections from nexcom application pods
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nexcom
+      ports:
+        - port: 5432
+    # Allow Prometheus scraping from monitoring namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 9127
+  egress:
+    # Allow connections to PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - port: 5432

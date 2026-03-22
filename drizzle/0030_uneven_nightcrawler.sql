@@ -1,0 +1,1 @@
+ALTER TABLE "farm_profiles" ADD COLUMN "boundary" jsonb;

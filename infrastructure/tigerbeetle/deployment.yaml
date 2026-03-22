@@ -1,0 +1,107 @@
+##############################################################################
+# NEXCOM Exchange - TigerBeetle Deployment
+# Ultra-high-performance financial accounting database
+# Handles double-entry bookkeeping for all exchange transactions
+##############################################################################
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tigerbeetle
+  namespace: nexcom-infra
+  labels:
+    app: tigerbeetle
+    app.kubernetes.io/part-of: nexcom-exchange
+    tier: data
+spec:
+  serviceName: tigerbeetle
+  replicas: 3
+  selector:
+    matchLabels:
+      app: tigerbeetle
+  template:
+    metadata:
+      labels:
+        app: tigerbeetle
+    spec:
+      containers:
+        - name: tigerbeetle
+          image: ghcr.io/tigerbeetle/tigerbeetle:0.15.6
+          command: ["./tigerbeetle"]
+          args:
+            - "start"
+            - "--addresses=0.0.0.0:3001"
+            - "/data/0_0.tigerbeetle"
+          ports:
+            - containerPort: 3001
+              name: tb-client
+              protocol: TCP
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "2"
+            limits:
+              memory: "8Gi"
+              cpu: "4"
+          volumeMounts:
+            - name: tigerbeetle-data
+              mountPath: /data
+          livenessProbe:
+            tcpSocket:
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - tigerbeetle
+              topologyKey: "kubernetes.io/hostname"
+  volumeClaimTemplates:
+    - metadata:
+        name: tigerbeetle-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gp3-iops
+        resources:
+          requests:
+            storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tigerbeetle
+  namespace: nexcom-infra
+  labels:
+    app: tigerbeetle
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3001
+      targetPort: 3001
+      protocol: TCP
+      name: tb-client
+  selector:
+    app: tigerbeetle
+---
+# StorageClass optimized for TigerBeetle's IO requirements
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3-iops
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  iops: "16000"
+  throughput: "1000"
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

@@ -1,0 +1,122 @@
+---
+# NEXCOM Fluvio Sidecar — Kubernetes Deployment
+# Bridges official Fluvio Python SDK to REST/WebSocket for Go gateway
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fluvio-sidecar
+  namespace: nexcom
+  labels:
+    app: fluvio-sidecar
+    component: streaming
+    tier: middleware
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fluvio-sidecar
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: fluvio-sidecar
+        component: streaming
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: nexcom-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: fluvio-sidecar
+          image: nexcom/fluvio-sidecar:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: FLUVIO_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: nexcom-config
+                  key: FLUVIO_ENDPOINT
+            - name: FLUVIO_SIDECAR_PORT
+              value: "9090"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fluvio-sidecar
+  namespace: nexcom
+  labels:
+    app: fluvio-sidecar
+spec:
+  selector:
+    app: fluvio-sidecar
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP
+---
+# HPA: scale based on CPU and custom Kafka lag metric
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fluvio-sidecar-hpa
+  namespace: nexcom
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fluvio-sidecar
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

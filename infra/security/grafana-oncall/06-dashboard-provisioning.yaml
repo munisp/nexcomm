@@ -1,0 +1,729 @@
+---
+# =============================================================================
+# NEXCOM Commodity Exchange — Grafana Dashboard Provisioning
+#
+# Automatically provisions the NEXCOM Security Overview dashboard on first
+# Grafana startup. No manual import required.
+#
+# Apply together with the rest of the Grafana OnCall stack:
+#   kubectl apply -f infra/security/grafana-oncall/
+#
+# Dashboards included:
+#   1. NEXCOM Security Overview  — Wazuh alert rates, agent status, top rules
+#   2. NEXCOM Trading Anomalies  — Market manipulation, unusual order patterns
+#   3. NEXCOM Infra Health       — K8s pod restarts, CPU/memory, service uptime
+# =============================================================================
+
+# ─── ConfigMap: Grafana datasource provisioning ───────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+  labels:
+    app: grafana
+    app.kubernetes.io/part-of: nexcom-security
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      # Prometheus — metrics from Wazuh, KEDA, and NEXCOM services
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+        isDefault: true
+        jsonData:
+          timeInterval: "15s"
+          queryTimeout: "60s"
+          httpMethod: POST
+
+      # Loki — structured logs from all NEXCOM pods
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc.cluster.local:3100
+        jsonData:
+          maxLines: 5000
+
+      # PostgreSQL — direct query for trade/order analytics
+      - name: PostgreSQL
+        type: postgres
+        url: postgresql.nexcom.svc.cluster.local:5432
+        database: nexcom
+        user: grafana_ro
+        secureJsonData:
+          password: "${GRAFANA_PG_PASSWORD}"
+        jsonData:
+          sslmode: require
+          postgresVersion: 1500
+          timescaledb: false
+
+---
+# ─── ConfigMap: Grafana dashboard provisioning config ─────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-providers
+  namespace: monitoring
+  labels:
+    app: grafana
+    app.kubernetes.io/part-of: nexcom-security
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: nexcom-security
+        orgId: 1
+        folder: "NEXCOM Security"
+        folderUid: "nexcom-security"
+        type: file
+        disableDeletion: true
+        updateIntervalSeconds: 30
+        allowUiUpdates: false
+        options:
+          path: /var/lib/grafana/dashboards/nexcom-security
+
+      - name: nexcom-trading
+        orgId: 1
+        folder: "NEXCOM Trading"
+        folderUid: "nexcom-trading"
+        type: file
+        disableDeletion: true
+        updateIntervalSeconds: 30
+        allowUiUpdates: false
+        options:
+          path: /var/lib/grafana/dashboards/nexcom-trading
+
+      - name: nexcom-infra
+        orgId: 1
+        folder: "NEXCOM Infrastructure"
+        folderUid: "nexcom-infra"
+        type: file
+        disableDeletion: true
+        updateIntervalSeconds: 30
+        allowUiUpdates: false
+        options:
+          path: /var/lib/grafana/dashboards/nexcom-infra
+
+---
+# ─── ConfigMap: NEXCOM Security Overview dashboard JSON ───────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-nexcom-security
+  namespace: monitoring
+  labels:
+    app: grafana
+    app.kubernetes.io/part-of: nexcom-security
+data:
+  nexcom-security-overview.json: |
+    {
+      "id": null,
+      "uid": "nexcom-security-overview",
+      "title": "NEXCOM Security Overview",
+      "description": "Wazuh SIEM alert rates, agent connectivity, and top triggered rules for NEXCOM Commodity Exchange",
+      "tags": ["nexcom", "security", "wazuh", "siem"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-6h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "severity",
+            "type": "custom",
+            "label": "Severity",
+            "options": [
+              { "text": "All", "value": ".*", "selected": true },
+              { "text": "Critical (10+)", "value": "1[0-9]" },
+              { "text": "High (7-9)", "value": "[7-9]" },
+              { "text": "Medium (4-6)", "value": "[4-6]" }
+            ],
+            "current": { "text": "All", "value": ".*" }
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Total Alerts (Last 1h)",
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "center",
+            "textMode": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"] }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 10 },
+                  { "color": "red", "value": 50 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "sum(increase(wazuh_alerts_total[1h]))",
+              "legendFormat": "Total Alerts"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Critical Alerts (Level 10+)",
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "center",
+            "textMode": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"] }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "sum(increase(wazuh_alerts_total{level=~\"1[0-9]\"}[1h]))",
+              "legendFormat": "Critical"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Active Wazuh Agents",
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "textMode": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"] }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "green", "value": 3 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "wazuh_agents_active",
+              "legendFormat": "Active Agents"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Disconnected Agents",
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "textMode": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"] }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "wazuh_agents_disconnected",
+              "legendFormat": "Disconnected"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Wazuh Manager Uptime",
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "textMode": "value_and_name",
+            "reduceOptions": { "calcs": ["lastNotNull"] }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "green", "value": 60 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "process_uptime_seconds{job=\"wazuh-manager\"}",
+              "legendFormat": "Uptime"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Alert Rate by Severity (per minute)",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": { "lineWidth": 2, "fillOpacity": 10 }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "sum by (level) (rate(wazuh_alerts_total[1m]))",
+              "legendFormat": "Level {{level}}"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "piechart",
+          "title": "Alerts by Rule Group",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "right" },
+            "pieType": "donut"
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "topk(10, sum by (rule_group) (increase(wazuh_alerts_total[6h])))",
+              "legendFormat": "{{rule_group}}"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "table",
+          "title": "Top 20 Triggered Rules (Last 6h)",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
+          "options": {
+            "sortBy": [{ "displayName": "Alert Count", "desc": true }],
+            "footer": { "show": false }
+          },
+          "fieldConfig": {
+            "defaults": { "custom": { "align": "auto" } },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "Alert Count" },
+                "properties": [{ "id": "custom.width", "value": 120 }, { "id": "custom.displayMode", "value": "color-background" }] },
+              { "matcher": { "id": "byName", "options": "Rule ID" },
+                "properties": [{ "id": "custom.width", "value": 90 }] }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "topk(20, sum by (rule_id, rule_description, level) (increase(wazuh_alerts_total[6h])))",
+              "legendFormat": "",
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            { "id": "organize", "options": {
+              "renameByName": {
+                "rule_id": "Rule ID",
+                "rule_description": "Description",
+                "level": "Severity",
+                "Value": "Alert Count"
+              }
+            }}
+          ]
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "NEXCOM-Specific Security Events",
+          "description": "Market manipulation, KYC fraud, SQL injection, container escape attempts",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 },
+          "options": {
+            "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right" },
+            "tooltip": { "mode": "multi" }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": { "lineWidth": 2, "fillOpacity": 15 }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "sum(rate(wazuh_alerts_total{rule_group=\"nexcom_trading\"}[5m]))",
+              "legendFormat": "Trading Anomalies"
+            },
+            {
+              "datasource": "Prometheus",
+              "expr": "sum(rate(wazuh_alerts_total{rule_group=\"nexcom_kyc\"}[5m]))",
+              "legendFormat": "KYC / Fraud"
+            },
+            {
+              "datasource": "Prometheus",
+              "expr": "sum(rate(wazuh_alerts_total{rule_group=\"market_manipulation\"}[5m]))",
+              "legendFormat": "Market Manipulation"
+            },
+            {
+              "datasource": "Prometheus",
+              "expr": "sum(rate(wazuh_alerts_total{rule_group=\"web_attack\"}[5m]))",
+              "legendFormat": "SQL Injection / XSS"
+            },
+            {
+              "datasource": "Prometheus",
+              "expr": "sum(rate(wazuh_alerts_total{rule_group=\"container_security\"}[5m]))",
+              "legendFormat": "Container Escape"
+            }
+          ]
+        }
+      ]
+    }
+
+  nexcom-trading-anomalies.json: |
+    {
+      "id": null,
+      "uid": "nexcom-trading-anomalies",
+      "title": "NEXCOM Trading Anomalies",
+      "description": "Real-time monitoring of unusual trading patterns, large orders, and market manipulation indicators",
+      "tags": ["nexcom", "trading", "security", "anomaly"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "15s",
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Active Orders",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "datasource": "PostgreSQL",
+              "rawSql": "SELECT COUNT(*) as value FROM orders WHERE status = 'OPEN' AND created_at > NOW() - INTERVAL '1 hour'",
+              "format": "table"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Large Orders (>$100k)",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 5 },
+                  { "color": "red", "value": 20 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "PostgreSQL",
+              "rawSql": "SELECT COUNT(*) as value FROM orders WHERE quantity * price > 100000 AND created_at > NOW() - INTERVAL '1 hour'",
+              "format": "table"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Cancelled Orders (Last 1h)",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+          "targets": [
+            {
+              "datasource": "PostgreSQL",
+              "rawSql": "SELECT COUNT(*) as value FROM orders WHERE status = 'CANCELLED' AND updated_at > NOW() - INTERVAL '1 hour'",
+              "format": "table"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Margin Calls Triggered",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "PostgreSQL",
+              "rawSql": "SELECT COUNT(*) as value FROM collateral_ledger WHERE action = 'MARGIN_CALL' AND created_at > NOW() - INTERVAL '24 hours'",
+              "format": "table"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Order Volume Over Time",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+          "targets": [
+            {
+              "datasource": "PostgreSQL",
+              "rawSql": "SELECT date_trunc('minute', created_at) as time, COUNT(*) as orders, SUM(quantity * price) as volume FROM orders WHERE created_at > NOW() - INTERVAL '1 hour' GROUP BY 1 ORDER BY 1",
+              "format": "time_series"
+            }
+          ]
+        }
+      ]
+    }
+
+---
+# ─── ConfigMap: NEXCOM Infra Health dashboard ─────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-nexcom-infra
+  namespace: monitoring
+  labels:
+    app: grafana
+    app.kubernetes.io/part-of: nexcom-security
+data:
+  nexcom-infra-health.json: |
+    {
+      "id": null,
+      "uid": "nexcom-infra-health",
+      "title": "NEXCOM Infrastructure Health",
+      "description": "Kubernetes pod health, service uptime, CPU/memory for all NEXCOM services",
+      "tags": ["nexcom", "infrastructure", "kubernetes"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-3h", "to": "now" },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Running Pods",
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "count(kube_pod_status_phase{namespace=~\"nexcom.*\",phase=\"Running\"})",
+              "legendFormat": "Running"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Pending / Failed Pods",
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "count(kube_pod_status_phase{namespace=~\"nexcom.*\",phase=~\"Pending|Failed\"}) or vector(0)",
+              "legendFormat": "Unhealthy"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Pod Restarts (Last 1h)",
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 3 },
+                  { "color": "red", "value": 10 }
+                ]
+              }
+            }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"nexcom.*\"}[1h]))",
+              "legendFormat": "Restarts"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "CPU Usage by Service",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=~\"nexcom.*\",container!=\"\"}[5m]))",
+              "legendFormat": "{{pod}}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Memory Usage by Service",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+          "fieldConfig": {
+            "defaults": { "unit": "bytes" }
+          },
+          "targets": [
+            {
+              "datasource": "Prometheus",
+              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=~\"nexcom.*\",container!=\"\"})",
+              "legendFormat": "{{pod}}"
+            }
+          ]
+        }
+      ]
+    }
+
+---
+# ─── Patch: Mount dashboard ConfigMaps into Grafana deployment ────────────────
+# Apply this patch after the main Grafana deployment is running:
+#   kubectl patch deployment grafana -n monitoring --patch-file 06-dashboard-provisioning-patch.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-mount-patch
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: nexcom-security
+  annotations:
+    description: "Apply with: kubectl patch deployment grafana -n monitoring -p $(kubectl get cm grafana-dashboard-mount-patch -n monitoring -o jsonpath='{.data.patch}')"
+data:
+  patch: |
+    {
+      "spec": {
+        "template": {
+          "spec": {
+            "volumes": [
+              {
+                "name": "grafana-datasources",
+                "configMap": { "name": "grafana-datasources" }
+              },
+              {
+                "name": "grafana-dashboard-providers",
+                "configMap": { "name": "grafana-dashboard-providers" }
+              },
+              {
+                "name": "grafana-dashboard-security",
+                "configMap": { "name": "grafana-dashboard-nexcom-security" }
+              },
+              {
+                "name": "grafana-dashboard-infra",
+                "configMap": { "name": "grafana-dashboard-nexcom-infra" }
+              }
+            ],
+            "containers": [
+              {
+                "name": "grafana",
+                "volumeMounts": [
+                  {
+                    "name": "grafana-datasources",
+                    "mountPath": "/etc/grafana/provisioning/datasources",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "grafana-dashboard-providers",
+                    "mountPath": "/etc/grafana/provisioning/dashboards",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "grafana-dashboard-security",
+                    "mountPath": "/var/lib/grafana/dashboards/nexcom-security",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "grafana-dashboard-infra",
+                    "mountPath": "/var/lib/grafana/dashboards/nexcom-infra",
+                    "readOnly": true
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }

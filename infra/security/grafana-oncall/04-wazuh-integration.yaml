@@ -1,0 +1,243 @@
+---
+# =============================================================================
+# NEXCOM — Wazuh → Grafana OnCall Integration
+# Replaces PagerDuty with open-source Grafana OnCall for incident alerting.
+#
+# Integration flow:
+#   Wazuh Manager → HTTP webhook → Grafana OnCall engine → escalation policy
+#                                                         → Slack / mobile push
+#
+# After deploying, register the webhook in Grafana OnCall:
+#   1. Open https://grafana.nexcom.exchange → OnCall → Integrations
+#   2. Click "New Integration" → "Webhook"
+#   3. Name: "Wazuh SIEM"
+#   4. Copy the generated webhook URL
+#   5. Update the ONCALL_WEBHOOK_URL in the ConfigMap below
+#   6. kubectl apply -f 04-wazuh-integration.yaml
+#   7. kubectl rollout restart statefulset/wazuh-manager -n wazuh
+# =============================================================================
+
+# ─── Wazuh custom integration script for Grafana OnCall ──────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wazuh-oncall-integration
+  namespace: wazuh
+  labels:
+    app: wazuh-manager
+    app.kubernetes.io/part-of: nexcom-security
+data:
+  # Grafana OnCall webhook URL — update after creating integration in OnCall UI
+  # Format: https://oncall.nexcom.exchange/integrations/v1/webhook/<TOKEN>/
+  ONCALL_WEBHOOK_URL: "https://oncall.nexcom.exchange/integrations/v1/webhook/CHANGEME_AFTER_CREATING_INTEGRATION/"
+
+  # Python integration script — placed at /var/ossec/integrations/custom-oncall.py
+  custom-oncall.py: |
+    #!/usr/bin/env python3
+    """
+    Wazuh → Grafana OnCall integration script.
+    Triggered by Wazuh for alerts at or above the configured level.
+
+    Wazuh calls: custom-oncall.py <alert_file> <api_key> <hook_url>
+    """
+    import json
+    import sys
+    import os
+    import urllib.request
+    import urllib.error
+    from datetime import datetime, timezone
+
+    # ── Severity mapping ──────────────────────────────────────────────────────
+    SEVERITY_MAP = {
+        range(0, 4):   ("info",     "P4"),
+        range(4, 7):   ("warning",  "P3"),
+        range(7, 10):  ("error",    "P2"),
+        range(10, 13): ("critical", "P1"),
+        range(13, 16): ("critical", "P0"),  # highest severity
+    }
+
+    def get_severity(level: int) -> tuple[str, str]:
+        for r, (sev, priority) in SEVERITY_MAP.items():
+            if level in r:
+                return sev, priority
+        return "critical", "P0"
+
+    def build_oncall_payload(alert: dict) -> dict:
+        rule = alert.get("rule", {})
+        agent = alert.get("agent", {})
+        level = int(rule.get("level", 0))
+        severity, priority = get_severity(level)
+
+        title = f"[{priority}] Wazuh Alert: {rule.get('description', 'Unknown alert')}"
+        body = (
+            f"**Agent:** {agent.get('name', 'unknown')} ({agent.get('ip', 'unknown')})\n"
+            f"**Rule ID:** {rule.get('id', 'N/A')} | **Level:** {level}\n"
+            f"**Groups:** {', '.join(rule.get('groups', []))}\n"
+            f"**MITRE:** {', '.join(t.get('id', '') for t in rule.get('mitre', {}).get('technique', []))}\n"
+            f"**Time:** {alert.get('timestamp', datetime.now(timezone.utc).isoformat())}\n\n"
+            f"**Full data:**\n```json\n{json.dumps(alert, indent=2)[:2000]}\n```"
+        )
+
+        return {
+            "title": title,
+            "message": body,
+            "alert_uid": alert.get("id", f"wazuh-{level}-{datetime.now().timestamp()}"),
+            "state": "alerting",
+            "severity": severity,
+            "labels": {
+                "source": "wazuh",
+                "agent": agent.get("name", "unknown"),
+                "rule_id": str(rule.get("id", "")),
+                "priority": priority,
+                "nexcom_env": os.environ.get("NEXCOM_ENV", "production"),
+            },
+        }
+
+    def send_to_oncall(webhook_url: str, payload: dict) -> bool:
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            webhook_url,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "wazuh-oncall-integration/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.status in (200, 201, 202)
+        except urllib.error.HTTPError as e:
+            print(f"[oncall] HTTP error: {e.code} {e.reason}", file=sys.stderr)
+            return False
+        except Exception as e:
+            print(f"[oncall] Error sending alert: {e}", file=sys.stderr)
+            return False
+
+    def main():
+        if len(sys.argv) < 2:
+            print("Usage: custom-oncall.py <alert_file> [api_key] [hook_url]", file=sys.stderr)
+            sys.exit(1)
+
+        alert_file = sys.argv[1]
+        # Webhook URL: prefer CLI arg, then env var, then default
+        webhook_url = (
+            sys.argv[3] if len(sys.argv) > 3
+            else os.environ.get("ONCALL_WEBHOOK_URL", "")
+        )
+        if not webhook_url or "CHANGEME" in webhook_url:
+            print("[oncall] ONCALL_WEBHOOK_URL not configured — skipping", file=sys.stderr)
+            sys.exit(0)
+
+        try:
+            with open(alert_file) as f:
+                alert = json.load(f)
+        except Exception as e:
+            print(f"[oncall] Failed to read alert file: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        payload = build_oncall_payload(alert)
+        success = send_to_oncall(webhook_url, payload)
+        sys.exit(0 if success else 1)
+
+    if __name__ == "__main__":
+        main()
+
+  # Wazuh ossec.conf integration stanza — append to <ossec_config>
+  ossec-integration-stanza.xml: |
+    <!-- Grafana OnCall integration — fires for level 7+ alerts -->
+    <integration>
+      <name>custom-oncall</name>
+      <hook_url>CHANGEME_AFTER_CREATING_INTEGRATION</hook_url>
+      <level>7</level>
+      <alert_format>json</alert_format>
+    </integration>
+
+    <!-- Grafana OnCall — critical alerts only (level 10+) with faster retry -->
+    <integration>
+      <name>custom-oncall</name>
+      <hook_url>CHANGEME_AFTER_CREATING_INTEGRATION</hook_url>
+      <level>10</level>
+      <alert_format>json</alert_format>
+    </integration>
+
+    <!-- Slack fallback for medium alerts (level 7-9) via Grafana OnCall routing -->
+    <!-- Routing rules are configured in the OnCall UI, not here -->
+---
+# ─── Job: Copy integration script into Wazuh Manager ─────────────────────────
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wazuh-install-oncall-integration
+  namespace: wazuh
+  labels:
+    app: wazuh-manager
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: installer
+          image: wazuh/wazuh-manager:4.7.3
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "Installing Grafana OnCall integration script..."
+              cp /tmp/custom-oncall.py /var/ossec/integrations/custom-oncall.py
+              chmod 750 /var/ossec/integrations/custom-oncall.py
+              chown root:wazuh /var/ossec/integrations/custom-oncall.py
+              echo "Done — restart wazuh-manager to activate."
+          volumeMounts:
+            - name: integration-script
+              mountPath: /tmp/custom-oncall.py
+              subPath: custom-oncall.py
+            - name: wazuh-integrations
+              mountPath: /var/ossec/integrations
+      volumes:
+        - name: integration-script
+          configMap:
+            name: wazuh-oncall-integration
+            items:
+              - key: custom-oncall.py
+                path: custom-oncall.py
+        - name: wazuh-integrations
+          hostPath:
+            path: /var/ossec/integrations
+            type: DirectoryOrCreate
+---
+# ─── NetworkPolicy: Allow Wazuh → OnCall webhook traffic ─────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wazuh-to-oncall
+  namespace: wazuh
+spec:
+  podSelector:
+    matchLabels:
+      app: wazuh-manager
+  policyTypes: [Egress]
+  egress:
+    # Allow HTTPS to Grafana OnCall ingress
+    - ports:
+        - port: 443
+          protocol: TCP
+    # Allow HTTP to OnCall service directly (internal)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: grafana-oncall
+      ports:
+        - port: 8080
+          protocol: TCP
+    # Allow DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

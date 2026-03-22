@@ -1,0 +1,290 @@
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXCOM Exchange — KEDA ScaledObjects for all 5 engine Deployments
+#
+# Trigger strategy per engine:
+#   MatchingEngine    — Kafka: orders.incoming lag + Redis: order_queue_len + CPU
+#   SettlementEngine  — Kafka: settlement.pending lag + CPU
+#   GatewayService    — Kafka: api.requests lag + CPU
+#   TradingEngine     — Kafka: trades.pending lag + CPU
+#   RiskManagement    — Kafka: risk.checks lag + Redis: risk_queue_len + CPU
+#
+# Prerequisites:
+#   1. KEDA 2.x installed in the cluster
+#   2. nexcom-kafka-credentials Secret created (see keda-trigger-auth.yaml)
+#   3. nexcom-redis-credentials Secret created
+#   4. Prometheus adapter installed for CPU-based triggers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── Matching Engine ──────────────────────────────────────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: matching-engine-scaledobject
+  namespace: nexcom
+  labels:
+    app: matching-engine
+    nexcom.io/component: exchange-core
+spec:
+  scaleTargetRef:
+    name: matching-engine
+  pollingInterval: 10      # check triggers every 10 seconds
+  cooldownPeriod: 60       # wait 60s before scaling down
+  minReplicaCount: 3       # NEVER go below 3 — HA minimum
+  maxReplicaCount: 20
+  fallback:
+    failureThreshold: 3    # if triggers fail 3 times, use last known good count
+    replicas: 3            # fallback to minimum HA count
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 4
+              periodSeconds: 60
+        scaleDown:
+          stabilizationWindowSeconds: 300  # 5 min stabilization before scale-down
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 120
+  triggers:
+    # Primary: Kafka order queue depth
+    - type: kafka
+      authenticationRef:
+        name: kafka-trigger-auth
+      metadata:
+        bootstrapServers: ""  # injected from TriggerAuthentication
+        consumerGroup: nexcom-matching-engine
+        topic: orders.incoming
+        lagThreshold: "500"          # scale up when lag > 500 messages
+        activationLagThreshold: "10" # activate (wake from 0) when lag > 10
+        offsetResetPolicy: latest
+        allowIdleConsumers: "false"
+        scaleToZeroOnInvalidOffset: "false"
+    # Secondary: Redis order queue length (burst traffic)
+    - type: redis
+      authenticationRef:
+        name: redis-trigger-auth
+      metadata:
+        address: ""  # injected from TriggerAuthentication
+        listName: nexcom:order_queue
+        listLength: "200"
+        activationListLength: "5"
+    # Tertiary: CPU utilization (sustained load)
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"
+
+---
+# ─── Settlement Engine ────────────────────────────────────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: settlement-engine-scaledobject
+  namespace: nexcom
+  labels:
+    app: settlement-engine
+    nexcom.io/component: exchange-core
+spec:
+  scaleTargetRef:
+    name: settlement-engine
+  pollingInterval: 15
+  cooldownPeriod: 120      # settlement needs longer cooldown — in-flight T+2 cycles
+  minReplicaCount: 2       # HA minimum
+  maxReplicaCount: 10
+  fallback:
+    failureThreshold: 3
+    replicas: 2
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 60
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 60
+        scaleDown:
+          stabilizationWindowSeconds: 600  # 10 min — settlement cycles must complete
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 180
+  triggers:
+    - type: kafka
+      authenticationRef:
+        name: kafka-trigger-auth
+      metadata:
+        bootstrapServers: ""
+        consumerGroup: nexcom-settlement-engine
+        topic: settlement.pending
+        lagThreshold: "100"
+        activationLagThreshold: "5"
+        offsetResetPolicy: latest
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "65"
+
+---
+# ─── Gateway Service ──────────────────────────────────────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: gateway-service-scaledobject
+  namespace: nexcom
+  labels:
+    app: gateway-service
+spec:
+  scaleTargetRef:
+    name: gateway-service
+  pollingInterval: 10
+  cooldownPeriod: 60
+  minReplicaCount: 3
+  maxReplicaCount: 15
+  fallback:
+    failureThreshold: 3
+    replicas: 3
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 15
+          policies:
+            - type: Pods
+              value: 3
+              periodSeconds: 30
+        scaleDown:
+          stabilizationWindowSeconds: 180
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers:
+    - type: kafka
+      authenticationRef:
+        name: kafka-trigger-auth
+      metadata:
+        bootstrapServers: ""
+        consumerGroup: nexcom-gateway
+        topic: api.requests
+        lagThreshold: "1000"
+        activationLagThreshold: "50"
+        offsetResetPolicy: latest
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "75"
+
+---
+# ─── Trading Engine ───────────────────────────────────────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: trading-engine-scaledobject
+  namespace: nexcom
+  labels:
+    app: trading-engine
+spec:
+  scaleTargetRef:
+    name: trading-engine
+  pollingInterval: 10
+  cooldownPeriod: 90
+  minReplicaCount: 2
+  maxReplicaCount: 12
+  fallback:
+    failureThreshold: 3
+    replicas: 2
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 60
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 120
+  triggers:
+    - type: kafka
+      authenticationRef:
+        name: kafka-trigger-auth
+      metadata:
+        bootstrapServers: ""
+        consumerGroup: nexcom-trading-engine
+        topic: trades.pending
+        lagThreshold: "300"
+        activationLagThreshold: "10"
+        offsetResetPolicy: latest
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"
+
+---
+# ─── Risk Management ──────────────────────────────────────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: risk-management-scaledobject
+  namespace: nexcom
+  labels:
+    app: risk-management
+spec:
+  scaleTargetRef:
+    name: risk-management
+  pollingInterval: 10
+  cooldownPeriod: 60
+  minReplicaCount: 2
+  maxReplicaCount: 8
+  fallback:
+    failureThreshold: 3
+    replicas: 2
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 20
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 30
+        scaleDown:
+          stabilizationWindowSeconds: 240
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 90
+  triggers:
+    - type: kafka
+      authenticationRef:
+        name: kafka-trigger-auth
+      metadata:
+        bootstrapServers: ""
+        consumerGroup: nexcom-risk-management
+        topic: risk.checks
+        lagThreshold: "200"
+        activationLagThreshold: "5"
+        offsetResetPolicy: latest
+    - type: redis
+      authenticationRef:
+        name: redis-trigger-auth
+      metadata:
+        address: ""
+        listName: nexcom:risk_queue
+        listLength: "100"
+        activationListLength: "5"
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"

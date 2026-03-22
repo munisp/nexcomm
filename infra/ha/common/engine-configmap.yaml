@@ -1,0 +1,73 @@
+---
+# NEXCOM Exchange — Shared Engine Configuration ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexcom-engine-config
+  namespace: nexcom-engines
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+data:
+  # Kafka
+  KAFKA_BROKERS: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+  KAFKA_REPLICATION_FACTOR: "3"
+  KAFKA_MIN_ISR: "2"
+
+  # Redis (Sentinel HA)
+  REDIS_SENTINEL_ADDRS: "redis-sentinel-0.redis-sentinel.redis.svc.cluster.local:26379,redis-sentinel-1.redis-sentinel.redis.svc.cluster.local:26379,redis-sentinel-2.redis-sentinel.redis.svc.cluster.local:26379"
+  REDIS_SENTINEL_MASTER: "nexcom-master"
+
+  # PostgreSQL (primary)
+  POSTGRES_HOST: "postgres-primary.postgres.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "nexcom"
+
+  # Temporal
+  TEMPORAL_HOST: "temporal-frontend.temporal.svc.cluster.local:7233"
+  TEMPORAL_NAMESPACE: "nexcom-exchange"
+
+  # Engine ports
+  MATCHING_ENGINE_PORT: "8080"
+  SETTLEMENT_ENGINE_PORT: "8005"
+  GATEWAY_PORT: "8200"
+  TRADING_ENGINE_PORT: "8001"
+  RISK_MANAGEMENT_PORT: "8004"
+
+  # Leader election
+  LEADER_ELECTION_ENABLED: "true"
+  LEADER_ELECTION_TTL_SECONDS: "15"
+  LEADER_ELECTION_RENEW_DEADLINE_SECONDS: "10"
+  LEADER_ELECTION_RETRY_PERIOD_SECONDS: "2"
+
+  # Health probe intervals
+  HEALTH_CHECK_INTERVAL_MS: "5000"
+  READINESS_THRESHOLD: "3"
+  LIVENESS_THRESHOLD: "5"
+
+  # Circuit breaker
+  CIRCUIT_BREAKER_THRESHOLD: "5"
+  CIRCUIT_BREAKER_TIMEOUT_MS: "30000"
+  CIRCUIT_BREAKER_HALF_OPEN_REQUESTS: "3"
+
+  # Graceful shutdown
+  GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS: "30"
+
+---
+# Secret template — fill with actual values via Sealed Secrets or Vault
+# kubectl create secret generic nexcom-engine-secrets -n nexcom-engines \
+#   --from-literal=POSTGRES_PASSWORD=... \
+#   --from-literal=REDIS_PASSWORD=... \
+#   --from-literal=KAFKA_SASL_PASSWORD=...
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nexcom-engine-secrets
+  namespace: nexcom-engines
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "REPLACE_WITH_SEALED_SECRET"
+  REDIS_PASSWORD: "REPLACE_WITH_SEALED_SECRET"
+  KAFKA_SASL_PASSWORD: "REPLACE_WITH_SEALED_SECRET"
+  JWT_SECRET: "REPLACE_WITH_SEALED_SECRET"

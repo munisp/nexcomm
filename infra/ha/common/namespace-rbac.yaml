@@ -1,0 +1,111 @@
+---
+# NEXCOM Exchange — Common Namespace & RBAC
+# All engine workloads run in the nexcom-engines namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom-engines
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+
+---
+# ServiceAccount shared by all engine pods
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexcom-engine
+  namespace: nexcom-engines
+  annotations:
+    # Allows KEDA TriggerAuthentication to reference this SA for Kafka/Redis
+    keda.sh/service-account: "true"
+
+---
+# Role: engines need to read ConfigMaps (config) and Secrets (TLS certs)
+# and update their own Lease for leader election
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nexcom-engine-role
+  namespace: nexcom-engines
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nexcom-engine-rolebinding
+  namespace: nexcom-engines
+subjects:
+  - kind: ServiceAccount
+    name: nexcom-engine
+    namespace: nexcom-engines
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: nexcom-engine-role
+
+---
+# NetworkPolicy: engines can talk to each other and to Redis/Kafka/Postgres
+# but are not reachable from the internet directly
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexcom-engines-netpol
+  namespace: nexcom-engines
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexcom-exchange
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow intra-namespace traffic (engine-to-engine)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nexcom-engines
+    # Allow ingress from the API gateway namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nexcom-gateway
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 9090
+          protocol: TCP
+  egress:
+    # Allow DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow all outbound within cluster (Redis, Kafka, Postgres, Temporal)
+    - to:
+        - namespaceSelector: {}
+
+---
+# PodDisruptionBudget template (applied per-engine in their own manifests)
+# This common one is a placeholder — each engine defines its own PDB.
+# Included here as documentation of the minimum availability contract.
+# minAvailable: 1 means at least 1 replica must be up during voluntary disruptions.

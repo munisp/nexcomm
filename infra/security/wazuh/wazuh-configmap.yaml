@@ -1,0 +1,385 @@
+---
+# =============================================================================
+# NEXCOM Commodity Exchange — Wazuh Configuration ConfigMap
+# Contains ossec.conf for both manager and agents, plus custom detection rules
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wazuh-manager-config
+  namespace: wazuh
+  labels:
+    app: wazuh-manager
+    app.kubernetes.io/part-of: nexcom-security
+data:
+  ossec.conf: |
+    <ossec_config>
+      <global>
+        <jsonout_output>yes</jsonout_output>
+        <alerts_log>yes</alerts_log>
+        <logall>no</logall>
+        <logall_json>no</logall_json>
+        <email_notification>no</email_notification>
+        <smtp_server>localhost</smtp_server>
+        <email_from>wazuh@nexcom.exchange</email_from>
+        <email_to>security@nexcom.exchange</email_to>
+        <email_maxperhour>12</email_maxperhour>
+        <email_log_source>alerts.log</email_log_source>
+        <agents_disconnection_time>10m</agents_disconnection_time>
+        <agents_disconnection_alert_time>0</agents_disconnection_alert_time>
+      </global>
+
+      <!-- Cluster configuration for HA -->
+      <cluster>
+        <name>nexcom-wazuh-cluster</name>
+        <node_name>master-node</node_name>
+        <node_type>master</node_type>
+        <key>$(WAZUH_CLUSTER_KEY)</key>
+        <port>1516</port>
+        <bind_addr>0.0.0.0</bind_addr>
+        <nodes>
+          <node>wazuh-manager-service</node>
+        </nodes>
+        <hidden>no</hidden>
+        <disabled>no</disabled>
+      </cluster>
+
+      <!-- Agent registration -->
+      <auth>
+        <disabled>no</disabled>
+        <port>1515</port>
+        <use_source_ip>no</use_source_ip>
+        <purge>yes</purge>
+        <use_password>yes</use_password>
+        <ciphers>HIGH:!ADH:!EXP:!MD5:!RC4:!3DES:!CAMELLIA:@STRENGTH</ciphers>
+        <ssl_verify_host>no</ssl_verify_host>
+        <ssl_manager_cert>/var/ossec/etc/sslmanager.cert</ssl_manager_cert>
+        <ssl_manager_key>/var/ossec/etc/sslmanager.key</ssl_manager_key>
+        <ssl_auto_negotiate>no</ssl_auto_negotiate>
+      </auth>
+
+      <!-- Remote agent connections -->
+      <remote>
+        <connection>secure</connection>
+        <port>1514</port>
+        <protocol>tcp</protocol>
+        <queue_size>131072</queue_size>
+      </remote>
+
+      <!-- Alerts configuration -->
+      <alerts>
+        <log_alert_level>3</log_alert_level>
+        <email_alert_level>12</email_alert_level>
+      </alerts>
+
+      <!-- Active response for automated containment -->
+      <active-response>
+        <disabled>no</disabled>
+        <ca_store>/var/ossec/etc/wpk_root.pem</ca_store>
+        <ca_verification>yes</ca_verification>
+      </active-response>
+
+      <!-- Vulnerability detection -->
+      <vulnerability-detection>
+        <enabled>yes</enabled>
+        <index-status>yes</index-status>
+        <feed-update-interval>60m</feed-update-interval>
+      </vulnerability-detection>
+
+      <!-- Log analysis: PostgreSQL logs -->
+      <localfile>
+        <log_format>syslog</log_format>
+        <location>/var/log/postgresql/postgresql-*.log</location>
+      </localfile>
+
+      <!-- Log analysis: Nginx access logs -->
+      <localfile>
+        <log_format>apache</log_format>
+        <location>/var/log/nginx/access.log</location>
+      </localfile>
+
+      <!-- Log analysis: Nginx error logs -->
+      <localfile>
+        <log_format>syslog</log_format>
+        <location>/var/log/nginx/error.log</location>
+      </localfile>
+
+      <!-- Log analysis: Kubernetes audit logs -->
+      <localfile>
+        <log_format>json</log_format>
+        <location>/var/log/kubernetes/audit/audit.log</location>
+        <label key="source">k8s-audit</label>
+      </localfile>
+
+      <!-- Log analysis: Application logs (Node.js API) -->
+      <localfile>
+        <log_format>json</log_format>
+        <location>/var/log/nexcom/api.log</location>
+        <label key="source">nexcom-api</label>
+      </localfile>
+
+      <!-- Integrity monitoring: critical config files -->
+      <syscheck>
+        <disabled>no</disabled>
+        <frequency>43200</frequency>
+        <scan_on_start>yes</scan_on_start>
+        <alert_new_files>yes</alert_new_files>
+        <auto_ignore frequency="10" timeframe="3600">no</auto_ignore>
+
+        <!-- Monitor Kubernetes manifests -->
+        <directories check_all="yes" report_changes="yes" realtime="yes">
+          /etc/kubernetes
+        </directories>
+
+        <!-- Monitor Nginx config -->
+        <directories check_all="yes" report_changes="yes" realtime="yes">
+          /etc/nginx
+        </directories>
+
+        <!-- Monitor PostgreSQL config -->
+        <directories check_all="yes" report_changes="yes" realtime="yes">
+          /etc/postgresql
+        </directories>
+
+        <!-- Monitor system binaries for rootkit detection -->
+        <directories check_all="yes">/bin,/sbin,/usr/bin,/usr/sbin</directories>
+
+        <!-- Ignore volatile directories -->
+        <ignore>/proc</ignore>
+        <ignore>/sys</ignore>
+        <ignore>/dev</ignore>
+        <ignore>/run</ignore>
+        <ignore type="sregex">.log$|.tmp$|.swp$</ignore>
+      </syscheck>
+
+      <!-- Rootcheck -->
+      <rootcheck>
+        <disabled>no</disabled>
+        <check_files>yes</check_files>
+        <check_trojans>yes</check_trojans>
+        <check_dev>yes</check_dev>
+        <check_sys>yes</check_sys>
+        <check_pids>yes</check_pids>
+        <check_ports>yes</check_ports>
+        <check_if>yes</check_if>
+        <frequency>43200</frequency>
+      </rootcheck>
+
+      <!-- OpenSCAP compliance scanning -->
+      <wodle name="open-scap">
+        <disabled>yes</disabled>
+        <timeout>1800</timeout>
+        <interval>1d</interval>
+        <scan-on-start>yes</scan-on-start>
+      </wodle>
+
+      <!-- Docker/container monitoring -->
+      <wodle name="docker-listener">
+        <disabled>no</disabled>
+        <interval>10m</interval>
+        <attempts>5</attempts>
+        <run_on_start>yes</run_on_start>
+      </wodle>
+
+      <!-- Indexer integration (Wazuh Indexer / OpenSearch) -->
+      <indexer>
+        <enabled>yes</enabled>
+        <hosts>
+          <host>https://wazuh-indexer-service:9200</host>
+        </hosts>
+        <ssl>
+          <certificate_authorities>
+            <ca>/etc/ssl/root-ca.pem</ca>
+          </certificate_authorities>
+          <certificate>/etc/ssl/filebeat.pem</certificate>
+          <key>/etc/ssl/filebeat-key.pem</key>
+        </ssl>
+      </indexer>
+    </ossec_config>
+
+  # NEXCOM-specific custom detection rules
+  nexcom-rules.xml: |
+    <!-- NEXCOM Commodity Exchange — Custom Wazuh Detection Rules -->
+    <!-- Rule IDs 100000-100999 are reserved for local custom rules -->
+
+    <group name="nexcom,trading,">
+
+      <!-- Rule 100001: Brute force on NEXCOM API authentication endpoint -->
+      <rule id="100001" level="10" frequency="10" timeframe="60">
+        <if_matched_sid>31101</if_matched_sid>
+        <url>/api/trpc/auth</url>
+        <description>NEXCOM: Possible brute force attack on authentication endpoint</description>
+        <mitre>
+          <id>T1110</id>
+        </mitre>
+        <group>authentication_failures,nexcom_auth,</group>
+      </rule>
+
+      <!-- Rule 100002: SQL injection attempt in NEXCOM API -->
+      <rule id="100002" level="12">
+        <if_sid>31103</if_sid>
+        <url>/api/trpc</url>
+        <match>UNION|SELECT|INSERT|UPDATE|DELETE|DROP|EXEC|CAST|CONVERT</match>
+        <description>NEXCOM: Possible SQL injection attempt in tRPC API</description>
+        <mitre>
+          <id>T1190</id>
+        </mitre>
+        <group>web_attack,sql_injection,nexcom_api,</group>
+      </rule>
+
+      <!-- Rule 100003: Unusual order submission rate (possible spoofing) -->
+      <rule id="100003" level="8" frequency="100" timeframe="60">
+        <if_matched_group>nexcom_order</if_matched_group>
+        <description>NEXCOM: High-frequency order submission — possible spoofing or wash trading</description>
+        <mitre>
+          <id>T1499</id>
+        </mitre>
+        <group>nexcom_trading,market_manipulation,</group>
+      </rule>
+
+      <!-- Rule 100004: Admin procedure called by non-admin user -->
+      <rule id="100004" level="14">
+        <decoded_as>json</decoded_as>
+        <field name="source">nexcom-api</field>
+        <field name="procedure" type="pcre2">^admin\.</field>
+        <field name="error">FORBIDDEN</field>
+        <description>NEXCOM: Unauthorized attempt to call admin procedure</description>
+        <mitre>
+          <id>T1078</id>
+        </mitre>
+        <group>nexcom_auth,privilege_escalation,</group>
+      </rule>
+
+      <!-- Rule 100005: PostgreSQL RLS policy violation -->
+      <rule id="100005" level="12">
+        <program_name>postgres</program_name>
+        <match>new row violates row-level security policy</match>
+        <description>NEXCOM: PostgreSQL RLS policy violation — possible IDOR attempt</description>
+        <mitre>
+          <id>T1078</id>
+        </mitre>
+        <group>nexcom_db,access_control,</group>
+      </rule>
+
+      <!-- Rule 100006: Kubernetes secret accessed outside normal hours -->
+      <rule id="100006" level="10">
+        <field name="source">k8s-audit</field>
+        <field name="objectRef.resource">secrets</field>
+        <field name="verb">get</field>
+        <time>21:00 - 06:00</time>
+        <description>NEXCOM: Kubernetes secret accessed outside business hours</description>
+        <mitre>
+          <id>T1552.007</id>
+        </mitre>
+        <group>nexcom_k8s,secrets_access,</group>
+      </rule>
+
+      <!-- Rule 100007: Container spawned a shell (possible container escape) -->
+      <rule id="100007" level="15">
+        <decoded_as>json</decoded_as>
+        <field name="source">docker-listener</field>
+        <field name="Action">exec_start</field>
+        <field name="Attributes.execArgs" type="pcre2">/bin/(bash|sh|zsh|ksh)</field>
+        <description>NEXCOM: Shell spawned inside container — possible container escape attempt</description>
+        <mitre>
+          <id>T1609</id>
+        </mitre>
+        <group>nexcom_container,container_escape,</group>
+      </rule>
+
+      <!-- Rule 100008: Large data export (possible exfiltration) -->
+      <rule id="100008" level="10">
+        <decoded_as>json</decoded_as>
+        <field name="source">nexcom-api</field>
+        <field name="procedure">orders.exportCsv</field>
+        <field name="responseSize" type="pcre2">^[1-9][0-9]{6,}</field>
+        <description>NEXCOM: Large CSV export — possible data exfiltration attempt</description>
+        <mitre>
+          <id>T1030</id>
+        </mitre>
+        <group>nexcom_data,exfiltration,</group>
+      </rule>
+
+      <!-- Rule 100009: Multiple failed KYC submissions (possible fraud) -->
+      <rule id="100009" level="8" frequency="5" timeframe="3600">
+        <decoded_as>json</decoded_as>
+        <field name="source">nexcom-api</field>
+        <field name="procedure">onboarding.submit</field>
+        <field name="error">VALIDATION_ERROR</field>
+        <description>NEXCOM: Multiple failed KYC submissions — possible fraudulent onboarding</description>
+        <mitre>
+          <id>T1078.001</id>
+        </mitre>
+        <group>nexcom_kyc,fraud,</group>
+      </rule>
+
+      <!-- Rule 100010: Settlement engine crash loop -->
+      <rule id="100010" level="12" frequency="3" timeframe="300">
+        <decoded_as>json</decoded_as>
+        <field name="source">nexcom-api</field>
+        <field name="message" type="pcre2">SettlementEngine.*CRITICAL.*restart</field>
+        <description>NEXCOM: Settlement engine crash loop detected — service availability at risk</description>
+        <group>nexcom_engine,availability,</group>
+      </rule>
+
+    </group>
+
+---
+# ConfigMap: Wazuh Agent configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wazuh-agent-config
+  namespace: wazuh
+  labels:
+    app: wazuh-agent
+    app.kubernetes.io/part-of: nexcom-security
+data:
+  ossec.conf: |
+    <ossec_config>
+      <client>
+        <server>
+          <address>wazuh-manager-service.wazuh.svc.cluster.local</address>
+          <port>1514</port>
+          <protocol>tcp</protocol>
+        </server>
+        <config-profile>nexcom-kubernetes</config-profile>
+        <notify_time>10</notify_time>
+        <time-reconnect>60</time-reconnect>
+        <auto_restart>yes</auto_restart>
+        <crypto_method>aes</crypto_method>
+      </client>
+
+      <!-- Collect all container logs via /var/log -->
+      <localfile>
+        <log_format>syslog</log_format>
+        <location>/var/log/syslog</location>
+      </localfile>
+
+      <localfile>
+        <log_format>json</log_format>
+        <location>/var/log/containers/*.log</location>
+        <label key="source">container</label>
+        <label key="node">$(NODE_NAME)</label>
+      </localfile>
+
+      <!-- File integrity monitoring on host -->
+      <syscheck>
+        <disabled>no</disabled>
+        <frequency>43200</frequency>
+        <scan_on_start>yes</scan_on_start>
+        <directories check_all="yes" realtime="yes">/etc</directories>
+        <directories check_all="yes">/usr/bin,/usr/sbin,/bin,/sbin</directories>
+        <ignore>/proc</ignore>
+        <ignore>/sys</ignore>
+        <ignore>/dev</ignore>
+      </syscheck>
+
+      <!-- Active response -->
+      <active-response>
+        <disabled>no</disabled>
+        <ca_store>/var/ossec/etc/wpk_root.pem</ca_store>
+        <ca_verification>yes</ca_verification>
+      </active-response>
+    </ossec_config>

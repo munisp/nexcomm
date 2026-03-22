@@ -1,0 +1,138 @@
+/**
+ * NEXCOM Exchange — Permify RBAC Schema
+ *
+ * Resource hierarchy:
+ *   exchange  ← top-level tenant
+ *     ├── order
+ *     ├── trade
+ *     ├── settlement
+ *     ├── kyc_application
+ *     ├── warehouse_receipt
+ *     ├── aml_flag
+ *     └── user_account
+ *
+ * Roles (defined on exchange):
+ *   admin            — full access to everything
+ *   compliance_officer — read all, manage AML/KYC
+ *   broker           — manage own orders + client orders
+ *   trader           — manage own orders and positions
+ *   farmer           — manage own listings and warehouse receipts
+ *   warehouse_operator — manage warehouse receipts
+ *   market_maker     — manage own orders + market data
+ *   viewer           — read-only across all resources
+ */
+
+entity user {}
+
+// ─── Exchange (top-level tenant) ─────────────────────────────────────────────
+entity exchange {
+  // Direct role assignments
+  relation admin             @user
+  relation compliance_officer @user
+  relation broker            @user
+  relation trader            @user
+  relation farmer            @user
+  relation warehouse_operator @user
+  relation market_maker      @user
+  relation viewer            @user
+
+  // Permissions
+  permission manage_users         = admin
+  permission view_all_orders      = admin or compliance_officer or broker
+  permission manage_system_config = admin
+  permission view_analytics       = admin or compliance_officer
+  permission export_reports       = admin or compliance_officer
+}
+
+// ─── Order ────────────────────────────────────────────────────────────────────
+entity order {
+  // The user who placed this order
+  relation owner    @user
+  // The broker managing this order on behalf of a client
+  relation manager  @user
+  // Exchange-level admin/compliance can always access
+  relation exchange @exchange
+
+  permission create  = exchange.admin or exchange.trader or exchange.broker or exchange.farmer or exchange.market_maker
+  permission read    = owner or manager or exchange.admin or exchange.compliance_officer or exchange.broker
+  permission cancel  = owner or manager or exchange.admin
+  permission modify  = owner or manager or exchange.admin
+}
+
+// ─── Trade ────────────────────────────────────────────────────────────────────
+entity trade {
+  relation buyer    @user
+  relation seller   @user
+  relation exchange @exchange
+
+  permission read   = buyer or seller or exchange.admin or exchange.compliance_officer
+  permission settle = exchange.admin
+  permission dispute = buyer or seller or exchange.admin
+}
+
+// ─── Settlement ───────────────────────────────────────────────────────────────
+entity settlement {
+  relation participant @user
+  relation exchange    @exchange
+
+  permission read    = participant or exchange.admin or exchange.compliance_officer
+  permission approve = exchange.admin
+  permission dispute = participant or exchange.admin
+}
+
+// ─── KYC Application ─────────────────────────────────────────────────────────
+entity kyc_application {
+  // The user whose KYC this is
+  relation subject   @user
+  // The reviewer assigned to this application
+  relation reviewer  @user
+  relation exchange  @exchange
+
+  permission submit  = subject
+  permission read    = subject or reviewer or exchange.admin or exchange.compliance_officer
+  permission approve = reviewer or exchange.admin or exchange.compliance_officer
+  permission reject  = reviewer or exchange.admin or exchange.compliance_officer
+  permission escalate = exchange.admin or exchange.compliance_officer
+}
+
+// ─── Warehouse Receipt ────────────────────────────────────────────────────────
+entity warehouse_receipt {
+  // The farmer who deposited the commodity
+  relation owner              @user
+  // The warehouse operator managing the facility
+  relation warehouse_operator @user
+  relation exchange           @exchange
+
+  permission create  = exchange.warehouse_operator or exchange.admin
+  permission read    = owner or warehouse_operator or exchange.admin or exchange.compliance_officer or exchange.broker
+  permission pledge  = owner or exchange.admin
+  permission redeem  = owner or exchange.admin
+  permission cancel  = exchange.warehouse_operator or exchange.admin
+}
+
+// ─── AML Flag ─────────────────────────────────────────────────────────────────
+entity aml_flag {
+  // The user who was flagged
+  relation subject  @user
+  relation exchange @exchange
+
+  permission create   = exchange.admin or exchange.compliance_officer
+  permission read     = exchange.admin or exchange.compliance_officer
+  permission review   = exchange.compliance_officer or exchange.admin
+  permission escalate = exchange.compliance_officer or exchange.admin
+  permission file_sar = exchange.compliance_officer or exchange.admin
+  permission clear    = exchange.admin
+}
+
+// ─── User Account ─────────────────────────────────────────────────────────────
+entity user_account {
+  // The user who owns this account
+  relation owner    @user
+  relation exchange @exchange
+
+  permission read    = owner or exchange.admin or exchange.compliance_officer
+  permission suspend = exchange.admin
+  permission promote = exchange.admin
+  permission delete  = exchange.admin
+  permission update_mfa = owner or exchange.admin
+}

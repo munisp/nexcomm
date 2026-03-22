@@ -1,0 +1,81 @@
+##############################################################################
+# NEXCOM Exchange - Kubecost Configuration
+# Cost monitoring and optimization for Kubernetes infrastructure
+##############################################################################
+
+# Kubecost Helm values
+global:
+  prometheus:
+    enabled: true
+    fqdn: "http://prometheus-server.nexcom-monitoring.svc.cluster.local"
+
+kubecostProductConfigs:
+  clusterName: "nexcom-exchange"
+  currencyCode: "USD"
+
+  # Cost allocation for NEXCOM namespaces
+  namespaceAnnotations:
+    - nexcom: "core-services"
+    - nexcom-infra: "infrastructure"
+    - nexcom-security: "security"
+    - nexcom-data: "data-platform"
+    - nexcom-monitoring: "monitoring"
+    - nexcom-workflows: "workflow-engine"
+
+  # Budget alerts
+  budgetAlerts:
+    - name: "daily-compute-budget"
+      threshold: 500  # $500/day
+      window: "daily"
+      aggregation: "namespace"
+      filter: "nexcom"
+
+    - name: "monthly-total-budget"
+      threshold: 15000  # $15,000/month
+      window: "monthly"
+      aggregation: "cluster"
+
+    - name: "storage-cost-alert"
+      threshold: 2000  # $2,000/month for storage
+      window: "monthly"
+      aggregation: "label:tier"
+      filter: "storage"
+
+  # Savings recommendations
+  savings:
+    enabled: true
+    requestSizing:
+      enabled: true
+      # Recommend right-sizing based on actual usage
+      targetCPUUtilization: 0.65
+      targetRAMUtilization: 0.70
+
+  # Network cost tracking
+  networkCosts:
+    enabled: true
+
+# Grafana integration
+grafana:
+  enabled: false  # Using OpenSearch Dashboards instead
+
+# Prometheus integration
+prometheus:
+  server:
+    enabled: false  # Using external Prometheus
+
+# Cost reports
+reports:
+  - name: "nexcom-weekly-cost"
+    schedule: "0 8 * * 1"  # Monday 8 AM
+    aggregation: "namespace"
+    window: "lastweek"
+    recipients:
+      - "ops@nexcom.exchange"
+
+  - name: "nexcom-monthly-cost"
+    schedule: "0 8 1 * *"  # 1st of month 8 AM
+    aggregation: "service"
+    window: "lastmonth"
+    recipients:
+      - "finance@nexcom.exchange"
+      - "ops@nexcom.exchange"

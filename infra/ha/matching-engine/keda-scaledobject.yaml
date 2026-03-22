@@ -1,0 +1,137 @@
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXCOM Exchange — KEDA ScaledObject: Rust Matching Engine
+#
+# Scaling triggers:
+#   1. Kafka consumer-group lag on orders.inbound  → primary scale-out signal
+#   2. Kafka consumer-group lag on orders.cancel   → secondary signal
+#   3. Redis queue length (pending-orders)         → burst protection
+#   4. CPU utilization                             → compute-bound fallback
+#
+# Scale range: 3 (min, 1 per AZ) → 20 (max, exchange capacity ceiling)
+# Cooldown: 60s scale-down to prevent thrashing during volatile markets
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: nexcom-matching-engine-scaler
+  namespace: nexcom-engines
+  labels:
+    app: nexcom-matching-engine
+    app.kubernetes.io/part-of: nexcom-exchange
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexcom-matching-engine
+
+  # ── Replica bounds ──────────────────────────────────────────────────────────
+  minReplicaCount: 3    # Never drop below 3 (one per AZ)
+  maxReplicaCount: 20   # Exchange capacity ceiling
+
+  # ── Cooldown periods ────────────────────────────────────────────────────────
+  pollingInterval: 15   # Check triggers every 15 seconds
+  cooldownPeriod: 60    # Wait 60s before scaling down (prevent thrashing)
+
+  # ── Advanced scaling behaviour ──────────────────────────────────────────────
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0    # Scale up immediately on demand spike
+          policies:
+            - type: Pods
+              value: 4                     # Add up to 4 pods per scale event
+              periodSeconds: 15
+            - type: Percent
+              value: 100                   # Or double the count, whichever is larger
+              periodSeconds: 15
+          selectPolicy: Max
+        scaleDown:
+          stabilizationWindowSeconds: 300  # Wait 5 min before scaling down
+          policies:
+            - type: Pods
+              value: 1                     # Remove at most 1 pod per 60s
+              periodSeconds: 60
+          selectPolicy: Min
+
+  # ── Triggers ─────────────────────────────────────────────────────────────────
+  triggers:
+    # ── Trigger 1: Kafka orders.inbound consumer-group lag ───────────────────
+    - type: kafka
+      metadata:
+        bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+        consumerGroup: "matching-engine-orders"
+        topic: "orders.inbound"
+        # Scale out when lag > 500 messages per replica
+        lagThreshold: "500"
+        # Offset reset: latest (don't replay historical on new pods)
+        offsetResetPolicy: "latest"
+      authenticationRef:
+        name: nexcom-kafka-trigger-auth
+
+    # ── Trigger 2: Kafka orders.cancel consumer-group lag ────────────────────
+    - type: kafka
+      metadata:
+        bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+        consumerGroup: "matching-engine-cancels"
+        topic: "orders.cancel"
+        lagThreshold: "200"
+        offsetResetPolicy: "latest"
+      authenticationRef:
+        name: nexcom-kafka-trigger-auth
+
+    # ── Trigger 3: Redis pending-orders queue length ──────────────────────────
+    - type: redis-sentinel
+      metadata:
+        addresses: "redis-sentinel-0.redis-sentinel.redis.svc.cluster.local:26379,redis-sentinel-1.redis-sentinel.redis.svc.cluster.local:26379,redis-sentinel-2.redis-sentinel.redis.svc.cluster.local:26379"
+        sentinelMaster: "nexcom-master"
+        listName: "pending-orders"
+        # Scale out when queue > 1000 items per replica
+        listLength: "1000"
+        enableTLS: "false"
+      authenticationRef:
+        name: nexcom-redis-trigger-auth
+
+    # ── Trigger 4: CPU utilization (fallback for compute-bound scenarios) ─────
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        # Scale out when average CPU > 70%
+        value: "70"
+
+---
+# ── TriggerAuthentication: Kafka SASL credentials ────────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: nexcom-kafka-trigger-auth
+  namespace: nexcom-engines
+spec:
+  secretTargetRef:
+    - parameter: sasl
+      name: nexcom-engine-secrets
+      key: KAFKA_SASL_MECHANISM
+    - parameter: username
+      name: nexcom-engine-secrets
+      key: KAFKA_SASL_USERNAME
+    - parameter: password
+      name: nexcom-engine-secrets
+      key: KAFKA_SASL_PASSWORD
+    - parameter: tls
+      name: nexcom-engine-secrets
+      key: KAFKA_TLS_ENABLED
+
+---
+# ── TriggerAuthentication: Redis Sentinel credentials ────────────────────────
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: nexcom-redis-trigger-auth
+  namespace: nexcom-engines
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: nexcom-engine-secrets
+      key: REDIS_PASSWORD

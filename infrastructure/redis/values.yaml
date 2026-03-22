@@ -1,0 +1,48 @@
+##############################################################################
+# NEXCOM Exchange - Redis Cluster Helm Values
+# High-performance caching for order books, sessions, rate limiting
+##############################################################################
+
+cluster:
+  nodes: 6
+  replicas: 1
+
+redis:
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: "500m"
+    limits:
+      memory: 2Gi
+      cpu: "1"
+  configuration: |-
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    appendonly yes
+    appendfsync everysec
+    save 900 1
+    save 300 10
+    save 60 10000
+    tcp-keepalive 300
+    timeout 0
+    hz 10
+    dynamic-hz yes
+
+password: ""  # Use Kubernetes secret in production
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: gp3
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: nexcom-monitoring
+
+networkPolicy:
+  enabled: true
+  allowExternal: false
+  ingressNSMatchLabels:
+    app.kubernetes.io/part-of: nexcom-exchange

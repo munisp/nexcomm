@@ -1,0 +1,424 @@
+##############################################################################
+# NEXCOM Exchange - Kafka Helm Values
+# Apache Kafka cluster configuration for Kubernetes
+##############################################################################
+
+# KRaft mode (no ZooKeeper)
+kraft:
+  enabled: true
+
+controller:
+  replicaCount: 3
+  persistence:
+    size: 50Gi
+    storageClass: gp3
+
+broker:
+  replicaCount: 3
+  persistence:
+    size: 100Gi
+    storageClass: gp3
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: "1"
+    limits:
+      memory: 4Gi
+      cpu: "2"
+
+# NEXCOM-specific topic configurations
+provisioning:
+  enabled: true
+  topics:
+    # Trading events - high throughput, low latency
+    - name: nexcom.trades.executed
+      partitions: 12
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"      # 7 days
+        min.insync.replicas: "2"
+        cleanup.policy: "delete"
+        compression.type: "lz4"
+
+    - name: nexcom.orders.placed
+      partitions: 12
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+        min.insync.replicas: "2"
+        compression.type: "lz4"
+
+    - name: nexcom.orders.matched
+      partitions: 12
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+        min.insync.replicas: "2"
+
+    # Market data - highest throughput
+    - name: nexcom.marketdata.ticks
+      partitions: 24
+      replicationFactor: 3
+      config:
+        retention.ms: "86400000"       # 1 day
+        compression.type: "snappy"
+        segment.ms: "3600000"
+
+    - name: nexcom.marketdata.ohlcv
+      partitions: 12
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"     # 30 days
+        compression.type: "lz4"
+
+    - name: nexcom.marketdata.orderbook
+      partitions: 12
+      replicationFactor: 3
+      config:
+        retention.ms: "86400000"
+        compression.type: "snappy"
+
+    # Settlement events
+    - name: nexcom.settlement.initiated
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+        min.insync.replicas: "2"
+
+    - name: nexcom.settlement.completed
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"    # 1 year (audit)
+        min.insync.replicas: "2"
+
+    # Risk events
+    - name: nexcom.risk.alerts
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+
+    - name: nexcom.risk.margin-calls
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+        min.insync.replicas: "2"
+
+    # User events
+    - name: nexcom.users.events
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+
+    - name: nexcom.users.kyc
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+
+    # Notifications
+    - name: nexcom.notifications.outbound
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    # AI/ML events
+    - name: nexcom.ai.predictions
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+
+    - name: nexcom.ai.anomalies
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+
+    # Blockchain events
+    - name: nexcom.blockchain.transactions
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+
+    # Audit log - long retention
+    - name: nexcom.audit.log
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+        cleanup.policy: "compact,delete"
+        min.insync.replicas: "2"
+
+    # API logs from APISIX
+    - name: nexcom-api-logs
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Ingestion Engine Topics (aligned with 38 data feeds)
+    # ──────────────────────────────────────────────────────────────────────
+
+    # Internal Exchange feeds
+    - name: nexcom.ingestion.int-orders
+      partitions: 12
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+        compression.type: "lz4"
+
+    - name: nexcom.ingestion.int-trades
+      partitions: 12
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+        compression.type: "lz4"
+
+    - name: nexcom.ingestion.int-orderbook
+      partitions: 24
+      replicationFactor: 3
+      config:
+        retention.ms: "86400000"
+        compression.type: "snappy"
+
+    - name: nexcom.ingestion.int-clearing
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+
+    - name: nexcom.ingestion.int-surveillance
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+
+    - name: nexcom.ingestion.int-tigerbeetle
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+
+    - name: nexcom.ingestion.int-positions
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.int-margins
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.int-futures
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.int-options
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.int-delivery
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+
+    - name: nexcom.ingestion.int-fix-messages
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    # External Market Data feeds
+    - name: nexcom.ingestion.ext-cme
+      partitions: 12
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+        compression.type: "lz4"
+
+    - name: nexcom.ingestion.ext-ice
+      partitions: 12
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+        compression.type: "lz4"
+
+    - name: nexcom.ingestion.ext-lme
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.ext-shfe
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.ext-mcx
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.ext-reuters
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.ext-bloomberg
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.ext-central-banks
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+
+    # Alternative Data feeds
+    - name: nexcom.ingestion.alt-satellite
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "2592000000"
+
+    - name: nexcom.ingestion.alt-weather
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.alt-shipping
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.alt-news
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.alt-social
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.alt-blockchain
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    # Regulatory feeds
+    - name: nexcom.ingestion.reg-cftc-cot
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+
+    - name: nexcom.ingestion.reg-transaction-reporting
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+
+    - name: nexcom.ingestion.reg-sanctions
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+
+    - name: nexcom.ingestion.reg-position-limits
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+
+    # IoT/Physical feeds
+    - name: nexcom.ingestion.iot-warehouse-sensors
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+        compression.type: "snappy"
+
+    - name: nexcom.ingestion.iot-fleet-gps
+      partitions: 6
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+        compression.type: "snappy"
+
+    - name: nexcom.ingestion.iot-port-throughput
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    - name: nexcom.ingestion.iot-quality-assurance
+      partitions: 3
+      replicationFactor: 3
+      config:
+        retention.ms: "604800000"
+
+    # Reference Data feeds
+    - name: nexcom.ingestion.ref-contract-specs
+      partitions: 1
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+        cleanup.policy: "compact"
+
+    - name: nexcom.ingestion.ref-calendars
+      partitions: 1
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+        cleanup.policy: "compact"
+
+    - name: nexcom.ingestion.ref-margin-params
+      partitions: 1
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+        cleanup.policy: "compact"
+
+    - name: nexcom.ingestion.ref-corporate-actions
+      partitions: 1
+      replicationFactor: 3
+      config:
+        retention.ms: "31536000000"
+        cleanup.policy: "compact"
+
+metrics:
+  kafka:
+    enabled: true
+  jmx:
+    enabled: true
+
+# Security
+auth:
+  clientProtocol: plaintext
+  interBrokerProtocol: plaintext

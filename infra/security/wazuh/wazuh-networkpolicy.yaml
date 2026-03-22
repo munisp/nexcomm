@@ -1,0 +1,216 @@
+---
+# =============================================================================
+# NEXCOM Commodity Exchange — Wazuh Network Policies
+# Restrict Wazuh traffic to only required communication paths
+# =============================================================================
+
+# NetworkPolicy: Wazuh Manager — only accept agent connections and API calls
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wazuh-manager-network-policy
+  namespace: wazuh
+spec:
+  podSelector:
+    matchLabels:
+      app: wazuh-manager
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Wazuh agents from all namespaces to register and send events
+    - ports:
+        - port: 1514
+          protocol: TCP
+        - port: 1514
+          protocol: UDP
+        - port: 1515
+          protocol: TCP
+        - port: 1516
+          protocol: TCP
+    # Allow Wazuh Dashboard to call the Manager API
+    - from:
+        - podSelector:
+            matchLabels:
+              app: wazuh-dashboard
+      ports:
+        - port: 55000
+    # Allow monitoring namespace to scrape metrics
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 9200
+  egress:
+    # Allow connections to Wazuh Indexer
+    - to:
+        - podSelector:
+            matchLabels:
+              app: wazuh-indexer
+      ports:
+        - port: 9200
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow vulnerability feed updates (HTTPS)
+    - ports:
+        - port: 443
+          protocol: TCP
+
+---
+# NetworkPolicy: Wazuh Dashboard — only accept from nexcom admin users
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wazuh-dashboard-network-policy
+  namespace: wazuh
+spec:
+  podSelector:
+    matchLabels:
+      app: wazuh-dashboard
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow HTTPS from ingress controller (admin access only via VPN)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 5601
+  egress:
+    # Allow connections to Wazuh Indexer
+    - to:
+        - podSelector:
+            matchLabels:
+              app: wazuh-indexer
+      ports:
+        - port: 9200
+    # Allow connections to Wazuh Manager API
+    - to:
+        - podSelector:
+            matchLabels:
+              app: wazuh-manager
+      ports:
+        - port: 55000
+    # Allow DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+
+---
+# Ingress: Wazuh Dashboard (admin-only, requires VPN)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wazuh-dashboard-ingress
+  namespace: wazuh
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    # Restrict to VPN CIDR only
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: wazuh-dashboard-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "NEXCOM Security Dashboard — Authorised Access Only"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - siem.nexcom.exchange
+      secretName: wazuh-dashboard-tls
+  rules:
+    - host: siem.nexcom.exchange
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wazuh-dashboard-service
+                port:
+                  number: 5601
+
+---
+# Deployment: Wazuh Dashboard
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wazuh-dashboard
+  namespace: wazuh
+  labels:
+    app: wazuh-dashboard
+    app.kubernetes.io/part-of: nexcom-security
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wazuh-dashboard
+  template:
+    metadata:
+      labels:
+        app: wazuh-dashboard
+    spec:
+      containers:
+        - name: wazuh-dashboard
+          image: wazuh/wazuh-dashboard:4.9.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5601
+              name: https
+          env:
+            - name: INDEXER_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: wazuh-indexer-credentials
+                  key: username
+            - name: INDEXER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wazuh-indexer-credentials
+                  key: password
+            - name: WAZUH_API_URL
+              value: https://wazuh-manager-service
+            - name: DASHBOARD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: wazuh-dashboard-credentials
+                  key: username
+            - name: DASHBOARD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wazuh-dashboard-credentials
+                  key: password
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+
+---
+# Service: Wazuh Dashboard
+apiVersion: v1
+kind: Service
+metadata:
+  name: wazuh-dashboard-service
+  namespace: wazuh
+  labels:
+    app: wazuh-dashboard
+spec:
+  type: ClusterIP
+  selector:
+    app: wazuh-dashboard
+  ports:
+    - name: https
+      port: 5601
+      targetPort: 5601
+      protocol: TCP

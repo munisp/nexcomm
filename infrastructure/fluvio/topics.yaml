@@ -1,0 +1,57 @@
+##############################################################################
+# NEXCOM Exchange - Fluvio Topic Configuration
+# Low-latency real-time streaming for market data
+##############################################################################
+apiVersion: fluvio.infinyon.com/v1
+kind: Topic
+metadata:
+  name: market-ticks
+  namespace: nexcom-infra
+spec:
+  partitions: 12
+  replicationFactor: 3
+  retentionTime: 86400   # 1 day in seconds
+  compressionType: lz4
+  maxPartitionSize: 10737418240  # 10GB
+---
+apiVersion: fluvio.infinyon.com/v1
+kind: Topic
+metadata:
+  name: orderbook-updates
+  namespace: nexcom-infra
+spec:
+  partitions: 12
+  replicationFactor: 3
+  retentionTime: 3600    # 1 hour
+  compressionType: snappy
+---
+apiVersion: fluvio.infinyon.com/v1
+kind: Topic
+metadata:
+  name: trade-signals
+  namespace: nexcom-infra
+spec:
+  partitions: 6
+  replicationFactor: 3
+  retentionTime: 86400
+  compressionType: lz4
+---
+apiVersion: fluvio.infinyon.com/v1
+kind: Topic
+metadata:
+  name: price-alerts
+  namespace: nexcom-infra
+spec:
+  partitions: 6
+  replicationFactor: 3
+  retentionTime: 604800  # 7 days
+---
+apiVersion: fluvio.infinyon.com/v1
+kind: Topic
+metadata:
+  name: risk-events
+  namespace: nexcom-infra
+spec:
+  partitions: 6
+  replicationFactor: 3
+  retentionTime: 2592000 # 30 days

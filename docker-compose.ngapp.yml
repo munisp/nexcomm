@@ -1,0 +1,737 @@
+##############################################################################
+# NEXCOM Exchange - Local Development Environment
+# All infrastructure components for local development
+##############################################################################
+
+version: "3.9"
+
+services:
+  # ==========================================================================
+  # API Gateway - Apache APISIX
+  # ==========================================================================
+  apisix:
+    image: apache/apisix:3.8.0-debian
+    container_name: nexcom-apisix
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ./infrastructure/apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+    ports:
+      - "9080:9080"   # HTTP proxy
+      - "9443:9443"   # HTTPS proxy
+      - "9180:9180"   # Admin API
+    depends_on:
+      - etcd
+    networks:
+      - nexcom-network
+
+  apisix-dashboard:
+    image: apache/apisix-dashboard:3.0.1-alpine
+    container_name: nexcom-apisix-dashboard
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/apisix/dashboard.yaml:/usr/local/apisix-dashboard/conf/conf.yaml:ro
+    ports:
+      - "9090:9000"
+    networks:
+      - nexcom-network
+
+  etcd:
+    image: bitnami/etcd:3.5
+    container_name: nexcom-etcd
+    restart: unless-stopped
+    environment:
+      ETCD_ENABLE_V2: "true"
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_ADVERTISE_CLIENT_URLS: "http://etcd:2379"
+      ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:2379"
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Identity & Access Management - Keycloak
+  # ==========================================================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: nexcom-keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    volumes:
+      - ./security/keycloak/realm/nexcom-realm.json:/opt/keycloak/data/import/nexcom-realm.json:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Financial Ledger - TigerBeetle
+  # ==========================================================================
+  tigerbeetle:
+    image: ghcr.io/tigerbeetle/tigerbeetle:0.15.6
+    container_name: nexcom-tigerbeetle
+    restart: unless-stopped
+    command: "start --addresses=0.0.0.0:3001 /data/0_0.tigerbeetle"
+    volumes:
+      - tigerbeetle-data:/data
+    ports:
+      - "3001:3001"
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Event Streaming - Apache Kafka (KRaft mode)
+  # ==========================================================================
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: nexcom-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_NUM_PARTITIONS: 6
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_CFG_LOG_RETENTION_HOURS: 168
+    ports:
+      - "9094:9094"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    networks:
+      - nexcom-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: nexcom-kafka-ui
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTERS_0_NAME: nexcom-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8082:8080"
+    depends_on:
+      - kafka
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Workflow Engine - Temporal
+  # ==========================================================================
+  temporal:
+    image: temporalio/auto-setup:1.24
+    container_name: nexcom-temporal
+    restart: unless-stopped
+    environment:
+      DB: postgresql
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:-temporal}
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/development.yaml
+    volumes:
+      - ./infrastructure/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
+    ports:
+      - "7233:7233"
+    depends_on:
+      - postgres
+    networks:
+      - nexcom-network
+
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    container_name: nexcom-temporal-ui
+    restart: unless-stopped
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8233:8080"
+    depends_on:
+      - temporal
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Database - PostgreSQL
+  # ==========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexcom-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexcom
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexcom_dev}
+      POSTGRES_MULTIPLE_DATABASES: nexcom,keycloak,temporal
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
+      - ./infrastructure/postgres/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Cache - Redis Cluster
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: nexcom-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+        --maxmemory 512mb
+        --maxmemory-policy allkeys-lru
+        --appendonly yes
+        --requirepass ${REDIS_PASSWORD:-nexcom_dev}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - nexcom-network
+
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: nexcom-redis-insight
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Search & Analytics - OpenSearch
+  # ==========================================================================
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    container_name: nexcom-opensearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      DISABLE_SECURITY_PLUGIN: "true"
+      cluster.name: nexcom-opensearch
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    networks:
+      - nexcom-network
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.13.0
+    container_name: nexcom-opensearch-dashboards
+    restart: unless-stopped
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    ports:
+      - "5601:5601"
+    depends_on:
+      - opensearch
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Real-time Streaming - Fluvio
+  # ==========================================================================
+  fluvio:
+    image: infinyon/fluvio:stable
+    container_name: nexcom-fluvio
+    restart: unless-stopped
+    command: "./fluvio-run sc start --local /data"
+    ports:
+      - "9003:9003"
+    volumes:
+      - fluvio-data:/data
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Security Monitoring - Wazuh
+  # ==========================================================================
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.8.2
+    container_name: nexcom-wazuh-manager
+    restart: unless-stopped
+    environment:
+      INDEXER_URL: https://opensearch:9200
+      INDEXER_USERNAME: admin
+      INDEXER_PASSWORD: ${WAZUH_INDEXER_PASSWORD:-admin}
+      FILEBEAT_SSL_VERIFICATION_MODE: none
+    volumes:
+      - wazuh-data:/var/ossec/data
+      - ./security/wazuh/ossec.conf:/var/ossec/etc/ossec.conf:ro
+    ports:
+      - "1514:1514"
+      - "1515:1515"
+      - "514:514/udp"
+      - "55000:55000"
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Cyber Threat Intelligence - OpenCTI
+  # ==========================================================================
+  opencti:
+    image: opencti/platform:6.0.10
+    container_name: nexcom-opencti
+    restart: unless-stopped
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=8096"
+      APP__PORT: 8088
+      APP__BASE_URL: http://localhost:8088
+      APP__ADMIN__EMAIL: admin@nexcom.exchange
+      APP__ADMIN__PASSWORD: ${OPENCTI_ADMIN_PASSWORD:-admin}
+      APP__ADMIN__TOKEN: ${OPENCTI_ADMIN_TOKEN:-changeme}
+      REDIS__HOSTNAME: redis
+      REDIS__PORT: 6379
+      REDIS__PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
+      ELASTICSEARCH__URL: http://opensearch:9200
+      MINIO__ENDPOINT: minio
+      MINIO__PORT: 9000
+      MINIO__USE_SSL: "false"
+      MINIO__ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO__SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      RABBITMQ__HOSTNAME: rabbitmq
+      RABBITMQ__PORT: 5672
+      RABBITMQ__USERNAME: guest
+      RABBITMQ__PASSWORD: guest
+    ports:
+      - "8088:8088"
+    depends_on:
+      - opensearch
+      - redis
+      - rabbitmq
+      - minio
+    networks:
+      - nexcom-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: nexcom-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - nexcom-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: nexcom-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # WAF - OpenAppSec
+  # ==========================================================================
+  openappsec:
+    image: ghcr.io/openappsec/smartsync:latest
+    container_name: nexcom-openappsec
+    restart: unless-stopped
+    volumes:
+      - ./security/openappsec/local-policy.yaml:/etc/cp/conf/local-policy.yaml:ro
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Dapr Sidecar (Placement Service)
+  # ==========================================================================
+  dapr-placement:
+    image: "daprio/dapr:1.13"
+    container_name: nexcom-dapr-placement
+    command: ["./placement", "-port", "50006"]
+    ports:
+      - "50006:50006"
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # Permify (Fine-Grained Authorization)
+  # ==========================================================================
+  permify:
+    image: ghcr.io/permify/permify:latest
+    container_name: nexcom-permify
+    restart: unless-stopped
+    command: serve
+    environment:
+      PERMIFY_DATABASE_ENGINE: postgres
+      PERMIFY_DATABASE_URI: "postgres://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom"
+    ports:
+      - "3476:3476"
+      - "3478:3478"
+    depends_on:
+      - postgres
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM Matching Engine (Rust)
+  # ==========================================================================
+  matching-engine:
+    build:
+      context: ./services/matching-engine
+      dockerfile: Dockerfile
+    container_name: nexcom-matching-engine
+    restart: unless-stopped
+    ports:
+      - "8010:8010"
+    environment:
+      PORT: "8010"
+      NODE_ID: nexcom-primary
+      NODE_ROLE: primary
+      RUST_LOG: nexcom_matching_engine=info
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM Trading Engine (Go)
+  # ==========================================================================
+  trading-engine:
+    build:
+      context: ./services/trading-engine
+      dockerfile: Dockerfile
+    container_name: nexcom-trading-engine
+    restart: unless-stopped
+    ports:
+      - "8011:8011"
+    environment:
+      PORT: "8011"
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
+    depends_on:
+      - kafka
+      - redis
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM Market Data (Go)
+  # ==========================================================================
+  market-data:
+    build:
+      context: ./services/market-data
+      dockerfile: Dockerfile
+    container_name: nexcom-market-data
+    restart: unless-stopped
+    ports:
+      - "8012:8002"
+      - "8013:8003"
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
+    depends_on:
+      - kafka
+      - redis
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM Risk Management (Go)
+  # ==========================================================================
+  risk-management:
+    build:
+      context: ./services/risk-management
+      dockerfile: Dockerfile
+    container_name: nexcom-risk-management
+    restart: unless-stopped
+    ports:
+      - "8014:8004"
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
+    depends_on:
+      - kafka
+      - redis
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM Settlement (Rust)
+  # ==========================================================================
+  settlement:
+    build:
+      context: ./services/settlement
+      dockerfile: Dockerfile
+    container_name: nexcom-settlement
+    restart: unless-stopped
+    ports:
+      - "8015:8005"
+    environment:
+      TIGERBEETLE_ADDRESSES: tigerbeetle:3001
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      - tigerbeetle
+      - kafka
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM User Management (TypeScript)
+  # ==========================================================================
+  user-management:
+    build:
+      context: ./services/user-management
+      dockerfile: Dockerfile
+    container_name: nexcom-user-management
+    restart: unless-stopped
+    ports:
+      - "8016:8006"
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: nexcom
+      POSTGRES_URL: postgres://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+    depends_on:
+      - keycloak
+      - postgres
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM AI/ML (Python)
+  # ==========================================================================
+  ai-ml:
+    build:
+      context: ./services/ai-ml
+      dockerfile: Dockerfile
+    container_name: nexcom-ai-ml
+    restart: unless-stopped
+    ports:
+      - "8017:8007"
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
+    depends_on:
+      - kafka
+      - redis
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM Notification (TypeScript)
+  # ==========================================================================
+  notification:
+    build:
+      context: ./services/notification
+      dockerfile: Dockerfile
+    container_name: nexcom-notification
+    restart: unless-stopped
+    ports:
+      - "8018:8008"
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
+    depends_on:
+      - kafka
+      - redis
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # IPFS Node (Kubo)
+  # ==========================================================================
+  ipfs:
+    image: ipfs/kubo:v0.27.0
+    container_name: nexcom-ipfs
+    restart: unless-stopped
+    environment:
+      IPFS_PROFILE: server
+    volumes:
+      - ipfs-data:/data/ipfs
+    ports:
+      - "4001:4001"     # Swarm
+      - "5001:5001"     # API
+      - "8081:8080"     # Gateway
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM Blockchain (Rust)
+  # ==========================================================================
+  blockchain:
+    build:
+      context: ./services/blockchain
+      dockerfile: Dockerfile
+    container_name: nexcom-blockchain
+    restart: unless-stopped
+    ports:
+      - "8019:8009"
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      ETHEREUM_RPC_URL: ${ETHEREUM_RPC_URL:-https://eth.llamarpc.com}
+      POLYGON_RPC_URL: ${POLYGON_RPC_URL:-https://polygon-rpc.com}
+      POLYGON_AMOY_RPC_URL: ${POLYGON_AMOY_RPC_URL:-https://rpc-amoy.polygon.technology}
+      COMMODITY_TOKEN_ADDRESS: ${COMMODITY_TOKEN_ADDRESS:-0x0000000000000000000000000000000000000000}
+      SETTLEMENT_ESCROW_ADDRESS: ${SETTLEMENT_ESCROW_ADDRESS:-0x0000000000000000000000000000000000000000}
+      IPFS_API_URL: http://ipfs:5001
+      IPFS_GATEWAY_URL: http://ipfs:8080
+    depends_on:
+      - kafka
+      - ipfs
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM API Gateway (Go)
+  # ==========================================================================
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    container_name: nexcom-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      ENVIRONMENT: development
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
+      TEMPORAL_HOST: temporal:7233
+      TIGERBEETLE_ADDRESSES: tigerbeetle:3001
+      DAPR_HTTP_PORT: "3500"
+      DAPR_GRPC_PORT: "50001"
+      FLUVIO_ENDPOINT: fluvio:9003
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: nexcom
+      KEYCLOAK_CLIENT_ID: nexcom-gateway
+      PERMIFY_ENDPOINT: permify:3476
+      POSTGRES_URL: postgres://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      APISIX_ADMIN_URL: http://apisix:9180
+      CORS_ORIGINS: http://localhost:3000,http://localhost:19006
+    depends_on:
+      - kafka
+      - redis
+      - temporal
+      - keycloak
+      - permify
+      - tigerbeetle
+      - fluvio
+      - dapr-placement
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM Analytics Service (Python)
+  # ==========================================================================
+  analytics:
+    build:
+      context: ./services/analytics
+      dockerfile: Dockerfile
+    container_name: nexcom-analytics
+    restart: unless-stopped
+    ports:
+      - "8002:8001"
+    environment:
+      PORT: "8001"
+      ENVIRONMENT: development
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
+      TEMPORAL_HOST: temporal:7233
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: nexcom
+      KEYCLOAK_CLIENT_ID: nexcom-analytics
+      PERMIFY_ENDPOINT: permify:3476
+    depends_on:
+      - kafka
+      - redis
+    networks:
+      - nexcom-network
+
+  # ==========================================================================
+  # NEXCOM Universal Ingestion Engine (Python)
+  # ==========================================================================
+  ingestion-engine:
+    build:
+      context: ./services/ingestion-engine
+      dockerfile: Dockerfile
+    container_name: nexcom-ingestion-engine
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+    environment:
+      PORT: "8005"
+      ENVIRONMENT: development
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
+      FLUVIO_ENDPOINT: fluvio:9003
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGRES_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      TEMPORAL_HOST: temporal:7233
+      TIGERBEETLE_ADDRESSES: tigerbeetle:3001
+      MATCHING_ENGINE_URL: http://matching-engine:8010
+      MINIO_ENDPOINT: minio:9000
+      LAKEHOUSE_BASE: /data/lakehouse
+    volumes:
+      - lakehouse-data:/data/lakehouse
+    depends_on:
+      - kafka
+      - redis
+      - opensearch
+      - temporal
+      - tigerbeetle
+      - fluvio
+      - minio
+      - postgres
+    networks:
+      - nexcom-network
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  nexcom-network:
+    driver: bridge
+    name: nexcom-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres-data:
+  redis-data:
+  kafka-data:
+  opensearch-data:
+  tigerbeetle-data:
+  fluvio-data:
+  wazuh-data:
+  minio-data:
+  lakehouse-data:
+  ipfs-data:
