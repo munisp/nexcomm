@@ -1,0 +1,61 @@
+# NEXCOM Universal Ingestion Engine - Python Dependencies
+# ======================================================
+
+# Web Framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+
+# Kafka
+kafka-python==2.0.2
+confluent-kafka==2.6.1
+
+# Redis
+redis==5.2.1
+
+# PostgreSQL
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+
+# Apache Spark (batch ETL)
+pyspark==3.5.4
+
+# Apache Flink (streaming)
+apache-flink==1.20.0
+
+# Delta Lake
+delta-spark==3.1.0
+deltalake==0.22.3
+
+# Apache Sedona (geospatial)
+apache-sedona==1.6.1
+geopandas==1.0.1
+shapely==2.0.6
+
+# Ray (distributed ML)
+ray[default]==2.40.0
+
+# DataFusion (analytical queries)
+datafusion==43.1.0
+
+# HTTP client
+httpx==0.28.1
+aiohttp==3.11.11
+
+# Data processing
+pyarrow==18.1.0
+pandas==2.2.3
+numpy==2.2.1
+
+# Temporal workflow client
+temporalio==1.8.0
+
+# Observability
+opentelemetry-api==1.29.0
+opentelemetry-sdk==1.29.0
+opentelemetry-instrumentation-fastapi==0.50b0
+prometheus-client==0.21.1
+
+# Utilities
+python-dateutil==2.9.0
+orjson==3.10.12

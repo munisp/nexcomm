@@ -1,0 +1,300 @@
+syntax = "proto3";
+
+package nexcom;
+
+// ─── Matching Engine Service ──────────────────────────────────────────────────
+// Handles order matching, partial fills, and order book management.
+// The main tRPC server calls this service when an order is submitted.
+service MatchingEngine {
+  // Submit a new order to the matching engine
+  rpc SubmitOrder(SubmitOrderRequest) returns (SubmitOrderResponse);
+  // Cancel an existing order
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+  // Get current order book for a symbol
+  rpc GetOrderBook(GetOrderBookRequest) returns (OrderBook);
+  // Stream live order book updates (server-side streaming)
+  rpc StreamOrderBook(GetOrderBookRequest) returns (stream OrderBookUpdate);
+  // Get order status
+  rpc GetOrderStatus(GetOrderStatusRequest) returns (OrderStatusResponse);
+}
+
+// ─── Settlement Service ───────────────────────────────────────────────────────
+// Handles T+2 settlement, delivery vs payment (DvP), and clearing.
+service SettlementService {
+  // Initiate settlement for a filled order
+  rpc InitiateSettlement(InitiateSettlementRequest) returns (SettlementResponse);
+  // Update settlement status (admin)
+  rpc UpdateSettlementStatus(UpdateSettlementStatusRequest) returns (SettlementResponse);
+  // Get settlement details
+  rpc GetSettlement(GetSettlementRequest) returns (SettlementResponse);
+  // List settlements for a user
+  rpc ListSettlements(ListSettlementsRequest) returns (ListSettlementsResponse);
+  // Batch settle all pending T+2 settlements (clearing house operation)
+  rpc BatchSettle(BatchSettleRequest) returns (BatchSettleResponse);
+}
+
+// ─── Price Alert Service ──────────────────────────────────────────────────────
+// Handles real-time price monitoring and alert triggering.
+service PriceAlertService {
+  // Create a new price alert
+  rpc CreateAlert(CreateAlertRequest) returns (AlertResponse);
+  // Delete an alert
+  rpc DeleteAlert(DeleteAlertRequest) returns (DeleteAlertResponse);
+  // List alerts for a user
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
+  // Stream triggered alerts (server-side streaming)
+  rpc StreamTriggeredAlerts(StreamAlertsRequest) returns (stream TriggeredAlert);
+}
+
+// ─── Shared Enums ─────────────────────────────────────────────────────────────
+enum AssetClass {
+  COMMODITY = 0;
+  FOREX = 1;
+  EQUITY = 2;
+  DIGITAL_ASSET = 3;
+  INDEX = 4;
+}
+
+enum OrderSide {
+  BUY = 0;
+  SELL = 1;
+}
+
+enum OrderType {
+  LIMIT = 0;
+  MARKET = 1;
+  STOP_LIMIT = 2;
+}
+
+enum OrderStatus {
+  OPEN = 0;
+  PARTIALLY_FILLED = 1;
+  FILLED = 2;
+  CANCELLED = 3;
+  REJECTED = 4;
+  EXPIRED = 5;
+}
+
+enum SettlementStatus {
+  PENDING = 0;
+  MATCHED = 1;
+  SETTLED = 2;
+  FAILED = 3;
+}
+
+enum AlertDirection {
+  ABOVE = 0;
+  BELOW = 1;
+}
+
+// ─── Matching Engine Messages ─────────────────────────────────────────────────
+message SubmitOrderRequest {
+  int32 user_id = 1;
+  string client_order_id = 2;  // Idempotency key (UUID)
+  string symbol = 3;
+  AssetClass asset_class = 4;
+  OrderSide side = 5;
+  OrderType order_type = 6;
+  double quantity = 7;
+  double price = 8;          // Required for LIMIT and STOP_LIMIT
+  double stop_price = 9;     // Required for STOP_LIMIT
+  string time_in_force = 10; // GTC, DAY, IOC, FOK
+  string notes = 11;
+}
+
+message SubmitOrderResponse {
+  int32 order_id = 1;
+  string client_order_id = 2;
+  OrderStatus status = 3;
+  double filled_qty = 4;
+  double avg_fill_price = 5;
+  bool idempotent = 6;       // true if this was a duplicate submission
+  string message = 7;
+  repeated Fill fills = 8;
+}
+
+message Fill {
+  int32 fill_id = 1;
+  double quantity = 2;
+  double price = 3;
+  int64 timestamp_ms = 4;
+  int32 counterparty_order_id = 5;
+}
+
+message CancelOrderRequest {
+  int32 order_id = 1;
+  int32 user_id = 2;
+}
+
+message CancelOrderResponse {
+  bool success = 1;
+  string message = 2;
+  OrderStatus final_status = 3;
+}
+
+message GetOrderBookRequest {
+  string symbol = 1;
+  int32 depth = 2;  // Number of price levels (default 20)
+}
+
+message PriceLevel {
+  double price = 1;
+  double quantity = 2;
+  int32 order_count = 3;
+}
+
+message OrderBook {
+  string symbol = 1;
+  repeated PriceLevel bids = 2;
+  repeated PriceLevel asks = 3;
+  int64 timestamp_ms = 4;
+  double last_price = 5;
+  double spread = 6;
+}
+
+message OrderBookUpdate {
+  string symbol = 1;
+  repeated PriceLevel bids = 2;
+  repeated PriceLevel asks = 3;
+  int64 timestamp_ms = 4;
+  double last_price = 5;
+  bool is_snapshot = 6;  // true = full book, false = incremental update
+}
+
+message GetOrderStatusRequest {
+  int32 order_id = 1;
+  int32 user_id = 2;
+}
+
+message OrderStatusResponse {
+  OrderStatus status = 1;
+  double filled_qty = 2;
+  double avg_fill_price = 3;
+  string message = 4;
+}
+
+// ─── Settlement Messages ──────────────────────────────────────────────────────
+message InitiateSettlementRequest {
+  int32 order_id = 1;
+  int32 user_id = 2;
+  string symbol = 3;
+  AssetClass asset_class = 4;
+  OrderSide side = 5;
+  double quantity = 6;
+  double price = 7;
+  int64 settlement_date_ms = 8;  // T+2 date in milliseconds
+  string counterparty_id = 9;
+}
+
+message UpdateSettlementStatusRequest {
+  int32 settlement_id = 1;
+  SettlementStatus status = 2;
+  string notes = 3;
+}
+
+message GetSettlementRequest {
+  int32 settlement_id = 1;
+}
+
+message ListSettlementsRequest {
+  int32 user_id = 1;
+  SettlementStatus status = 2;  // 0 = all
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message SettlementRecord {
+  int32 id = 1;
+  int32 order_id = 2;
+  int32 user_id = 3;
+  string symbol = 4;
+  AssetClass asset_class = 5;
+  OrderSide side = 6;
+  double quantity = 7;
+  double price = 8;
+  SettlementStatus status = 9;
+  int64 settlement_date_ms = 10;
+  string counterparty_id = 11;
+  string notes = 12;
+  int64 created_at_ms = 13;
+  int64 updated_at_ms = 14;
+}
+
+message SettlementResponse {
+  bool success = 1;
+  string message = 2;
+  SettlementRecord settlement = 3;
+}
+
+message ListSettlementsResponse {
+  repeated SettlementRecord settlements = 1;
+  int32 total = 2;
+}
+
+message BatchSettleRequest {
+  int64 settlement_date_ms = 1;  // Settle all pending for this date
+}
+
+message BatchSettleResponse {
+  int32 settled_count = 1;
+  int32 failed_count = 2;
+  repeated string errors = 3;
+}
+
+// ─── Price Alert Messages ─────────────────────────────────────────────────────
+message CreateAlertRequest {
+  int32 user_id = 1;
+  string symbol = 2;
+  AssetClass asset_class = 3;
+  AlertDirection direction = 4;
+  double target_price = 5;
+  string note = 6;
+}
+
+message DeleteAlertRequest {
+  int32 alert_id = 1;
+  int32 user_id = 2;
+}
+
+message DeleteAlertResponse {
+  bool success = 1;
+}
+
+message ListAlertsRequest {
+  int32 user_id = 1;
+}
+
+message AlertRecord {
+  int32 id = 1;
+  int32 user_id = 2;
+  string symbol = 3;
+  AssetClass asset_class = 4;
+  AlertDirection direction = 5;
+  double target_price = 6;
+  bool triggered = 7;
+  string note = 8;
+  int64 created_at_ms = 9;
+  int64 triggered_at_ms = 10;
+}
+
+message AlertResponse {
+  bool success = 1;
+  AlertRecord alert = 2;
+}
+
+message ListAlertsResponse {
+  repeated AlertRecord alerts = 1;
+}
+
+message StreamAlertsRequest {
+  int32 user_id = 1;
+}
+
+message TriggeredAlert {
+  int32 alert_id = 1;
+  string symbol = 2;
+  double target_price = 3;
+  double current_price = 4;
+  AlertDirection direction = 5;
+  int64 triggered_at_ms = 6;
+}

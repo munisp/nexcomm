@@ -1,0 +1,336 @@
+# NEXCOM Exchange — APISIX Declarative Gateway Configuration
+# Deploy with: apisix config push nexcom-routes.yaml
+# Requires APISIX 3.x with Admin API enabled.
+#
+# Auth flow:
+#   1. APISIX validates JWT via Keycloak JWKS endpoint (jwt-auth plugin)
+#   2. Permify RBAC check via forward-auth plugin to /authz/check
+#   3. Rate limiting via limit-req per consumer key
+#   4. Upstream routing to internal microservices
+#
+# Middleware stack per route:
+#   jwt-auth → forward-auth (Permify) → limit-req → proxy-rewrite → upstream
+
+upstreams:
+  - id: portal-backend
+    name: nexcom-portal-backend
+    type: roundrobin
+    nodes:
+      - host: portal-backend
+        port: 3000
+        weight: 100
+    health_check:
+      active:
+        type: http
+        http_path: /api/trpc/system.health
+        interval: 10
+        timeout: 5
+        healthy:
+          http_statuses: [200]
+          successes: 2
+        unhealthy:
+          http_statuses: [500, 502, 503]
+          http_failures: 3
+
+  - id: trading-engine
+    name: nexcom-trading-engine
+    type: roundrobin
+    nodes:
+      - host: trading-engine
+        port: 8001
+        weight: 100
+    health_check:
+      active:
+        type: http
+        http_path: /healthz
+        interval: 5
+        timeout: 3
+        healthy:
+          successes: 2
+        unhealthy:
+          http_failures: 3
+
+  - id: settlement-engine
+    name: nexcom-settlement-engine
+    type: roundrobin
+    nodes:
+      - host: settlement-engine
+        port: 8005
+        weight: 100
+
+  - id: kyc-service
+    name: nexcom-kyc-service
+    type: roundrobin
+    nodes:
+      - host: kyc-service
+        port: 8002
+        weight: 100
+
+  - id: market-data
+    name: nexcom-market-data
+    type: roundrobin
+    nodes:
+      - host: market-data
+        port: 8003
+        weight: 100
+
+  - id: risk-management
+    name: nexcom-risk-management
+    type: roundrobin
+    nodes:
+      - host: risk-management
+        port: 8004
+        weight: 100
+
+  - id: ai-ml-service
+    name: nexcom-ai-ml
+    type: roundrobin
+    nodes:
+      - host: ai-ml-service
+        port: 8006
+        weight: 100
+
+  - id: analytics-engine
+    name: nexcom-analytics
+    type: roundrobin
+    nodes:
+      - host: analytics-engine
+        port: 8007
+        weight: 100
+
+  - id: middleware-hub
+    name: nexcom-middleware-hub
+    type: roundrobin
+    nodes:
+      - host: middleware-hub
+        port: 8080
+        weight: 100
+
+consumers:
+  - username: nexcom-internal
+    plugins:
+      key-auth:
+        key: "${APISIX_INTERNAL_KEY}"
+
+  - username: nexcom-public-api
+    plugins:
+      key-auth:
+        key: "${APISIX_PUBLIC_KEY}"
+
+global_rules:
+  - id: cors-global
+    plugins:
+      cors:
+        allow_origins: "https://*.manus.space,https://nexcom.exchange"
+        allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
+        allow_headers: "Authorization,Content-Type,X-Request-ID"
+        expose_headers: "X-RateLimit-Limit,X-RateLimit-Remaining"
+        max_age: 3600
+        allow_credential: true
+
+  - id: request-id-global
+    plugins:
+      request-id:
+        header_name: X-Request-ID
+        include_in_response: true
+
+routes:
+  - id: health-check
+    name: health-check
+    uri: /health
+    methods: [GET]
+    upstream_id: portal-backend
+    plugins:
+      proxy-rewrite:
+        uri: /api/trpc/system.health
+
+  - id: trpc-public
+    name: trpc-public-procedures
+    uri: /api/trpc/*
+    methods: [GET, POST]
+    upstream_id: portal-backend
+    plugins:
+      limit-req:
+        rate: 100
+        burst: 50
+        key: remote_addr
+        rejected_code: 429
+
+  - id: trading-orders
+    name: trading-order-submission
+    uri: /api/v1/orders
+    methods: [GET, POST, DELETE]
+    upstream_id: trading-engine
+    plugins:
+      jwt-auth:
+        key: "${KEYCLOAK_JWKS_URI}"
+        algorithm: RS256
+      forward-auth:
+        uri: http://permify-sidecar:3476/v1/authz/check
+        request_headers: [Authorization, X-User-ID, X-User-Role]
+        upstream_headers: [X-Authz-Result]
+      limit-req:
+        rate: 50
+        burst: 20
+        key: consumer_name
+        rejected_code: 429
+      limit-count:
+        count: 1000
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+
+  - id: trading-orderbook
+    name: trading-orderbook-stream
+    uri: /api/v1/orderbook/*
+    methods: [GET]
+    upstream_id: trading-engine
+    plugins:
+      limit-req:
+        rate: 200
+        burst: 100
+        key: remote_addr
+        rejected_code: 429
+
+  - id: market-data-prices
+    name: market-data-price-feed
+    uri: /api/v1/prices/*
+    methods: [GET]
+    upstream_id: market-data
+    plugins:
+      proxy-cache:
+        cache_zone: market_data_cache
+        cache_ttl: 5
+        cache_http_status: [200]
+      limit-req:
+        rate: 500
+        burst: 200
+        key: remote_addr
+        rejected_code: 429
+
+  - id: settlement-api
+    name: settlement-engine-api
+    uri: /api/v1/settlement/*
+    methods: [GET, POST]
+    upstream_id: settlement-engine
+    plugins:
+      jwt-auth:
+        key: "${KEYCLOAK_JWKS_URI}"
+        algorithm: RS256
+      forward-auth:
+        uri: http://permify-sidecar:3476/v1/authz/check
+        request_headers: [Authorization, X-User-ID, X-User-Role]
+        upstream_headers: [X-Authz-Result]
+      limit-req:
+        rate: 20
+        burst: 5
+        key: consumer_name
+        rejected_code: 429
+
+  - id: kyc-submit
+    name: kyc-document-submission
+    uri: /api/v1/kyc/*
+    methods: [GET, POST, PUT]
+    upstream_id: kyc-service
+    plugins:
+      jwt-auth:
+        key: "${KEYCLOAK_JWKS_URI}"
+        algorithm: RS256
+      limit-req:
+        rate: 10
+        burst: 5
+        key: consumer_name
+        rejected_code: 429
+      request-size-limiting:
+        allowed_payload_size: 10485760
+
+  - id: risk-api
+    name: risk-management-api
+    uri: /api/v1/risk/*
+    methods: [GET, POST]
+    upstream_id: risk-management
+    plugins:
+      jwt-auth:
+        key: "${KEYCLOAK_JWKS_URI}"
+        algorithm: RS256
+      forward-auth:
+        uri: http://permify-sidecar:3476/v1/authz/check
+        request_headers: [Authorization, X-User-ID, X-User-Role]
+        upstream_headers: [X-Authz-Result]
+      limit-req:
+        rate: 30
+        burst: 10
+        key: consumer_name
+        rejected_code: 429
+
+  - id: ai-ml-api
+    name: ai-ml-inference
+    uri: /api/v1/ai/*
+    methods: [GET, POST]
+    upstream_id: ai-ml-service
+    plugins:
+      jwt-auth:
+        key: "${KEYCLOAK_JWKS_URI}"
+        algorithm: RS256
+      limit-req:
+        rate: 10
+        burst: 5
+        key: consumer_name
+        rejected_code: 429
+      limit-count:
+        count: 100
+        time_window: 3600
+        key: consumer_name
+        rejected_code: 429
+
+  - id: analytics-api
+    name: analytics-engine-api
+    uri: /api/v1/analytics/*
+    methods: [GET, POST]
+    upstream_id: analytics-engine
+    plugins:
+      jwt-auth:
+        key: "${KEYCLOAK_JWKS_URI}"
+        algorithm: RS256
+      proxy-cache:
+        cache_zone: analytics_cache
+        cache_ttl: 30
+        cache_http_status: [200]
+      limit-req:
+        rate: 50
+        burst: 20
+        key: consumer_name
+        rejected_code: 429
+
+  - id: middleware-hub-api
+    name: middleware-hub-internal
+    uri: /internal/middleware/*
+    methods: [GET, POST]
+    upstream_id: middleware-hub
+    plugins:
+      key-auth: {}
+      ip-restriction:
+        whitelist:
+          - 10.0.0.0/8
+          - 172.16.0.0/12
+          - 192.168.0.0/16
+      limit-req:
+        rate: 200
+        burst: 100
+        key: consumer_name
+        rejected_code: 429
+
+  - id: webhook-ingress
+    name: external-webhook-receiver
+    uri: /webhooks/*
+    methods: [POST]
+    upstream_id: portal-backend
+    plugins:
+      hmac-auth: {}
+      limit-req:
+        rate: 50
+        burst: 20
+        key: remote_addr
+        rejected_code: 429
+      proxy-rewrite:
+        regex_uri: ["/webhooks/(.*)", "/api/webhooks/$1"]

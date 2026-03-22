@@ -1,0 +1,1097 @@
+openapi: 3.0.3
+info:
+  title: NEXCOM Exchange Gateway API
+  description: |
+    REST API for the NEXCOM Next-Generation Commodity Exchange platform.
+    Provides endpoints for trading, market data, portfolio management,
+    clearing, surveillance, and platform administration.
+  version: 1.0.0
+  contact:
+    name: NEXCOM Exchange
+    url: https://nexcom.exchange
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+  - url: https://api.nexcom.exchange/api/v1
+    description: Production
+
+tags:
+  - name: Auth
+    description: Authentication and authorization (Keycloak OIDC)
+  - name: Markets
+    description: Market data, tickers, orderbooks, candles
+  - name: Orders
+    description: Order management (create, cancel, list)
+  - name: Trades
+    description: Trade history and execution reports
+  - name: Portfolio
+    description: Portfolio positions and P&L
+  - name: Alerts
+    description: Price alert management
+  - name: Account
+    description: User account, KYC, preferences
+  - name: Notifications
+    description: Notification center
+  - name: Analytics
+    description: Dashboard, geospatial, AI/ML insights
+  - name: Matching Engine
+    description: Proxy routes to Rust matching engine
+  - name: Ingestion
+    description: Proxy routes to ingestion engine
+  - name: Accounts
+    description: Trading accounts CRUD
+  - name: Audit Log
+    description: Platform audit trail
+  - name: Platform
+    description: Platform health and middleware status
+  - name: WebSocket
+    description: Real-time data streams
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [Platform]
+      responses:
+        "200":
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /auth/login:
+    post:
+      summary: Login with email/password
+      operationId: login
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+
+  /auth/logout:
+    post:
+      summary: Logout current session
+      operationId: logout
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out
+
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      operationId: refreshToken
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: Token refreshed
+
+  /auth/callback:
+    post:
+      summary: OIDC callback (Keycloak)
+      operationId: authCallback
+      tags: [Auth]
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          schema:
+            type: string
+        - name: code_verifier
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Token exchange successful
+
+  /markets:
+    get:
+      summary: List all commodities/markets
+      operationId: listMarkets
+      tags: [Markets]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of commodities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommodityList"
+
+  /markets/search:
+    get:
+      summary: Search markets by name/symbol
+      operationId: searchMarkets
+      tags: [Markets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
+
+  /markets/{symbol}/ticker:
+    get:
+      summary: Get ticker for a symbol
+      operationId: getTicker
+      tags: [Markets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Market ticker data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketTicker"
+
+  /markets/{symbol}/orderbook:
+    get:
+      summary: Get orderbook depth
+      operationId: getOrderBook
+      tags: [Markets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Orderbook snapshot
+
+  /markets/{symbol}/candles:
+    get:
+      summary: Get OHLCV candles
+      operationId: getCandles
+      tags: [Markets]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 4h, 1d]
+            default: 1h
+      responses:
+        "200":
+          description: OHLCV candle data
+
+  /orders:
+    get:
+      summary: List orders for current user
+      operationId: listOrders
+      tags: [Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, filled, cancelled, all]
+      responses:
+        "200":
+          description: List of orders
+    post:
+      summary: Submit a new order
+      operationId: createOrder
+      tags: [Orders]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}:
+    get:
+      summary: Get order by ID
+      operationId: getOrder
+      tags: [Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order details
+    delete:
+      summary: Cancel an order
+      operationId: cancelOrder
+      tags: [Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order cancelled
+
+  /trades:
+    get:
+      summary: List trade history
+      operationId: listTrades
+      tags: [Trades]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of trades
+
+  /trades/{id}:
+    get:
+      summary: Get trade by ID
+      operationId: getTrade
+      tags: [Trades]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Trade details
+
+  /portfolio:
+    get:
+      summary: Get portfolio summary
+      operationId: getPortfolio
+      tags: [Portfolio]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Portfolio summary with balance, P&L
+
+  /portfolio/positions:
+    get:
+      summary: List open positions
+      operationId: listPositions
+      tags: [Portfolio]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of positions
+
+  /portfolio/positions/{id}:
+    delete:
+      summary: Close a position
+      operationId: closePosition
+      tags: [Portfolio]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Position closed
+
+  /portfolio/history:
+    get:
+      summary: Portfolio value history
+      operationId: getPortfolioHistory
+      tags: [Portfolio]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Historical portfolio values
+
+  /alerts:
+    get:
+      summary: List price alerts
+      operationId: listAlerts
+      tags: [Alerts]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of alerts
+    post:
+      summary: Create a price alert
+      operationId: createAlert
+      tags: [Alerts]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAlertRequest"
+      responses:
+        "201":
+          description: Alert created
+
+  /alerts/{id}:
+    patch:
+      summary: Update an alert
+      operationId: updateAlert
+      tags: [Alerts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Alert updated
+    delete:
+      summary: Delete an alert
+      operationId: deleteAlert
+      tags: [Alerts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Alert deleted
+
+  /account/profile:
+    get:
+      summary: Get user profile
+      operationId: getProfile
+      tags: [Account]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User profile
+    patch:
+      summary: Update user profile
+      operationId: updateProfile
+      tags: [Account]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Profile updated
+
+  /account/kyc:
+    get:
+      summary: Get KYC status
+      operationId: getKYC
+      tags: [Account]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: KYC verification status
+
+  /account/kyc/submit:
+    post:
+      summary: Submit KYC documents
+      operationId: submitKYC
+      tags: [Account]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: KYC submitted
+
+  /notifications:
+    get:
+      summary: List notifications
+      operationId: listNotifications
+      tags: [Notifications]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of notifications
+
+  /notifications/{id}/read:
+    patch:
+      summary: Mark notification as read
+      operationId: markNotificationRead
+      tags: [Notifications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Marked as read
+
+  /analytics/dashboard:
+    get:
+      summary: Analytics dashboard data
+      operationId: analyticsDashboard
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard metrics
+
+  /analytics/pnl:
+    get:
+      summary: P&L report
+      operationId: pnlReport
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: P&L data
+
+  /analytics/geospatial/{commodity}:
+    get:
+      summary: Geospatial data for a commodity
+      operationId: geospatialData
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: commodity
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Geospatial analytics
+
+  /analytics/ai-insights:
+    get:
+      summary: AI/ML market insights
+      operationId: aiInsights
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: AI-generated insights
+
+  /analytics/forecast/{symbol}:
+    get:
+      summary: Price forecast for a symbol
+      operationId: priceForecast
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Price forecast with confidence intervals
+
+  /matching-engine/status:
+    get:
+      summary: Matching engine health status
+      operationId: matchingEngineStatus
+      tags: [Matching Engine]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Engine status
+
+  /matching-engine/depth/{symbol}:
+    get:
+      summary: Orderbook depth from matching engine
+      operationId: matchingEngineDepth
+      tags: [Matching Engine]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Depth data
+
+  /matching-engine/symbols:
+    get:
+      summary: List active symbols
+      operationId: matchingEngineSymbols
+      tags: [Matching Engine]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active symbols
+
+  /matching-engine/futures/contracts:
+    get:
+      summary: List futures contracts
+      operationId: matchingEngineFutures
+      tags: [Matching Engine]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Futures contracts
+
+  /matching-engine/options/contracts:
+    get:
+      summary: List options contracts
+      operationId: matchingEngineOptions
+      tags: [Matching Engine]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Options contracts
+
+  /matching-engine/clearing/positions/{account_id}:
+    get:
+      summary: Get clearing positions
+      operationId: matchingEnginePositions
+      tags: [Matching Engine]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Clearing positions
+
+  /matching-engine/surveillance/alerts:
+    get:
+      summary: Get surveillance alerts
+      operationId: matchingEngineSurveillance
+      tags: [Matching Engine]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Surveillance alerts
+
+  /matching-engine/delivery/warehouses:
+    get:
+      summary: List certified warehouses
+      operationId: matchingEngineWarehouses
+      tags: [Matching Engine]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Warehouse list
+
+  /matching-engine/audit/entries:
+    get:
+      summary: Get audit trail entries
+      operationId: matchingEngineAudit
+      tags: [Matching Engine]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Audit entries
+
+  /ingestion/feeds:
+    get:
+      summary: List all data feeds
+      operationId: ingestionFeeds
+      tags: [Ingestion]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Feed list
+
+  /ingestion/feeds/{id}/start:
+    post:
+      summary: Start a data feed
+      operationId: ingestionStartFeed
+      tags: [Ingestion]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Feed started
+
+  /ingestion/feeds/{id}/stop:
+    post:
+      summary: Stop a data feed
+      operationId: ingestionStopFeed
+      tags: [Ingestion]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Feed stopped
+
+  /ingestion/feeds/metrics:
+    get:
+      summary: Feed ingestion metrics
+      operationId: ingestionMetrics
+      tags: [Ingestion]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Metrics data
+
+  /ingestion/lakehouse/status:
+    get:
+      summary: Lakehouse layer status
+      operationId: ingestionLakehouseStatus
+      tags: [Ingestion]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Lakehouse status
+
+  /ingestion/lakehouse/catalog:
+    get:
+      summary: Data catalog (all tables)
+      operationId: ingestionLakehouseCatalog
+      tags: [Ingestion]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Table catalog
+
+  /ingestion/schema-registry:
+    get:
+      summary: Schema registry
+      operationId: ingestionSchemaRegistry
+      tags: [Ingestion]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Registered schemas
+
+  /ingestion/pipeline/status:
+    get:
+      summary: Pipeline job status (Flink/Spark)
+      operationId: ingestionPipelineStatus
+      tags: [Ingestion]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pipeline status
+
+  /platform/health:
+    get:
+      summary: Aggregated platform health
+      operationId: platformHealth
+      tags: [Platform]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Health of all services
+
+  /accounts:
+    get:
+      summary: List trading accounts
+      operationId: listAccounts
+      tags: [Accounts]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account list
+    post:
+      summary: Create trading account
+      operationId: createAccount
+      tags: [Accounts]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+      responses:
+        "201":
+          description: Account created
+
+  /accounts/{id}:
+    get:
+      summary: Get account by ID
+      operationId: getAccount
+      tags: [Accounts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Account details
+    patch:
+      summary: Update account
+      operationId: updateAccount
+      tags: [Accounts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Account updated
+    delete:
+      summary: Delete account
+      operationId: deleteAccount
+      tags: [Accounts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Account deleted
+
+  /audit-log:
+    get:
+      summary: List audit log entries
+      operationId: listAuditLog
+      tags: [Audit Log]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Audit entries
+
+  /audit-log/{id}:
+    get:
+      summary: Get audit entry by ID
+      operationId: getAuditEntry
+      tags: [Audit Log]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit entry
+
+  /middleware/status:
+    get:
+      summary: Middleware connectivity status
+      operationId: middlewareStatus
+      tags: [Platform]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Middleware status
+
+  /ws/notifications:
+    get:
+      summary: WebSocket - real-time notifications
+      operationId: wsNotifications
+      tags: [WebSocket]
+      security:
+        - bearerAuth: []
+      responses:
+        "101":
+          description: WebSocket upgrade
+
+  /ws/market-data:
+    get:
+      summary: WebSocket - real-time market data
+      operationId: wsMarketData
+      tags: [WebSocket]
+      security:
+        - bearerAuth: []
+      responses:
+        "101":
+          description: WebSocket upgrade
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Keycloak OIDC JWT token
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+            service:
+              type: string
+            version:
+              type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            expires_in:
+              type: integer
+            token_type:
+              type: string
+
+    CommodityList:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            commodities:
+              type: array
+              items:
+                $ref: "#/components/schemas/Commodity"
+
+    Commodity:
+      type: object
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          enum: [agricultural, metals, energy, carbon]
+        price:
+          type: number
+        change_24h:
+          type: number
+        volume_24h:
+          type: number
+
+    MarketTicker:
+      type: object
+      properties:
+        symbol:
+          type: string
+        last_price:
+          type: number
+        bid:
+          type: number
+        ask:
+          type: number
+        high_24h:
+          type: number
+        low_24h:
+          type: number
+        volume_24h:
+          type: number
+        change_24h:
+          type: number
+        open_interest:
+          type: number
+
+    CreateOrderRequest:
+      type: object
+      required: [symbol, side, type, quantity]
+      properties:
+        symbol:
+          type: string
+        side:
+          type: string
+          enum: [BUY, SELL]
+        type:
+          type: string
+          enum: [MARKET, LIMIT, STOP, STOP_LIMIT]
+        time_in_force:
+          type: string
+          enum: [DAY, GTC, IOC, FOK]
+          default: DAY
+        price:
+          type: number
+        stop_price:
+          type: number
+        quantity:
+          type: number
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        symbol:
+          type: string
+        side:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        price:
+          type: number
+        quantity:
+          type: number
+        filled_quantity:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+
+    CreateAlertRequest:
+      type: object
+      required: [symbol, condition, target_price]
+      properties:
+        symbol:
+          type: string
+        condition:
+          type: string
+          enum: [above, below, cross]
+        target_price:
+          type: number
+
+    CreateAccountRequest:
+      type: object
+      required: [type, currency]
+      properties:
+        type:
+          type: string
+          enum: [trading, margin, delivery]
+        currency:
+          type: string
+          enum: [USD, KES, GBP, EUR]

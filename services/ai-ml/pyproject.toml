@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "nexcom-ai-ml"
+version = "0.1.0"
+description = "NEXCOM Exchange - AI/ML Service for price forecasting, risk scoring, and sentiment analysis"
+authors = ["NEXCOM Team"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+pydantic = "^2.5.0"
+numpy = "^1.26.0"
+pandas = "^2.1.0"
+scikit-learn = "^1.4.0"
+confluent-kafka = "^2.3.0"
+redis = "^5.0.0"
+psycopg2-binary = "^2.9.9"
+httpx = "^0.26.0"
+structlog = "^24.1.0"
+prometheus-client = "^0.20.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

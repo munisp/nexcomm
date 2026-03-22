@@ -1,0 +1,21 @@
+fastapi==0.109.0
+uvicorn==0.27.0
+pydantic==2.5.3
+httpx==0.26.0
+redis==5.0.1
+confluent-kafka==2.3.0
+temporalio==1.4.0
+# Lakehouse / Data Platform
+# delta-spark==3.0.0
+# pyspark==3.5.0
+# apache-flink==1.18.0
+# apache-sedona==1.5.1
+# ray==2.9.0
+# datafusion==34.0.0
+numpy==1.26.3
+pandas==2.1.4
+scikit-learn==1.4.0
+# Keycloak
+python-keycloak==3.9.0
+# Permify
+# permify-python==0.1.0

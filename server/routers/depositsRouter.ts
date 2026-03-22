@@ -1,0 +1,149 @@
+import { z } from "zod";
+import { protectedProcedure, router } from "../_core/trpc";
+import { getDb } from "../db";
+import { depositRequests, auditLog } from "../../drizzle/schema";
+import { eq, and, desc } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+
+export const depositsRouter = router({
+  // LIST deposit requests for current user
+  list: protectedProcedure
+    .input(z.object({
+      page: z.number().min(1).default(1),
+      limit: z.number().min(1).max(100).default(20),
+      status: z.enum(["PENDING", "RECEIVED", "GRADED", "STORED", "REJECTED"]).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { deposits: [], total: 0 };
+      const offset = (input.page - 1) * input.limit;
+
+      const items = await db.select().from(depositRequests)
+        .where(
+          input.status
+            ? and(eq(depositRequests.userId, ctx.user.id), eq(depositRequests.status, input.status))
+            : eq(depositRequests.userId, ctx.user.id)
+        )
+        .orderBy(desc(depositRequests.createdAt))
+        .limit(input.limit).offset(offset);
+
+      return { deposits: items, total: items.length };
+    }),
+
+  // LIST all deposits (admin)
+  listAll: protectedProcedure
+    .input(z.object({ page: z.number().min(1).default(1), limit: z.number().min(1).max(100).default(20) }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) return { deposits: [], total: 0 };
+      const offset = (input.page - 1) * input.limit;
+      const items = await db.select().from(depositRequests)
+        .orderBy(desc(depositRequests.createdAt))
+        .limit(input.limit).offset(offset);
+      return { deposits: items, total: items.length };
+    }),
+
+  // GET single deposit
+  get: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const result = await db.select().from(depositRequests)
+        .where(eq(depositRequests.id, input.id)).limit(1);
+      const dep = result[0];
+      if (!dep) return null;
+      if (dep.userId !== ctx.user.id && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      return dep;
+    }),
+
+  // CREATE deposit request
+  create: protectedProcedure
+    .input(z.object({
+      commodity: z.string().max(64),
+      grade: z.string().max(32).optional(),
+      quantity: z.string(),
+      unit: z.string().max(16),
+      warehouseId: z.string().max(64).optional(),
+      warehouseName: z.string().max(256).optional(),
+      expectedDate: z.date().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const [deposit] = await db.insert(depositRequests).values({
+        userId: ctx.user.id,
+        commodity: input.commodity,
+        grade: input.grade ?? null,
+        quantity: input.quantity,
+        unit: input.unit,
+        warehouseId: input.warehouseId ?? null,
+        warehouseName: input.warehouseName ?? null,
+        expectedDate: input.expectedDate ?? null,
+        notes: input.notes ?? null,
+        status: "PENDING",
+      }).returning();
+
+      await db.insert(auditLog).values({
+        userId: ctx.user.id,
+        action: "DEPOSIT_CREATE",
+        resource: "deposit_requests",
+        resourceId: String(deposit.id),
+        details: { commodity: input.commodity, quantity: input.quantity },
+      });
+
+      return deposit;
+    }),
+
+  // UPDATE deposit status (admin / warehouse operator)
+  updateStatus: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(["PENDING", "RECEIVED", "GRADED", "STORED", "REJECTED"]),
+      notes: z.string().optional(),
+      grade: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const updateData: Record<string, unknown> = { status: input.status, updatedAt: new Date() };
+      if (input.notes) updateData.notes = input.notes;
+      if (input.grade) updateData.grade = input.grade;
+
+      await db.update(depositRequests).set(updateData).where(eq(depositRequests.id, input.id));
+
+      await db.insert(auditLog).values({
+        userId: ctx.user.id,
+        action: "DEPOSIT_STATUS_UPDATE",
+        resource: "deposit_requests",
+        resourceId: String(input.id),
+        details: { newStatus: input.status },
+      });
+
+      return { success: true };
+    }),
+
+  // CANCEL deposit request (user can cancel PENDING requests)
+  cancel: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const result = await db.select().from(depositRequests)
+        .where(and(eq(depositRequests.id, input.id), eq(depositRequests.userId, ctx.user.id))).limit(1);
+      if (!result[0]) throw new TRPCError({ code: "NOT_FOUND" });
+      if (result[0].status !== "PENDING") throw new TRPCError({ code: "BAD_REQUEST", message: "Only PENDING deposits can be cancelled" });
+
+      await db.update(depositRequests)
+        .set({ status: "REJECTED", notes: "Cancelled by user", updatedAt: new Date() })
+        .where(eq(depositRequests.id, input.id));
+
+      return { success: true };
+    }),
+});

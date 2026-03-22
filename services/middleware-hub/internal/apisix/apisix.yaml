@@ -1,0 +1,80 @@
+# APISIX configuration for NEXCOM Exchange
+# Standalone mode — routes are loaded from apisix.yaml (nexcom-routes.yaml)
+# OpenAPPSEC WAF is loaded as a custom Lua plugin.
+
+apisix:
+  node_listen: 9080
+  ssl:
+    listen_port: 9443
+  enable_ipv6: false
+  enable_admin: true
+  admin_listen:
+    ip: 0.0.0.0
+    port: 9091
+  admin_key:
+    - name: admin
+      key: ${APISIX_ADMIN_KEY:-nexcom-apisix-admin-key-change-in-prod}
+      role: admin
+
+deployment:
+  role: standalone
+  role_standalone:
+    config_provider: yaml
+
+etcd:
+  host:
+    - "http://etcd:2379"
+  prefix: /apisix
+  timeout: 30
+
+plugin_attr:
+  # OpenAPPSEC WAF integration — attach the agent to APISIX via Lua plugin
+  openappsec-agent:
+    # The openappsec-agent sidecar listens on this port for inspection requests
+    agent_url: "http://localhost:8090"
+    # Fail-open: if agent is unavailable, allow traffic through
+    fail_open: true
+    # Enforcement mode: prevent | detect
+    mode: prevent
+    # Minimum threat level to block: critical | high | medium | low
+    min_severity: high
+
+  prometheus:
+    export_uri: /apisix/prometheus/metrics
+    metric_prefix: apisix_
+    enable_export_server: true
+    export_addr:
+      ip: 0.0.0.0
+      port: 9091
+
+plugins:
+  # Auth & security
+  - jwt-auth
+  - key-auth
+  - hmac-auth
+  - forward-auth
+  - consumer-restriction
+  # Rate limiting
+  - limit-req
+  - limit-count
+  - limit-conn
+  # Traffic management
+  - proxy-cache
+  - proxy-rewrite
+  - redirect
+  - response-rewrite
+  # Observability
+  - prometheus
+  - zipkin
+  - skywalking
+  - request-id
+  # CORS
+  - cors
+  # WAF (custom Lua plugin wrapping openappsec-agent)
+  - openappsec-waf
+
+stream_plugins:
+  - mqtt-proxy
+
+# Custom plugin directory — openappsec-waf.lua lives here
+extra_lua_path: "/usr/local/lib/apisix/plugins/?.lua"

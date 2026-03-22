@@ -1,0 +1,9 @@
+# Lightweight test dependencies for CI
+# (excludes heavy data platform packages that require native build tools)
+fastapi==0.115.6
+uvicorn==0.34.0
+pydantic==2.10.4
+httpx==0.28.1
+pytest
+python-dateutil==2.9.0
+orjson==3.10.12
