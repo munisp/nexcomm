@@ -131,3 +131,11 @@
 - [x] Add pnpm db:seed script to package.json — also added pnpm db:setup (db:push + db:seed)
 - [x] Wire Kafka connection — logLevel.NOTHING for localhost brokers in both consumer and producer; retries reduced to 1 for fast-fail in dev; single clean warning on startup instead of repeated noise
 - [x] Finalize for publish — TypeScript: 0 errors, server running, Kafka noise suppressed, all features complete
+
+## Next Steps (Round 5)
+
+- [x] KAFKA_BROKERS secret — using default localhost:9092 (graceful degradation in dev; set real broker in production Secrets panel)
+- [x] pnpm db:reset script — added to package.json (truncates all tables then re-seeds via scripts/seed.mjs)
+- [x] WebSocket order book server endpoint — already implemented in server/ws/orderBookServer.ts (symbol subscriptions, tick/book broadcasts, Rust engine depth integration with simulated fallback)
+- [x] React Native live order book — useOrderBook.ts hook wired into trading/[symbol].tsx; live price + bids/asks with depth bars + connection status badge; graceful demo fallback
+- [x] Flutter live order book — OrderBookProvider (StreamProvider), OrderBookWidget (depth bars + spread row + status badge), wired into MarketDetailScreen Chart|Order Book tab selector

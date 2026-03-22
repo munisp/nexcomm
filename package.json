@@ -12,7 +12,8 @@
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "db:seed": "node scripts/seed.mjs",
-    "db:setup": "pnpm db:push && pnpm db:seed"
+    "db:setup": "pnpm db:push && pnpm db:seed",
+    "db:reset": "drizzle-kit drop && pnpm db:push && pnpm db:seed"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
