@@ -746,6 +746,13 @@ export const haManager = new EngineHAManager();
 // ─── Backward-compat shims ────────────────────────────────────────────────────
 
 export async function startAllEngines(): Promise<void> {
+  // In development mode, skip binary engine startup to allow the HTTP server
+  // to start without compiled Rust/Go binaries. Set DISABLE_ENGINES=false to
+  // force engine startup in development.
+  if (process.env.NODE_ENV === "development" && process.env.DISABLE_ENGINES !== "false") {
+    console.log("[HAManager] Development mode — skipping binary engine startup. Set DISABLE_ENGINES=false to enable.");
+    return;
+  }
   return haManager.startAll();
 }
 

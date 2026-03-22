@@ -136,6 +136,12 @@ const DfspKycReview             = lazy(() => import("./pages/DfspKycReview"));
 const ComplianceDashboard       = lazy(() => import("./pages/ComplianceDashboard"));
 const Watchlist                  = lazy(() => import("./pages/Watchlist"));
 const ApiDocs                    = lazy(() => import("./pages/ApiDocs"));
+const FixedIncome                = lazy(() => import("./pages/FixedIncome"));
+const WorkBench                  = lazy(() => import("./pages/WorkBench"));
+const ABCPMarkets                = lazy(() => import("./pages/ABCPMarkets"));
+const InputFinancing             = lazy(() => import("./pages/InputFinancing"));
+const FieldAgents                = lazy(() => import("./pages/FieldAgents"));
+const CropReports                = lazy(() => import("./pages/CropReports"));
 
 function PageLoader() {
   return (
@@ -275,6 +281,12 @@ function Router() {
         <Route path="/compliance-dashboard"                    component={ComplianceDashboard} />
         <Route path="/watchlist"                                component={Watchlist} />
         <Route path="/docs/api"                                 component={ApiDocs} />
+        <Route path="/fixed-income"                               component={FixedIncome} />
+        <Route path="/workbench"                                  component={WorkBench} />
+        <Route path="/abcp-markets"                               component={ABCPMarkets} />
+        <Route path="/input-financing"                            component={InputFinancing} />
+        <Route path="/field-agents"                               component={FieldAgents} />
+        <Route path="/crop-reports"                               component={CropReports} />
         {/* 404 */}
         <Route                           component={NotFound} />
       </Switch>

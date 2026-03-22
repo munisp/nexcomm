@@ -11,7 +11,8 @@ import {
   Menu, X, Bell, ChevronDown, LogOut, Settings,
   Shield, Activity, Zap, User,
   DollarSign, Cpu, BarChart2, Users, Eye,
-  ClipboardList, BarChart, Star, Calendar, Globe, BellRing
+  ClipboardList, BarChart, Star, Calendar, Globe, BellRing,
+  Layers, Tractor, UserCheck, Sprout, BookOpen, Landmark
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,6 +71,24 @@ const NAV_GROUPS: { key: string; label: string; items: { href: string; icon: Rea
     items: [
       { href: "/compliance",   icon: Shield, label: "Compliance" },
       { href: "/surveillance", icon: Eye,    label: "Surveillance" },
+    ],
+  },
+  {
+    key: "capital-markets",
+    label: "Capital Markets",
+    items: [
+      { href: "/fixed-income",    icon: Landmark, label: "Fixed Income" },
+      { href: "/abcp-markets",    icon: Layers,   label: "ABCP Markets" },
+    ],
+  },
+  {
+    key: "agri-ecosystem",
+    label: "Agri Ecosystem",
+    items: [
+      { href: "/workbench",       icon: BookOpen,  label: "WorkBench (SaaS)" },
+      { href: "/input-financing", icon: Tractor,   label: "Input Financing" },
+      { href: "/field-agents",    icon: UserCheck, label: "Field Agents" },
+      { href: "/crop-reports",    icon: Sprout,    label: "Crop Reports" },
     ],
   },
   {

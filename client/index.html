@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#16a34a" />
+    <meta name="theme-color" content="#10b981" />
     <meta name="description" content="NEXCOM Exchange — Africa's premier multi-asset exchange. Trade commodities, forex, equities, digital assets, and derivatives with instant settlement." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -14,17 +14,18 @@
     <meta property="og:title" content="NEXCOM Exchange — Multi-Asset African Exchange" />
     <meta property="og:description" content="Africa's premier multi-asset exchange. Trade 200+ instruments across commodities, forex, equities, digital assets, and derivatives." />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content="/icons/icon-512.png" />
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
 
     <!-- Favicon & PWA Icons -->
     <link rel="icon" type="image/svg+xml" href="https://d2xsxph8kpxj0f.cloudfront.net/114501028/Z6GQVTriFM5Jphexw7gsTa/favicon_e82b2b3d.svg" />
-    <link rel="apple-touch-icon" href="https://d2xsxph8kpxj0f.cloudfront.net/114501028/Z6GQVTriFM5Jphexw7gsTa/apple-touch-icon_fa658f6c.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="https://d2xsxph8kpxj0f.cloudfront.net/114501028/Z6GQVTriFM5Jphexw7gsTa/icon-192_e191964a.png" />
-    <link rel="icon" type="image/png" sizes="512x512" href="https://d2xsxph8kpxj0f.cloudfront.net/114501028/Z6GQVTriFM5Jphexw7gsTa/icon-512_0c31d802.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
 
-    <!-- Google Fonts: Inter + JetBrains Mono -->
+    <!-- Google Fonts: Inter + JetBrains Mono + DM Serif Display -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -34,5 +35,21 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(reg) {
+              console.log('[NEXCOM SW] Registered, scope:', reg.scope);
+              // Check for updates every 60 seconds
+              setInterval(function() { reg.update(); }, 60000);
+            })
+            .catch(function(err) {
+              console.warn('[NEXCOM SW] Registration failed:', err);
+            });
+        });
+      }
+    </script>
   </body>
 </html>

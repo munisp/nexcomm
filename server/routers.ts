@@ -78,6 +78,11 @@ import { searchRouter } from "./routers/searchRouter";
 import { engineHARouter } from "./routers/engineHARouter";
 import { pushNotificationsRouter } from "./routers/pushNotificationsRouter";
 import { warehouseRouter } from "./routers/warehouseRouter";
+import { fixedIncomeRouter } from "./routers/fixedIncomeRouter";
+import { workbenchRouter } from "./routers/workbenchRouter";
+import { abcpRouter } from "./routers/abcpRouter";
+import { inputFinancingRouter, fieldAgentRouter } from "./routers/inputFinancingRouter";
+import { cropReportsRouter } from "./routers/cropReportsRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -155,6 +160,12 @@ export const appRouter = router({
   webauthn: webauthnRouter,
   search: searchRouter,
   warehouseMessages: warehouseRouter,
+  fixedIncome: fixedIncomeRouter,
+  workbench: workbenchRouter,
+  abcp: abcpRouter,
+  inputFinancing: inputFinancingRouter,
+  fieldAgent: fieldAgentRouter,
+  cropReports: cropReportsRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure

@@ -1,0 +1,69 @@
+{
+  "name": "NEXCOM Exchange",
+  "short_name": "NEXCOM",
+  "description": "Multi-Asset African Commodity Exchange — Trade commodities, forex, equities and digital assets",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f1a",
+  "theme_color": "#10b981",
+  "orientation": "portrait-primary",
+  "categories": ["finance", "business"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/dashboard.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "NEXCOM Dashboard"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Trade Commodities",
+      "short_name": "Trade",
+      "description": "Open the commodity trading terminal",
+      "url": "/trade",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Warehouse Receipts",
+      "short_name": "Receipts",
+      "description": "View and manage your EWRs",
+      "url": "/receipts",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Portfolio",
+      "short_name": "Portfolio",
+      "description": "View your portfolio and P&L",
+      "url": "/portfolio",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=ng.nexcom.exchange",
+      "id": "ng.nexcom.exchange"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/nexcom-exchange/id0000000000"
+    }
+  ]
+}

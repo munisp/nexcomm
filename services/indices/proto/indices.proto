@@ -1,0 +1,177 @@
+syntax = "proto3";
+
+package nexcom.indices.v1;
+
+option go_package = "github.com/nexcom/indices/proto";
+
+// CommodityIndicesService provides real-time and historical commodity
+// price indices for the NEXCOM Exchange platform.
+service CommodityIndicesService {
+  // GetIndex returns the current value of a named index
+  rpc GetIndex(GetIndexRequest) returns (GetIndexResponse);
+
+  // GetAllIndices returns all active indices
+  rpc GetAllIndices(GetAllIndicesRequest) returns (GetAllIndicesResponse);
+
+  // GetIndexHistory returns historical values for an index
+  rpc GetIndexHistory(GetIndexHistoryRequest) returns (GetIndexHistoryResponse);
+
+  // StreamIndex streams live index updates
+  rpc StreamIndex(StreamIndexRequest) returns (stream IndexUpdate);
+
+  // GetCommodityPrice returns the current price for a commodity
+  rpc GetCommodityPrice(GetCommodityPriceRequest) returns (GetCommodityPriceResponse);
+
+  // GetMarketSummary returns a market summary for all commodities
+  rpc GetMarketSummary(GetMarketSummaryRequest) returns (GetMarketSummaryResponse);
+
+  // CalculateBasket calculates a custom basket index
+  rpc CalculateBasket(CalculateBasketRequest) returns (CalculateBasketResponse);
+}
+
+// Index represents a commodity price index
+message Index {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  double value = 4;
+  double change = 5;
+  double change_percent = 6;
+  double high = 7;
+  double low = 8;
+  double open = 9;
+  int64 timestamp = 10;
+  string currency = 11;
+  string base_date = 12;
+  double base_value = 13;
+  repeated string components = 14;
+  string methodology = 15;
+}
+
+// CommodityPrice represents the current price of a commodity
+message CommodityPrice {
+  string symbol = 1;
+  string name = 2;
+  double price = 3;
+  double bid = 4;
+  double ask = 5;
+  double high = 6;
+  double low = 7;
+  double open = 8;
+  double close = 9;
+  double change = 10;
+  double change_percent = 11;
+  double volume = 12;
+  int64 timestamp = 13;
+  string currency = 14;
+  string unit = 15;
+  string exchange = 16;
+  string quality_grade = 17;
+}
+
+// HistoricalDataPoint represents a single historical data point
+message HistoricalDataPoint {
+  int64 timestamp = 1;
+  double open = 2;
+  double high = 3;
+  double low = 4;
+  double close = 5;
+  double volume = 6;
+}
+
+// IndexUpdate is a streaming update for an index
+message IndexUpdate {
+  string index_id = 1;
+  double value = 2;
+  double change = 3;
+  double change_percent = 4;
+  int64 timestamp = 5;
+}
+
+// BasketComponent defines a component of a custom basket
+message BasketComponent {
+  string symbol = 1;
+  double weight = 2;
+}
+
+// MarketSummaryItem represents a single item in the market summary
+message MarketSummaryItem {
+  string symbol = 1;
+  string name = 2;
+  double price = 3;
+  double change_percent = 4;
+  double volume = 5;
+  string trend = 6;
+}
+
+// Requests and Responses
+
+message GetIndexRequest {
+  string index_id = 1;
+}
+
+message GetIndexResponse {
+  Index index = 1;
+}
+
+message GetAllIndicesRequest {
+  string category = 1; // optional filter: "GRAIN", "OILSEED", "CASH_CROP", "COMPOSITE"
+}
+
+message GetAllIndicesResponse {
+  repeated Index indices = 1;
+  int64 timestamp = 2;
+}
+
+message GetIndexHistoryRequest {
+  string index_id = 1;
+  string timeframe = 2; // "1H", "4H", "1D", "1W", "1M", "1Y"
+  int64 from_timestamp = 3;
+  int64 to_timestamp = 4;
+  int32 limit = 5;
+}
+
+message GetIndexHistoryResponse {
+  string index_id = 1;
+  repeated HistoricalDataPoint data = 2;
+}
+
+message StreamIndexRequest {
+  repeated string index_ids = 1;
+  int32 interval_seconds = 2;
+}
+
+message GetCommodityPriceRequest {
+  string symbol = 1;
+}
+
+message GetCommodityPriceResponse {
+  CommodityPrice price = 1;
+}
+
+message GetMarketSummaryRequest {
+  string category = 1; // optional
+  int32 limit = 2;
+}
+
+message GetMarketSummaryResponse {
+  repeated MarketSummaryItem items = 1;
+  int32 gainers = 2;
+  int32 losers = 3;
+  int32 unchanged = 4;
+  int64 timestamp = 5;
+}
+
+message CalculateBasketRequest {
+  string name = 1;
+  repeated BasketComponent components = 2;
+  string currency = 3;
+}
+
+message CalculateBasketResponse {
+  string name = 1;
+  double value = 2;
+  double change_percent = 3;
+  repeated BasketComponent components = 4;
+  int64 timestamp = 5;
+}

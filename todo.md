@@ -1,0 +1,102 @@
+# NEXCOM Exchange — Full Platform TODO
+
+## Infrastructure (Completed)
+- [x] Restore v53 archive from backup
+- [x] Install PostgreSQL 14 + PostGIS 3.2
+- [x] Run full schema migration (105 tables)
+- [x] Fix HAManager dev mode bypass
+- [x] Server running on port 3000
+
+## Phase 1 — Core Exchange Parity
+- [x] Commodity Price Indices Go microservice (NAXI, NGGI, AOXI, WACCI indices)
+- [x] Fixed Income Board — tRPC router + UI page
+- [x] Sub-Broker Program — registration, commission tracking, client management
+- [x] Commodity Index DB schema tables
+- [x] Fixed Income instruments DB schema
+
+## Phase 2 — Ecosystem Expansion
+- [x] WorkBench Agri-SME SaaS portal (farm management, crop planning, soil analysis)
+- [x] Collateral Manager Accreditation workflow
+- [x] WorkBench DB schema tables
+- [x] WorkBench tRPC router
+
+## Phase 3 — Capital Markets
+- [x] ABCP (Asset-Backed Commercial Paper) issuance engine
+- [x] ABCP Fixed Income board UI
+- [x] Crop Production Reports service
+- [x] ABCP DB schema tables
+- [x] Crop report generation pipeline
+
+## Phase 4 — Physical Operations
+- [x] Input Financing Engine — loan origination, repayment, collateral
+- [x] Field Agent Network — agent registration, farm visits, GPS tracking
+- [x] Input financing DB schema
+- [x] Field agent DB schema
+- [x] Input Financing tRPC router + UI page
+- [x] Field Agent tRPC router + UI page
+- [x] Crop Reports tRPC router + UI page
+
+## PWA Enhancements
+- [x] Web App Manifest (manifest.json) — installable PWA
+- [x] Service Worker (sw.js) — offline cache strategy
+- [x] Push notification subscription + backend
+- [x] Offline fallback pages
+- [x] App icons (192x192, 512x512)
+
+## React Native Mobile App (nexcom-mobile/)
+- [x] Expo Router project scaffold
+- [x] Root layout with tRPC + React Query providers
+- [x] Bottom tab navigator (Dashboard, Markets, Trade, Warehouse, Profile)
+- [x] Dashboard screen — portfolio overview, market summary, alerts, quick actions
+- [x] Markets screen — commodity list with search, filter by category, gainers/losers
+- [x] Trade screen — order placement (LIMIT/MARKET/STOP/STOP_LIMIT), TIF options
+- [x] Warehouse screen — WR list with status badges, pledge/sell actions
+- [x] Profile screen — account info, KYC status, settings, biometric toggle
+- [x] Auth screen — login/register with biometric option, demo mode
+- [x] Trading detail screen — chart placeholder, order book, recent trades, buy/sell bar
+- [x] Warehouse receipt detail — blockchain info, quality specs, transaction history
+- [x] Field Agent screen — task management, farmer list, crop reports
+- [x] Farmer profile screen — contact info, crop history, loan tracking
+- [x] Zustand state stores (auth, trading, app preferences)
+- [x] tRPC client configuration for mobile
+- [x] App configuration (app.json, tsconfig, babel.config)
+- [x] Constants (colors, typography, config)
+- [x] README with setup and deployment guide
+
+## Go Microservices
+- [x] FIX Gateway (services/fix-gateway/) — order routing
+- [x] Commodity Indices Service (services/indices/) — gRPC price indices
+  - [x] 7 calculation methodologies
+  - [x] 4 predefined indices (NAXI, NGGI, AOXI, WACCI)
+  - [x] Streaming gRPC endpoint
+  - [x] Custom basket calculation
+  - [x] Prometheus metrics
+  - [x] Docker + Kubernetes deployment configs
+
+## Rust Microservices
+- [x] Matching Engine (services/matching-engine/) — order matching
+
+## Python Microservices
+- [x] Analytics Service (services/analytics/) — market analytics
+
+## Database
+- [x] 105 PostgreSQL tables with PostGIS spatial support
+- [x] Phase 1-4 tables: fixed_income_instruments, workbench_businesses, abcp_programs, input_loans, field_agents, crop_reports
+- [x] All migrations applied
+
+## Web Platform Pages (116 total)
+- [x] All original 110 pages from v53 archive
+- [x] Fixed Income Board page
+- [x] WorkBench page
+- [x] ABCP Markets page
+- [x] Input Financing page
+- [x] Field Agents page
+- [x] Crop Reports page
+
+## Production Readiness
+- [x] TypeScript errors: 0
+- [x] All tRPC routers functional with demo data
+- [x] PWA installable manifest
+- [x] Service worker offline caching
+- [x] Mobile app ready for Expo build
+- [x] Go services ready for Docker deployment

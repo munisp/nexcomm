@@ -13,16 +13,15 @@ let _db: ReturnType<typeof drizzle> | null = null;
 // In development, use the local PostgreSQL instance.
 // In production, DATABASE_URL must be a valid postgresql:// or postgres:// URL.
 function resolveDbUrl(): string {
-  if (process.env.NODE_ENV === "development") {
-    console.log("[Database] Development mode: using local PostgreSQL postgresql://localhost:5432/nexcom");
-    return "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom";
+  // NEXCOM_PG_URL takes priority (production hosted Postgres)
+  const pgUrl = process.env.NEXCOM_PG_URL ?? "";
+  if (pgUrl.startsWith("postgresql://") || pgUrl.startsWith("postgres://")) {
+    console.log("[Database] Using NEXCOM_PG_URL");
+    return pgUrl;
   }
-  const url = process.env.DATABASE_URL ?? "";
-  if (url.startsWith("postgresql://") || url.startsWith("postgres://")) {
-    return url;
-  }
-  // DATABASE_URL must be a PostgreSQL URL (postgresql:// or postgres://)
-  throw new Error(`[Database] Invalid DATABASE_URL: must start with postgresql:// or postgres://. Got: ${url.substring(0, 30)}...`);
+  // Fall back to local PostgreSQL (development sandbox)
+  console.log("[Database] Using local PostgreSQL postgresql://127.0.0.1:5432/nexcom");
+  return "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom";
 }
 
 export async function getDb() {

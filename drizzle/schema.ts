@@ -2191,3 +2191,355 @@ export const warehouseMessages = pgTable("warehouse_messages", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 export type WarehouseMessage = typeof warehouseMessages.$inferSelect;
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 1 — FIXED INCOME BOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const fixedIncomeTypeEnum = pgEnum("fixed_income_type", [
+  "TREASURY_BILL", "TREASURY_BOND", "CORPORATE_BOND", "ABCP", "SUKUK",
+  "COMMERCIAL_PAPER", "AGRI_BOND", "GREEN_BOND",
+]);
+
+export const fixedIncomeStatusEnum = pgEnum("fixed_income_status", [
+  "ACTIVE", "MATURED", "DEFAULTED", "CALLED", "SUSPENDED",
+]);
+
+export const fixedIncomeInstruments = pgTable("fixed_income_instruments", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  isin: varchar("isin", { length: 20 }).unique(),
+  ticker: varchar("ticker", { length: 20 }).notNull(),
+  name: varchar("name", { length: 300 }).notNull(),
+  issuerName: varchar("issuer_name", { length: 200 }).notNull(),
+  type: fixedIncomeTypeEnum("type").notNull(),
+  status: fixedIncomeStatusEnum("status").default("ACTIVE").notNull(),
+  faceValueNgn: numeric("face_value_ngn", { precision: 18, scale: 2 }).notNull(),
+  couponRatePct: numeric("coupon_rate_pct", { precision: 8, scale: 4 }),
+  yieldPct: numeric("yield_pct", { precision: 8, scale: 4 }),
+  maturityDate: timestamp("maturity_date").notNull(),
+  issueDate: timestamp("issue_date").notNull(),
+  totalIssuanceNgn: numeric("total_issuance_ngn", { precision: 22, scale: 2 }),
+  outstandingNgn: numeric("outstanding_ngn", { precision: 22, scale: 2 }),
+  creditRating: varchar("credit_rating", { length: 10 }),
+  ratingAgency: varchar("rating_agency", { length: 50 }),
+  collateralDescription: text("collateral_description"),
+  prospectusUrl: text("prospectus_url"),
+  lastPriceNgn: numeric("last_price_ngn", { precision: 18, scale: 4 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type FixedIncomeInstrument = typeof fixedIncomeInstruments.$inferSelect;
+
+export const fixedIncomeTrades = pgTable("fixed_income_trades", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  instrumentId: integer("instrument_id").notNull(),
+  buyerUserId: integer("buyer_user_id").notNull(),
+  sellerUserId: integer("seller_user_id"),
+  faceValueNgn: numeric("face_value_ngn", { precision: 18, scale: 2 }).notNull(),
+  priceNgn: numeric("price_ngn", { precision: 18, scale: 4 }).notNull(),
+  yieldPct: numeric("yield_pct", { precision: 8, scale: 4 }),
+  settlementDate: timestamp("settlement_date"),
+  tradeDate: timestamp("trade_date").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type FixedIncomeTrade = typeof fixedIncomeTrades.$inferSelect;
+
+// ─── NEXCOM Commodity Index (NCI) ─────────────────────────────────────────────
+
+export const commodityIndexes = pgTable("commodity_indexes", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  ticker: varchar("ticker", { length: 20 }).notNull().unique(),
+  name: varchar("name", { length: 200 }).notNull(),
+  description: text("description"),
+  baseValue: numeric("base_value", { precision: 10, scale: 4 }).default("1000"),
+  currentValue: numeric("current_value", { precision: 10, scale: 4 }),
+  changePercent: numeric("change_percent", { precision: 8, scale: 4 }),
+  components: jsonb("components"), // [{symbol, weight, lastPrice}]
+  calculationMethod: varchar("calculation_method", { length: 50 }).default("PRICE_WEIGHTED"),
+  rebalanceFrequency: varchar("rebalance_frequency", { length: 20 }).default("MONTHLY"),
+  lastCalculatedAt: timestamp("last_calculated_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type CommodityIndex = typeof commodityIndexes.$inferSelect;
+
+export const commodityIndexHistory = pgTable("commodity_index_history", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  indexId: integer("index_id").notNull(),
+  value: numeric("value", { precision: 10, scale: 4 }).notNull(),
+  changePercent: numeric("change_percent", { precision: 8, scale: 4 }),
+  volume: numeric("volume", { precision: 22, scale: 2 }),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 2 — WORKBENCH AGRI-SME SAAS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const workbenchFarmStatusEnum = pgEnum("workbench_farm_status", [
+  "ACTIVE", "FALLOW", "HARVESTED", "ABANDONED",
+]);
+
+export const workbenchFarms = pgTable("workbench_farms", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: integer("user_id").notNull(),
+  farmName: varchar("farm_name", { length: 200 }).notNull(),
+  locationState: varchar("location_state", { length: 100 }),
+  locationLga: varchar("location_lga", { length: 100 }),
+  locationAddress: text("location_address"),
+  coordinates: geometry("coordinates", { type: "Point", srid: 4326 }),
+  totalHectares: numeric("total_hectares", { precision: 10, scale: 2 }),
+  soilType: varchar("soil_type", { length: 50 }),
+  irrigationType: varchar("irrigation_type", { length: 50 }),
+  status: workbenchFarmStatusEnum("status").default("ACTIVE").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type WorkbenchFarm = typeof workbenchFarms.$inferSelect;
+
+export const workbenchCropSeasonEnum = pgEnum("workbench_crop_season", [
+  "WET_SEASON", "DRY_SEASON", "YEAR_ROUND",
+]);
+
+export const workbenchCropPlans = pgTable("workbench_crop_plans", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  farmId: integer("farm_id").notNull(),
+  userId: integer("user_id").notNull(),
+  cropSymbol: varchar("crop_symbol", { length: 20 }).notNull(),
+  cropName: varchar("crop_name", { length: 100 }).notNull(),
+  season: workbenchCropSeasonEnum("season").notNull(),
+  plantingDate: timestamp("planting_date"),
+  expectedHarvestDate: timestamp("expected_harvest_date"),
+  actualHarvestDate: timestamp("actual_harvest_date"),
+  plannedHectares: numeric("planned_hectares", { precision: 10, scale: 2 }),
+  actualHectares: numeric("actual_hectares", { precision: 10, scale: 2 }),
+  expectedYieldMt: numeric("expected_yield_mt", { precision: 10, scale: 3 }),
+  actualYieldMt: numeric("actual_yield_mt", { precision: 10, scale: 3 }),
+  inputCostNgn: numeric("input_cost_ngn", { precision: 18, scale: 2 }),
+  revenueNgn: numeric("revenue_ngn", { precision: 18, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type WorkbenchCropPlan = typeof workbenchCropPlans.$inferSelect;
+
+export const workbenchSoilTests = pgTable("workbench_soil_tests", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  farmId: integer("farm_id").notNull(),
+  userId: integer("user_id").notNull(),
+  testDate: timestamp("test_date").defaultNow().notNull(),
+  phLevel: numeric("ph_level", { precision: 4, scale: 2 }),
+  nitrogenPpm: numeric("nitrogen_ppm", { precision: 8, scale: 2 }),
+  phosphorusPpm: numeric("phosphorus_ppm", { precision: 8, scale: 2 }),
+  potassiumPpm: numeric("potassium_ppm", { precision: 8, scale: 2 }),
+  organicMatterPct: numeric("organic_matter_pct", { precision: 5, scale: 2 }),
+  recommendations: text("recommendations"),
+  labName: varchar("lab_name", { length: 200 }),
+  reportUrl: text("report_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type WorkbenchSoilTest = typeof workbenchSoilTests.$inferSelect;
+
+// ─── Bank Financing API ───────────────────────────────────────────────────────
+
+export const bankFinancingStatusEnum = pgEnum("bank_financing_status", [
+  "DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED",
+  "DISBURSED", "REPAYING", "CLOSED", "DEFAULTED",
+]);
+
+export const bankFinancingApplications = pgTable("bank_financing_applications", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: integer("user_id").notNull(),
+  bankName: varchar("bank_name", { length: 200 }).notNull(),
+  bankCode: varchar("bank_code", { length: 20 }),
+  loanPurpose: varchar("loan_purpose", { length: 100 }).notNull(),
+  requestedAmountNgn: numeric("requested_amount_ngn", { precision: 18, scale: 2 }).notNull(),
+  approvedAmountNgn: numeric("approved_amount_ngn", { precision: 18, scale: 2 }),
+  interestRatePct: numeric("interest_rate_pct", { precision: 6, scale: 3 }),
+  tenorMonths: integer("tenor_months"),
+  collateralEwrId: integer("collateral_ewr_id"),
+  collateralValueNgn: numeric("collateral_value_ngn", { precision: 18, scale: 2 }),
+  status: bankFinancingStatusEnum("status").default("DRAFT").notNull(),
+  rejectionReason: text("rejection_reason"),
+  disbursedAt: timestamp("disbursed_at"),
+  repaymentDueDate: timestamp("repayment_due_date"),
+  externalReferenceId: varchar("external_reference_id", { length: 100 }),
+  documents: jsonb("documents"), // [{name, url, type}]
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type BankFinancingApplication = typeof bankFinancingApplications.$inferSelect;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 3 — ABCP CAPITAL MARKETS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const abcpStatusEnum = pgEnum("abcp_status", [
+  "STRUCTURING", "SEC_REVIEW", "APPROVED", "ISSUED", "TRADING",
+  "MATURED", "DEFAULTED", "CANCELLED",
+]);
+
+export const abcpPrograms = pgTable("abcp_programs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  programName: varchar("program_name", { length: 300 }).notNull(),
+  isin: varchar("isin", { length: 20 }).unique(),
+  sponsorName: varchar("sponsor_name", { length: 200 }).notNull(),
+  sponsorUserId: integer("sponsor_user_id"),
+  arrangerName: varchar("arranger_name", { length: 200 }),
+  programSizeNgn: numeric("program_size_ngn", { precision: 22, scale: 2 }).notNull(),
+  outstandingNgn: numeric("outstanding_ngn", { precision: 22, scale: 2 }).default("0"),
+  collateralType: varchar("collateral_type", { length: 100 }).notNull(), // e.g. "WAREHOUSE_RECEIPTS"
+  collateralValueNgn: numeric("collateral_value_ngn", { precision: 22, scale: 2 }),
+  coverageRatioPct: numeric("coverage_ratio_pct", { precision: 6, scale: 2 }),
+  yieldPct: numeric("yield_pct", { precision: 8, scale: 4 }),
+  tenorDays: integer("tenor_days").notNull(),
+  issueDate: timestamp("issue_date"),
+  maturityDate: timestamp("maturity_date"),
+  creditRating: varchar("credit_rating", { length: 10 }),
+  ratingAgency: varchar("rating_agency", { length: 50 }),
+  status: abcpStatusEnum("status").default("STRUCTURING").notNull(),
+  secApprovalRef: varchar("sec_approval_ref", { length: 100 }),
+  prospectusUrl: text("prospectus_url"),
+  underlyingEwrIds: jsonb("underlying_ewr_ids"), // array of EWR IDs
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type AbcpProgram = typeof abcpPrograms.$inferSelect;
+
+// ─── Crop Production Reports ──────────────────────────────────────────────────
+
+export const cropReportTypeEnum = pgEnum("crop_report_type", [
+  "PLANTING_PROGRESS", "CROP_CONDITIONS", "YIELD_FORECAST",
+  "HARVEST_PROGRESS", "STORAGE_STOCKS", "PRICE_OUTLOOK",
+]);
+
+export const cropProductionReports = pgTable("crop_production_reports", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  reportType: cropReportTypeEnum("report_type").notNull(),
+  cropSymbol: varchar("crop_symbol", { length: 20 }).notNull(),
+  cropName: varchar("crop_name", { length: 100 }).notNull(),
+  reportingPeriod: varchar("reporting_period", { length: 50 }).notNull(), // e.g. "2025-Q3"
+  coverageRegion: varchar("coverage_region", { length: 100 }).default("NIGERIA"),
+  productionMt: numeric("production_mt", { precision: 14, scale: 2 }),
+  yieldMtPerHa: numeric("yield_mt_per_ha", { precision: 8, scale: 4 }),
+  areaHarvestedHa: numeric("area_harvested_ha", { precision: 14, scale: 2 }),
+  stocksMt: numeric("stocks_mt", { precision: 14, scale: 2 }),
+  exportsMt: numeric("exports_mt", { precision: 14, scale: 2 }),
+  importsMt: numeric("imports_mt", { precision: 14, scale: 2 }),
+  priceNgnPerMt: numeric("price_ngn_per_mt", { precision: 12, scale: 2 }),
+  priceChangePercent: numeric("price_change_percent", { precision: 8, scale: 4 }),
+  outlookSummary: text("outlook_summary"),
+  spatialDataUrl: text("spatial_data_url"), // GeoJSON from Sedona
+  publishedAt: timestamp("published_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type CropProductionReport = typeof cropProductionReports.$inferSelect;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 4 — INPUT FINANCING ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const inputFinancingStatusEnum = pgEnum("input_financing_status", [
+  "APPLIED", "APPROVED", "DISBURSED", "IN_USE", "REPAYING",
+  "REPAID", "DEFAULTED", "WRITTEN_OFF",
+]);
+
+export const inputTypes = pgEnum("input_type", [
+  "SEEDS", "FERTILIZER", "PESTICIDE", "HERBICIDE", "EQUIPMENT",
+  "IRRIGATION", "STORAGE", "CASH",
+]);
+
+export const inputFinancingLoans = pgTable("input_financing_loans", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  farmerId: integer("farmer_id").notNull(),
+  agentId: integer("agent_id"), // field agent who originated
+  cropPlanId: integer("crop_plan_id"),
+  inputType: inputTypes("input_type").notNull(),
+  inputDescription: text("input_description").notNull(),
+  requestedValueNgn: numeric("requested_value_ngn", { precision: 18, scale: 2 }).notNull(),
+  approvedValueNgn: numeric("approved_value_ngn", { precision: 18, scale: 2 }),
+  disbursedValueNgn: numeric("disbursed_value_ngn", { precision: 18, scale: 2 }),
+  repaidValueNgn: numeric("repaid_value_ngn", { precision: 18, scale: 2 }).default("0"),
+  interestRatePct: numeric("interest_rate_pct", { precision: 6, scale: 3 }).default("8.5"),
+  tenorMonths: integer("tenor_months").default(6),
+  status: inputFinancingStatusEnum("status").default("APPLIED").notNull(),
+  collateralEwrId: integer("collateral_ewr_id"),
+  repaymentMethod: varchar("repayment_method", { length: 50 }).default("HARVEST_DEDUCTION"),
+  disbursedAt: timestamp("disbursed_at"),
+  repaymentDueDate: timestamp("repayment_due_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type InputFinancingLoan = typeof inputFinancingLoans.$inferSelect;
+
+export const inputFinancingRepayments = pgTable("input_financing_repayments", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  loanId: integer("loan_id").notNull(),
+  amountNgn: numeric("amount_ngn", { precision: 18, scale: 2 }).notNull(),
+  method: varchar("method", { length: 50 }).notNull(), // CASH, HARVEST_DEDUCTION, EWR_PLEDGE
+  reference: varchar("reference", { length: 100 }),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 4 — FIELD AGENT NETWORK
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const fieldAgentStatusEnum = pgEnum("field_agent_status", [
+  "PENDING", "ACTIVE", "SUSPENDED", "TERMINATED",
+]);
+
+export const fieldAgents = pgTable("field_agents", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  agentCode: varchar("agent_code", { length: 20 }).notNull().unique(),
+  fullName: varchar("full_name", { length: 200 }).notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  stateOfOperation: varchar("state_of_operation", { length: 100 }),
+  lgaOfOperation: varchar("lga_of_operation", { length: 100 }),
+  totalFarmersOnboarded: integer("total_farmers_onboarded").default(0),
+  totalLoansOriginated: integer("total_loans_originated").default(0),
+  totalLoansValueNgn: numeric("total_loans_value_ngn", { precision: 22, scale: 2 }).default("0"),
+  commissionEarnedNgn: numeric("commission_earned_ngn", { precision: 18, scale: 2 }).default("0"),
+  status: fieldAgentStatusEnum("status").default("PENDING").notNull(),
+  supervisorId: integer("supervisor_id"),
+  profilePhotoUrl: text("profile_photo_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type FieldAgent = typeof fieldAgents.$inferSelect;
+
+export const fieldVisitTypeEnum = pgEnum("field_visit_type", [
+  "ONBOARDING", "CROP_INSPECTION", "LOAN_ASSESSMENT",
+  "HARVEST_VERIFICATION", "REPAYMENT_COLLECTION", "FOLLOW_UP",
+]);
+
+export const fieldVisitStatusEnum = pgEnum("field_visit_status", [
+  "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW",
+]);
+
+export const fieldVisits = pgTable("field_visits", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  agentId: integer("agent_id").notNull(),
+  farmerId: integer("farmer_id").notNull(),
+  farmId: integer("farm_id"),
+  visitType: fieldVisitTypeEnum("visit_type").notNull(),
+  status: fieldVisitStatusEnum("status").default("SCHEDULED").notNull(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  gpsLatitude: numeric("gps_latitude", { precision: 10, scale: 7 }),
+  gpsLongitude: numeric("gps_longitude", { precision: 10, scale: 7 }),
+  observations: text("observations"),
+  photoUrls: jsonb("photo_urls"), // array of S3 URLs
+  cropCondition: varchar("crop_condition", { length: 20 }), // GOOD, FAIR, POOR
+  estimatedYieldMt: numeric("estimated_yield_mt", { precision: 10, scale: 3 }),
+  loanRecommendationNgn: numeric("loan_recommendation_ngn", { precision: 18, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type FieldVisit = typeof fieldVisits.$inferSelect;
