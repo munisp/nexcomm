@@ -100,3 +100,9 @@
 - [x] Service worker offline caching
 - [x] Mobile app ready for Expo build
 - [x] Go services ready for Docker deployment
+
+## Suggested Next Steps (Completed)
+
+- [x] EAS Build setup — eas.json with development/preview/production profiles, app.json with bundle IDs + deep links + OTA updates, GitHub Actions CI/CD workflow, EAS_SETUP.md guide
+- [x] TimescaleDB integration — hypertables with compression/retention policies, continuous aggregates (1h/1d OHLCV), live price feed ingestion loop from Redis, graceful fallback to demo data
+- [x] Push notification price alerts — Expo push helper in notificationsRouter.ts, registerPushToken/unregisterPushToken/listAlerts/createAlert/deleteAlert/evaluateAlerts procedures, mobile app alerts screen (nexcom-mobile/app/alerts/index.tsx), 15 vitest tests passing

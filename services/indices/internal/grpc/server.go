@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nexcom/indices/internal/calculator"
+	"github.com/nexcom/indices/internal/db"
 	"github.com/nexcom/indices/internal/models"
 	pb "github.com/nexcom/indices/proto"
 	"github.com/rs/zerolog/log"
@@ -22,14 +23,22 @@ type IndicesServer struct {
 	calc       *calculator.Calculator
 	indices    map[string]models.CommodityIndex
 	priceCache map[string]models.CommodityPrice
+	tsdb       *db.TimescaleDB // nil when running in demo mode
 }
 
-// NewIndicesServer creates a new gRPC server instance
+// NewIndicesServer creates a new gRPC server instance (demo mode, no DB)
 func NewIndicesServer() *IndicesServer {
+	return NewIndicesServerWithDB(nil)
+}
+
+// NewIndicesServerWithDB creates a gRPC server with optional TimescaleDB backing.
+// When tsdb is nil the server falls back to in-memory demo data.
+func NewIndicesServerWithDB(tsdb *db.TimescaleDB) *IndicesServer {
 	s := &IndicesServer{
 		calc:       calculator.NewCalculator(),
 		indices:    make(map[string]models.CommodityIndex),
 		priceCache: make(map[string]models.CommodityPrice),
+		tsdb:       tsdb,
 	}
 
 	// Load predefined indices
@@ -190,15 +199,43 @@ func (s *IndicesServer) GetIndexHistory(ctx context.Context, req *pb.GetIndexHis
 		return nil, status.Errorf(codes.NotFound, "index %s not found", req.IndexId)
 	}
 
-	// Generate synthetic historical data for demo
-	// In production, this queries the time-series database
 	limit := int(req.Limit)
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
 
-	dataPoints := s.generateHistoricalData(idx, req.Timeframe, limit)
+	// Use TimescaleDB when available, fall back to synthetic data
+	if s.tsdb != nil {
+		from := time.Unix(req.FromTimestamp/1000, 0)
+		to := time.Unix(req.ToTimestamp/1000, 0)
+		if req.FromTimestamp == 0 {
+			from = time.Now().Add(-30 * 24 * time.Hour)
+		}
+		if req.ToTimestamp == 0 {
+			to = time.Now()
+		}
 
+		points, err := s.tsdb.GetIndexHistory(ctx, req.IndexId, req.Timeframe, from, to, limit)
+		if err != nil {
+			log.Warn().Err(err).Str("index", req.IndexId).Msg("TimescaleDB query failed, using synthetic data")
+		} else if len(points) > 0 {
+			pbPoints := make([]*pb.HistoricalDataPoint, len(points))
+			for i, p := range points {
+				pbPoints[i] = &pb.HistoricalDataPoint{
+					Timestamp: p.Timestamp.UnixMilli(),
+					Open:      p.Open,
+					High:      p.High,
+					Low:       p.Low,
+					Close:     p.Close,
+					Volume:    p.Volume,
+				}
+			}
+			return &pb.GetIndexHistoryResponse{IndexId: req.IndexId, Data: pbPoints}, nil
+		}
+	}
+
+	// Fallback: generate synthetic historical data
+	dataPoints := s.generateHistoricalData(idx, req.Timeframe, limit)
 	return &pb.GetIndexHistoryResponse{
 		IndexId: req.IndexId,
 		Data:    dataPoints,
@@ -262,6 +299,36 @@ func (s *IndicesServer) StreamIndex(req *pb.StreamIndexRequest, stream pb.Commod
 func (s *IndicesServer) GetCommodityPrice(ctx context.Context, req *pb.GetCommodityPriceRequest) (*pb.GetCommodityPriceResponse, error) {
 	if req.Symbol == "" {
 		return nil, status.Error(codes.InvalidArgument, "symbol is required")
+	}
+
+	// Use TimescaleDB when available
+	if s.tsdb != nil {
+		p, err := s.tsdb.GetLatestPrice(ctx, req.Symbol)
+		if err == nil {
+			high, low, open, vol, _ := s.tsdb.GetMarketStats(ctx, req.Symbol)
+			return &pb.GetCommodityPriceResponse{
+				Price: &pb.CommodityPrice{
+					Symbol:        p.Symbol,
+					Name:          p.Name,
+					Price:         p.Price,
+					Bid:           p.Bid,
+					Ask:           p.Ask,
+					High:          high,
+					Low:           low,
+					Open:          open,
+					Close:         p.Close,
+					Change:        p.Change,
+					ChangePercent: p.ChangePercent,
+					Volume:        vol,
+					Timestamp:     p.Timestamp.UnixMilli(),
+					Currency:      p.Currency,
+					Unit:          p.Unit,
+					Exchange:      p.Exchange,
+					QualityGrade:  p.QualityGrade,
+				},
+			}, nil
+		}
+		log.Warn().Err(err).Str("symbol", req.Symbol).Msg("TimescaleDB price lookup failed, using cache")
 	}
 
 	price, ok := s.priceCache[req.Symbol]
