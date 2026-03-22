@@ -119,3 +119,9 @@
 - [x] PWA / React Native / Flutter parity — Flutter app created (29 files, 13 routes, 15 screens)
 - [x] Comprehensive verified archive — nexcom-platform-final.zip with all 678 files
 - [x] Final audit report — delivered to user
+
+## Next Steps (Round 3)
+
+- [x] Database seed script — scripts/seed.mjs (PostgreSQL only): 6 users, 7 WRs, 12 orders, 6 settlements, 8 notifications, 6 price alerts, 22 watchlist entries, 6 KYC records
+- [x] docker-compose.yml — already present with 30+ services: Kafka, Zookeeper, Redis, PostgreSQL, TigerBeetle, all microservices, Mojaloop, Temporal, Permify, APISIX, Kafka UI, RedisInsight
+- [x] App publish — checkpoint saved (9463b229), user directed to click Publish button in Management UI
