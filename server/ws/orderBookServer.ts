@@ -13,6 +13,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "http";
 import { getMarketDepth, checkMatchingEngineHealth } from "../matchingEngineClient";
 import { subscribePositions, unsubscribePositions, broadcastPriceUpdate } from "./positionBroadcaster";
+import { subscribeLoanEvents, unsubscribeLoanEvents } from "./loanNotificationBroadcaster";
 
 // Cache of whether the Rust engine is available (checked every 30s)
 let _rustEngineAvailable = false;
@@ -272,6 +273,11 @@ export function attachOrderBookWS(httpServer: Server): WebSocketServer {
           ws.send(JSON.stringify({ type: "positions_subscribed", userId: msg.userId }));
         } else if (msg.type === "unsubscribe_positions") {
           unsubscribePositions(ws);
+        } else if (msg.type === "subscribe_loans" && typeof msg.userId === "number") {
+          // Subscribe to real-time loan lifecycle events (approvals, disbursements, repayments)
+          subscribeLoanEvents(ws, msg.userId);
+        } else if (msg.type === "unsubscribe_loans") {
+          unsubscribeLoanEvents(ws);
         } else if (msg.type === "ping") {
           ws.send(JSON.stringify({ type: "pong" }));
         }
@@ -282,7 +288,8 @@ export function attachOrderBookWS(httpServer: Server): WebSocketServer {
 
     ws.on("close", () => {
       subscriptions.delete(ws);
-      unsubscribePositions(ws); // Clean up position subscriptions too
+      unsubscribePositions(ws);   // Clean up position subscriptions
+      unsubscribeLoanEvents(ws);  // Clean up loan notification subscriptions
     });
 
     // Send welcome

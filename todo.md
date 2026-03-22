@@ -146,3 +146,12 @@
 - [x] Core banking integration layer — services/core-banking/ with Temenos, Finacle, Mambu adapters; agribanking module (onboarding, input loans, WR financing, settlement repayment, insurance); HTTP REST API on :8090; Dockerfile
 - [x] Core banking integration architecture document — docs/core-banking-integration.md (10 sections, 7 references, topology diagram, lifecycle flow, Kafka event table, tRPC procedure table)
 - [x] Comprehensive archive rebuild — delivered with all new components
+
+## Next Steps (Round 7)
+
+- [x] Custom CBS adapter plugin system — services/core-banking/internal/registry/registry.go + generic/adapter.go; any CBS can be registered at runtime via RegisterAdapter(name, adapter)
+- [x] Banking Dashboard page — client/src/pages/BankingDashboard.tsx (accounts, loans, repayment schedule, transaction history, crop insurance); routed at /banking; bankingRouter.ts wired to appRouter
+- [x] Crop insurance application flow — bankingRouter.ts applyCropInsurance procedure; BankingDashboard.tsx insurance tab with form (crop, coverage, premium, season)
+- [x] Real-time loan notification system — loanNotificationBroadcaster.ts WebSocket broadcaster; subscribe_loans/unsubscribe_loans in orderBookServer.ts; Kafka handlers for loan.approved, loan.disbursed, loan.repaid via WebSocket + browser push
+- [x] KYC approval → farmer onboarding — Kafka handler for kyc.approved topic; browser push notification on KYC approval; topics array updated in startKafkaConsumer
+- [x] Transaction history section — included in BankingDashboard.tsx transactions tab with pagination, filtering, and export

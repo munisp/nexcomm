@@ -20,6 +20,7 @@ import { orders, settlements, positions, tradeFills } from "../../drizzle/schema
 import { eq, and } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { pushToUser } from "../routers/pushNotificationsRouter";
+import { broadcastLoanEvent } from "../ws/loanNotificationBroadcaster";
 
 // ─── Kafka client ─────────────────────────────────────────────────────────────
 
@@ -94,6 +95,42 @@ interface RiskAlertEvent {
   symbol?: string;
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   message: string;
+  timestamp: number;
+}
+
+interface KycApprovedEvent {
+  userId: number;
+  farmerId?: number;
+  kycId: number;
+  fullName: string;
+  tier: string;
+  timestamp: number;
+}
+
+interface LoanApprovedEvent {
+  loanId: number;
+  userId: number;
+  farmerId: number;
+  amount: number;
+  currency: string;
+  timestamp: number;
+}
+
+interface LoanDisbursedEvent {
+  loanId: number;
+  userId: number;
+  farmerId: number;
+  amount: number;
+  currency: string;
+  timestamp: number;
+}
+
+interface LoanRepaidEvent {
+  loanId: number;
+  userId: number;
+  farmerId: number;
+  amount: number;
+  currency: string;
   timestamp: number;
 }
 
@@ -348,6 +385,96 @@ async function handleRiskAlert(event: RiskAlertEvent): Promise<void> {
   );
 }
 
+// ─── Handler: kyc.approved ──────────────────────────────────────────────────────
+
+async function handleKycApproved(event: KycApprovedEvent): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  // Notify the user their KYC has been approved
+  pushToUser(
+    event.userId,
+    {
+      title: "KYC Approved ✅",
+      body: `Your identity verification (${event.tier}) has been approved. You can now access all trading features.`,
+      url: "/profile",
+      tag: `kyc-approved-${event.kycId}`,
+    },
+    "systemAlerts",
+  ).catch(e => console.warn("[WebPush] KYC push failed:", (e as Error).message));
+  console.log(`[Kafka] kyc.approved: userId=${event.userId} tier=${event.tier}`);
+}
+
+// ─── Handler: loan.approved ──────────────────────────────────────────────────
+
+async function handleLoanApproved(event: LoanApprovedEvent): Promise<void> {
+  // Broadcast real-time WebSocket event to the farmer
+  broadcastLoanEvent(event.userId, {
+    event: "LOAN_APPROVED",
+    loanId: event.loanId,
+    amount: event.amount,
+    currency: event.currency,
+    message: `Your loan of ${event.currency} ${event.amount.toLocaleString()} has been approved.`,
+  });
+  // Also push a browser notification
+  pushToUser(
+    event.userId,
+    {
+      title: "Loan Approved ✅",
+      body: `Your input financing loan of ${event.currency} ${event.amount.toLocaleString()} has been approved.`,
+      url: "/banking",
+      tag: `loan-approved-${event.loanId}`,
+    },
+    "systemAlerts",
+  ).catch(e => console.warn("[WebPush] Loan approved push failed:", (e as Error).message));
+  console.log(`[Kafka] loan.approved: loanId=${event.loanId} userId=${event.userId} amount=${event.amount}`);
+}
+
+// ─── Handler: loan.disbursed ──────────────────────────────────────────────────
+
+async function handleLoanDisbursed(event: LoanDisbursedEvent): Promise<void> {
+  broadcastLoanEvent(event.userId, {
+    event: "LOAN_DISBURSED",
+    loanId: event.loanId,
+    amount: event.amount,
+    currency: event.currency,
+    message: `${event.currency} ${event.amount.toLocaleString()} has been disbursed to your account.`,
+  });
+  pushToUser(
+    event.userId,
+    {
+      title: "Funds Disbursed 💰",
+      body: `${event.currency} ${event.amount.toLocaleString()} from your loan has been disbursed to your account.`,
+      url: "/banking",
+      tag: `loan-disbursed-${event.loanId}`,
+    },
+    "systemAlerts",
+  ).catch(e => console.warn("[WebPush] Loan disbursed push failed:", (e as Error).message));
+  console.log(`[Kafka] loan.disbursed: loanId=${event.loanId} userId=${event.userId} amount=${event.amount}`);
+}
+
+// ─── Handler: loan.repaid ────────────────────────────────────────────────────
+
+async function handleLoanRepaid(event: LoanRepaidEvent): Promise<void> {
+  broadcastLoanEvent(event.userId, {
+    event: "LOAN_REPAID",
+    loanId: event.loanId,
+    amount: event.amount,
+    currency: event.currency,
+    message: `Loan repayment of ${event.currency} ${event.amount.toLocaleString()} confirmed.`,
+  });
+  pushToUser(
+    event.userId,
+    {
+      title: "Loan Repaid ✅",
+      body: `Your loan repayment of ${event.currency} ${event.amount.toLocaleString()} has been confirmed.`,
+      url: "/banking",
+      tag: `loan-repaid-${event.loanId}`,
+    },
+    "systemAlerts",
+  ).catch(e => console.warn("[WebPush] Loan repaid push failed:", (e as Error).message));
+  console.log(`[Kafka] loan.repaid: loanId=${event.loanId} userId=${event.userId} amount=${event.amount}`);
+}
+
 // ─── Message router ───────────────────────────────────────────────────────────
 
 async function handleMessage({ topic, message }: EachMessagePayload): Promise<void> {
@@ -374,6 +501,18 @@ async function handleMessage({ topic, message }: EachMessagePayload): Promise<vo
         break;
       case "risk.alert":
         await handleRiskAlert(payload as RiskAlertEvent);
+        break;
+      case "kyc.approved":
+        await handleKycApproved(payload as KycApprovedEvent);
+        break;
+      case "loan.approved":
+        await handleLoanApproved(payload as LoanApprovedEvent);
+        break;
+      case "loan.disbursed":
+        await handleLoanDisbursed(payload as LoanDisbursedEvent);
+        break;
+      case "loan.repaid":
+        await handleLoanRepaid(payload as LoanRepaidEvent);
         break;
       case "price.updated":
         // Price updates are handled by the WebSocket server directly
@@ -407,6 +546,10 @@ export async function startKafkaConsumer(): Promise<void> {
         "order.cancelled",
         "price.updated",
         "risk.alert",
+        "kyc.approved",
+        "loan.approved",
+        "loan.disbursed",
+        "loan.repaid",
       ],
       fromBeginning: false,
     });

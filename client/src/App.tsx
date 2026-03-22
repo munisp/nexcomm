@@ -140,6 +140,7 @@ const FixedIncome                = lazy(() => import("./pages/FixedIncome"));
 const WorkBench                  = lazy(() => import("./pages/WorkBench"));
 const ABCPMarkets                = lazy(() => import("./pages/ABCPMarkets"));
 const InputFinancing             = lazy(() => import("./pages/InputFinancing"));
+const BankingDashboard           = lazy(() => import("./pages/BankingDashboard"));
 const FieldAgents                = lazy(() => import("./pages/FieldAgents"));
 const CropReports                = lazy(() => import("./pages/CropReports"));
 
@@ -285,6 +286,7 @@ function Router() {
         <Route path="/workbench"                                  component={WorkBench} />
         <Route path="/abcp-markets"                               component={ABCPMarkets} />
         <Route path="/input-financing"                            component={InputFinancing} />
+        <Route path="/banking"                                     component={BankingDashboard} />
         <Route path="/field-agents"                               component={FieldAgents} />
         <Route path="/crop-reports"                               component={CropReports} />
         {/* 404 */}
