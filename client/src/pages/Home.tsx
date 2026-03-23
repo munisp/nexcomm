@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
+import { PasskeyLoginButton } from "@/components/PasskeyLoginButton";
 import { Link } from "wouter";
 import {
   TrendingUp, Wheat, Warehouse, BarChart3, ArrowRight,
@@ -177,6 +178,7 @@ function UnauthenticatedHome() {
           <Button size="lg" className="gap-2" onClick={() => { window.location.href = getLoginUrl(); }}>
             <TrendingUp className="w-5 h-5" />Sign In to Trade
           </Button>
+          <PasskeyLoginButton className="gap-2" />
           <Link href="/join">
             <Button size="lg" variant="outline" className="gap-2">
               <Users className="w-5 h-5" />Register as Stakeholder

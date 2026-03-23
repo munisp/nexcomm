@@ -539,7 +539,8 @@ export const kycAnalysisRouter = router({
     .use(requireKycApprove)
     .input(z.object({
       kycQueueId: z.number().int(),
-      decision: z.enum(["APPROVED", "REJECTED"]),
+      /** APPROVED | REJECTED | UNDER_REVIEW (= "request more info") */
+      decision: z.enum(["APPROVED", "REJECTED", "UNDER_REVIEW"]),
       reviewNotes: z.string().max(2000).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -557,9 +558,26 @@ export const kycAnalysisRouter = router({
         .returning();
       if (!updated) throw new Error("KYC record not found");
       // Notify owner
+      const decisionLabel =
+        input.decision === "APPROVED" ? "Approved" :
+        input.decision === "REJECTED" ? "Rejected" :
+        "Returned for More Information";
       await notifyOwner({
-        title: `KYC ${input.decision === "APPROVED" ? "Approved" : "Rejected"}`,
-        content: `KYC application #${input.kycQueueId} has been ${input.decision.toLowerCase()} by admin #${ctx.user!.id}${input.reviewNotes ? `: ${input.reviewNotes}` : ""}.`,
+        title: `KYC ${decisionLabel}`,
+        content: `KYC application #${input.kycQueueId} has been ${decisionLabel.toLowerCase()} by admin #${ctx.user!.id}${input.reviewNotes ? `: ${input.reviewNotes}` : ""}.`,
+      }).catch(() => {});
+      // Notify the applicant in-app
+      await db.insert(notifications).values({
+        userId: updated.userId,
+        type: "SECURITY_ALERT",
+        title: `KYC Application ${decisionLabel}`,
+        message: input.decision === "APPROVED"
+          ? "Congratulations! Your KYC application has been approved. You now have full platform access."
+          : input.decision === "REJECTED"
+          ? `Your KYC application has been rejected. Reason: ${input.reviewNotes ?? "Please contact support for details."}`
+          : `Your KYC application requires additional information. ${input.reviewNotes ?? "Please resubmit with the requested documents."}`,
+        read: false,
+        metadata: { kycQueueId: input.kycQueueId, decision: input.decision },
       }).catch(() => {});
       return updated;
     }),

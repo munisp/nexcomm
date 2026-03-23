@@ -17,7 +17,7 @@ import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
 import * as crypto from "crypto";
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   mfaOtpCodes,
@@ -28,6 +28,9 @@ import {
   webauthnCredentials,
 } from "../../drizzle/schema";
 import { notifyOwner } from "../_core/notification";
+import { sdk } from "../_core/sdk";
+import { getSessionCookieOptions } from "../_core/cookies";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -581,5 +584,139 @@ export const webauthnRouter = router({
           set: { mfaRequired: input.required, updatedAt: new Date() },
         });
       return { success: true };
+    }),
+  // ── Public passkey login (no session required) ───────────────────────────────
+  /**
+   * Step 1 of passkey login: get a challenge and allowed credentials.
+   * Accepts an optional email/username to narrow the credential list.
+   * If no identifier is provided, returns a discoverable-credential challenge
+   * (allowCredentials = []) so the browser shows its own passkey picker.
+   */
+  passkeyLoginOptions: publicProcedure
+    .input(z.object({ email: z.string().email().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const challenge = generateChallenge();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      let allowCredentials: { type: "public-key"; id: string; transports: string[] }[] = [];
+      if (input.email) {
+        // Look up user by email to pre-populate allowCredentials
+        const [user] = await db.select({ id: users.id }).from(users).where(eq(users.email, input.email)).limit(1);
+        if (user) {
+          const creds = await db
+            .select({ credentialId: webauthnCredentials.credentialId, transports: webauthnCredentials.transports })
+            .from(webauthnCredentials)
+            .where(eq(webauthnCredentials.userId, user.id));
+          allowCredentials = creds.map((c) => ({
+            type: "public-key" as const,
+            id: c.credentialId,
+            transports: c.transports ? JSON.parse(c.transports) : ["internal"],
+          }));
+          // Store challenge keyed to this user
+          await db.insert(webauthnChallenges).values({ userId: user.id, challenge, type: "authentication", expiresAt });
+        }
+      }
+      if (!input.email || allowCredentials.length === 0) {
+        // Discoverable credential flow — store challenge with userId = 0 (anonymous)
+        await db.insert(webauthnChallenges).values({ userId: 0, challenge, type: "authentication", expiresAt });
+      }
+      return {
+        challenge,
+        timeout: 300_000,
+        rpId: "nexcom.exchange",
+        allowCredentials,
+        userVerification: "preferred",
+      };
+    }),
+
+  /**
+   * Step 2 of passkey login: verify the assertion and issue a session cookie.
+   * On success, sets the session cookie and returns the authenticated user info.
+   */
+  passkeyLoginVerify: publicProcedure
+    .input(z.object({
+      credentialId: z.string(),
+      authenticatorData: z.string(),
+      clientDataJSON: z.string(),
+      signature: z.string(),
+      userHandle: z.string().optional(),
+      challenge: z.string(), // echo back the challenge from step 1
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Find the stored challenge (may be keyed to userId=0 for discoverable flow)
+      const [storedChallenge] = await db
+        .select()
+        .from(webauthnChallenges)
+        .where(
+          and(
+            eq(webauthnChallenges.challenge, input.challenge),
+            eq(webauthnChallenges.type, "authentication")
+          )
+        )
+        .limit(1);
+      if (!storedChallenge || storedChallenge.expiresAt < new Date()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Challenge expired or not found" });
+      }
+      // Validate clientDataJSON
+      let clientData: { type: string; challenge: string };
+      try {
+        clientData = JSON.parse(fromBase64url(input.clientDataJSON).toString("utf8"));
+      } catch {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid clientDataJSON" });
+      }
+      if (clientData.type !== "webauthn.get") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Wrong ceremony type" });
+      }
+      if (clientData.challenge !== storedChallenge.challenge) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Challenge mismatch" });
+      }
+      // Find credential — search by credentialId across all users
+      const [cred] = await db
+        .select()
+        .from(webauthnCredentials)
+        .where(eq(webauthnCredentials.credentialId, input.credentialId))
+        .limit(1);
+      if (!cred) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Passkey not registered on this platform" });
+      }
+      // Verify signature
+      const valid = await verifyAssertionSignature(
+        cred.publicKey,
+        input.authenticatorData,
+        input.clientDataJSON,
+        input.signature
+      );
+      if (!valid) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Passkey signature verification failed" });
+      }
+      // Clone detection via signCount
+      const authDataBuf = fromBase64url(input.authenticatorData);
+      const newSignCount = authDataBuf.readUInt32BE(33);
+      if (newSignCount !== 0 && newSignCount <= cred.signCount) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Authenticator clone detected" });
+      }
+      // Update signCount and lastUsed
+      await db
+        .update(webauthnCredentials)
+        .set({ signCount: newSignCount, lastUsed: new Date() })
+        .where(eq(webauthnCredentials.id, cred.id));
+      // Clean up challenge
+      await db.delete(webauthnChallenges).where(eq(webauthnChallenges.id, storedChallenge.id)).catch(() => {});
+      // Fetch user
+      const [user] = await db.select().from(users).where(eq(users.id, cred.userId)).limit(1);
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User account not found" });
+      }
+      // Issue session cookie
+      const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name ?? "" });
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      return {
+        success: true,
+        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      };
     }),
 });

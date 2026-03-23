@@ -54,6 +54,7 @@ const Register          = lazy(() => import("./pages/Register"));
 const Onboarding        = lazy(() => import("./pages/Onboarding"));
 const Admin             = lazy(() => import("./pages/Admin"));
 const BulkKycAdmin      = lazy(() => import("./pages/BulkKycAdmin"));
+const AdminKycDocumentReview = lazy(() => import("./pages/AdminKycDocumentReview"));
 const GingerPriceHistory = lazy(() => import("./pages/GingerPriceHistory"));
 const Settlements       = lazy(() => import("./pages/Settlements"));
 const Settings          = lazy(() => import("./pages/Settings"));
@@ -199,6 +200,7 @@ function Router() {
         <Route path="/onboarding"        component={Onboarding} />
          <Route path="/admin"             component={Admin} />
          <Route path="/admin/bulk-kyc"    component={BulkKycAdmin} />
+         <Route path="/admin/kyc-review"   component={AdminKycDocumentReview} />
         <Route path="/settlements"        component={Settlements} />
         <Route path="/settings"           component={Settings} />
         <Route path="/architecture"        component={Architecture} />

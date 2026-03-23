@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
+import { PasskeyLoginButton } from "@/components/PasskeyLoginButton";
 import { generateAllTicks, type PriceTick } from "../../../shared/commodities";
 
 const NAV_GROUPS: { key: string; label: string; items: { href: string; icon: React.ElementType; label: string }[] }[] = [
@@ -230,12 +231,20 @@ export default function Layout({ children }: LayoutProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <a
-              href={getLoginUrl()}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-            >
-              <User className="w-4 h-4" />Sign In
-            </a>
+            <>
+              <a
+                href={getLoginUrl()}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                <User className="w-4 h-4" />Sign In
+              </a>
+              <div className="relative w-full flex items-center gap-2 mt-1">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              <PasskeyLoginButton className="w-full" />
+            </>
           )}
         </div>
       </div>
@@ -331,7 +340,10 @@ export default function Layout({ children }: LayoutProps) {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <a href={getLoginUrl()} className="text-sm font-medium text-primary hover:underline px-2">Sign In</a>
+              <>
+                <a href={getLoginUrl()} className="text-sm font-medium text-primary hover:underline px-2">Sign In</a>
+                <PasskeyLoginButton className="text-sm h-8 px-3" />
+              </>
             )}
           </div>
         </header>

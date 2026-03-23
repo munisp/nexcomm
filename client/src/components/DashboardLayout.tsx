@@ -89,6 +89,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { PasskeyUpgradeBanner } from "./PasskeyUpgradeBanner";
+import { PasskeyLoginButton } from "./PasskeyLoginButton";
 import { Button } from "./ui/button";
 import { trpc } from "@/lib/trpc";
 
@@ -156,6 +157,7 @@ const menuSections: MenuSection[] = [
       { icon: Users,             label: "User Management",       path: "/admin/users",         adminOnly: true },
       { icon: Shield,            label: "Stakeholder Admin",    path: "/admin/stakeholders", adminOnly: true },
       { icon: UserCheck,           label: "Re-KYC Flags",          path: "/admin/re-kyc-flags",  adminOnly: true },
+      { icon: FileCheck,           label: "KYC Document Review",    path: "/admin/kyc-review",    adminOnly: true },
       { icon: Award,               label: "Performance Metrics",   path: "/admin/performance-metrics", adminOnly: true },
       { icon: Activity,            label: "Price Feed Admin",       path: "/admin/price-feed",    adminOnly: true },
       { icon: Network,              label: "Platform Health",        path: "/admin/platform-health", adminOnly: true },
@@ -313,6 +315,12 @@ export default function DashboardLayout({
           >
             Sign in with Manus
           </Button>
+          <div className="relative w-full flex items-center gap-3">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <PasskeyLoginButton className="w-full" />
         </div>
       </div>
     );

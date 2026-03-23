@@ -292,3 +292,20 @@
 - [x] React Rules of Hooks violation fixed in Onboarding.tsx (hooks moved before early returns)
 - [x] TypeScript: 0 errors
 - [x] All 812 tests pass (8 test files)
+
+## Round 20 — Admin KYC Review UI + Passkey Login + Email Suppression
+- [ ] Admin KYC document review UI with inline viewer and approve/reject/request-more-info
+- [ ] Passkey/WebAuthn login option on the login page
+- [x] Test email suppression confirmed (NODE_ENV=test guard already in notifyOwner)
+
+## Round 20 — Passkey Login + Admin KYC Review + OpenSanctions
+- [x] PasskeyLoginButton component (passkeyLoginOptions + passkeyLoginVerify public procedures)
+- [x] Passkey sign-in on DashboardLayout unauthenticated screen
+- [x] Passkey sign-in on Layout.tsx mobile sidebar and desktop header
+- [x] Passkey sign-in on Home.tsx hero section
+- [x] AdminKycDocumentReview.tsx page with inline viewer, approve/reject/request-more-info
+- [x] adminDecideKyc extended with UNDER_REVIEW (request more info) status
+- [x] KYC Document Review added to sidebar nav (admin-only)
+- [x] OpenSanctions KYB screening with live API + graceful fallback
+- [x] Test email suppression confirmed (NODE_ENV=test guard already in place)
+- [x] 812 tests pass, 0 TypeScript errors
