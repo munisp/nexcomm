@@ -22,9 +22,12 @@ import { getDb } from "../db";
 import {
   mfaOtpCodes,
   userMfaSettings,
+  users,
+  notifications,
   webauthnChallenges,
   webauthnCredentials,
 } from "../../drizzle/schema";
+import { notifyOwner } from "../_core/notification";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -482,10 +485,46 @@ export const webauthnRouter = router({
 
     await db.insert(mfaOtpCodes).values({ userId: uid, method: "email_otp", codeHash, expiresAt });
 
-    // In production, send via email service. Here we log for dev purposes.
-    console.info(`[MFA] Email OTP for user ${uid}: ${code} (expires ${expiresAt.toISOString()})`);
+    // ── Deliver OTP via in-app notification + owner alert ────────────────────
+    // 1. Look up the user's email for display
+    const [userRow] = await db
+      .select({ email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.id, uid))
+      .limit(1);
+    const userEmail = userRow?.email ?? ctx.user.email ?? null;
+    const maskedEmail = userEmail?.replace(/(.{2}).+(@.+)/, "$1***$2") ?? "***";
 
-    return { sent: true, maskedEmail: ctx.user.email?.replace(/(.{2}).+(@.+)/, "$1***$2") ?? "***" };
+    // 2. Insert an in-app SECURITY_ALERT notification so the user sees the OTP
+    //    immediately in the notification bell (even without email).
+    await db.insert(notifications).values({
+      userId: uid,
+      type: "SECURITY_ALERT",
+      title: "Your One-Time Passcode",
+      message:
+        `Your NexCom security code is: ${code}\n\n` +
+        `This code expires in 10 minutes. Do not share it with anyone.\n` +
+        `If you did not request this code, please secure your account immediately.`,
+      read: false,
+      metadata: { method: "email_otp", expiresAt: expiresAt.toISOString() },
+    });
+
+    // 3. Also attempt to notify the platform owner so they can forward the code
+    //    to the user via email if no transactional email service is wired.
+    //    In production, replace this block with a direct SMTP / SendGrid / SES call.
+    if (userEmail) {
+      await notifyOwner({
+        title: `[MFA] Email OTP for ${userEmail}`,
+        content:
+          `User ID ${uid} (${userEmail}) requested an email OTP.\n` +
+          `Code: ${code}\n` +
+          `Expires: ${expiresAt.toISOString()}\n\n` +
+          `Forward this code to the user or configure SMTP_HOST / SENDGRID_API_KEY ` +
+          `in your environment to enable direct transactional email delivery.`,
+      }).catch(() => {/* non-fatal */});
+    }
+
+    return { sent: true, maskedEmail };
   }),
 
   /** Verify a 6-digit email OTP. */

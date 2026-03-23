@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,10 @@ import {
   Pencil,
   Mail,
   CalendarDays,
+  ShieldCheck,
+  ShieldOff,
+  QrCode,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -80,6 +85,105 @@ function formatRelativeTime(date: Date): string {
   if (diffWk  < 5)   return `${diffWk} week${diffWk !== 1 ? "s" : ""} ago`;
   if (diffMo  < 12)  return `${diffMo} month${diffMo !== 1 ? "s" : ""} ago`;
   return `${diffYr} year${diffYr !== 1 ? "s" : ""} ago`;
+}
+
+
+// --- TOTP / Authenticator App Tab ---
+function TotpTab() {
+  const [, navigate] = useLocation();
+  const { data: totpStatus, isLoading } = trpc.totp.getStatus.useQuery();
+  const isEnabled = totpStatus?.isEnabled ?? false;
+  const confirmedAt = totpStatus?.confirmedAt ? new Date(totpStatus.confirmedAt as unknown as string) : null;
+
+  return (
+    <div className="space-y-6">
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {isEnabled ? (
+              <ShieldCheck className="h-5 w-5 text-emerald-500" />
+            ) : (
+              <ShieldOff className="h-5 w-5 text-muted-foreground" />
+            )}
+            Authenticator App (TOTP)
+          </CardTitle>
+          <CardDescription>
+            Use Google Authenticator, Authy, 1Password, or any TOTP-compatible app to generate
+            time-based one-time codes as a second factor.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading ? (
+            <div className="h-10 bg-muted animate-pulse rounded" />
+          ) : (
+            <>
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/40 border border-border">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    Status:{" "}
+                    <Badge
+                      className={isEnabled ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}
+                      variant={isEnabled ? "outline" : "secondary"}
+                    >
+                      {isEnabled ? (
+                        <><CheckCircle2 className="h-3 w-3 mr-1 inline" /> Enabled</>
+                      ) : (
+                        <><XCircle className="h-3 w-3 mr-1 inline" /> Disabled</>
+                      )}
+                    </Badge>
+                  </p>
+                  {confirmedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Enabled {formatRelativeTime(confirmedAt)}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  onClick={() => navigate("/totp-setup")}
+                  variant={isEnabled ? "outline" : "default"}
+                >
+                  <QrCode className="h-4 w-4 mr-2" />
+                  {isEnabled ? "Manage TOTP" : "Set Up TOTP"}
+                  <ExternalLink className="h-3 w-3 ml-2 opacity-60" />
+                </Button>
+              </div>
+
+              {isEnabled ? (
+                <Alert className="border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  <AlertDescription className="text-sm text-emerald-800 dark:text-emerald-200">
+                    Your account is protected with TOTP two-factor authentication. You will be
+                    prompted for a 6-digit code on sensitive operations. Manage backup codes on
+                    the TOTP setup page.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-sm text-amber-800 dark:text-amber-200">
+                    TOTP is not enabled. We strongly recommend enabling an authenticator app as a
+                    second factor. It takes under 2 minutes and significantly reduces account
+                    compromise risk.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">How it works</p>
+                <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li>Install an authenticator app (Google Authenticator, Authy, 1Password, Bitwarden)</li>
+                  <li>Scan the QR code shown on the TOTP setup page</li>
+                  <li>Enter the 6-digit code to confirm setup</li>
+                  <li>Save your 8 backup codes in a secure location</li>
+                  <li>Use a fresh code whenever prompted during login or sensitive actions</li>
+                </ol>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 // ─── FIDO2 / Passkeys Tab ─────────────────────────────────────────────────────
@@ -1136,13 +1240,16 @@ export default function SecuritySettings() {
           <div>
             <h1 className="text-2xl font-bold">Security Settings</h1>
             <p className="text-sm text-muted-foreground">
-              Passkeys, MFA, webhooks, IP allowlists, and withdrawal verification.
+              Authenticator app (TOTP), passkeys, MFA, webhooks, IP allowlists, and withdrawal verification.
             </p>
           </div>
         </div>
 
         <Tabs defaultValue="passkeys">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="totp">
+              <QrCode className="h-4 w-4 mr-2" /> Authenticator
+            </TabsTrigger>
             <TabsTrigger value="passkeys">
               <Fingerprint className="h-4 w-4 mr-2" /> Passkeys &amp; MFA
             </TabsTrigger>
@@ -1157,6 +1264,9 @@ export default function SecuritySettings() {
             </TabsTrigger>
           </TabsList>
 
+          <TabsContent value="totp" className="mt-6">
+            <TotpTab />
+          </TabsContent>
           <TabsContent value="passkeys" className="mt-6">
             <PasskeysTab />
           </TabsContent>

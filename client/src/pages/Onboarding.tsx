@@ -14,7 +14,7 @@
  *  Step 2: Personal information
  *  Step 3: Business / entity information
  *  Step 4: Stakeholder-specific details
- *  Step 5: Document upload (simulated)
+ *  Step 5: Document upload (real S3 via trpc.onboarding.uploadKycDocument)
  *  Step 6: Review & submit → trpc.onboarding.submit
  */
 import { useState, useCallback, useRef } from "react";
@@ -34,6 +34,13 @@ import {
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+interface UploadedDoc {
+  docId: string;
+  url: string;
+  name: string;
+  type: string;
+  fileName: string;
+}
 type StakeholderType = "FARMER" | "TRADER" | "BROKER" | "WAREHOUSE_OPERATOR" | "MARKET_MAKER" | "ADMIN";
 
 interface PersonalInfo {
@@ -188,6 +195,54 @@ export default function Onboarding() {
     return true;
   }, [step, stakeholderType, personal, agreedToTerms, agreedToKyc]);
 
+  // ── Cooperative Bulk KYC Upload state (moved up to satisfy Rules of Hooks) ──
+  const [bulkCsvText, setBulkCsvText] = useState("");
+  const [bulkCoopName, setBulkCoopName] = useState("");
+  const [bulkFileName, setBulkFileName] = useState("");
+  const [bulkPreview, setBulkPreview] = useState<Array<Record<string,string>>>([]);
+  const [bulkParseError, setBulkParseError] = useState("");
+  const [showBulkPanel, setShowBulkPanel] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Document upload state ──
+  const [uploadedDocs, setUploadedDocs] = useState<Record<string, UploadedDoc>>({});
+  const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
+  const docInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const uploadKycDocMutation = trpc.onboarding.uploadKycDocument.useMutation({
+    onError: (err) => {
+      toast.error("Upload failed", { description: err.message });
+      setUploadingDocId(null);
+    },
+  });
+  const handleDocFileChange = async (docId: string, docLabel: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File too large", { description: "Maximum file size is 5 MB." });
+      return;
+    }
+    setUploadingDocId(docId);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = (reader.result as string).split(",")[1];
+      try {
+        const result = await uploadKycDocMutation.mutateAsync({ docId, fileName: file.name, mimeType: file.type, base64Data });
+        setUploadedDocs(prev => ({ ...prev, [docId]: { docId, url: result.url, name: docLabel, type: docId, fileName: file.name } }));
+        toast.success("Document uploaded successfully");
+      } catch { /* handled by onError */ } finally { setUploadingDocId(null); }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const bulkUploadMutation = trpc.onboarding.bulkKycUpload.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Bulk upload complete: ${data.success} applications created`, {
+        description: data.failed > 0 ? `${data.failed} rows failed. Check the error list below.` : "All members processed successfully.",
+      });
+    },
+    onError: (err) => toast.error("Bulk upload failed", { description: err.message }),
+  });
+
   const handleSubmit = useCallback(() => {
     if (!stakeholderType) return;
     submitMutation.mutate({
@@ -233,10 +288,11 @@ export default function Onboarding() {
         adminCode: specific.adminCode || undefined,
         department: specific.department || undefined,
       },
+      documentsUploaded: Object.values(uploadedDocs).map(d => ({ type: d.type, url: d.url, name: d.fileName })),
       agreedToTerms,
       agreedToKyc,
     });
-  }, [stakeholderType, personal, business, specific, agreedToTerms, agreedToKyc, submitMutation]);
+  }, [stakeholderType, personal, business, specific, uploadedDocs, agreedToTerms, agreedToKyc, submitMutation]);
 
   // ── Loading / auth gate ──
   if (loading || statusLoading) {
@@ -298,24 +354,6 @@ export default function Onboarding() {
   }
 
   const selectedConfig = STAKEHOLDERS.find(s => s.type === stakeholderType);
-
-  // ── Cooperative Bulk KYC Upload state ──
-  const [bulkCsvText, setBulkCsvText] = useState("");
-  const [bulkCoopName, setBulkCoopName] = useState("");
-  const [bulkFileName, setBulkFileName] = useState("");
-  const [bulkPreview, setBulkPreview] = useState<Array<Record<string,string>>>([]);
-  const [bulkParseError, setBulkParseError] = useState("");
-  const [showBulkPanel, setShowBulkPanel] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const bulkUploadMutation = trpc.onboarding.bulkKycUpload.useMutation({
-    onSuccess: (data) => {
-      toast.success(`Bulk upload complete: ${data.success} applications created`, {
-        description: data.failed > 0 ? `${data.failed} rows failed. Check the error list below.` : "All members processed successfully.",
-      });
-    },
-    onError: (err) => toast.error("Bulk upload failed", { description: err.message }),
-  });
 
   const parseCsv = (text: string) => {
     setBulkParseError("");
@@ -552,42 +590,70 @@ export default function Onboarding() {
               </div>
               <p className="text-sm text-gray-400 mb-6">Upload the required documents for KYC verification. Accepted formats: PDF, JPG, PNG (max 5MB each).</p>
               <div className="space-y-3">
-                {[
-                  { label: "Government-issued ID (NIN slip, International Passport, or Driver's License)", required: true },
-                  { label: "Proof of Address (utility bill or bank statement, not older than 3 months)", required: true },
+                {([
+                  { id: "government_id", label: "Government-issued ID (NIN slip, International Passport, or Driver's License)", required: true },
+                  { id: "proof_of_address", label: "Proof of Address (utility bill or bank statement, not older than 3 months)", required: true },
                   ...(stakeholderType === "FARMER" ? [
-                    { label: "Land ownership document or lease agreement", required: false },
-                    { label: "Cooperative membership certificate (if applicable)", required: false },
+                    { id: "land_ownership", label: "Land ownership document or lease agreement", required: false },
+                    { id: "cooperative_cert", label: "Cooperative membership certificate (if applicable)", required: false },
                   ] : []),
                   ...(stakeholderType === "BROKER" ? [
-                    { label: "SEC / regulatory license certificate", required: true },
-                    { label: "Professional indemnity insurance", required: false },
+                    { id: "sec_license", label: "SEC / regulatory license certificate", required: true },
+                    { id: "indemnity_insurance", label: "Professional indemnity insurance", required: false },
                   ] : []),
                   ...(stakeholderType === "WAREHOUSE_OPERATOR" ? [
-                    { label: "Warehouse certification / inspection report", required: true },
-                    { label: "Insurance policy document", required: true },
+                    { id: "warehouse_cert", label: "Warehouse certification / inspection report", required: true },
+                    { id: "insurance_policy", label: "Insurance policy document", required: true },
                   ] : []),
                   ...(stakeholderType === "MARKET_MAKER" ? [
-                    { label: "Proof of capital / bank statement", required: true },
-                    { label: "Trading infrastructure description", required: false },
+                    { id: "proof_of_capital", label: "Proof of capital / bank statement", required: true },
+                    { id: "trading_infra", label: "Trading infrastructure description", required: false },
                   ] : []),
-                  { label: "CAC Certificate of Incorporation (for entities)", required: false },
-                ].map((doc, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
-                    <FileText className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">{doc.label}</p>
-                      <p className="text-xs text-gray-500">{doc.required ? "Required" : "Optional"}</p>
+                  { id: "cac_certificate", label: "CAC Certificate of Incorporation (for entities)", required: false },
+                ] as Array<{ id: string; label: string; required: boolean }>).map((doc) => {
+                  const uploaded = uploadedDocs[doc.id];
+                  const isUploading = uploadingDocId === doc.id;
+                  return (
+                    <div key={doc.id} className={`flex items-center gap-3 p-3 border rounded-lg transition-colors ${uploaded ? "bg-emerald-900/20 border-emerald-500/30" : "bg-white/5 border-white/10 hover:bg-white/10"}`}>
+                      {uploaded
+                        ? <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                        : <FileText className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{doc.label}</p>
+                        {uploaded
+                          ? <p className="text-xs text-emerald-400 truncate">{uploaded.fileName}</p>
+                          : <p className="text-xs text-gray-500">{doc.required ? "Required" : "Optional"}</p>
+                        }
+                      </div>
+                      <input
+                        ref={el => { docInputRefs.current[doc.id] = el; }}
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        className="hidden"
+                        onChange={(e) => handleDocFileChange(doc.id, doc.label, e)}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isUploading}
+                        onClick={() => docInputRefs.current[doc.id]?.click()}
+                        className={`text-xs border-white/20 bg-transparent ${uploaded ? "text-emerald-400 border-emerald-500/40" : "text-gray-300 hover:text-white"}`}
+                      >
+                        {isUploading
+                          ? <><RefreshCw className="w-3 h-3 mr-1 animate-spin" /> Uploading...</>
+                          : uploaded
+                            ? <><Upload className="w-3 h-3 mr-1" /> Replace</>
+                            : <><Upload className="w-3 h-3 mr-1" /> Upload</>
+                        }
+                      </Button>
                     </div>
-                    <Button size="sm" variant="outline" className="text-xs border-white/20 text-gray-300 hover:text-white bg-transparent">
-                      <Upload className="w-3 h-3 mr-1" /> Upload
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <p className="text-xs text-gray-500 mt-4 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
-                Document upload is simulated in this demo. In production, files are encrypted and stored securely.
+                Files are uploaded securely to encrypted S3 storage. Accepted: PDF, JPG, PNG (max 5 MB each).
               </p>
             </div>
           )}

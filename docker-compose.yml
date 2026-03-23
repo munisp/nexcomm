@@ -213,6 +213,7 @@ services:
       PORT: "8003"
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
+      OPENSANCTIONS_API_KEY: ${OPENSANCTIONS_API_KEY:-}
     ports:
       - "8003:8003"
     depends_on:

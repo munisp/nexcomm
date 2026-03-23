@@ -10,6 +10,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { kycQueue, profiles, users, auditLog, cooperativeBulkUploads, notifications, depositRequests, orders } from "../../drizzle/schema";
 import { notifyOwner } from "../_core/notification";
+import { storagePut } from "../storage";
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 const personalInfoSchema = z.object({
@@ -693,6 +694,37 @@ export const onboardingRouter = router({
       });
 
       return { approved };
+    }),
+
+  /**
+   * Upload a KYC document for the onboarding application.
+   * Accepts a base64-encoded file, uploads it to S3, and returns the CDN URL.
+   * The URL is then included in the documentsUploaded array when calling submit.
+   */
+  uploadKycDocument: protectedProcedure
+    .input(z.object({
+      docId: z.string().min(1),          // e.g. "government_id", "proof_of_address"
+      fileName: z.string().min(1),        // original file name for extension detection
+      mimeType: z.string().min(1),        // e.g. "image/jpeg", "application/pdf"
+      base64Data: z.string().min(1),      // base64-encoded file content
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const MAX_BYTES = 5 * 1024 * 1024; // 5 MB limit
+      const buffer = Buffer.from(input.base64Data, "base64");
+      if (buffer.length > MAX_BYTES) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "File exceeds 5 MB limit." });
+      }
+      const allowedMimeTypes = [
+        "image/jpeg", "image/jpg", "image/png", "image/webp",
+        "application/pdf",
+      ];
+      if (!allowedMimeTypes.includes(input.mimeType)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Unsupported file type. Accepted: PDF, JPG, PNG." });
+      }
+      const ext = input.fileName.split(".").pop()?.toLowerCase() ?? "bin";
+      const key = `kyc/onboarding/${ctx.user.id}/${input.docId}-${Date.now()}.${ext}`;
+      const { url } = await storagePut(key, buffer, input.mimeType);
+      return { url, docId: input.docId, key };
     }),
 
   /**

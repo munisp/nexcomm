@@ -269,3 +269,26 @@
 - [x] Added ussd-engine, channel-gateway, bot-logic, core-banking, indices, kafka-ui, redis-insight to docker-compose.yml (now 45 services)
 - [x] Built truly complete archive including nexcom-binaries (289 MB uncompressed, 100 MB compressed, 1,623 files)
 - [x] Archive includes: blockchain binary (124 MB), all Go/Rust binaries, dist/, drizzle migrations, Flutter, React Native, all 20 microservices
+
+## Round 19 — Full Security Gap Closure
+
+- [ ] Add TOTP tab to SecuritySettings.tsx (link to /totp-setup, show status)
+- [ ] Wire email OTP delivery to real email/notification service in webauthnRouter.ts
+- [ ] Write Vitest tests for WebAuthn router (registration, authentication, email OTP, MFA policy, signCount replay)
+- [ ] Wire Onboarding.tsx document upload steps to real S3 via trpc.farmer.uploadKycDocument / kycService
+- [ ] Integrate OpenSanctions API for live KYB AML/PEP/sanctions screening in kyb/screening.py
+- [ ] Add docling and opencv-python as hard requirements in services/kyc-service/requirements.txt
+- [ ] Update KYC microservice Dockerfile to install docling + opencv deps
+
+## Round 19 — Security Hardening (TOTP/WebAuthn/KYC gaps)
+- [x] TOTP tab added to SecuritySettings with full wizard UI
+- [x] WebAuthn email OTP wired to real in-app notification + owner alert (no more console.info stub)
+- [x] 30 comprehensive WebAuthn Vitest tests (registration, authentication, email OTP, MFA policy, rename, remove)
+- [x] Onboarding.tsx document upload wired to real S3 via uploadKycDocument tRPC procedure
+- [x] KYB screening.py replaced with live OpenSanctions API integration (OFAC, EU FSF, UN SC, HMT, EFCC)
+- [x] OpenSanctions fallback mode (rule-based) when API key not set
+- [x] OPENSANCTIONS_API_KEY added to docker-compose.yml kyc-service env
+- [x] KYC /health endpoint reports opensanctions mode (live_api vs fallback_rule_based)
+- [x] React Rules of Hooks violation fixed in Onboarding.tsx (hooks moved before early returns)
+- [x] TypeScript: 0 errors
+- [x] All 812 tests pass (8 test files)

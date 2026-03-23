@@ -50,7 +50,10 @@ from models.schemas import (
 from ocr.paddle_ocr import PaddleOCREngine
 from document.docling_parser import DoclingParser, VLMDocumentVerifier
 from liveness.detector import LivenessDetector
-from kyb.screening import KYBScreeningEngine, StakeholderOnboarding
+from kyb.screening import KYBScreeningEngine, StakeholderOnboarding, OPENSANCTIONS_API_KEY
+import logging
+logging.basicConfig(level=logging.INFO)
+_logger = logging.getLogger("nexcom-kyc")
 
 app = FastAPI(
     title="NEXCOM KYC/KYB Service",
@@ -459,6 +462,7 @@ async def health():
             "mediapipe": "available" if liveness_detector._initialized and liveness_detector._face_mesh else "fallback_mock",
             "vlm_verifier": "available",
             "kyb_screener": "available",
+            "opensanctions": "live_api" if OPENSANCTIONS_API_KEY else "fallback_rule_based",
         },
         "stats": {
             "kyc_applications": len(kyc_applications),
