@@ -3,6 +3,7 @@ import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import { getGatewayHealth, getMiddlewareStatus } from "../gatewayClient";
 import { checkMatchingEngineHealth, checkSettlementEngineHealth, getExchangeStatus } from "../matchingEngineClient";
+import { pingDb } from "../db";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -39,22 +40,25 @@ export const systemRouter = router({
    */
   platformHealth: adminProcedure.query(async () => {
     // Run all health checks in parallel
-    const [meHealthy, settlementHealthy, gatewayHealth, middlewareStatus, exchangeStatus] =
+    const [meHealthy, settlementHealthy, gatewayHealth, middlewareStatus, exchangeStatus, dbPing] =
       await Promise.allSettled([
         checkMatchingEngineHealth(),
         checkSettlementEngineHealth(),
         getGatewayHealth(),
         getMiddlewareStatus(),
         getExchangeStatus(),
+        pingDb(),
       ]);
-
     const me = meHealthy.status === "fulfilled" ? meHealthy.value : false;
     const settlement = settlementHealthy.status === "fulfilled" ? settlementHealthy.value : false;
     const gateway = gatewayHealth.status === "fulfilled" ? gatewayHealth.value : null;
     const middleware = middlewareStatus.status === "fulfilled" ? middlewareStatus.value : null;
     const exchange = exchangeStatus.status === "fulfilled" ? exchangeStatus.value : null;
-
+    const dbHealthy = dbPing.status === "fulfilled" ? dbPing.value : false;
     return {
+      database: {
+        postgres: { connected: dbHealthy, description: "Primary PostgreSQL database (Drizzle ORM, pool max=20)" },
+      },
       services: {
         matchingEngine: {
           name: "Rust Matching Engine",

@@ -1,4 +1,4 @@
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
@@ -8,6 +8,7 @@ import {
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pgClient: ReturnType<typeof postgres> | null = null;
 
 // Resolve the PostgreSQL connection URL.
 // In development, use the local PostgreSQL instance.
@@ -29,14 +30,37 @@ export async function getDb() {
     try {
       const dbUrl = resolveDbUrl();
       const isLocal = dbUrl.includes("localhost") || dbUrl.includes("127.0.0.1");
-      const client = postgres(dbUrl, { max: 10, ssl: isLocal ? false : "require" });
-      _db = drizzle(client);
+      _pgClient = postgres(dbUrl, {
+        max: 20,                    // max pool size
+        idle_timeout: 30,           // close idle connections after 30s
+        connect_timeout: 10,        // fail fast if DB is unreachable
+        max_lifetime: 1800,         // recycle connections every 30 minutes
+        ssl: isLocal ? false : "require",
+        onnotice: () => {},         // suppress NOTICE messages
+      });
+      _db = drizzle(_pgClient);
+      // Startup validation: run a cheap query to confirm connectivity
+      await _db.execute(sql`SELECT 1`);
+      console.log("[Database] PostgreSQL connection pool established (max=20)");
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
+      _pgClient = null;
     }
   }
   return _db;
+}
+
+/** Ping the database — returns true if reachable, false otherwise. */
+export async function pingDb(): Promise<boolean> {
+  try {
+    const db = await getDb();
+    if (!db) return false;
+    await db.execute(sql`SELECT 1`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ============================================================

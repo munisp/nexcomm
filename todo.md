@@ -309,3 +309,15 @@
 - [x] OpenSanctions KYB screening with live API + graceful fallback
 - [x] Test email suppression confirmed (NODE_ENV=test guard already in place)
 - [x] 812 tests pass, 0 TypeScript errors
+
+## Round 21 — TigerBeetle/Mojaloop/PostgreSQL Hardening + Email + Passkeys
+- [x] Transactional email service (nodemailer SMTP/SendGrid) wired to WebAuthn email OTP
+- [x] Test email suppression confirmed via NODE_ENV=test guard in notifyOwner
+- [x] My Passkeys section added to Account page (list, rename, delete)
+- [x] TigerBeetle auto-provisioning on KYC approval (Trading/Settlement/Margin accounts)
+- [x] TigerBeetle ledger transfer wired into Mojaloop settlement callback
+- [x] Mojaloop adapter confirmed fully implemented (quote/transfer/error callbacks + Kafka)
+- [x] PostgreSQL pool hardened: max=20, idle_timeout=30s, connect_timeout=10s, max_lifetime=30min
+- [x] PostgreSQL startup validation query (SELECT 1) on first connection
+- [x] pingDb() helper exported for health checks
+- [x] PostgreSQL health added to platformHealth aggregator

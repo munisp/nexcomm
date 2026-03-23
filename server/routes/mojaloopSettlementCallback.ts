@@ -10,8 +10,9 @@
  * On receipt of a committed transfer this handler:
  *  1. Validates the payload
  *  2. Upserts the transfer record in mojaloop_transfers (marks as COMMITTED)
- *  3. Emits mojaloop.transfer.committed Kafka event for the lakehouse
- *  4. Returns 200 OK to the Go adapter
+ *  3. Posts a TigerBeetle ledger transfer (DFSP-to-DFSP, fire-and-forget)
+ *  4. Emits mojaloop.transfer.committed Kafka event for the lakehouse
+ *  5. Returns 200 OK to the Go adapter
  */
 
 import { Router, Request, Response } from "express";
@@ -24,6 +25,7 @@ import { eq } from "drizzle-orm";
 import {
   emitMojaloopTransferCommitted,
 } from "../kafka/kafkaProducer";
+import { createLedgerTransfer } from "../matchingEngineClient";
 
 export const mojaloopSettlementCallbackRouter = Router();
 
@@ -112,7 +114,19 @@ mojaloopSettlementCallbackRouter.post(
         });
       }
 
-      // 2. Emit Kafka event for lakehouse ingestion
+      // 2. Post a TigerBeetle ledger transfer (fire-and-forget — non-fatal if SE is offline)
+      //    Debit the payer DFSP settlement account, credit the payee DFSP settlement account.
+      createLedgerTransfer({
+        debit_account_id: `DFSP-${payerFspId}`,
+        credit_account_id: `DFSP-${payeeFspId}`,
+        amount: Math.round(amount * 100), // convert to minor units (cents/kobo)
+        currency,
+        reference: transferId,
+      }).catch((e) =>
+        console.warn(`[MojaloopSettlementCallback] TigerBeetle transfer skipped (SE offline?): ${e}`)
+      );
+
+      // 3. Emit Kafka event for lakehouse ingestion
       await emitMojaloopTransferCommitted({
         transferId,
         payerFspId,

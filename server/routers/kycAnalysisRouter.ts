@@ -10,6 +10,7 @@ import { getDb } from "../db";
 import { kycAnalysisResults, reKycFlags, notifications, users, platformSettings, bulkListingApprovals, kycQueue } from "../../drizzle/schema";
 import { eq, desc, and, or } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
+import { createLedgerAccount } from "../matchingEngineClient";
 
 const KYC_SERVICE_URL = process.env.KYC_SERVICE_URL ?? "http://localhost:3002";
 
@@ -557,6 +558,19 @@ export const kycAnalysisRouter = router({
         .where(eq(kycQueue.id, input.kycQueueId))
         .returning();
       if (!updated) throw new Error("KYC record not found");
+
+      // Auto-provision TigerBeetle ledger accounts on KYC approval (fire-and-forget)
+      if (input.decision === "APPROVED") {
+        const userId = String(updated.userId);
+        const accountTypes: Array<"Trading" | "Settlement" | "Margin"> = [
+          "Trading", "Settlement", "Margin",
+        ];
+        for (const accountType of accountTypes) {
+          createLedgerAccount({ user_id: userId, currency: "NGN", account_type: accountType })
+            .catch((e) => console.warn(`[KYC] TigerBeetle ${accountType} account provision skipped: ${e}`));
+        }
+      }
+
       // Notify owner
       const decisionLabel =
         input.decision === "APPROVED" ? "Approved" :

@@ -28,6 +28,7 @@ import {
   webauthnCredentials,
 } from "../../drizzle/schema";
 import { notifyOwner } from "../_core/notification";
+import { sendOtpEmail } from "../_core/email";
 import { sdk } from "../_core/sdk";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
@@ -512,19 +513,29 @@ export const webauthnRouter = router({
       metadata: { method: "email_otp", expiresAt: expiresAt.toISOString() },
     });
 
-    // 3. Also attempt to notify the platform owner so they can forward the code
-    //    to the user via email if no transactional email service is wired.
-    //    In production, replace this block with a direct SMTP / SendGrid / SES call.
+    // 3. Send the OTP via transactional email (SMTP or SendGrid).
+    //    Falls back to console stub in development if no provider is configured.
+    //    Completely suppressed in test environment (NODE_ENV=test).
     if (userEmail) {
-      await notifyOwner({
-        title: `[MFA] Email OTP for ${userEmail}`,
-        content:
-          `User ID ${uid} (${userEmail}) requested an email OTP.\n` +
-          `Code: ${code}\n` +
-          `Expires: ${expiresAt.toISOString()}\n\n` +
-          `Forward this code to the user or configure SMTP_HOST / SENDGRID_API_KEY ` +
-          `in your environment to enable direct transactional email delivery.`,
-      }).catch(() => {/* non-fatal */});
+      const emailResult = await sendOtpEmail({
+        to: userEmail,
+        code,
+        expiresMinutes: 10,
+        userName: userRow?.name ?? undefined,
+      }).catch((e) => ({ ok: false, provider: "stub" as const, error: String(e) }));
+      if (!emailResult.ok) {
+        // Non-fatal: user still gets the in-app notification
+        console.warn("[WebAuthn] Email OTP delivery failed:", emailResult.error);
+        // Fallback: notify owner so they can forward manually
+        await notifyOwner({
+          title: `[MFA] Email OTP delivery failed for ${userEmail}`,
+          content:
+            `Email delivery failed for user ID ${uid} (${userEmail}).\n` +
+            `Error: ${emailResult.error ?? "unknown"}\n` +
+            `Code: ${code} (expires ${expiresAt.toISOString()})\n\n` +
+            `Configure SMTP_HOST or SENDGRID_API_KEY to enable automatic delivery.`,
+        }).catch(() => {/* non-fatal */});
+      }
     }
 
     return { sent: true, maskedEmail };

@@ -6,7 +6,8 @@
 import { useState, useEffect } from "react";
 import {
   User, Shield, Key, Bell, CreditCard, LogOut, Copy, Eye, EyeOff,
-  CheckCircle2, Clock, RefreshCw, AlertCircle, Building2
+  CheckCircle2, Clock, RefreshCw, AlertCircle, Building2,
+  Fingerprint, Pencil, Trash2, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,59 @@ export default function Account() {
   const [newKeyPerms, setNewKeyPerms] = useState<("READ" | "TRADE" | "ADMIN")[]>(["READ"]);
   const [showNewKeyModal, setShowNewKeyModal] = useState(false);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+
+  // Passkey state
+  const [registerPasskeyLoading, setRegisterPasskeyLoading] = useState(false);
+  const [editingPasskeyId, setEditingPasskeyId] = useState<string | null>(null);
+  const [editingPasskeyName, setEditingPasskeyName] = useState("");
+
+  // Live passkeys
+  const { data: passkeysData, refetch: refetchPasskeys } = trpc.webauthn.listCredentials.useQuery(
+    undefined, { enabled: isAuthenticated }
+  );
+  const passkeyCreds = passkeysData ?? [];
+
+  const renamePasskeyMutation = trpc.webauthn.renameCredential.useMutation({
+    onSuccess: () => { toast.success("Passkey renamed"); setEditingPasskeyId(null); refetchPasskeys(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const removePasskeyMutation = trpc.webauthn.removeCredential.useMutation({
+    onSuccess: () => { toast.success("Passkey removed"); refetchPasskeys(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const registrationOptionsMutation = trpc.webauthn.registrationOptions.useMutation();
+  const verifyRegistrationMutation = trpc.webauthn.verifyRegistration.useMutation({
+    onSuccess: () => { toast.success("Passkey registered successfully!"); refetchPasskeys(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  async function handleRegisterPasskey() {
+    setRegisterPasskeyLoading(true);
+    try {
+      const opts = await registrationOptionsMutation.mutateAsync();
+      // Use the browser WebAuthn API
+      const { startRegistration } = await import("@simplewebauthn/browser");
+      const attResp = await startRegistration(opts as Parameters<typeof startRegistration>[0]);
+      await verifyRegistrationMutation.mutateAsync({ response: attResp as unknown as Record<string, unknown> });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!msg.includes("cancelled") && !msg.includes("NotAllowedError")) {
+        toast.error(msg);
+      }
+    } finally {
+      setRegisterPasskeyLoading(false);
+    }
+  }
+
+  function handleRenamePasskey(credentialId: string) {
+    if (!editingPasskeyName.trim()) return;
+    renamePasskeyMutation.mutate({ credentialId, name: editingPasskeyName.trim() });
+  }
+
+  function handleRemovePasskey(credentialId: string) {
+    if (!confirm("Remove this passkey? You will no longer be able to use it to sign in.")) return;
+    removePasskeyMutation.mutate({ credentialId });
+  }
 
   // Live API keys
   const { data: apiKeysList, refetch: refetchApiKeys } = trpc.apiKeys.list.useQuery(
@@ -367,13 +421,75 @@ export default function Account() {
                   </div>
                 ))}
               </div>
-              <Button variant="outline" className="w-full text-negative border-negative/30 hover:bg-negative/10" onClick={() => { toast.success("All sessions terminated — signing you out"); setTimeout(() => logout(), 800); }}>
+               <Button variant="outline" className="w-full text-negative border-negative/30 hover:bg-negative/10" onClick={() => { toast.success("All sessions terminated — signing you out"); setTimeout(() => logout(), 800); }}>
                 Terminate All Sessions
+              </Button>
+            </div>
+
+            {/* My Passkeys */}
+            <div className="stat-card space-y-4">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <Fingerprint className="w-4 h-4 text-primary" />My Passkeys
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Passkeys let you sign in securely without a password using your device biometrics or PIN.
+              </p>
+              {passkeyCreds.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                  No passkeys registered yet.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {passkeyCreds.map((cred) => (
+                    <div key={cred.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-3 bg-muted/20">
+                      <div className="flex items-center gap-3">
+                        <Fingerprint className="w-4 h-4 text-muted-foreground" />
+                        <div>
+                          <div className="text-sm font-medium text-foreground">{cred.name ?? "Unnamed passkey"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Added {new Date(cred.createdAt).toLocaleDateString()} · Used {cred.signCount} time{cred.signCount !== 1 ? "s" : ""}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {editingPasskeyId === cred.id ? (
+                          <>
+                            <Input
+                              value={editingPasskeyName}
+                              onChange={(e) => setEditingPasskeyName(e.target.value)}
+                              className="h-7 w-36 text-xs"
+                              autoFocus
+                              onKeyDown={(e) => { if (e.key === "Enter") handleRenamePasskey(cred.id); if (e.key === "Escape") setEditingPasskeyId(null); }}
+                            />
+                            <Button size="sm" className="h-7 px-2 text-xs" onClick={() => handleRenamePasskey(cred.id)} disabled={renamePasskeyMutation.isPending}>Save</Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingPasskeyId(null)}>Cancel</Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => { setEditingPasskeyId(cred.id); setEditingPasskeyName(cred.name ?? ""); }}>
+                              <Pencil className="w-3 h-3" />Rename
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive hover:text-destructive gap-1" onClick={() => handleRemovePasskey(cred.id)} disabled={removePasskeyMutation.isPending}>
+                              <Trash2 className="w-3 h-3" />Remove
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Button
+                className="gap-2"
+                onClick={handleRegisterPasskey}
+                disabled={registerPasskeyLoading}
+              >
+                {registerPasskeyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
+                {registerPasskeyLoading ? "Registering\u2026" : "Register New Passkey"}
               </Button>
             </div>
           </div>
         </TabsContent>
-
         {/* API Keys Tab */}
         <TabsContent value="api" className="mt-4">
           <div className="stat-card space-y-4">
