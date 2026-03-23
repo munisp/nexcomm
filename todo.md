@@ -262,3 +262,10 @@
 - [x] React Native Notifications screen — nexcom-mobile/app/notifications/index.tsx (mark read, mark all read, type-based icons); registered in root _layout.tsx
 - [x] React Native profile quick links — Banking & Loans + Notifications added to Services section of profile.tsx
 - [x] 782/782 tests passing, 0 TypeScript errors, dev server clean
+
+## Round 18 — Production Readiness & Complete Archive
+
+- [x] Created comprehensive README.md with restore, Docker Compose, and deployment instructions
+- [x] Added ussd-engine, channel-gateway, bot-logic, core-banking, indices, kafka-ui, redis-insight to docker-compose.yml (now 45 services)
+- [x] Built truly complete archive including nexcom-binaries (289 MB uncompressed, 100 MB compressed, 1,623 files)
+- [x] Archive includes: blockchain binary (124 MB), all Go/Rust binaries, dist/, drizzle migrations, Flutter, React Native, all 20 microservices

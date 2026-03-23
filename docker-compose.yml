@@ -740,3 +740,137 @@ services:
       - kafka
       - redis
     network_mode: "service:portal"
+
+  # ─── Channel Services (USSD / WhatsApp / Telegram) ────────────────────────
+
+  ussd-engine:
+    build:
+      context: services/ussd-engine
+      dockerfile: Dockerfile
+    container_name: nexcom-ussd-engine
+    environment:
+      PORT: "8020"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      AFRICASTALKING_API_KEY: ${AFRICASTALKING_API_KEY:-sandbox}
+      AFRICASTALKING_USERNAME: ${AFRICASTALKING_USERNAME:-sandbox}
+      PORTAL_URL: http://portal:3000
+    ports:
+      - "8020:8020"
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [nexcom]
+    restart: unless-stopped
+
+  channel-gateway:
+    build:
+      context: services/channel-gateway
+      dockerfile: Dockerfile
+    container_name: nexcom-channel-gateway
+    environment:
+      PORT: "8021"
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-nexcom_verify}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      BOT_LOGIC_URL: http://bot-logic:8022
+    ports:
+      - "8021:8021"
+    depends_on:
+      kafka: { condition: service_healthy }
+    networks: [nexcom]
+    restart: unless-stopped
+
+  bot-logic:
+    build:
+      context: services/bot-logic
+      dockerfile: Dockerfile
+    container_name: nexcom-bot-logic
+    environment:
+      PORT: "8022"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      KAFKA_BROKERS: kafka:9092
+      CHANNEL_GATEWAY_URL: http://channel-gateway:8021
+      PORTAL_URL: http://portal:3000
+    ports:
+      - "8022:8022"
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    networks: [nexcom]
+    restart: unless-stopped
+
+  # ─── Core Banking Integration ──────────────────────────────────────────────
+
+  core-banking:
+    build:
+      context: services/core-banking
+      dockerfile: Dockerfile
+    container_name: nexcom-core-banking
+    environment:
+      PORT: "8023"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      CBS_ADAPTER: ${CBS_ADAPTER:-generic}
+      CBS_BASE_URL: ${CBS_BASE_URL:-http://localhost:9090}
+      CBS_API_KEY: ${CBS_API_KEY:-}
+    ports:
+      - "8023:8023"
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    networks: [nexcom]
+    restart: unless-stopped
+
+  # ─── Commodity Indices Service (gRPC) ─────────────────────────────────────
+
+  indices:
+    build:
+      context: services/indices
+      dockerfile: Dockerfile
+    container_name: nexcom-indices
+    environment:
+      GRPC_PORT: "8024"
+      HTTP_PORT: "8025"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8024:8024"
+      - "8025:8025"
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    networks: [nexcom]
+    restart: unless-stopped
+
+  # ─── Developer Tools (opt-in with --profile tools) ────────────────────────
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: nexcom-kafka-ui
+    environment:
+      KAFKA_CLUSTERS_0_NAME: nexcom
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8090:8080"
+    depends_on:
+      kafka: { condition: service_healthy }
+    networks: [nexcom]
+    profiles: ["tools"]
+
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: nexcom-redis-insight
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+    networks: [nexcom]
+    profiles: ["tools"]
