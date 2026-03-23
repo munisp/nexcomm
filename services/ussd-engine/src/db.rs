@@ -407,3 +407,85 @@ pub async fn make_repayment(
 
     Ok(reference)
 }
+
+// ─── Account Balance & Mini-Statement ────────────────────────────────────────
+
+/// Wallet balance summary fetched from clearing_accounts + active loans.
+pub struct WalletBalance {
+    pub cash_balance: f64,
+    pub portfolio_value: f64,
+    pub active_loans: i64,
+    pub outstanding_loan_balance: f64,
+}
+
+/// A single mini-statement line (recent settled trades).
+pub struct MiniStatementLine {
+    pub date: String,
+    pub description: String,
+    pub amount: f64,
+    pub direction: String, // "CR" or "DR"
+}
+
+/// Fetch wallet balance for a user from clearing_accounts and active loans.
+pub async fn get_wallet_balance(db: &DbPool, user_id: i32) -> Result<WalletBalance> {
+    // Cash balance from clearing_accounts
+    let ca_row = sqlx::query(
+        r#"SELECT COALESCE(cash_balance::float8, 0.0) AS cash_balance,
+                  COALESCE(portfolio_value::float8, 0.0) AS portfolio_value
+           FROM clearing_accounts WHERE user_id = $1 LIMIT 1"#,
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+
+    let (cash_balance, portfolio_value) = ca_row
+        .map(|r| (r.get::<f64, _>("cash_balance"), r.get::<f64, _>("portfolio_value")))
+        .unwrap_or((0.0, 0.0));
+
+    // Active loans count and outstanding balance
+    let loan_row = sqlx::query(
+        r#"SELECT COUNT(*)::bigint AS active_loans,
+                  COALESCE(SUM(COALESCE(approved_amount_ngn::float8, requested_amount_ngn::float8)), 0.0) AS outstanding
+           FROM bank_financing_applications
+           WHERE user_id = $1 AND status IN ('DISBURSED', 'REPAYING', 'APPROVED')"#,
+    )
+    .bind(user_id)
+    .fetch_one(db)
+    .await?;
+
+    Ok(WalletBalance {
+        cash_balance,
+        portfolio_value,
+        active_loans: loan_row.get::<i64, _>("active_loans"),
+        outstanding_loan_balance: loan_row.get::<f64, _>("outstanding"),
+    })
+}
+
+/// Fetch the last 5 settled orders as mini-statement lines.
+pub async fn get_mini_statement(db: &DbPool, user_id: i32) -> Result<Vec<MiniStatementLine>> {
+    let rows = sqlx::query(
+        r#"SELECT
+               TO_CHAR(created_at, 'DD-Mon') AS date,
+               CONCAT(side, ' ', symbol, ' @', COALESCE(avg_fill_price::text, price::text)) AS description,
+               COALESCE((filled_qty * avg_fill_price)::float8, (quantity * price)::float8, 0.0) AS amount,
+               CASE WHEN side = 'SELL' THEN 'CR' ELSE 'DR' END AS direction
+           FROM orders
+           WHERE user_id = $1
+             AND status IN ('FILLED', 'PARTIALLY_FILLED')
+           ORDER BY created_at DESC
+           LIMIT 5"#,
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| MiniStatementLine {
+            date: r.get("date"),
+            description: r.get("description"),
+            amount: r.get::<f64, _>("amount"),
+            direction: r.get("direction"),
+        })
+        .collect())
+}

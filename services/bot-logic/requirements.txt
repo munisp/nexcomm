@@ -7,3 +7,5 @@ pydantic==2.8.2
 prometheus-fastapi-instrumentator==7.0.0
 confluent-kafka==2.5.0
 python-dotenv==1.0.1
+apscheduler==3.10.4
+aiokafka==0.11.0

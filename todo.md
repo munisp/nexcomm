@@ -207,3 +207,24 @@
 - [ ] Telegram alert commands: /alert set <commodity> <price> <above|below>, /alert list, /alert delete <id> wired to createAlert/listAlerts/deleteAlert
 - [ ] Tests for USSD loan flow and Telegram alert commands
 - [ ] Checkpoint and archive update
+
+## Round 11 — COMPLETED
+- [x] Rust USSD engine: full 5-step loan-apply flow (type → amount → tenor → confirm → PIN → DB insert + Kafka)
+- [x] Telegram price alert commands (/alert set/list/delete) wired to telegramRouter procedures
+- [x] Go channel-gateway /alert sub-command routing
+- [x] Python bot-logic NLP: ALERT_LIST/ALERT_DELETE/condition extraction — 18/18 tests passing
+- [x] 782/782 vitest tests, 0 TypeScript errors
+
+## Round 12 — COMPLETED
+- [x] Rust USSD engine: full 5-step loan repayment flow (select → amount → provider → confirm → PIN → DB + Kafka)
+- [x] Python bot-logic: WhatsApp price alert broadcaster (polls priceAlerts every 60s, sends via channel-gateway)
+- [x] Go Telegram handler: processCallbackQuery (order:confirm/cancel, trade:BUY/SELL, cmd:* quick actions)
+- [x] Python router: EXECUTE_ORDER handler added
+- [x] 782/782 Node.js tests + 18/18 Python NLP tests, 0 TypeScript errors
+
+## Round 13 — COMPLETED
+- [x] USSD account balance & mini-statement: ACCOUNT_BALANCE + ACCOUNT_MINI_STMT states in menu.rs; DB functions get_wallet_balance + get_mini_statement already in db.rs; account_menu_text updated to 4 options
+- [x] WhatsApp order status updates: app/kafka/order_consumer.py consumes nexcom.order.matched topic, sends WhatsApp notifications via channel-gateway; wired into main.py lifespan
+- [x] Telegram market open/close broadcasts: app/telegram/market_broadcast.py with APScheduler (08:00 WAT open + 16:00 WAT close, Mon–Fri); wired into main.py lifespan; apscheduler + aiokafka added to requirements.txt
+- [x] Loan-to-core-banking integration documentation: docs/loan-core-banking-integration.md (10 sections, full flow diagram, DB schema table, Kafka event topology, security notes, config reference)
+- [x] Test suite: 782/782 Node.js tests passing, 18/18 Python NLP tests passing, 0 TypeScript errors

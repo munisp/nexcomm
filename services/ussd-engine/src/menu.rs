@@ -99,7 +99,9 @@ async fn route_input(
         "LOAN_REPAY_PROVIDER" => handle_loan_repay_provider(session, input).await,
         "LOAN_REPAY_CONFIRM" => handle_loan_repay_confirm(session, input).await,
         "LOAN_REPAY_PIN" => handle_loan_repay_pin(state, session, input).await,
-        "ACCOUNT" => handle_account(session, input).await,
+        "ACCOUNT" => handle_account(state, session, input).await,
+        "ACCOUNT_BALANCE" => handle_account_balance(state, session).await,
+        "ACCOUNT_MINI_STMT" => handle_account_mini_stmt(state, session).await,
         "SET_PIN" => handle_set_pin(session, input).await,
         "SET_PIN_CONFIRM" => handle_set_pin_confirm(state, session, input).await,
         _ => Ok(MenuResponse::End("Invalid session state. Please dial again.")),
@@ -743,6 +745,7 @@ async fn handle_loan_apply_pin(
 // ─── ACCOUNT MANAGEMENT ──────────────────────────────────────────────────────
 
 async fn handle_account(
+    state: &AppState,
     session: &mut UssdSessionState,
     input: &str,
 ) -> Result<MenuResponse> {
@@ -750,15 +753,20 @@ async fn handle_account(
         return Ok(MenuResponse::Continue(account_menu_text()));
     }
     match input {
-        "1" => Ok(MenuResponse::End(
-            "Visit nexcom.exchange/banking to view your full account balance.",
-        )),
+        "1" => {
+            session.current_menu = "ACCOUNT_BALANCE".to_string();
+            handle_account_balance(state, session).await
+        }
         "2" => {
+            session.current_menu = "ACCOUNT_MINI_STMT".to_string();
+            handle_account_mini_stmt(state, session).await
+        }
+        "3" => {
             session.current_menu = "SET_PIN".to_string();
             session.pending_pin = Some(PendingPin { new_pin: None, step: 1 });
             Ok(MenuResponse::Continue("Enter new 4-digit PIN:"))
         }
-        "3" => Ok(MenuResponse::End(
+        "4" => Ok(MenuResponse::End(
             "USSD alerts disabled.\nRe-enable at nexcom.exchange/settings",
         )),
         "0" => {
@@ -770,6 +778,55 @@ async fn handle_account(
             account_menu_text()
         ))),
     }
+}
+
+async fn handle_account_balance(
+    state: &AppState,
+    session: &mut UssdSessionState,
+) -> Result<MenuResponse> {
+    let user_id = match session.user_id {
+        Some(id) => id,
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+    };
+    let bal = db::get_wallet_balance(&state.db, user_id).await
+        .unwrap_or(db::WalletBalance {
+            cash_balance: 0.0,
+            portfolio_value: 0.0,
+            active_loans: 0,
+            outstanding_loan_balance: 0.0,
+        });
+    session.current_menu = "ACCOUNT".to_string();
+    Ok(MenuResponse::Continue(format!(
+        "Account Balance\nCash: \u{{20a6}}{:.2}\nPortfolio: \u{{20a6}}{:.2}\nActive Loans: {}\nLoan Balance: \u{{20a6}}{:.2}\n\n0. Back",
+        bal.cash_balance, bal.portfolio_value, bal.active_loans, bal.outstanding_loan_balance
+    )))
+}
+
+async fn handle_account_mini_stmt(
+    state: &AppState,
+    session: &mut UssdSessionState,
+) -> Result<MenuResponse> {
+    let user_id = match session.user_id {
+        Some(id) => id,
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+    };
+    let lines = db::get_mini_statement(&state.db, user_id).await
+        .unwrap_or_default();
+    session.current_menu = "ACCOUNT".to_string();
+    if lines.is_empty() {
+        return Ok(MenuResponse::Continue(
+            "No recent transactions found.\n\n0. Back".to_string(),
+        ));
+    }
+    let mut msg = String::from("Mini-Statement (last 5):\n");
+    for l in &lines {
+        msg.push_str(&format!(
+            "{} {} \u{{20a6}}{:.0} {}\n",
+            l.date, l.description, l.amount, l.direction
+        ));
+    }
+    msg.push_str("\n0. Back");
+    Ok(MenuResponse::Continue(msg))
 }
 
 // ─── PIN MANAGEMENT ──────────────────────────────────────────────────────────
@@ -1029,7 +1086,7 @@ fn price_menu_text() -> &'static str {
 }
 
 fn account_menu_text() -> &'static str {
-    "Account:\n1. Balance\n2. Change PIN\n3. Disable Alerts\n0. Back"
+    "Account:\n1. Balance\n2. Mini-Statement\n3. Change PIN\n4. Disable Alerts\n0. Back"
 }
 
 /// Extract the latest user input from the accumulated AT text field
