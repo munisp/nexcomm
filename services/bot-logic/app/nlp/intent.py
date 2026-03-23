@@ -15,6 +15,8 @@ Intents:
   LOAN_STATUS     — "my loan", "loan balance", "repayment"
   LOAN_APPLY      — "apply for loan", "need financing"
   ALERT_SET       — "alert me when maize hits 50000"
+  ALERT_LIST      — "alert list", "show my alerts", "my alerts"
+  ALERT_DELETE    — "alert delete 42", "remove alert 7"
   MARKET_NEWS     — "news", "market update"
   HELP            — "help", "what can you do"
   GREETING        — "hi", "hello", "good morning"
@@ -124,8 +126,22 @@ def classify(text: str) -> Intent:
     if re.search(r"\b(balance|my account|account balance)\b", text_lower):
         return Intent("PORTFOLIO", 0.80, entities)
 
-    # ALERT_SET
+    # ALERT_DELETE — must come before ALERT_SET/LIST to catch '/alert delete 42'
+    if re.search(r"\b(alert\s+delete|delete\s+alert|remove\s+alert|cancel\s+alert)\b", text_lower):
+        alert_id = _extract_alert_id(text_lower)
+        if alert_id:
+            entities["alert_id"] = alert_id
+        return Intent("ALERT_DELETE", 0.93, entities)
+
+    # ALERT_LIST — '/alert list', 'list alerts', 'show alerts', 'my alerts'
+    if re.search(r"\b(alert\s+list|list\s+alerts?|show\s+alerts?|my\s+alerts?|view\s+alerts?)\b", text_lower):
+        return Intent("ALERT_LIST", 0.93, entities)
+
+    # ALERT_SET — '/alert set SYMBOL PRICE', 'alert MAIZE 50000'
     if re.search(r"\b(alert|notify|notification|remind|watch|monitor)\b", text_lower):
+        condition = _extract_condition(text_lower)
+        if condition:
+            entities["condition"] = condition
         if commodity and price:
             return Intent("ALERT_SET", 0.90, entities)
         return Intent("ALERT_SET", 0.72, entities)
@@ -160,6 +176,32 @@ def _extract_quantity(text: str) -> Optional[float]:
     match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mt|tonnes?|bags?|kg|tons?)?", text)
     if match:
         return float(match.group(1))
+    return None
+
+
+def _extract_alert_id(text: str) -> Optional[int]:
+    """Extract alert ID from text (e.g. 'delete 42', 'alert delete 7')."""
+    # Pattern: delete/remove/cancel [alert] <number>
+    match = re.search(r"(?:delete|remove|cancel)\s+(?:alert\s+)?(\d+)", text)
+    if match:
+        return int(match.group(1))
+    # Pattern: alert delete <number>
+    match = re.search(r"alert\s+delete\s+(\d+)", text)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _extract_condition(text: str) -> Optional[str]:
+    """Extract alert condition from text (ABOVE, BELOW, CROSS_ABOVE, CROSS_BELOW)."""
+    if re.search(r"\bcross\s+above\b", text):
+        return "CROSS_ABOVE"
+    if re.search(r"\bcross\s+below\b", text):
+        return "CROSS_BELOW"
+    if re.search(r"\b(above|over|exceed|higher than|rises?\s+above|goes?\s+above)\b", text):
+        return "ABOVE"
+    if re.search(r"\b(below|under|lower than|falls?\s+below|drops?\s+below|goes?\s+below)\b", text):
+        return "BELOW"
     return None
 
 

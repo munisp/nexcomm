@@ -103,3 +103,50 @@ def test_price_extraction():
 def test_quantity_extraction():
     r = classify("buy 25.5 MT cotton")
     assert r.entities.get("quantity") == 25.5
+
+
+# ─── Alert List / Delete / Condition Tests ────────────────────────────────────
+
+def test_alert_list():
+    """ALERT_LIST intent from various phrasings."""
+    cases = [
+        "alert list",
+        "/alert list",
+        "list alerts",
+        "show my alerts",
+        "my alerts",
+        "view alerts",
+    ]
+    for text in cases:
+        r = classify(text)
+        assert r.name == "ALERT_LIST", f"Expected ALERT_LIST for '{text}', got {r.name}"
+        assert r.confidence >= 0.90
+
+
+def test_alert_delete():
+    """ALERT_DELETE intent with alert_id extraction."""
+    cases = [
+        ("/alert delete 42", 42),
+        ("alert delete 7", 7),
+        ("delete alert 99", 99),
+        ("remove alert 3", 3),
+        ("cancel alert 15", 15),
+    ]
+    for text, expected_id in cases:
+        r = classify(text)
+        assert r.name == "ALERT_DELETE", f"Expected ALERT_DELETE for '{text}', got {r.name}"
+        assert r.confidence >= 0.90
+        assert r.entities.get("alert_id") == expected_id, (
+            f"Expected alert_id={expected_id} for '{text}', got {r.entities.get('alert_id')}"
+        )
+
+
+def test_alert_set_with_condition():
+    """ALERT_SET intent extracts condition (ABOVE/BELOW)."""
+    r = classify("alert ginger 500 above")
+    assert r.name == "ALERT_SET"
+    assert r.entities.get("condition") == "ABOVE"
+
+    r2 = classify("notify me when maize falls below 40000")
+    assert r2.name == "ALERT_SET"
+    assert r2.entities.get("condition") == "BELOW"

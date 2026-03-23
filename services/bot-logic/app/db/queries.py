@@ -101,16 +101,41 @@ async def set_price_alert(
     user_id: int,
     symbol: str,
     target_price: float,
-    channel: str,
-    channel_id: str,
-) -> None:
-    """Create or update a price alert for a user."""
+    condition: str = "ABOVE",
+) -> int:
+    """Create a price alert for a user. Returns the new alert id."""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute(
-            """INSERT INTO price_alerts (user_id, symbol, target_price, channel, channel_id, is_active, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
-               ON CONFLICT (user_id, symbol, channel) DO UPDATE SET
-                 target_price = $3, is_active = true, updated_at = NOW()""",
-            user_id, symbol, target_price, channel, channel_id,
+        row = await conn.fetchrow(
+            """INSERT INTO price_alerts (user_id, symbol, condition, target_price, triggered, notified)
+               VALUES ($1, $2, $3::alert_condition, $4, false, false)
+               RETURNING id""",
+            user_id, symbol.upper(), condition.upper(), target_price,
         )
+        return row["id"] if row else 0
+
+
+async def get_price_alerts(user_id: int) -> list:
+    """List all active (non-triggered) price alerts for a user."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT id, symbol, condition, target_price::float8 as target_price,
+                      triggered, TO_CHAR(created_at, 'DD Mon HH24:MI') as created_at
+               FROM price_alerts
+               WHERE user_id = $1 AND triggered = false
+               ORDER BY created_at DESC""",
+            user_id,
+        )
+        return [dict(r) for r in rows]
+
+
+async def delete_price_alert(user_id: int, alert_id: int) -> bool:
+    """Delete a price alert by id (only if it belongs to the user). Returns True if deleted."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM price_alerts WHERE id = $1 AND user_id = $2",
+            alert_id, user_id,
+        )
+        return result == "DELETE 1"

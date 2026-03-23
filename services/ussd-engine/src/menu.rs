@@ -89,6 +89,11 @@ async fn route_input(
         "ORDER_QTY" => handle_order_qty(session, input).await,
         "ORDER_CONFIRM" => handle_order_confirm(state, session, input).await,
         "LOAN" => handle_loan(state, session, input).await,
+        "LOAN_APPLY_TYPE" => handle_loan_apply_type(session, input).await,
+        "LOAN_APPLY_AMOUNT" => handle_loan_apply_amount(session, input).await,
+        "LOAN_APPLY_TENOR" => handle_loan_apply_tenor(session, input).await,
+        "LOAN_APPLY_CONFIRM" => handle_loan_apply_confirm(state, session, input).await,
+        "LOAN_APPLY_PIN" => handle_loan_apply_pin(state, session, input).await,
         "ACCOUNT" => handle_account(session, input).await,
         "SET_PIN" => handle_set_pin(session, input).await,
         "SET_PIN_CONFIRM" => handle_set_pin_confirm(state, session, input).await,
@@ -470,29 +475,227 @@ async fn handle_order_confirm(
     }
 }
 
-// ─── LOAN STATUS ─────────────────────────────────────────────────────────────
+// ─── LOAN STATUS + APPLY ─────────────────────────────────────────────────────
 
 async fn handle_loan(
     state: &AppState,
     session: &mut UssdSessionState,
-    _input: &str,
+    input: &str,
 ) -> Result<MenuResponse> {
     let user_id = match session.user_id {
         Some(id) => id,
         None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
     };
+    // First call — show loan menu
+    if input.is_empty() {
+        return Ok(MenuResponse::Continue(loan_menu_text()));
+    }
+    match input {
+        "1" => {
+            // View existing loan status
+            match db::get_loan_summary(&state.db, user_id).await? {
+                Some(loan) => Ok(MenuResponse::Continue(format!(
+                    "Loan Status\nBank: {}\nAmount: \u{{20a6}}{:.2}\nStatus: {}\nDue: {}\nBalance: \u{{20a6}}{:.2}\n\n0. Back",
+                    loan.bank_name, loan.amount, loan.status, loan.due_date, loan.balance
+                ))),
+                None => Ok(MenuResponse::Continue(
+                    "No active loans found.\n\n2. Apply for Loan\n0. Back",
+                )),
+            }
+        }
+        "2" => {
+            // Start loan application flow
+            session.pending_loan = Some(crate::session::PendingLoan {
+                input_type: None,
+                amount_ngn: None,
+                tenor_months: None,
+                description: None,
+                step: 1,
+            });
+            session.current_menu = "LOAN_APPLY_TYPE".to_string();
+            Ok(MenuResponse::Continue(loan_type_menu_text()))
+        }
+        "0" => {
+            session.current_menu = "MAIN".to_string();
+            Ok(MenuResponse::Continue(main_menu_text()))
+        }
+        _ => Ok(MenuResponse::Continue(format!("Invalid option.\n{}", loan_menu_text()))),
+    }
+}
 
-    match db::get_loan_summary(&state.db, user_id).await? {
-        Some(loan) => Ok(MenuResponse::End(format!(
-            "Loan Status\nBank: {}\nAmount: ₦{:.2}\nStatus: {}\nDue: {}\nBalance: ₦{:.2}\n\nDial *347*99# for more",
-            loan.bank_name,
-            loan.amount,
-            loan.status,
-            loan.due_date,
-            loan.balance
-        ))),
-        None => Ok(MenuResponse::End(
-            "No active loans found.\nVisit nexcom.exchange to apply for financing.",
+// ─── LOAN APPLY — STEP 1: Input Type ─────────────────────────────────────────
+
+async fn handle_loan_apply_type(
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let type_str = match input {
+        "1" => "SEEDS",
+        "2" => "FERTILIZER",
+        "3" => "EQUIPMENT",
+        "4" => "CASH",
+        "5" => "STORAGE",
+        "0" => {
+            session.current_menu = "LOAN".to_string();
+            return Ok(MenuResponse::Continue(loan_menu_text()));
+        }
+        _ => return Ok(MenuResponse::Continue(format!("Invalid option.\n{}", loan_type_menu_text()))),
+    };
+    if let Some(ref mut pl) = session.pending_loan {
+        pl.input_type = Some(type_str.to_string());
+        pl.step = 2;
+    }
+    session.current_menu = "LOAN_APPLY_AMOUNT".to_string();
+    Ok(MenuResponse::Continue("Enter loan amount (NGN):\nMin: 5,000  Max: 10,000,000\nE.g. 50000"))
+}
+
+// ─── LOAN APPLY — STEP 2: Amount ─────────────────────────────────────────────
+
+async fn handle_loan_apply_amount(
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let amount: f64 = match input.trim().parse::<f64>() {
+        Ok(v) if v >= 5_000.0 && v <= 10_000_000.0 => v,
+        Ok(_) => return Ok(MenuResponse::Continue(
+            "Amount must be between \u{20a6}5,000 and \u{20a6}10,000,000.\nEnter loan amount:"
+        )),
+        Err(_) => return Ok(MenuResponse::Continue(
+            "Invalid amount. Enter numbers only.\nE.g. 50000"
+        )),
+    };
+    if let Some(ref mut pl) = session.pending_loan {
+        pl.amount_ngn = Some(amount);
+        pl.step = 3;
+    }
+    session.current_menu = "LOAN_APPLY_TENOR".to_string();
+    Ok(MenuResponse::Continue(
+        "Select repayment period:\n1. 3 months\n2. 6 months\n3. 12 months\n4. 18 months\n5. 24 months"
+    ))
+}
+
+// ─── LOAN APPLY — STEP 3: Tenor ──────────────────────────────────────────────
+
+async fn handle_loan_apply_tenor(
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let tenor: i32 = match input {
+        "1" => 3,
+        "2" => 6,
+        "3" => 12,
+        "4" => 18,
+        "5" => 24,
+        _ => return Ok(MenuResponse::Continue(
+            "Invalid option.\nSelect period:\n1. 3mo  2. 6mo  3. 12mo  4. 18mo  5. 24mo"
+        )),
+    };
+    if let Some(ref mut pl) = session.pending_loan {
+        pl.tenor_months = Some(tenor);
+        let desc = format!(
+            "USSD loan application for {} — tenor {} months",
+            pl.input_type.as_deref().unwrap_or("CASH"), tenor
+        );
+        pl.description = Some(desc);
+        pl.step = 4;
+    }
+    session.current_menu = "LOAN_APPLY_CONFIRM".to_string();
+    let summary = if let Some(ref pl) = session.pending_loan {
+        format!(
+            "Confirm Loan Application:\nType: {}\nAmount: \u{{20a6}}{:.2}\nTenor: {} months\nRepayment: Harvest Deduction\n\n1. Confirm\n2. Cancel",
+            pl.input_type.as_deref().unwrap_or("-"),
+            pl.amount_ngn.unwrap_or(0.0),
+            pl.tenor_months.unwrap_or(6)
+        )
+    } else {
+        "Session error. Please dial again.".to_string()
+    };
+    Ok(MenuResponse::Continue(summary))
+}
+
+// ─── LOAN APPLY — STEP 4: Confirm ────────────────────────────────────────────
+
+async fn handle_loan_apply_confirm(
+    _state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    match input {
+        "1" => {
+            session.current_menu = "LOAN_APPLY_PIN".to_string();
+            Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN to confirm:"))
+        }
+        "2" => {
+            session.pending_loan = None;
+            session.current_menu = "MAIN".to_string();
+            Ok(MenuResponse::Continue(format!("Loan application cancelled.\n{}", main_menu_text())))
+        }
+        _ => Ok(MenuResponse::Continue("Invalid option.\n1. Confirm\n2. Cancel")),
+    }
+}
+
+// ─── LOAN APPLY — STEP 5: PIN Verify + Submit ────────────────────────────────
+
+async fn handle_loan_apply_pin(
+    state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let user_id = match session.user_id {
+        Some(id) => id,
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+    };
+    match db::verify_pin(&state.db, &session.phone_number.clone(), input).await {
+        Ok(Some(_)) => {
+            let loan = match session.pending_loan.take() {
+                Some(l) => l,
+                None => return Ok(MenuResponse::End("Session error. Please dial again.")),
+            };
+            let input_type = loan.input_type.as_deref().unwrap_or("CASH").to_string();
+            let amount = loan.amount_ngn.unwrap_or(0.0);
+            let tenor = loan.tenor_months.unwrap_or(6);
+            let desc = loan.description.as_deref().unwrap_or("USSD loan application").to_string();
+            match db::apply_loan(&state.db, user_id, &input_type, amount, tenor, &desc).await {
+                Ok(loan_id) => {
+                    let _ = state.kafka.send(
+                        "loan.applied",
+                        &serde_json::json!({
+                            "loan_id": loan_id,
+                            "user_id": user_id,
+                            "input_type": input_type,
+                            "amount_ngn": amount,
+                            "tenor_months": tenor,
+                            "source": "USSD"
+                        }).to_string(),
+                    ).await;
+                    session.current_menu = "MAIN".to_string();
+                    Ok(MenuResponse::End(format!(
+                        "Loan Application Submitted!\nRef: LOAN-{}\nAmount: \u{{20a6}}{:.2}\nType: {}\nStatus: Under Review\n\nYou will be notified via SMS.",
+                        loan_id, amount, input_type
+                    )))
+                }
+                Err(e) => {
+                    tracing::error!("USSD apply_loan failed: {}", e);
+                    Ok(MenuResponse::End(
+                        "Loan application failed. Please try again or visit nexcom.exchange"
+                    ))
+                }
+            }
+        }
+        Ok(None) => {
+            session.auth_attempts += 1;
+            if session.auth_attempts >= 3 {
+                session.pending_loan = None;
+                Ok(MenuResponse::End("Too many incorrect PINs. Application cancelled."))
+            } else {
+                Ok(MenuResponse::Continue(format!(
+                    "Incorrect PIN. {} attempt(s) remaining.\nEnter PIN:",
+                    3 - session.auth_attempts
+                )))
+            }
+        }
+        Err(_) => Ok(MenuResponse::End(
+            "PIN verification failed. Please set your PIN first via Account menu."
         )),
     }
 }
@@ -587,7 +790,15 @@ async fn handle_set_pin_confirm(
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn main_menu_text() -> &'static str {
-    "NEXCOM Exchange\n1. Price Check\n2. My Portfolio\n3. Place Order\n4. Loan Status\n5. Account\n0. Exit"
+    "NEXCOM Exchange\n1. Price Check\n2. My Portfolio\n3. Place Order\n4. Loans\n5. Account\n0. Exit"
+}
+
+fn loan_menu_text() -> &'static str {
+    "Loans:\n1. View Loan Status\n2. Apply for Loan\n0. Back"
+}
+
+fn loan_type_menu_text() -> &'static str {
+    "Select Loan Type:\n1. Seeds\n2. Fertilizer\n3. Equipment\n4. Cash\n5. Storage\n0. Back"
 }
 
 fn price_menu_text() -> &'static str {

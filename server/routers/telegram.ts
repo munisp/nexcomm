@@ -21,6 +21,7 @@ import { getDb } from "../db";
 import {
   telegramContacts,
   telegramMessages,
+  priceAlerts,
 } from "../../drizzle/schema";
 import { eq, and, desc, count, gte, like } from "drizzle-orm";
 import crypto from "crypto";
@@ -312,6 +313,63 @@ export const telegramRouter = router({
         ));
 
       return { success: true };
+    }),
+
+  // ─── Protected: Get My Price Alerts ────────────────────────────────────────────────
+  getAlerts: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+    const alerts = await db
+      .select()
+      .from(priceAlerts)
+      .where(eq(priceAlerts.userId, ctx.user.id))
+      .orderBy(desc(priceAlerts.createdAt))
+      .limit(50);
+    return alerts;
+  }),
+
+  // ─── Protected: Create Price Alert via Telegram ──────────────────────────────────────
+  createAlert: protectedProcedure
+    .input(
+      z.object({
+        symbol: z.string().min(1).max(20),
+        targetPrice: z.number().positive(),
+        condition: z.enum(["ABOVE", "BELOW", "CROSS_ABOVE", "CROSS_BELOW"]).default("ABOVE"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      const [alert] = await db
+        .insert(priceAlerts)
+        .values({
+          userId: ctx.user.id,
+          symbol: input.symbol.toUpperCase(),
+          targetPrice: String(input.targetPrice),
+          condition: input.condition,
+          triggered: false,
+          notified: false,
+          createdAt: new Date(),
+        })
+        .returning();
+      return alert;
+    }),
+
+  // ─── Protected: Delete Price Alert ──────────────────────────────────────────────────────────────
+  deleteAlert: protectedProcedure
+    .input(z.object({ alertId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      const [deleted] = await db
+        .delete(priceAlerts)
+        .where(and(
+          eq(priceAlerts.id, input.alertId),
+          eq(priceAlerts.userId, ctx.user.id), // ensure ownership
+        ))
+        .returning();
+      if (!deleted) throw new TRPCError({ code: "NOT_FOUND", message: "Alert not found" });
+      return { success: true, deletedId: input.alertId };
     }),
 
   // ─── Protected: Unlink Account ────────────────────────────────────────────────

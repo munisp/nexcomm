@@ -273,7 +273,9 @@ func (h *Handler) cmdHelp() string {
 /portfolio — Your positions & P&L
 /trade BUY|SELL SYMBOL QTY — Place order
 /loan — Active loan status
-/alert SYMBOL PRICE — Set price alert
+/alert set SYMBOL PRICE [ABOVE|BELOW] — Set price alert
+/alert list — View active alerts
+/alert delete ID — Delete an alert
 
 *Account management:*
 /verify CODE — Link your NEXCOM account
@@ -317,13 +319,56 @@ func (h *Handler) cmdTrade(args []string) (string, *InlineKeyboard) {
 }
 
 func (h *Handler) cmdAlert(telegramID string, args []string) string {
-	if len(args) < 2 {
-		return "Usage: /alert SYMBOL PRICE\nExample: /alert MAIZE 50000\n\nYou'll be notified when MAIZE reaches ₦50,000/MT"
+	if len(args) == 0 {
+		// Show alert help menu
+		return "*Price Alerts* 🔔\n\nManage your commodity price alerts:\n\n" +
+			"/alert set SYMBOL PRICE [ABOVE|BELOW] — Create alert\n" +
+			"/alert list — View active alerts\n" +
+			"/alert delete ID — Delete an alert\n\n" +
+			"Examples:\n" +
+			"  /alert set GINGER 500 ABOVE\n" +
+			"  /alert set MAIZE 50000 BELOW\n" +
+			"  /alert list\n" +
+			"  /alert delete 42"
 	}
-	symbol := strings.ToUpper(args[0])
-	price := args[1]
-	// Forward to bot-logic to create the alert
-	return h.forwardToBotLogic(telegramID, fmt.Sprintf("CREATE_ALERT %s %s", symbol, price), "telegram")
+
+	subCmd := strings.ToLower(args[0])
+	switch subCmd {
+	case "set":
+		if len(args) < 3 {
+			return "Usage: /alert set SYMBOL PRICE [ABOVE|BELOW]\n" +
+				"Example: /alert set GINGER 500 ABOVE"
+		}
+		symbol := strings.ToUpper(args[1])
+		price := args[2]
+		condition := "ABOVE"
+		if len(args) >= 4 {
+			condition = strings.ToUpper(args[3])
+		}
+		return h.forwardToBotLogic(telegramID,
+			fmt.Sprintf("alert set %s %s %s", symbol, price, condition), "telegram")
+
+	case "list":
+		return h.forwardToBotLogic(telegramID, "alert list", "telegram")
+
+	case "delete", "del", "remove":
+		if len(args) < 2 {
+			return "Usage: /alert delete ID\nExample: /alert delete 42\n\nType /alert list to see your alert IDs."
+		}
+		alertID := args[1]
+		return h.forwardToBotLogic(telegramID,
+			fmt.Sprintf("alert delete %s", alertID), "telegram")
+
+	default:
+		// Legacy: /alert SYMBOL PRICE (backward compat with old format)
+		if len(args) >= 2 {
+			symbol := strings.ToUpper(args[0])
+			price := args[1]
+			return h.forwardToBotLogic(telegramID,
+				fmt.Sprintf("alert set %s %s ABOVE", symbol, price), "telegram")
+		}
+		return "Usage: /alert set SYMBOL PRICE\nExample: /alert set GINGER 500"
+	}
 }
 
 func (h *Handler) cmdVerify(ctx context.Context, telegramID string, args []string) (string, *InlineKeyboard) {

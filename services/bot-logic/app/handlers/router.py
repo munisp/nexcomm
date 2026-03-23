@@ -17,6 +17,8 @@ from app.db.queries import (
     get_loan_summary,
     get_user_by_channel_id,
     set_price_alert,
+    get_price_alerts,
+    delete_price_alert,
 )
 from app.kafka.producer import KafkaProducer
 
@@ -126,9 +128,30 @@ async def dispatch(intent, channel, from_id, user, redis, kafka) -> str:
             return _auth_required_message(channel)
         symbol = entities.get("symbol")
         price = entities.get("price")
+        condition = entities.get("condition", "ABOVE")
         if not symbol or not price:
-            return "Please specify: *alert SYMBOL PRICE*\nExample: *alert MAIZE 50000*"
-        return await handle_alert(user["id"], symbol, price, channel, from_id)
+            return (
+                "Please specify: *alert set SYMBOL PRICE [ABOVE|BELOW]*\n"
+                "Example: *alert set GINGER 500* or */alert set MAIZE 50000 BELOW*"
+            )
+        return await handle_alert_set(user["id"], symbol, price, condition)
+
+    if name == "ALERT_LIST":
+        if not user:
+            return _auth_required_message(channel)
+        return await handle_alert_list(user["id"])
+
+    if name == "ALERT_DELETE":
+        if not user:
+            return _auth_required_message(channel)
+        alert_id = entities.get("alert_id")
+        if not alert_id:
+            return (
+                "Please specify the alert ID to delete.\n"
+                "Example: */alert delete 42*\n\n"
+                "Type */alert list* to see your alert IDs."
+            )
+        return await handle_alert_delete(user["id"], int(alert_id))
 
     if name == "MARKET_NEWS":
         return "📰 *Latest Market Update*\n\nVisit nexcom.exchange/market for live commodity prices, news, and analysis.\n\nOr type *price SYMBOL* for a specific commodity."
@@ -141,6 +164,7 @@ async def dispatch(intent, channel, from_id, user, redis, kafka) -> str:
         "I didn't understand that. Try:\n"
         "• *price MAIZE* — commodity price\n"
         "• *portfolio* — your positions\n"
+        "• *alert set GINGER 500* — price alert\n"
         "• *help* — all commands\n\n"
         "Or visit nexcom.exchange for full access."
     )
@@ -157,6 +181,7 @@ async def handle_greeting(channel: str, from_id: str, user) -> str:
             "• *price MAIZE* — live price\n"
             "• *portfolio* — your positions\n"
             "• *loan* — loan status\n"
+            "• *alert list* — your price alerts\n"
             "• *help* — all commands"
         )
     return (
@@ -178,8 +203,11 @@ def handle_help(channel: str) -> str:
             "*Account required:*\n"
             "/portfolio — Positions & P&L\n"
             "/trade BUY|SELL SYMBOL QTY — Place order\n"
-            "/loan — Loan status\n"
-            "/alert SYMBOL PRICE — Price alert\n\n"
+            "/loan — Loan status\n\n"
+            "*Price Alerts:*\n"
+            "/alert set SYMBOL PRICE [ABOVE|BELOW] — Set alert\n"
+            "/alert list — View your alerts\n"
+            "/alert delete ID — Delete an alert\n\n"
             "*Setup:*\n"
             "/verify — Link your account\n"
             "/unsubscribe — Stop notifications"
@@ -193,8 +221,11 @@ def handle_help(channel: str) -> str:
         "*Account required:*\n"
         "• *portfolio* — Positions & P&L\n"
         "• *buy/sell SYMBOL QTY* — Place order\n"
-        "• *loan* — Loan status\n"
-        "• *alert SYMBOL PRICE* — Price alert\n\n"
+        "• *loan* — Loan status\n\n"
+        "*Price Alerts:*\n"
+        "• *alert set GINGER 500* — Set alert\n"
+        "• *alert list* — View your alerts\n"
+        "• *alert delete 42* — Delete alert #42\n\n"
         "Visit nexcom.exchange to create an account."
     )
 
@@ -287,13 +318,59 @@ async def handle_loan_status(user_id: int) -> str:
     )
 
 
-async def handle_alert(user_id, symbol, price, channel, from_id) -> str:
-    await set_price_alert(user_id, symbol, price, channel, from_id)
+# ─── Price Alert Handlers ─────────────────────────────────────────────────────
+
+async def handle_alert_set(user_id: int, symbol: str, price: float, condition: str = "ABOVE") -> str:
+    """Create a price alert and return confirmation."""
+    condition = condition.upper()
+    if condition not in ("ABOVE", "BELOW", "CROSS_ABOVE", "CROSS_BELOW"):
+        condition = "ABOVE"
+    alert_id = await set_price_alert(user_id, symbol, price, condition)
+    cond_label = {
+        "ABOVE": "rises above",
+        "BELOW": "falls below",
+        "CROSS_ABOVE": "crosses above",
+        "CROSS_BELOW": "crosses below",
+    }.get(condition, condition)
     return (
-        f"🔔 *Price Alert Set*\n\n"
-        f"You'll be notified when *{symbol}* reaches ₦{price:,.0f}/MT\n\n"
-        "To cancel alerts, visit nexcom.exchange/alerts"
+        f"🔔 *Price Alert Set* (ID: {alert_id})\n\n"
+        f"You'll be notified when *{symbol.upper()}* {cond_label} ₦{price:,.0f}/MT\n\n"
+        "Type */alert list* to see all your alerts\n"
+        f"Type */alert delete {alert_id}* to remove this alert"
     )
+
+
+async def handle_alert_list(user_id: int) -> str:
+    """List all active price alerts for a user."""
+    alerts = await get_price_alerts(user_id)
+    if not alerts:
+        return (
+            "🔕 *No Active Alerts*\n\n"
+            "You have no price alerts set.\n\n"
+            "To set one: */alert set GINGER 500*"
+        )
+    cond_label = {
+        "ABOVE": "↑ above",
+        "BELOW": "↓ below",
+        "CROSS_ABOVE": "↑ cross",
+        "CROSS_BELOW": "↓ cross",
+    }
+    lines = ["🔔 *Your Price Alerts*\n"]
+    for a in alerts:
+        label = cond_label.get(a["condition"], a["condition"])
+        lines.append(
+            f"• [{a['id']}] *{a['symbol']}* {label} ₦{a['target_price']:,.0f} — {a['created_at']}"
+        )
+    lines.append("\nType */alert delete ID* to remove an alert.")
+    return "\n".join(lines)
+
+
+async def handle_alert_delete(user_id: int, alert_id: int) -> str:
+    """Delete a price alert by ID."""
+    deleted = await delete_price_alert(user_id, alert_id)
+    if deleted:
+        return f"✅ Alert #{alert_id} deleted."
+    return f"❌ Alert #{alert_id} not found or does not belong to your account."
 
 
 async def handle_flow(channel, from_id, text, conv_state, user, redis, kafka) -> str:

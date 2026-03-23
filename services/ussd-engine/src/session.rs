@@ -9,6 +9,7 @@
  *   - menu_path: breadcrumb of inputs (e.g. "1>2>500")
  *   - user_id: resolved after PIN authentication
  *   - pending_order: partial order being built
+ *   - pending_loan: partial loan application being built
  *   - auth_attempts: failed PIN attempts in this session
  */
 
@@ -32,6 +33,8 @@ pub struct UssdSessionState {
     pub pending_order: Option<PendingOrder>,
     /// Partial PIN-set flow
     pub pending_pin: Option<PendingPin>,
+    /// Partial loan application flow
+    pub pending_loan: Option<PendingLoan>,
     /// Total interactions in this session
     pub interactions: u32,
 }
@@ -49,6 +52,21 @@ pub struct PendingPin {
     pub step: u8,   // 1 = enter new PIN, 2 = confirm new PIN
 }
 
+/// Partial loan application being built across multiple USSD inputs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingLoan {
+    /// Loan input type: 1=SEEDS 2=FERTILIZER 3=EQUIPMENT 4=CASH 5=STORAGE
+    pub input_type: Option<String>,
+    /// Requested amount in NGN
+    pub amount_ngn: Option<f64>,
+    /// Repayment tenor in months (default 6)
+    pub tenor_months: Option<i32>,
+    /// Free-text purpose / description (auto-generated from input_type if blank)
+    pub description: Option<String>,
+    /// Step: 1=type, 2=amount, 3=tenor, 4=confirm, 5=pin_verify
+    pub step: u8,
+}
+
 impl UssdSessionState {
     pub fn new(session_id: &str, phone_number: &str) -> Self {
         Self {
@@ -60,6 +78,7 @@ impl UssdSessionState {
             auth_attempts: 0,
             pending_order: None,
             pending_pin: None,
+            pending_loan: None,
             interactions: 0,
         }
     }

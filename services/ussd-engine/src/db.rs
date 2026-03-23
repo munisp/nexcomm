@@ -261,3 +261,60 @@ pub async fn save_session(
     .await?;
     Ok(())
 }
+
+// ─── Loan Application ─────────────────────────────────────────────────────────
+
+/// Apply for an input financing loan via USSD.
+/// Inserts into input_financing_loans and creates a notification.
+/// Returns the new loan ID on success.
+pub async fn apply_loan(
+    db: &DbPool,
+    user_id: i32,
+    input_type: &str,
+    amount_ngn: f64,
+    tenor_months: i32,
+    description: &str,
+) -> Result<i64> {
+    // Resolve farmer_id: use farmer_profiles.id if exists, else fall back to user_id
+    let farmer_row = sqlx::query(
+        "SELECT id FROM farmer_profiles WHERE user_id = $1 LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+    let farmer_id: i32 = farmer_row
+        .map(|r| r.get::<i32, _>("id"))
+        .unwrap_or(user_id);
+
+    let row = sqlx::query(
+        r#"INSERT INTO input_financing_loans
+           (farmer_id, input_type, input_description, requested_value_ngn,
+            tenor_months, repayment_method, status, created_at, updated_at)
+           VALUES ($1, $2::input_type, $3, $4, $5, 'HARVEST_DEDUCTION', 'APPLIED', NOW(), NOW())
+           RETURNING id"#,
+    )
+    .bind(farmer_id)
+    .bind(input_type)
+    .bind(description)
+    .bind(amount_ngn)
+    .bind(tenor_months)
+    .fetch_one(db)
+    .await?;
+
+    let loan_id: i64 = row.get("id");
+
+    // Insert a system notification for the user
+    let _ = sqlx::query(
+        r#"INSERT INTO notifications (user_id, type, title, message, read, created_at)
+           VALUES ($1, 'SYSTEM', 'Loan Application Received', $2, false, NOW())"#,
+    )
+    .bind(user_id)
+    .bind(format!(
+        "Your {} loan application for ₦{:.2} (ID: {}) has been received and is under review.",
+        input_type, amount_ngn, loan_id
+    ))
+    .execute(db)
+    .await;
+
+    Ok(loan_id)
+}

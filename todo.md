@@ -193,3 +193,17 @@
 - [x] ChannelDashboard.tsx: admin page with live stats, session/contact tables, send-message modals for all 3 channels; routed at /channel-dashboard
 - [x] DashboardLayout: Channel Dashboard nav item added (admin-only, Phone icon)
 - [x] Tests: 782 passing (7 test files, 0 failures) — 17 new channel router tests in channels.test.ts
+
+## Round 11 — Channel Secrets + USSD Loan Flow + Telegram Alerts
+- [ ] Configure production secrets: AFRICASTALKING_API_KEY, WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, TELEGRAM_BOT_TOKEN, WHATSAPP_VERIFY_TOKEN, CHANNEL_GATEWAY_URL
+- [ ] Extend Rust USSD engine: loan-apply flow (LOAN_AMOUNT → LOAN_PURPOSE → LOAN_CONFIRM → PIN verify → applyLoan HTTP call)
+- [ ] Telegram alert commands: /alert set <commodity> <price> <above|below>, /alert list, /alert delete <id> — wired to existing createAlert/listAlerts/deleteAlert tRPC procedures via bot-logic service
+- [ ] Tests for USSD loan flow and Telegram alert commands
+- [ ] Checkpoint and archive update
+
+## Round 11 — Channel Secrets + USSD Loan Flow + Telegram Alerts
+- [ ] Configure production secrets: AFRICASTALKING_API_KEY, WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, TELEGRAM_BOT_TOKEN, WHATSAPP_VERIFY_TOKEN, CHANNEL_GATEWAY_URL
+- [ ] Extend Rust USSD engine: loan-apply flow (LOAN_AMOUNT -> LOAN_PURPOSE -> LOAN_CONFIRM -> PIN verify -> applyLoan HTTP call)
+- [ ] Telegram alert commands: /alert set <commodity> <price> <above|below>, /alert list, /alert delete <id> wired to createAlert/listAlerts/deleteAlert
+- [ ] Tests for USSD loan flow and Telegram alert commands
+- [ ] Checkpoint and archive update
