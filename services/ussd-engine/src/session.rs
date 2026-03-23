@@ -41,6 +41,8 @@ pub struct UssdSessionState {
     pub interactions: u32,
     /// Partial price alert being set from the price check menu
     pub pending_price_alert: Option<PendingPriceAlert>,
+    /// Alert id pending deletion confirmation in the My Alerts menu
+    pub pending_delete_alert_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,6 +115,7 @@ impl UssdSessionState {
             pending_loan: None,
             pending_repayment: None,
             pending_price_alert: None,
+            pending_delete_alert_id: None,
             interactions: 0,
         }
     }

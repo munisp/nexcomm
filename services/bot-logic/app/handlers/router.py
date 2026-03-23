@@ -19,6 +19,8 @@ from app.db.queries import (
     set_price_alert,
     get_price_alerts,
     delete_price_alert,
+    get_telegram_broadcast_status,
+    set_telegram_broadcast,
 )
 from app.kafka.producer import KafkaProducer
 
@@ -159,7 +161,41 @@ async def dispatch(intent, channel, from_id, user, redis, kafka) -> str:
     if name == "LOAN_APPLY":
         if not user:
             return _auth_required_message(channel)
-        return "To apply for a loan, visit nexcom.exchange/banking or contact your nearest NEXCOM agent.\n\nYour farmer profile will be used to pre-qualify you."
+        if channel == "telegram":
+            return await handle_loan_apply_telegram(user["id"], from_id, redis)
+        return (
+            "🏦 *Loan Application*\n\n"
+            "Select an amount:\n"
+            "1️⃣  ₦50,000\n"
+            "2️⃣  ₦100,000\n"
+            "3️⃣  ₦250,000\n"
+            "4️⃣  Custom amount\n\n"
+            "Reply with the number or type the amount (e.g. *loan 75000*)."
+        )
+
+    if name == "SUBSCRIBE_BROADCASTS":
+        if channel != "telegram":
+            return "Market broadcasts are only available on Telegram. Join us at t.me/nexcom_exchange"
+        updated = await set_telegram_broadcast(from_id, True)
+        if updated:
+            return (
+                "✅ *Market Broadcasts Enabled*\n\n"
+                "You'll now receive daily market open (8:00 AM) and close (4:00 PM) summaries, Mon–Fri.\n\n"
+                "Type /unsubscribe to stop receiving broadcasts."
+            )
+        return "⚠️ Could not update your preferences. Please link your account first with /verify."
+
+    if name == "UNSUBSCRIBE_BROADCASTS":
+        if channel != "telegram":
+            return "Market broadcasts are only available on Telegram."
+        updated = await set_telegram_broadcast(from_id, False)
+        if updated:
+            return (
+                "🔕 *Market Broadcasts Disabled*\n\n"
+                "You'll no longer receive daily market summaries.\n\n"
+                "Type /subscribe to re-enable at any time."
+            )
+        return "⚠️ Could not update your preferences. Please link your account first with /verify."
 
     if name == "ALERT_SET":
         if not user:
@@ -193,6 +229,17 @@ async def dispatch(intent, channel, from_id, user, redis, kafka) -> str:
 
     if name == "MARKET_NEWS":
         return "📰 *Latest Market Update*\n\nVisit nexcom.exchange/market for live commodity prices, news, and analysis.\n\nOr type *price SYMBOL* for a specific commodity."
+
+    if name == "BROADCAST_STATUS":
+        if channel != "telegram":
+            return "Market broadcasts are only available on Telegram."
+        enabled = await get_telegram_broadcast_status(from_id)
+        status = "enabled ✅" if enabled else "disabled 🔕"
+        return (
+            f"📊 *Market Broadcast Status*\n\n"
+            f"Daily summaries are currently *{status}*.\n\n"
+            f"{'Type /unsubscribe to stop.' if enabled else 'Type /subscribe to enable.'}"
+        )
 
     if name == "ACCOUNT_LINK":
         return _account_link_message(channel)
@@ -468,3 +515,38 @@ def _account_link_message(channel: str) -> str:
     if channel == "telegram":
         return "type /verify to link your account."
     return "visit nexcom.exchange/settings/whatsapp to link your account."
+
+
+# ─── Telegram Loan Apply Inline Keyboard ─────────────────────────────────────
+# This function stores loan state in Redis and returns a special marker string
+# that the Telegram webhook handler (in channel-gateway) converts into an
+# inline keyboard message. The format is:
+#   LOAN_KEYBOARD:<user_id>:<redis_state_key>
+# The Go channel-gateway detects this prefix and sends the Telegram Bot API
+# sendMessage with reply_markup instead of plain text.
+
+_LOAN_AMOUNTS = [50_000, 100_000, 250_000, 500_000]
+_LOAN_TENORS = [3, 6, 12]  # months
+
+
+async def handle_loan_apply_telegram(user_id: int, from_id: str, redis) -> str:
+    """
+    Store loan application state and return a marker for the Telegram gateway
+    to convert into an inline keyboard.
+
+    Keyboard layout (2 columns):
+      [₦50,000]   [₦100,000]
+      [₦250,000]  [₦500,000]
+      [Custom amount]
+    """
+    state_key = f"bot:telegram:{from_id}:state"
+    await redis.hset(state_key, mapping={
+        "flow": "loan_apply",
+        "step": "amount",
+        "user_id": str(user_id),
+    })
+    await redis.expire(state_key, 600)  # 10 min TTL
+
+    # Return a special marker that the Go gateway converts to an inline keyboard.
+    # Format: LOAN_KEYBOARD:<user_id>
+    return f"LOAN_KEYBOARD:{user_id}"

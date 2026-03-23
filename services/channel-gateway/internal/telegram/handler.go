@@ -153,6 +153,11 @@ func (h *Handler) processMessage(msg *TgMessage) {
 		reply = h.forwardToBotLogic(telegramID, text, "telegram")
 	}
 
+	// Detect LOAN_KEYBOARD marker from bot-logic and convert to inline keyboard
+	if strings.HasPrefix(reply, "LOAN_KEYBOARD:") {
+		reply, keyboard = h.buildLoanKeyboard(reply)
+	}
+
 	if reply != "" {
 		sentMsgID := h.sendMessage(chatID, reply, keyboard)
 		h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", reply)
@@ -243,7 +248,7 @@ func (h *Handler) processCallbackQuery(cb *CallbackQuery) {
 		case "portfolio":
 			reply = h.forwardToBotLogic(telegramID, "/portfolio", "telegram")
 		case "loan":
-			reply = h.forwardToBotLogic(telegramID, "/loan", "telegram")
+			reply, keyboard = h.cmdLoan(telegramID)
 		case "alert":
 			reply = "*Price Alerts* 🔔\n\n/alert set SYMBOL PRICE [ABOVE|BELOW]\n/alert list\n/alert delete ID"
 		case "verify":
@@ -253,6 +258,45 @@ func (h *Handler) processCallbackQuery(cb *CallbackQuery) {
 		}
 		if reply != "" {
 			sentMsgID := h.sendMessage(chatID, reply, keyboard)
+			h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", reply)
+		}
+		return
+	}
+
+	// ─── Loan callbacks ──────────────────────────────────────────────────────
+	if strings.HasPrefix(cb.Data, "loan:") {
+		parts := strings.SplitN(cb.Data, ":", 3)
+		action := parts[1]
+		switch action {
+		case "apply":
+			amount := ""
+			if len(parts) == 3 {
+				amount = parts[2]
+			}
+			var reply string
+			if amount == "custom" {
+				reply = "Please type the loan amount you need (in ₦):\nExample: 175000"
+			} else if amount != "" {
+				applyCmd := fmt.Sprintf("LOAN_APPLY:%s", amount)
+				reply = h.forwardToBotLogic(telegramID, applyCmd, "telegram")
+				if reply == "" {
+					reply = fmt.Sprintf("⏳ Loan application for *₦%s* submitted.\n\nYou will receive a decision within 24 hours.", amount)
+				}
+			}
+			if reply != "" {
+				sentMsgID := h.sendMessage(chatID, reply, nil)
+				h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", reply)
+			}
+		case "status":
+			reply, keyboard := h.cmdLoan(telegramID)
+			sentMsgID := h.sendMessage(chatID, reply, keyboard)
+			h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", reply)
+		case "repay":
+			reply := h.forwardToBotLogic(telegramID, "LOAN_REPAY", "telegram")
+			if reply == "" {
+				reply = "To make a repayment, use:\n/loan repay AMOUNT\n\nExample: /loan repay 5000"
+			}
+			sentMsgID := h.sendMessage(chatID, reply, nil)
 			h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", reply)
 		}
 		return
@@ -285,7 +329,11 @@ func (h *Handler) handleCommand(ctx context.Context, chatID int64, telegramID, t
 	case "/trade":
 		return h.cmdTrade(args)
 	case "/loan":
-		return h.forwardToBotLogic(telegramID, text, "telegram"), nil
+		return h.cmdLoan(telegramID)
+	case "/subscribe":
+		return h.forwardToBotLogic(telegramID, "/subscribe", "telegram"), nil
+	case "/broadcasts":
+		return h.forwardToBotLogic(telegramID, "/broadcasts", "telegram"), nil
 	case "/alert":
 		return h.cmdAlert(telegramID, args), nil
 	case "/verify":
@@ -654,4 +702,61 @@ func (h *Handler) fallbackResponse(text string) string {
 func generateVerificationCode() string {
 	// 6-digit numeric code
 	return fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+}
+
+// ─── Loan Command ─────────────────────────────────────────────────────────────
+
+// cmdLoan shows the loan status and an inline keyboard for quick actions
+// including amount tier selection for new applications.
+func (h *Handler) cmdLoan(telegramID string) (string, *InlineKeyboard) {
+// Forward to bot-logic for the actual loan status text
+statusText := h.forwardToBotLogic(telegramID, "/loan", "telegram")
+if statusText == "" {
+statusText = "*NEXCOM Loan Centre* 🏦\n\nCheck your loan status or apply for a new loan below."
+}
+
+keyboard := &InlineKeyboard{
+InlineKeyboard: [][]InlineButton{
+{
+{Text: "₦50,000", CallbackData: "loan:apply:50000"},
+{Text: "₦100,000", CallbackData: "loan:apply:100000"},
+{Text: "₦250,000", CallbackData: "loan:apply:250000"},
+},
+{
+{Text: "✏️ Custom Amount", CallbackData: "loan:apply:custom"},
+{Text: "📋 View Status", CallbackData: "loan:status"},
+},
+{
+{Text: "💳 Make Repayment", CallbackData: "loan:repay"},
+},
+},
+}
+return statusText, keyboard
+}
+
+// buildLoanKeyboard parses a LOAN_KEYBOARD:<message> marker returned by bot-logic
+// and attaches the standard loan inline keyboard to the message text.
+func (h *Handler) buildLoanKeyboard(reply string) (string, *InlineKeyboard) {
+// Strip the marker prefix; the rest is the message body
+msg := strings.TrimPrefix(reply, "LOAN_KEYBOARD:")
+if msg == "" {
+msg = "*NEXCOM Loan Centre* 🏦\n\nSelect an amount to apply or check your status."
+}
+keyboard := &InlineKeyboard{
+InlineKeyboard: [][]InlineButton{
+{
+{Text: "₦50,000", CallbackData: "loan:apply:50000"},
+{Text: "₦100,000", CallbackData: "loan:apply:100000"},
+{Text: "₦250,000", CallbackData: "loan:apply:250000"},
+},
+{
+{Text: "✏️ Custom Amount", CallbackData: "loan:apply:custom"},
+{Text: "📋 View Status", CallbackData: "loan:status"},
+},
+{
+{Text: "💳 Make Repayment", CallbackData: "loan:repay"},
+},
+},
+}
+return msg, keyboard
 }

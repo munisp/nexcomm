@@ -235,3 +235,10 @@
 - [x] Telegram /subscribe and /unsubscribe commands — marketBroadcasts column added to telegram_contacts schema; subscribeMarketBroadcasts, unsubscribeMarketBroadcasts, getMarketBroadcastStatus procedures added to telegramRouter; DB migration applied (123 tables)
 - [x] USSD price alert shortcut — PendingPriceAlert struct added to session.rs; create_price_alert() DB function added to db.rs; handle_price() updated: after viewing a price, authenticated users see "9. Set Alert"; PRICE_ALERT_STEP1 (choose ABOVE/BELOW) and PRICE_ALERT_STEP2 (enter target price) sub-states added; PRICE_ALERT_STEP1|PRICE_ALERT_STEP2 wired into main dispatch
 - [x] Test suite fixes — totpSecrets cleanup added to Phase 33 Integration beforeEach; missing notification_type enum values added (SECURITY_ALERT, PRICE_ALERT, LOAN, ORDER, DEPOSIT, WITHDRAWAL); farm_profiles centroid/geom columns added as text fallback (PostGIS not installed); 782/782 tests passing
+
+## Round 15 — COMPLETED
+- [x] Harden email suppression — notifyOwner() returns early when EMAIL_ENABLED != "true"; vitest.config.ts sets NODE_ENV=test + EMAIL_ENABLED=false; no emails fire during any test run
+- [x] Telegram /subscribe and /unsubscribe bot commands — /subscribe and /broadcasts wired in channel-gateway handleCommand; subscribe/unsubscribe/getMarketBroadcastStatus handlers added to bot-logic router.py and queries.py
+- [x] USSD My Alerts menu — Account menu option 5 "My Alerts"; ALERTS_LIST + ALERTS_DELETE states in menu.rs; list_price_alerts + delete_price_alert in db.rs; pending_delete_alert_id added to UssdSessionState
+- [x] Telegram inline keyboard for loan application — cmdLoan() returns 3-row keyboard (₦50k/₦100k/₦250k/Custom/Status/Repay); buildLoanKeyboard() handles LOAN_KEYBOARD: marker from bot-logic; loan:* callbacks handled in processCallbackQuery; /loan and cmd:loan both use cmdLoan()
+- [x] 782/782 tests passing, checkpoint saved

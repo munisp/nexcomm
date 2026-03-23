@@ -516,3 +516,61 @@ pub async fn create_price_alert(
     .await?;
     Ok(row.get::<i64, _>("id"))
 }
+
+/// A single price alert row for USSD display.
+#[derive(Debug)]
+pub struct PriceAlertRow {
+    pub id: i64,
+    pub symbol: String,
+    pub condition: String,
+    pub target_price: f64,
+    pub created_at: String,
+}
+
+/// List all active (non-triggered) price alerts for a user.
+/// Returns at most 5 to keep USSD screen manageable.
+pub async fn list_price_alerts(
+    db: &DbPool,
+    user_id: i32,
+) -> Result<Vec<PriceAlertRow>> {
+    let rows = sqlx::query(
+        r#"SELECT id, symbol, condition::text AS condition,
+                  target_price::float8 AS target_price,
+                  TO_CHAR(created_at, 'DD Mon') AS created_at
+           FROM price_alerts
+           WHERE user_id = $1 AND triggered = false
+           ORDER BY created_at DESC
+           LIMIT 5"#,
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| PriceAlertRow {
+            id: r.get::<i64, _>("id"),
+            symbol: r.get("symbol"),
+            condition: r.get("condition"),
+            target_price: r.get::<f64, _>("target_price"),
+            created_at: r.get("created_at"),
+        })
+        .collect())
+}
+
+/// Delete a price alert by id, only if it belongs to the user.
+/// Returns true if a row was deleted.
+pub async fn delete_price_alert(
+    db: &DbPool,
+    user_id: i32,
+    alert_id: i64,
+) -> Result<bool> {
+    let result = sqlx::query(
+        "DELETE FROM price_alerts WHERE id = $1 AND user_id = $2",
+    )
+    .bind(alert_id)
+    .bind(user_id)
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}

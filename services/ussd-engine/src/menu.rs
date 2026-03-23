@@ -102,6 +102,8 @@ async fn route_input(
         "ACCOUNT" => handle_account(state, session, input).await,
         "ACCOUNT_BALANCE" => handle_account_balance(state, session).await,
         "ACCOUNT_MINI_STMT" => handle_account_mini_stmt(state, session).await,
+        "ALERTS_LIST" => handle_alerts_list(state, session, input).await,
+        "ALERTS_DELETE" => handle_alerts_delete(state, session, input).await,
         "SET_PIN" => handle_set_pin(session, input).await,
         "SET_PIN_CONFIRM" => handle_set_pin_confirm(state, session, input).await,
         _ => Ok(MenuResponse::End("Invalid session state. Please dial again.")),
@@ -897,6 +899,10 @@ async fn handle_account(
         "4" => Ok(MenuResponse::End(
             "USSD alerts disabled.\nRe-enable at nexcom.exchange/settings",
         )),
+        "5" => {
+            session.current_menu = "ALERTS_LIST".to_string();
+            handle_alerts_list(state, session, "").await
+        }
         "0" => {
             session.current_menu = "MAIN".to_string();
             Ok(MenuResponse::Continue(main_menu_text()))
@@ -1214,7 +1220,102 @@ fn price_menu_text() -> &'static str {
 }
 
 fn account_menu_text() -> &'static str {
-    "Account:\n1. Balance\n2. Mini-Statement\n3. Change PIN\n4. Disable Alerts\n0. Back"
+    "Account:\n1. Balance\n2. Mini-Statement\n3. Change PIN\n4. Disable Alerts\n5. My Alerts\n0. Back"
+}
+
+// ─── MY ALERTS ───────────────────────────────────────────────────────────────
+
+async fn handle_alerts_list(
+    state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let user_id = match session.user_id {
+        Some(id) => id,
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+    };
+
+    if input == "0" {
+        session.current_menu = "ACCOUNT".to_string();
+        return Ok(MenuResponse::Continue(account_menu_text()));
+    }
+
+    // If user enters a number, treat it as "select alert at position N to delete"
+    if !input.is_empty() {
+        if let Ok(pos) = input.parse::<usize>() {
+            let alerts = db::list_price_alerts(&state.db, user_id).await.unwrap_or_default();
+            if pos >= 1 && pos <= alerts.len() {
+                let alert = &alerts[pos - 1];
+                session.pending_delete_alert_id = Some(alert.id);
+                session.current_menu = "ALERTS_DELETE".to_string();
+                let cond = if alert.condition == "ABOVE" { "above" } else { "below" };
+                return Ok(MenuResponse::Continue(format!(
+                    "Delete alert #{}?\n{} {} \u{{20a6}}{:.0}/MT\n\n1. Confirm\n0. Cancel",
+                    alert.id, alert.symbol, cond, alert.target_price
+                )));
+            }
+        }
+    }
+
+    let alerts = db::list_price_alerts(&state.db, user_id).await.unwrap_or_default();
+    if alerts.is_empty() {
+        session.current_menu = "ACCOUNT".to_string();
+        return Ok(MenuResponse::Continue(
+            "No active price alerts.\nSet one from the Price menu (option 9).\n\n0. Back".to_string(),
+        ));
+    }
+
+    let mut msg = String::from("My Alerts (tap to delete):\n");
+    for (i, a) in alerts.iter().enumerate() {
+        let cond = if a.condition == "ABOVE" { "\u{2191}" } else { "\u{2193}" };
+        msg.push_str(&format!(
+            "{}. {} {} \u{{20a6}}{:.0}\n",
+            i + 1, a.symbol, cond, a.target_price
+        ));
+    }
+    msg.push_str("0. Back");
+    session.current_menu = "ALERTS_LIST".to_string();
+    Ok(MenuResponse::Continue(msg))
+}
+
+async fn handle_alerts_delete(
+    state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let user_id = match session.user_id {
+        Some(id) => id,
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+    };
+    let alert_id = match session.pending_delete_alert_id {
+        Some(id) => id,
+        None => {
+            session.current_menu = "ALERTS_LIST".to_string();
+            return handle_alerts_list(state, session, "").await;
+        }
+    };
+
+    match input {
+        "1" => {
+            let deleted = db::delete_price_alert(&state.db, user_id, alert_id)
+                .await
+                .unwrap_or(false);
+            session.pending_delete_alert_id = None;
+            session.current_menu = "ALERTS_LIST".to_string();
+            let msg = if deleted {
+                format!("Alert #{} deleted.\n\n0. Back", alert_id)
+            } else {
+                format!("Alert #{} not found.\n\n0. Back", alert_id)
+            };
+            Ok(MenuResponse::Continue(msg))
+        }
+        _ => {
+            // Cancel or invalid — go back to list
+            session.pending_delete_alert_id = None;
+            session.current_menu = "ALERTS_LIST".to_string();
+            handle_alerts_list(state, session, "").await
+        }
+    }
 }
 
 /// Extract the latest user input from the accumulated AT text field

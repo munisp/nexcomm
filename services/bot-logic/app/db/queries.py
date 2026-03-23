@@ -139,3 +139,29 @@ async def delete_price_alert(user_id: int, alert_id: int) -> bool:
             alert_id, user_id,
         )
         return result == "DELETE 1"
+
+async def get_telegram_broadcast_status(telegram_id: str) -> bool:
+    """Return True if market_broadcasts is enabled for this Telegram contact."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT market_broadcasts FROM telegram_contacts WHERE telegram_id = $1",
+            telegram_id,
+        )
+        if row is None:
+            return False
+        return bool(row["market_broadcasts"])
+
+
+async def set_telegram_broadcast(telegram_id: str, enabled: bool) -> bool:
+    """Enable or disable market_broadcasts for a Telegram contact.
+    Returns True if the row was found and updated, False if the contact does not exist."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """UPDATE telegram_contacts
+               SET market_broadcasts = $1, updated_at = NOW()
+               WHERE telegram_id = $2""",
+            enabled, telegram_id,
+        )
+        return result == "UPDATE 1"
