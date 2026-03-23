@@ -671,6 +671,44 @@ export default function AdminPlatformHealth() {
         </CardContent>
       </Card>
 
+      {/* Database Health */}
+      <Card className="border-border/50">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Database className="w-4 h-4 text-sky-400" />
+            Database Health
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <div key={i} className="h-10 bg-muted/50 rounded animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div>
+              <MiddlewareRow
+                icon={Database}
+                name="PostgreSQL (Primary)"
+                connected={(data as any)?.database?.postgres?.connected ?? false}
+                description={(data as any)?.database?.postgres?.description ?? "Primary write database (Drizzle ORM, pool max=20)"}
+              />
+              <MiddlewareRow
+                icon={Database}
+                name={
+                  (data as any)?.database?.readReplica?.configured
+                    ? "PostgreSQL (Read Replica)"
+                    : "PostgreSQL (Read Replica — not configured)"
+                }
+                connected={(data as any)?.database?.readReplica?.connected ?? false}
+                description={(data as any)?.database?.readReplica?.description ?? "Set NEXCOM_PG_READ_URL to enable a dedicated read replica"}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Architecture Note */}
       <Card className="border-border/50 bg-muted/20">
         <CardContent className="pt-4">

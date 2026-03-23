@@ -3,7 +3,7 @@ import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import { getGatewayHealth, getMiddlewareStatus } from "../gatewayClient";
 import { checkMatchingEngineHealth, checkSettlementEngineHealth, getExchangeStatus } from "../matchingEngineClient";
-import { pingDb } from "../db";
+import { pingDb, pingReadDb, hasReadReplica } from "../db";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -40,7 +40,7 @@ export const systemRouter = router({
    */
   platformHealth: adminProcedure.query(async () => {
     // Run all health checks in parallel
-    const [meHealthy, settlementHealthy, gatewayHealth, middlewareStatus, exchangeStatus, dbPing] =
+    const [meHealthy, settlementHealthy, gatewayHealth, middlewareStatus, exchangeStatus, dbPing, readDbPing] =
       await Promise.allSettled([
         checkMatchingEngineHealth(),
         checkSettlementEngineHealth(),
@@ -48,6 +48,7 @@ export const systemRouter = router({
         getMiddlewareStatus(),
         getExchangeStatus(),
         pingDb(),
+        pingReadDb(),
       ]);
     const me = meHealthy.status === "fulfilled" ? meHealthy.value : false;
     const settlement = settlementHealthy.status === "fulfilled" ? settlementHealthy.value : false;
@@ -55,9 +56,18 @@ export const systemRouter = router({
     const middleware = middlewareStatus.status === "fulfilled" ? middlewareStatus.value : null;
     const exchange = exchangeStatus.status === "fulfilled" ? exchangeStatus.value : null;
     const dbHealthy = dbPing.status === "fulfilled" ? dbPing.value : false;
+    const readDbHealthy = readDbPing.status === "fulfilled" ? readDbPing.value : false;
+    const replicaConfigured = hasReadReplica();
     return {
       database: {
         postgres: { connected: dbHealthy, description: "Primary PostgreSQL database (Drizzle ORM, pool max=20)" },
+        readReplica: {
+          connected: readDbHealthy,
+          configured: replicaConfigured,
+          description: replicaConfigured
+            ? "PostgreSQL read replica (NEXCOM_PG_READ_URL, pool max=10)"
+            : "No read replica configured — reads use primary (set NEXCOM_PG_READ_URL to enable)",
+        },
       },
       services: {
         matchingEngine: {

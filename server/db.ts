@@ -9,6 +9,8 @@ import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pgClient: ReturnType<typeof postgres> | null = null;
+let _readDb: ReturnType<typeof drizzle> | null = null;
+let _readPgClient: ReturnType<typeof postgres> | null = null;
 
 // Resolve the PostgreSQL connection URL.
 // In development, use the local PostgreSQL instance.
@@ -23,6 +25,22 @@ function resolveDbUrl(): string {
   // Fall back to local PostgreSQL (development sandbox)
   console.log("[Database] Using local PostgreSQL postgresql://127.0.0.1:5432/nexcom");
   return "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom";
+}
+
+/**
+ * Resolve the PostgreSQL read replica URL.
+ * Falls back to the primary DB URL if NEXCOM_PG_READ_URL is not set.
+ *
+ * To enable read replica:
+ *   Set NEXCOM_PG_READ_URL=postgresql://user:pass@read-replica-host:5432/nexcom
+ */
+function resolveReadDbUrl(): string {
+  const readUrl = process.env.NEXCOM_PG_READ_URL ?? "";
+  if (readUrl.startsWith("postgresql://") || readUrl.startsWith("postgres://")) {
+    return readUrl;
+  }
+  // Fall back to primary
+  return resolveDbUrl();
 }
 
 export async function getDb() {
@@ -51,7 +69,47 @@ export async function getDb() {
   return _db;
 }
 
-/** Ping the database — returns true if reachable, false otherwise. */
+/**
+ * Get the read replica database connection (or primary if no replica configured).
+ * Use this for all SELECT queries to reduce load on the primary.
+ *
+ * @example
+ *   const readDb = await getReadDb();
+ *   const rows = await readDb?.select().from(users).where(eq(users.id, id));
+ */
+export async function getReadDb() {
+  if (!_readDb) {
+    try {
+      const readUrl = resolveReadDbUrl();
+      const isPrimary = readUrl === resolveDbUrl();
+      const isLocal = readUrl.includes("localhost") || readUrl.includes("127.0.0.1");
+      _readPgClient = postgres(readUrl, {
+        max: 10,                    // read replicas get a smaller pool
+        idle_timeout: 30,
+        connect_timeout: 10,
+        max_lifetime: 1800,
+        ssl: isLocal ? false : "require",
+        onnotice: () => {},
+        // Read-only hint: prevents accidental writes to the replica
+        connection: { options: "-c default_transaction_read_only=on" },
+      });
+      _readDb = drizzle(_readPgClient);
+      await _readDb.execute(sql`SELECT 1`);
+      if (isPrimary) {
+        console.log("[Database] Read replica not configured — using primary for reads");
+      } else {
+        console.log("[Database] Read replica connection pool established (max=10)");
+      }
+    } catch (error) {
+      console.warn("[Database] Read replica connection failed, falling back to primary:", error);
+      // Fall back to primary on error
+      _readDb = await getDb();
+    }
+  }
+  return _readDb;
+}
+
+/** Ping the primary database — returns true if reachable, false otherwise. */
 export async function pingDb(): Promise<boolean> {
   try {
     const db = await getDb();
@@ -61,6 +119,24 @@ export async function pingDb(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Ping the read replica (or primary if no replica configured). */
+export async function pingReadDb(): Promise<boolean> {
+  try {
+    const db = await getReadDb();
+    if (!db) return false;
+    await db.execute(sql`SELECT 1`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Returns true if NEXCOM_PG_READ_URL is configured (separate replica exists). */
+export function hasReadReplica(): boolean {
+  const readUrl = process.env.NEXCOM_PG_READ_URL ?? "";
+  return readUrl.startsWith("postgresql://") || readUrl.startsWith("postgres://");
 }
 
 // ============================================================

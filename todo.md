@@ -321,3 +321,17 @@
 - [x] PostgreSQL startup validation query (SELECT 1) on first connection
 - [x] pingDb() helper exported for health checks
 - [x] PostgreSQL health added to platformHealth aggregator
+
+## Round 22 — SMTP Secrets + PG Read Replica + Platform Health UI
+- [ ] SMTP/SendGrid secrets wired with NODE_ENV=test suppression
+- [ ] PostgreSQL read replica support (NEXCOM_PG_READ_URL, getReadDb())
+- [ ] Admin Platform Health UI shows PostgreSQL status
+
+## Round 22 — PostgreSQL Read Replica + Admin DB Health + Email Service
+- [x] PostgreSQL read replica support (getReadDb, pingReadDb, hasReadReplica, NEXCOM_PG_READ_URL)
+- [x] Admin Platform Health UI: Database Health card with primary + replica status
+- [x] systemRouter platformHealth: includes database.postgres and database.readReplica
+- [x] SMTP/SendGrid email service registered (NODE_ENV=test suppression confirmed)
+- [x] My Passkeys section added to Account page
+- [x] TigerBeetle auto-provisioning on KYC approval (3 accounts: Trading/Settlement/Margin)
+- [x] Mojaloop settlement callback wired to TigerBeetle ledger transfer
