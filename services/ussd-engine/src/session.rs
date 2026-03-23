@@ -35,6 +35,8 @@ pub struct UssdSessionState {
     pub pending_pin: Option<PendingPin>,
     /// Partial loan application flow
     pub pending_loan: Option<PendingLoan>,
+    /// Partial loan repayment flow
+    pub pending_repayment: Option<PendingRepayment>,
     /// Total interactions in this session
     pub interactions: u32,
 }
@@ -50,6 +52,19 @@ pub struct PendingOrder {
 pub struct PendingPin {
     pub new_pin: Option<String>,
     pub step: u8,   // 1 = enter new PIN, 2 = confirm new PIN
+}
+
+/// Partial loan repayment being built across multiple USSD inputs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingRepayment {
+    /// The loan application ID being repaid
+    pub loan_id: Option<i64>,
+    /// Amount to repay in NGN
+    pub amount_ngn: Option<f64>,
+    /// Mobile money provider: 1=MTN 2=Airtel 3=Glo 4=9Mobile
+    pub provider: Option<String>,
+    /// Step: 1=select_loan, 2=enter_amount, 3=select_provider, 4=confirm, 5=pin_verify
+    pub step: u8,
 }
 
 /// Partial loan application being built across multiple USSD inputs
@@ -79,6 +94,7 @@ impl UssdSessionState {
             pending_order: None,
             pending_pin: None,
             pending_loan: None,
+            pending_repayment: None,
             interactions: 0,
         }
     }

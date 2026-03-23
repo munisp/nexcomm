@@ -180,13 +180,87 @@ func (h *Handler) processCallbackQuery(cb *CallbackQuery) {
 
 	h.log.Infow("Telegram callback", "from", telegramID, "data", cb.Data)
 
-	// Acknowledge the callback
+	// Acknowledge the callback immediately
 	h.answerCallbackQuery(cb.ID, "")
 
-	// Forward to bot-logic for stateful handling
+	contactID := h.getContactID(ctx, telegramID)
+
+	// ─── Order confirmation callbacks ────────────────────────────────────────
+	if cb.Data == "order:cancel" {
+		sentMsgID := h.sendMessage(chatID, "❌ Order cancelled. No position was opened.", nil)
+		h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", "Order cancelled.")
+		return
+	}
+
+	if strings.HasPrefix(cb.Data, "order:confirm:") {
+		// Format: order:confirm:SIDE:SYMBOL:QTY
+		parts := strings.SplitN(cb.Data, ":", 5)
+		if len(parts) == 5 {
+			side, symbol, qty := parts[2], parts[3], parts[4]
+			// Forward to bot-logic to execute the trade
+			executeCmd := fmt.Sprintf("EXECUTE_ORDER:%s %s %s", side, symbol, qty)
+			reply := h.forwardToBotLogic(telegramID, executeCmd, "telegram")
+			if reply == "" {
+				reply = fmt.Sprintf(
+					"⏳ Order submitted: *%s %s MT of %s*\n\nYou will receive a confirmation once matched.",
+					side, qty, symbol,
+				)
+			}
+			sentMsgID := h.sendMessage(chatID, reply, nil)
+			h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", reply)
+			// Emit Kafka event for order submission
+			h.kafka.Emit("nexcom.telegram.order.submitted", map[string]interface{}{
+				"telegram_id": telegramID,
+				"side":        side,
+				"symbol":      symbol,
+				"qty":         qty,
+				"timestamp":   time.Now().UTC().Format(time.RFC3339),
+			})
+		}
+		return
+	}
+
+	// ─── trade:BUY / trade:SELL shortcut callbacks ───────────────────────────
+	if strings.HasPrefix(cb.Data, "trade:") {
+		side := strings.ToUpper(strings.TrimPrefix(cb.Data, "trade:"))
+		reply := fmt.Sprintf(
+			"To place a *%s* order, use:\n/trade %s SYMBOL QUANTITY\n\nExample: /trade %s MAIZE 10",
+			side, side, side,
+		)
+		sentMsgID := h.sendMessage(chatID, reply, nil)
+		h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", reply)
+		return
+	}
+
+	// ─── cmd:* shortcut callbacks (from /start quick-action buttons) ─────────
+	if strings.HasPrefix(cb.Data, "cmd:") {
+		cmd := strings.TrimPrefix(cb.Data, "cmd:")
+		var reply string
+		var keyboard *InlineKeyboard
+		switch cmd {
+		case "price":
+			reply = "Usage: /price SYMBOL\nExample: /price MAIZE\n\nAvailable: MAIZE, SORGHUM, SOYBEANS, SESAME, COCOA, COTTON, GINGER, GROUNDNUT"
+		case "portfolio":
+			reply = h.forwardToBotLogic(telegramID, "/portfolio", "telegram")
+		case "loan":
+			reply = h.forwardToBotLogic(telegramID, "/loan", "telegram")
+		case "alert":
+			reply = "*Price Alerts* 🔔\n\n/alert set SYMBOL PRICE [ABOVE|BELOW]\n/alert list\n/alert delete ID"
+		case "verify":
+			reply = "Use /verify YOUR_CODE to link your NEXCOM account.\n\nGet your code at nexcom.exchange → Settings → Telegram"
+		default:
+			reply = h.forwardToBotLogic(telegramID, "CALLBACK:"+cb.Data, "telegram")
+		}
+		if reply != "" {
+			sentMsgID := h.sendMessage(chatID, reply, keyboard)
+			h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", reply)
+		}
+		return
+	}
+
+	// ─── Fallback: forward to bot-logic ──────────────────────────────────────
 	reply := h.forwardToBotLogic(telegramID, "CALLBACK:"+cb.Data, "telegram")
 	if reply != "" {
-		contactID := h.getContactID(ctx, telegramID)
 		sentMsgID := h.sendMessage(chatID, reply, nil)
 		h.persistMessage(ctx, contactID, sentMsgID, "OUTBOUND", "", reply)
 	}

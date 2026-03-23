@@ -94,6 +94,11 @@ async fn route_input(
         "LOAN_APPLY_TENOR" => handle_loan_apply_tenor(session, input).await,
         "LOAN_APPLY_CONFIRM" => handle_loan_apply_confirm(state, session, input).await,
         "LOAN_APPLY_PIN" => handle_loan_apply_pin(state, session, input).await,
+        "LOAN_REPAY_SELECT" => handle_loan_repay_select(state, session, input).await,
+        "LOAN_REPAY_AMOUNT" => handle_loan_repay_amount(session, input).await,
+        "LOAN_REPAY_PROVIDER" => handle_loan_repay_provider(session, input).await,
+        "LOAN_REPAY_CONFIRM" => handle_loan_repay_confirm(session, input).await,
+        "LOAN_REPAY_PIN" => handle_loan_repay_pin(state, session, input).await,
         "ACCOUNT" => handle_account(session, input).await,
         "SET_PIN" => handle_set_pin(session, input).await,
         "SET_PIN_CONFIRM" => handle_set_pin_confirm(state, session, input).await,
@@ -515,6 +520,41 @@ async fn handle_loan(
             session.current_menu = "LOAN_APPLY_TYPE".to_string();
             Ok(MenuResponse::Continue(loan_type_menu_text()))
         }
+        "3" => {
+            // Start loan repayment flow
+            session.pending_repayment = Some(crate::session::PendingRepayment {
+                loan_id: None,
+                amount_ngn: None,
+                provider: None,
+                step: 1,
+            });
+            session.current_menu = "LOAN_REPAY_SELECT".to_string();
+            // Fetch active loans
+            let user_id = session.user_id.unwrap_or(0);
+            match db::get_active_loans(&state.db, user_id).await {
+                Ok(loans) if !loans.is_empty() => {
+                    let mut menu = "Select Loan to Repay:\n".to_string();
+                    for (i, loan) in loans.iter().enumerate() {
+                        menu.push_str(&format!(
+                            "{}. {} \u{{20a6}}{:.0} ({})\n",
+                            i + 1,
+                            loan.bank_name,
+                            loan.outstanding,
+                            loan.status
+                        ));
+                    }
+                    menu.push_str("0. Back");
+                    Ok(MenuResponse::Continue(menu))
+                }
+                _ => {
+                    session.pending_repayment = None;
+                    session.current_menu = "LOAN".to_string();
+                    Ok(MenuResponse::Continue(
+                        "No active loans found.\n\n1. View Status\n2. Apply\n0. Back"
+                    ))
+                }
+            }
+        }
         "0" => {
             session.current_menu = "MAIN".to_string();
             Ok(MenuResponse::Continue(main_menu_text()))
@@ -787,6 +827,189 @@ async fn handle_set_pin_confirm(
     }
 }
 
+// ─── LOAN REPAYMENT — STEP 1: Select Loan ────────────────────────────────────
+
+async fn handle_loan_repay_select(
+    state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    if input == "0" {
+        session.pending_repayment = None;
+        session.current_menu = "LOAN".to_string();
+        return Ok(MenuResponse::Continue(loan_menu_text()));
+    }
+    let user_id = session.user_id.unwrap_or(0);
+    let loans = db::get_active_loans(&state.db, user_id).await.unwrap_or_default();
+    let idx: usize = match input.parse::<usize>() {
+        Ok(n) if n >= 1 && n <= loans.len() => n - 1,
+        _ => {
+            return Ok(MenuResponse::Continue(
+                "Invalid selection. Enter the loan number or 0 to go back."
+            ));
+        }
+    };
+    let loan = &loans[idx];
+    if let Some(ref mut pr) = session.pending_repayment {
+        pr.loan_id = Some(loan.id);
+        pr.step = 2;
+    }
+    session.current_menu = "LOAN_REPAY_AMOUNT".to_string();
+    Ok(MenuResponse::Continue(format!(
+        "Loan #{}: {}\nOutstanding: \u{{20a6}}{:.2}\nDue: {}\n\nEnter repayment amount (NGN):",
+        loan.id, loan.bank_name, loan.outstanding, loan.due_date
+    )))
+}
+
+// ─── LOAN REPAYMENT — STEP 2: Enter Amount ───────────────────────────────────
+
+async fn handle_loan_repay_amount(
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let amount: f64 = match input.trim().parse::<f64>() {
+        Ok(v) if v >= 100.0 => v,
+        Ok(_) => return Ok(MenuResponse::Continue(
+            "Minimum repayment is \u{20a6}100.\nEnter amount:"
+        )),
+        Err(_) => return Ok(MenuResponse::Continue(
+            "Invalid amount. Enter numbers only.\nE.g. 5000"
+        )),
+    };
+    if let Some(ref mut pr) = session.pending_repayment {
+        pr.amount_ngn = Some(amount);
+        pr.step = 3;
+    }
+    session.current_menu = "LOAN_REPAY_PROVIDER".to_string();
+    Ok(MenuResponse::Continue(
+        "Select Mobile Money Provider:\n1. MTN MoMo\n2. Airtel Money\n3. Glo Pay\n4. 9Mobile\n0. Cancel"
+    ))
+}
+
+// ─── LOAN REPAYMENT — STEP 3: Select Provider ────────────────────────────────
+
+async fn handle_loan_repay_provider(
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    if input == "0" {
+        session.pending_repayment = None;
+        session.current_menu = "MAIN".to_string();
+        return Ok(MenuResponse::Continue(format!("Repayment cancelled.\n{}", main_menu_text())));
+    }
+    let provider = match input {
+        "1" => "MTN MoMo",
+        "2" => "Airtel Money",
+        "3" => "Glo Pay",
+        "4" => "9Mobile",
+        _ => return Ok(MenuResponse::Continue(
+            "Invalid option.\n1. MTN  2. Airtel  3. Glo  4. 9Mobile  0. Cancel"
+        )),
+    };
+    if let Some(ref mut pr) = session.pending_repayment {
+        pr.provider = Some(provider.to_string());
+        pr.step = 4;
+    }
+    session.current_menu = "LOAN_REPAY_CONFIRM".to_string();
+    let summary = if let Some(ref pr) = session.pending_repayment {
+        format!(
+            "Confirm Repayment:\nLoan ID: #{}\nAmount: \u{{20a6}}{:.2}\nProvider: {}\n\n1. Confirm & Enter PIN\n2. Cancel",
+            pr.loan_id.unwrap_or(0),
+            pr.amount_ngn.unwrap_or(0.0),
+            pr.provider.as_deref().unwrap_or("-")
+        )
+    } else {
+        "Session error. Please dial again.".to_string()
+    };
+    Ok(MenuResponse::Continue(summary))
+}
+
+// ─── LOAN REPAYMENT — STEP 4: Confirm ────────────────────────────────────────
+
+async fn handle_loan_repay_confirm(
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    match input {
+        "1" => {
+            session.current_menu = "LOAN_REPAY_PIN".to_string();
+            Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN to authorise payment:"))
+        }
+        "2" => {
+            session.pending_repayment = None;
+            session.current_menu = "MAIN".to_string();
+            Ok(MenuResponse::Continue(format!("Repayment cancelled.\n{}", main_menu_text())))
+        }
+        _ => Ok(MenuResponse::Continue("Invalid option.\n1. Confirm & Enter PIN\n2. Cancel")),
+    }
+}
+
+// ─── LOAN REPAYMENT — STEP 5: PIN Verify + Submit ────────────────────────────
+
+async fn handle_loan_repay_pin(
+    state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let user_id = match session.user_id {
+        Some(id) => id,
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+    };
+    match db::verify_pin(&state.db, &session.phone_number.clone(), input).await {
+        Ok(Some(_)) => {
+            let pr = match session.pending_repayment.take() {
+                Some(p) => p,
+                None => return Ok(MenuResponse::End("Session error. Please dial again.")),
+            };
+            let loan_id = pr.loan_id.unwrap_or(0);
+            let amount = pr.amount_ngn.unwrap_or(0.0);
+            let provider = pr.provider.as_deref().unwrap_or("MTN MoMo");
+            let phone = session.phone_number.clone();
+            match db::make_repayment(&state.db, user_id, loan_id, amount, provider, &phone).await {
+                Ok(reference) => {
+                    let _ = state.kafka.send(
+                        "loan.repayment",
+                        &serde_json::json!({
+                            "loan_id": loan_id,
+                            "user_id": user_id,
+                            "amount_ngn": amount,
+                            "provider": provider,
+                            "reference": reference,
+                            "source": "USSD"
+                        }).to_string(),
+                    ).await;
+                    session.current_menu = "MAIN".to_string();
+                    Ok(MenuResponse::End(format!(
+                        "Repayment Initiated!\nRef: {}\nAmount: \u{{20a6}}{:.2}\nProvider: {}\n\nYou will receive an SMS confirmation shortly.",
+                        reference, amount, provider
+                    )))
+                }
+                Err(e) => {
+                    tracing::error!("USSD make_repayment failed: {}", e);
+                    Ok(MenuResponse::End(
+                        "Repayment failed. Please try again or visit nexcom.exchange"
+                    ))
+                }
+            }
+        }
+        Ok(None) => {
+            session.auth_attempts += 1;
+            if session.auth_attempts >= 3 {
+                session.pending_repayment = None;
+                Ok(MenuResponse::End("Too many incorrect PINs. Repayment cancelled."))
+            } else {
+                Ok(MenuResponse::Continue(format!(
+                    "Incorrect PIN. {} attempt(s) remaining.\nEnter PIN:",
+                    3 - session.auth_attempts
+                )))
+            }
+        }
+        Err(_) => Ok(MenuResponse::End(
+            "PIN verification failed. Please set your PIN first via Account menu."
+        )),
+    }
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn main_menu_text() -> &'static str {
@@ -794,7 +1017,7 @@ fn main_menu_text() -> &'static str {
 }
 
 fn loan_menu_text() -> &'static str {
-    "Loans:\n1. View Loan Status\n2. Apply for Loan\n0. Back"
+    "Loans:\n1. View Loan Status\n2. Apply for Loan\n3. Make Repayment\n0. Back"
 }
 
 fn loan_type_menu_text() -> &'static str {

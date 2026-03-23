@@ -318,3 +318,92 @@ pub async fn apply_loan(
 
     Ok(loan_id)
 }
+
+// ─── Loan Repayment ───────────────────────────────────────────────────────────
+
+/// Represents a single active loan for the repayment menu
+pub struct ActiveLoan {
+    pub id: i64,
+    pub bank_name: String,
+    pub approved_amount: f64,
+    pub outstanding: f64,
+    pub due_date: String,
+    pub status: String,
+}
+
+/// Fetch all active/disbursed/repaying loans for a user (max 5)
+pub async fn get_active_loans(db: &DbPool, user_id: i32) -> Result<Vec<ActiveLoan>> {
+    let rows = sqlx::query(
+        r#"SELECT id,
+                  bank_name,
+                  COALESCE(approved_amount_ngn::float8, requested_amount_ngn::float8) AS approved_amount,
+                  COALESCE(approved_amount_ngn::float8, requested_amount_ngn::float8) AS outstanding,
+                  COALESCE(TO_CHAR(repayment_due_date, 'DD Mon YYYY'), 'N/A') AS due_date,
+                  status
+           FROM bank_financing_applications
+           WHERE user_id = $1
+             AND status IN ('DISBURSED', 'REPAYING', 'APPROVED')
+           ORDER BY created_at DESC
+           LIMIT 5"#,
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| ActiveLoan {
+            id: r.get::<i64, _>("id"),
+            bank_name: r.get("bank_name"),
+            approved_amount: r.get::<f64, _>("approved_amount"),
+            outstanding: r.get::<f64, _>("outstanding"),
+            due_date: r.get("due_date"),
+            status: r.get("status"),
+        })
+        .collect())
+}
+
+/// Record a loan repayment via mobile money and update loan status.
+/// Returns a reference number string.
+pub async fn make_repayment(
+    db: &DbPool,
+    user_id: i32,
+    loan_id: i64,
+    amount_ngn: f64,
+    provider: &str,
+    phone_number: &str,
+) -> Result<String> {
+    // Generate a reference number
+    let reference = format!(
+        "USSD-REP-{}-{}",
+        loan_id,
+        chrono::Utc::now().timestamp_millis()
+    );
+
+    // Insert repayment audit record into notifications
+    sqlx::query(
+        r#"INSERT INTO notifications (user_id, type, title, message, read, created_at)
+           VALUES ($1, 'SYSTEM', 'Loan Repayment Initiated', $2, false, NOW())"#,
+    )
+    .bind(user_id)
+    .bind(format!(
+        "Repayment of \u{20a6}{:.2} for loan #{} via {} initiated. Ref: {}. Phone: {}",
+        amount_ngn, loan_id, provider, reference, phone_number
+    ))
+    .execute(db)
+    .await?;
+
+    // Update loan status to REPAYING if it was DISBURSED
+    sqlx::query(
+        r#"UPDATE bank_financing_applications
+           SET status = CASE WHEN status = 'DISBURSED' THEN 'REPAYING'::bank_financing_status ELSE status END,
+               updated_at = NOW()
+           WHERE id = $1 AND user_id = $2"#,
+    )
+    .bind(loan_id)
+    .bind(user_id)
+    .execute(db)
+    .await?;
+
+    Ok(reference)
+}

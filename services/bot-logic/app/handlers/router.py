@@ -52,8 +52,46 @@ async def process_message(
     3. Dispatch to handler
     4. Return reply + metadata
     """
+    # ─── EXECUTE_ORDER: Telegram inline keyboard confirmed order ──────────────────────────────────────
+    # Format: "EXECUTE_ORDER:BUY MAIZE 10"
+    if text.startswith("EXECUTE_ORDER:"):
+        order_str = text[len("EXECUTE_ORDER:"):].strip()
+        parts = order_str.split()
+        if len(parts) >= 3:
+            side, symbol, qty_str = parts[0].upper(), parts[1].upper(), parts[2]
+            try:
+                qty = float(qty_str)
+            except ValueError:
+                return {"reply": "Invalid order quantity.", "intent": "EXECUTE_ORDER", "confidence": 1.0}
+            user = await get_user_by_channel_id(channel, from_id)
+            if not user:
+                return {"reply": _auth_required_message(channel), "intent": "EXECUTE_ORDER", "confidence": 1.0}
+            redis = await get_redis()
+            kafka.emit("nexcom.bot.order.placed", {
+                "user_id": user["id"],
+                "side": side,
+                "symbol": symbol,
+                "quantity": qty,
+                "source": channel.upper(),
+                "channel_id": from_id,
+            })
+            price_data = await get_live_price(symbol)
+            price_str = f"\u20a6{price_data['price']:,.0f}/MT" if price_data else "market price"
+            est_value = f"\u20a6{price_data['price'] * qty:,.0f}" if price_data else "N/A"
+            reply = (
+                f"\u2705 *Order Placed*\n\n"
+                f"{'\ud83d\udcc8 BUY' if side == 'BUY' else '\ud83d\udcc9 SELL'} {qty:.0f} MT *{symbol}*\n"
+                f"Price: {price_str}\n"
+                f"Est. Value: {est_value}\n"
+                f"Status: PENDING\n\n"
+                "Your order is being processed. You'll receive a confirmation once matched.\n"
+                "Track at nexcom.exchange/orders"
+            )
+            return {"reply": reply, "intent": "EXECUTE_ORDER", "confidence": 1.0}
+        return {"reply": "Invalid order format.", "intent": "EXECUTE_ORDER", "confidence": 1.0}
+
     intent = classify(text)
-    logger.info(f"[{channel}] {from_id}: '{text}' → {intent.name} ({intent.confidence:.2f})")
+    logger.info(f"[{channel}] {from_id}: '{text}' \u2192 {intent.name} ({intent.confidence:.2f})")
 
     # Get user from DB (may be None for unverified users)
     user = await get_user_by_channel_id(channel, from_id)

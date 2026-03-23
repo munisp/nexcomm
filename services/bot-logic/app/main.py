@@ -21,6 +21,7 @@ Endpoints:
   GET  /metrics          — Prometheus metrics
 """
 
+import asyncio
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -45,14 +46,23 @@ logger = logging.getLogger("nexcom.bot-logic")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
+    from app.alerts.broadcaster import run_alert_broadcaster
     logger.info("Starting NEXCOM Bot Logic Service...")
     await init_db()
     app.state.kafka = KafkaProducer(
         brokers=os.getenv("KAFKA_BROKERS", "localhost:9092")
     )
-    logger.info("Bot Logic Service ready on :8040")
+    # Start WhatsApp price alert broadcaster as a background task
+    broadcaster_task = asyncio.create_task(run_alert_broadcaster())
+    app.state.broadcaster_task = broadcaster_task
+    logger.info("Bot Logic Service ready on :8040 (alert broadcaster running)")
     yield
     logger.info("Shutting down Bot Logic Service...")
+    broadcaster_task.cancel()
+    try:
+        await broadcaster_task
+    except asyncio.CancelledError:
+        pass
     await close_db()
     app.state.kafka.close()
 
