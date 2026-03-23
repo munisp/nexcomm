@@ -16,7 +16,7 @@ const logger = createLogger({
   transports: [new transports.Console()],
 });
 
-type Channel = 'email' | 'sms' | 'push' | 'websocket' | 'ussd';
+type Channel = 'email' | 'sms' | 'push' | 'websocket' | 'ussd' | 'whatsapp' | 'telegram';
 type NotificationType =
   | 'trade_executed' | 'order_filled' | 'margin_call' | 'price_alert'
   | 'kyc_update' | 'settlement_complete' | 'security_alert' | 'system_announcement'
@@ -171,6 +171,36 @@ function buildEmailHTML(title: string, body: string, type: NotificationType): st
 </html>`;
 }
 
+// ─── WhatsApp via Go Channel-Gateway ────────────────────────────────────────
+async function sendWhatsAppMessage(phone: string, message: string): Promise<boolean> {
+  const gatewayUrl = process.env.CHANNEL_GATEWAY_URL ?? 'http://localhost:8090';
+  try {
+    const resp = await fetch(`${gatewayUrl}/internal/whatsapp/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Key': process.env.INTERNAL_API_KEY ?? '' },
+      body: JSON.stringify({ phone, message }),
+    });
+    if (!resp.ok) { logger.error(`[WhatsApp] Gateway error: ${resp.status}`); return false; }
+    logger.info(`[WhatsApp] Message queued for ${phone}`);
+    return true;
+  } catch (err) { logger.error('[WhatsApp] Gateway unreachable:', err); return false; }
+}
+
+// ─── Telegram via Go Channel-Gateway ─────────────────────────────────────────
+async function sendTelegramMessage(telegramId: string, message: string): Promise<boolean> {
+  const gatewayUrl = process.env.CHANNEL_GATEWAY_URL ?? 'http://localhost:8090';
+  try {
+    const resp = await fetch(`${gatewayUrl}/internal/telegram/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Key': process.env.INTERNAL_API_KEY ?? '' },
+      body: JSON.stringify({ telegramId, message, parseMode: 'Markdown' }),
+    });
+    if (!resp.ok) { logger.error(`[Telegram] Gateway error: ${resp.status}`); return false; }
+    logger.info(`[Telegram] Message queued for ${telegramId}`);
+    return true;
+  } catch (err) { logger.error('[Telegram] Gateway unreachable:', err); return false; }
+}
+
 // ─── Core Dispatch ────────────────────────────────────────────────────────────
 async function dispatchNotification(n: Notification, prefs?: UserPreferences): Promise<void> {
   try {
@@ -204,6 +234,20 @@ async function dispatchNotification(n: Notification, prefs?: UserPreferences): P
         logger.info(`[USSD] USSD notification queued: ${n.id}`);
         ok = true;
         break;
+      case 'whatsapp': {
+        // WhatsApp delivery via Go channel-gateway — inserts QUEUED outbound message into DB
+        const waPhone = prefs?.phone ?? n.metadata['phone'];
+        if (!waPhone) { n.status = 'failed'; n.errorMessage = 'No WhatsApp phone number'; return; }
+        ok = await sendWhatsAppMessage(waPhone, `*${n.title}*\n${n.body}`);
+        break;
+      }
+      case 'telegram': {
+        // Telegram delivery via Go channel-gateway — inserts OUTBOUND message into DB
+        const tgId = n.metadata['telegramId'];
+        if (!tgId) { n.status = 'failed'; n.errorMessage = 'No Telegram ID'; return; }
+        ok = await sendTelegramMessage(tgId, `*${n.title}*\n${n.body}`);
+        break;
+      }
     }
     n.status = ok ? 'sent' : 'failed';
     if (ok) n.sentAt = new Date();

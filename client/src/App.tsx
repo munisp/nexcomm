@@ -143,6 +143,7 @@ const InputFinancing             = lazy(() => import("./pages/InputFinancing"));
 const BankingDashboard           = lazy(() => import("./pages/BankingDashboard"));
 const FieldAgents                = lazy(() => import("./pages/FieldAgents"));
 const CropReports                = lazy(() => import("./pages/CropReports"));
+const ChannelDashboard           = lazy(() => import("./pages/ChannelDashboard"));
 
 function PageLoader() {
   return (
@@ -289,6 +290,7 @@ function Router() {
         <Route path="/banking"                                     component={BankingDashboard} />
         <Route path="/field-agents"                               component={FieldAgents} />
         <Route path="/crop-reports"                               component={CropReports} />
+        <Route path="/channel-dashboard"                           component={ChannelDashboard} />
         {/* 404 */}
         <Route                           component={NotFound} />
       </Switch>

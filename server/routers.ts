@@ -84,6 +84,9 @@ import { abcpRouter } from "./routers/abcpRouter";
 import { inputFinancingRouter, fieldAgentRouter } from "./routers/inputFinancingRouter";
 import { cropReportsRouter } from "./routers/cropReportsRouter";
 import { bankingRouter } from "./routers/bankingRouter";
+import { ussdRouter } from "./routers/ussd";
+import { whatsappRouter } from "./routers/whatsapp";
+import { telegramRouter } from "./routers/telegram";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -168,6 +171,9 @@ export const appRouter = router({
   fieldAgent: fieldAgentRouter,
   cropReports: cropReportsRouter,
   banking: bankingRouter,
+  ussd: ussdRouter,
+  whatsapp: whatsappRouter,
+  telegram: telegramRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure

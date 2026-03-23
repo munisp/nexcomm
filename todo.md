@@ -182,3 +182,14 @@
 - [x] Banking Dashboard: Loan Application Form + Insurance Claim Form + Transaction History all wired end-to-end
 - [x] React Native: useLoanNotifications hook with WebSocket reconnect, unread badge, dashboard integration
 - [x] Flutter: loan_notification_provider.dart StateNotifier + notifications_screen.dart live alerts section
+
+## Round 10 — USSD / WhatsApp / Telegram (Go + Python + Rust) — COMPLETED
+- [x] DB schema: ussd_sessions, whatsapp_contacts, whatsapp_messages, telegram_contacts, telegram_messages tables added and migrated (0042 migration)
+- [x] Rust USSD engine: services/ussd-engine/ (main.rs, session.rs, menu.rs, db.rs, kafka.rs, pin.rs, metrics.rs, Dockerfile) — Africa's Talking callback handler, full menu tree (price check, portfolio, trade, loan), Redis-backed session state machine, Prometheus metrics
+- [x] Go channel gateway: services/channel-gateway/ (WhatsApp Meta Cloud API webhook + Telegram Bot webhook, Kafka producer, Prometheus metrics, Dockerfile, internal /send endpoints)
+- [x] Python bot-logic service: services/bot-logic/ (FastAPI, NLP intent classifier, message router, DB queries, Kafka producer, Dockerfile) — 15/15 NLP tests passing
+- [x] tRPC routers: ussdRouter (getSessionStats, getSessions, getSessionDetail), whatsappRouter (getStats, getContacts, getMessages, sendMessage, updateContactStatus), telegramRouter (getStats, getContacts, getMessages, sendMessage, updateContactStatus) — all mounted in appRouter
+- [x] Notification service: sendWhatsAppMessage + sendTelegramMessage helpers added; whatsapp/telegram dispatch channels wired into dispatchNotification
+- [x] ChannelDashboard.tsx: admin page with live stats, session/contact tables, send-message modals for all 3 channels; routed at /channel-dashboard
+- [x] DashboardLayout: Channel Dashboard nav item added (admin-only, Phone icon)
+- [x] Tests: 782 passing (7 test files, 0 failures) — 17 new channel router tests in channels.test.ts

@@ -294,6 +294,13 @@
       "when": 1774214873050,
       "tag": "0041_careful_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1774222978097,
+      "tag": "0042_tidy_genesis",
+      "breakpoints": true
     }
   ]
 }

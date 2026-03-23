@@ -2561,3 +2561,117 @@ export const pushTokens = pgTable("push_tokens", {
 });
 export type PushToken = typeof pushTokens.$inferSelect;
 export type InsertPushToken = typeof pushTokens.$inferInsert;
+
+// ============================================================
+// USSD Sessions & Channel Contacts
+// ============================================================
+export const ussdSessionStatusEnum = pgEnum("ussd_session_status", [
+  "ACTIVE", "COMPLETED", "TIMED_OUT", "FAILED",
+]);
+export const ussdSessions = pgTable("ussd_sessions", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  sessionId: varchar("session_id", { length: 128 }).notNull().unique(),
+  phoneNumber: varchar("phone_number", { length: 20 }).notNull(),
+  userId: integer("user_id"),            // resolved after PIN auth
+  serviceCode: varchar("service_code", { length: 20 }).default("*347*99#"),
+  networkCode: varchar("network_code", { length: 20 }),
+  menuPath: text("menu_path").default(""),   // e.g. "1>2>1" breadcrumb
+  currentMenu: varchar("current_menu", { length: 64 }).default("MAIN"),
+  lastInput: varchar("last_input", { length: 256 }),
+  status: ussdSessionStatusEnum("status").default("ACTIVE").notNull(),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  lastActivityAt: timestamp("last_activity_at").defaultNow().notNull(),
+  endedAt: timestamp("ended_at"),
+  totalInteractions: integer("total_interactions").default(0).notNull(),
+  metadata: jsonb("metadata"),
+});
+export type UssdSession = typeof ussdSessions.$inferSelect;
+
+export const ussdPins = pgTable("ussd_pins", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  pinHash: varchar("pin_hash", { length: 256 }).notNull(),
+  failedAttempts: integer("failed_attempts").default(0).notNull(),
+  lockedUntil: timestamp("locked_until"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type UssdPin = typeof ussdPins.$inferSelect;
+
+export const channelContactStatusEnum = pgEnum("channel_contact_status", [
+  "ACTIVE", "OPTED_OUT", "BLOCKED",
+]);
+
+export const whatsappContacts = pgTable("whatsapp_contacts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id"),
+  phoneNumber: varchar("phone_number", { length: 20 }).notNull().unique(),
+  waId: varchar("wa_id", { length: 30 }).notNull().unique(),   // WhatsApp ID (usually phone without +)
+  displayName: varchar("display_name", { length: 200 }),
+  status: channelContactStatusEnum("status").default("ACTIVE").notNull(),
+  lastMessageAt: timestamp("last_message_at"),
+  totalMessages: integer("total_messages").default(0).notNull(),
+  verificationToken: varchar("verification_token", { length: 64 }),
+  verifiedAt: timestamp("verified_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type WhatsappContact = typeof whatsappContacts.$inferSelect;
+
+export const whatsappMessageDirectionEnum = pgEnum("whatsapp_message_direction", ["INBOUND", "OUTBOUND"]);
+export const whatsappMessageStatusEnum = pgEnum("whatsapp_message_status", [
+  "QUEUED", "SENT", "DELIVERED", "READ", "FAILED",
+]);
+export const whatsappMessages = pgTable("whatsapp_messages", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  contactId: integer("contact_id").notNull(),
+  wamid: varchar("wamid", { length: 256 }).unique(),           // WhatsApp message ID
+  direction: whatsappMessageDirectionEnum("direction").notNull(),
+  messageType: varchar("message_type", { length: 30 }).default("text").notNull(),
+  body: text("body"),
+  status: whatsappMessageStatusEnum("status").default("QUEUED").notNull(),
+  errorCode: varchar("error_code", { length: 20 }),
+  errorMessage: text("error_message"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type WhatsappMessage = typeof whatsappMessages.$inferSelect;
+
+export const telegramContactStatusEnum = pgEnum("telegram_contact_status", [
+  "ACTIVE", "BLOCKED", "OPTED_OUT",
+]);
+export const telegramContacts = pgTable("telegram_contacts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id"),
+  telegramId: varchar("telegram_id", { length: 30 }).notNull().unique(),
+  username: varchar("username", { length: 100 }),
+  firstName: varchar("first_name", { length: 100 }),
+  lastName: varchar("last_name", { length: 100 }),
+  status: telegramContactStatusEnum("status").default("ACTIVE").notNull(),
+  isVerified: boolean("is_verified").default(false).notNull(),
+  verificationCode: varchar("verification_code", { length: 10 }),
+  verificationExpiresAt: timestamp("verification_expires_at"),
+  alertsEnabled: boolean("alerts_enabled").default(true).notNull(),
+  priceAlertsEnabled: boolean("price_alerts_enabled").default(true).notNull(),
+  tradeNotificationsEnabled: boolean("trade_notifications_enabled").default(true).notNull(),
+  lastInteractionAt: timestamp("last_interaction_at"),
+  totalCommands: integer("total_commands").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type TelegramContact = typeof telegramContacts.$inferSelect;
+
+export const telegramMessageDirectionEnum = pgEnum("telegram_message_direction", ["INBOUND", "OUTBOUND"]);
+export const telegramMessages = pgTable("telegram_messages", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  contactId: integer("contact_id").notNull(),
+  telegramMessageId: integer("telegram_message_id"),
+  direction: telegramMessageDirectionEnum("direction").notNull(),
+  command: varchar("command", { length: 64 }),
+  text: text("text"),
+  parseMode: varchar("parse_mode", { length: 20 }).default("Markdown"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type TelegramMessage = typeof telegramMessages.$inferSelect;

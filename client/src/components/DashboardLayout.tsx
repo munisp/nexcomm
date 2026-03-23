@@ -83,6 +83,7 @@ import {
   Code2,
   BookMarked,
   MessageSquare,
+  Phone,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -159,6 +160,7 @@ const menuSections: MenuSection[] = [
       { icon: Activity,            label: "Price Feed Admin",       path: "/admin/price-feed",    adminOnly: true },
       { icon: Network,              label: "Platform Health",        path: "/admin/platform-health", adminOnly: true },
       { icon: MessageSquare,        label: "Warehouse Messages",     path: "/admin/warehouse-messages", adminOnly: true },
+      { icon: Phone,                 label: "Channel Dashboard",      path: "/channel-dashboard",       adminOnly: true },
     ],
   },
   {
