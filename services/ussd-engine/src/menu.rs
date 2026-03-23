@@ -82,7 +82,7 @@ async fn route_input(
     match session.current_menu.as_str() {
         "MAIN" | "" => handle_main(state, session, input).await,
         "AUTH" => handle_auth(state, session, input).await,
-        "PRICE" => handle_price(state, session, input).await,
+        "PRICE" | "PRICE_ALERT_STEP1" | "PRICE_ALERT_STEP2" => handle_price(state, session, input).await,
         "PORTFOLIO" => handle_portfolio(state, session, input).await,
         "ORDER_SIDE" => handle_order_side(session, input).await,
         "ORDER_SYM" => handle_order_symbol(session, input).await,
@@ -239,6 +239,15 @@ async fn handle_price(
     session: &mut UssdSessionState,
     input: &str,
 ) -> Result<MenuResponse> {
+    // ── Sub-state: PRICE_ALERT_STEP1 — choose ABOVE or BELOW ─────────────────
+    if session.current_menu == "PRICE_ALERT_STEP1" {
+        return handle_price_alert_step1(state, session, input).await;
+    }
+    // ── Sub-state: PRICE_ALERT_STEP2 — enter target price ────────────────────
+    if session.current_menu == "PRICE_ALERT_STEP2" {
+        return handle_price_alert_step2(state, session, input).await;
+    }
+
     // Commodity list
     let commodities = vec![
         ("1", "MAIZE", "Maize"),
@@ -255,7 +264,7 @@ async fn handle_price(
     if input.is_empty() {
         let menu = commodities
             .iter()
-            .map(|(n, _, name)| format!("{}. {}", n, name))
+            .map(|(n, _, name)| format!("{}.  {}", n, name))
             .collect::<Vec<_>>()
             .join("\n");
         return Ok(MenuResponse::Continue(format!("Select commodity:\n{}", menu)));
@@ -272,14 +281,29 @@ async fn handle_price(
             match db::get_live_price(&state.db, symbol).await? {
                 Some(price) => {
                     let change_sign = if price.change_pct >= 0.0 { "+" } else { "" };
-                    Ok(MenuResponse::End(format!(
-                        "{} Price\n₦{:.2}/MT\nChange: {}{}%\nHigh: ₦{:.2}\nLow: ₦{:.2}\n\nDial *347*99# to trade",
+                    // Store context for optional alert creation (option 9)
+                    session.pending_price_alert = Some(crate::session::PendingPriceAlert {
+                        symbol: symbol.to_string(),
+                        name: name.to_string(),
+                        current_price: price.price,
+                        condition: None,
+                        step: 1,
+                    });
+                    // Show price + option to set alert
+                    let auth_suffix = if session.is_authenticated() {
+                        "\n9. Set Alert\n0. Back"
+                    } else {
+                        "\n0. Back"
+                    };
+                    Ok(MenuResponse::Continue(format!(
+                        "{} Price\n₦{:.2}/MT\nChange: {}{}%\nHigh: ₦{:.2}\nLow: ₦{:.2}{}",
                         name,
                         price.price,
                         change_sign,
                         price.change_pct,
                         price.high,
-                        price.low
+                        price.low,
+                        auth_suffix,
                     )))
                 }
                 None => Ok(MenuResponse::End(format!(
@@ -288,9 +312,113 @@ async fn handle_price(
                 ))),
             }
         }
-        None => Ok(MenuResponse::Continue(format!(
-            "Invalid option.\nSelect commodity (1-8) or 0 to go back:"
-        ))),
+        None => {
+            // Check if user pressed 9 (Set Alert) after viewing a price
+            if input == "9" {
+                if let Some(ref alert) = session.pending_price_alert.clone() {
+                    if !session.is_authenticated() {
+                        return Ok(MenuResponse::End(
+                            "Please log in to set price alerts.\nDial *347*99# to log in.".to_string(),
+                        ));
+                    }
+                    session.current_menu = "PRICE_ALERT_STEP1".to_string();
+                    return Ok(MenuResponse::Continue(format!(
+                        "Set {} Alert\nCurrent: ₦{:.2}/MT\n\n1. Alert me ABOVE a price\n2. Alert me BELOW a price\n0. Cancel",
+                        alert.name, alert.current_price
+                    )));
+                }
+            }
+            Ok(MenuResponse::Continue(format!(
+                "Invalid option.\nSelect commodity (1-8) or 0 to go back:"
+            )))
+        }
+    }
+}
+
+// ─── PRICE ALERT STEP 1: Choose direction ────────────────────────────────────
+async fn handle_price_alert_step1(
+    _state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    if input == "0" {
+        session.current_menu = "PRICE".to_string();
+        session.pending_price_alert = None;
+        return Ok(MenuResponse::Continue(price_menu_text()));
+    }
+    let condition = match input {
+        "1" => "ABOVE",
+        "2" => "BELOW",
+        _ => {
+            return Ok(MenuResponse::Continue(
+                "Invalid option.\n1. Alert ABOVE\n2. Alert BELOW\n0. Cancel".to_string(),
+            ))
+        }
+    };
+    if let Some(ref mut alert) = session.pending_price_alert {
+        alert.condition = Some(condition.to_string());
+        alert.step = 2;
+        let direction_text = if condition == "ABOVE" { "above" } else { "below" };
+        let name = alert.name.clone();
+        let current = alert.current_price;
+        session.current_menu = "PRICE_ALERT_STEP2".to_string();
+        return Ok(MenuResponse::Continue(format!(
+            "Alert when {} goes {}\nCurrent: ₦{:.2}/MT\n\nEnter target price (NGN/MT):\n0. Cancel",
+            name, direction_text, current
+        )));
+    }
+    // No pending alert context — restart
+    session.current_menu = "PRICE".to_string();
+    Ok(MenuResponse::Continue(price_menu_text()))
+}
+
+// ─── PRICE ALERT STEP 2: Enter target price ──────────────────────────────────
+async fn handle_price_alert_step2(
+    state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    if input == "0" {
+        session.current_menu = "PRICE".to_string();
+        session.pending_price_alert = None;
+        return Ok(MenuResponse::Continue(price_menu_text()));
+    }
+    let target: f64 = match input.trim().parse() {
+        Ok(v) if v > 0.0 => v,
+        _ => {
+            return Ok(MenuResponse::Continue(
+                "Invalid price. Enter a positive number (e.g. 45000):\n0. Cancel".to_string(),
+            ))
+        }
+    };
+    let alert = match session.pending_price_alert.clone() {
+        Some(a) => a,
+        None => {
+            session.current_menu = "PRICE".to_string();
+            return Ok(MenuResponse::Continue(price_menu_text()));
+        }
+    };
+    let user_id = match session.user_id {
+        Some(id) => id,
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
+    };
+    let condition = alert.condition.as_deref().unwrap_or("ABOVE");
+    match db::create_price_alert(&state.db, user_id, &alert.symbol, condition, target).await {
+        Ok(alert_id) => {
+            session.pending_price_alert = None;
+            session.current_menu = "PRICE".to_string();
+            let direction_text = if condition == "ABOVE" { "above" } else { "below" };
+            Ok(MenuResponse::End(format!(
+                "Alert Set!\n{} {} ₦{:.2}/MT\nAlert ID: {}\n\nYou will be notified via SMS when triggered.",
+                alert.name, direction_text, target, alert_id
+            )))
+        }
+        Err(e) => {
+            tracing::error!("Failed to create price alert: {:?}", e);
+            Ok(MenuResponse::End(
+                "Alert could not be saved.\nPlease try again later.".to_string(),
+            ))
+        }
     }
 }
 

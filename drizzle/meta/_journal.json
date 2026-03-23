@@ -301,6 +301,13 @@
       "when": 1774222978097,
       "tag": "0042_tidy_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1774265744874,
+      "tag": "0043_furry_callisto",
+      "breakpoints": true
     }
   ]
 }

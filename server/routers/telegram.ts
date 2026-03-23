@@ -372,16 +372,83 @@ export const telegramRouter = router({
       return { success: true, deletedId: input.alertId };
     }),
 
-  // ─── Protected: Unlink Account ────────────────────────────────────────────────
+    // ─── Protected: Unlink Account ────────────────────────────────────────────────
   unlinkAccount: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-
     await db
       .update(telegramContacts)
       .set({ userId: null, isVerified: false, updatedAt: new Date() })
       .where(eq(telegramContacts.userId, ctx.user.id));
-
     return { success: true };
+  }),
+
+  // ─── Protected: Market Broadcast Subscription ─────────────────────────────────
+  /**
+   * Enable daily market open/close Telegram broadcasts for the current user.
+   * The scheduler in app/telegram/market_broadcast.py checks this flag before
+   * sending each broadcast.
+   */
+  subscribeMarketBroadcasts: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+    const [contact] = await db
+      .select({ id: telegramContacts.id, isVerified: telegramContacts.isVerified })
+      .from(telegramContacts)
+      .where(eq(telegramContacts.userId, ctx.user.id))
+      .limit(1);
+    if (!contact) throw new TRPCError({ code: "NOT_FOUND", message: "No linked Telegram account found. Link your Telegram account first." });
+    if (!contact.isVerified) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Telegram account not verified. Complete verification first." });
+    await db
+      .update(telegramContacts)
+      .set({ marketBroadcasts: true, updatedAt: new Date() })
+      .where(eq(telegramContacts.userId, ctx.user.id));
+    return { success: true, marketBroadcasts: true };
+  }),
+
+  /**
+   * Disable daily market open/close Telegram broadcasts for the current user.
+   */
+  unsubscribeMarketBroadcasts: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+    const [contact] = await db
+      .select({ id: telegramContacts.id })
+      .from(telegramContacts)
+      .where(eq(telegramContacts.userId, ctx.user.id))
+      .limit(1);
+    if (!contact) throw new TRPCError({ code: "NOT_FOUND", message: "No linked Telegram account found." });
+    await db
+      .update(telegramContacts)
+      .set({ marketBroadcasts: false, updatedAt: new Date() })
+      .where(eq(telegramContacts.userId, ctx.user.id));
+    return { success: true, marketBroadcasts: false };
+  }),
+
+  /**
+   * Get the current market broadcast subscription status for the current user.
+   */
+  getMarketBroadcastStatus: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+    const [contact] = await db
+      .select({
+        isLinked: telegramContacts.id,
+        isVerified: telegramContacts.isVerified,
+        marketBroadcasts: telegramContacts.marketBroadcasts,
+        username: telegramContacts.username,
+      })
+      .from(telegramContacts)
+      .where(eq(telegramContacts.userId, ctx.user.id))
+      .limit(1);
+    if (!contact) {
+      return { isLinked: false, isVerified: false, marketBroadcasts: false, username: null };
+    }
+    return {
+      isLinked: true,
+      isVerified: contact.isVerified,
+      marketBroadcasts: contact.marketBroadcasts ?? true,
+      username: contact.username,
+    };
   }),
 });

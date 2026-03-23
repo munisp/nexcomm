@@ -1,0 +1,1 @@
+ALTER TABLE "telegram_contacts" ADD COLUMN "market_broadcasts" boolean DEFAULT true NOT NULL;

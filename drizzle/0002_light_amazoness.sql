@@ -1,5 +1,6 @@
-CREATE TYPE "public"."push_platform" AS ENUM('ios', 'android', 'web');--> statement-breakpoint
-CREATE TABLE "push_tokens" (
+DO $$ BEGIN
+  CREATE TYPE "public"."push_platform" AS ENUM('ios', 'android', 'web');--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "push_tokens" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"token" varchar(512) NOT NULL,
@@ -10,3 +11,5 @@ CREATE TABLE "push_tokens" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "push_tokens_token_unique" UNIQUE("token")
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

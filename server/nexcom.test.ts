@@ -17,7 +17,7 @@ import { t, formatCurrency, EXCHANGE_RATES, CURRENCY_SYMBOLS } from "../client/s
 import type { Language, Currency } from "../client/src/lib/i18n";
 import { TOTP, NobleCryptoPlugin, ScureBase32Plugin } from "otplib";
 import { getDb } from "./db";
-import { deviceSessions, velocityLedger, amlRules, amlFlags, sarReports, settlementCycles, settlementFails, settlementInstructions, regulatoryReports, regulatoryReportSchedules, clearingAccounts, marginCalls, irEvents, irDocuments, shareholderRegistry, marketMakerProfiles, marketMakerObligations, circuitBreakerRules, circuitBreakerEvents, washTradeFlags, futuresContracts, futuresPositions, futuresSettlements, optionsContracts, optionsPositions, portfolioSnapshots, farmerProfiles, farmProfiles, cropListings, traderProfiles, brokerProfiles, warehouseOperatorProfiles, marketMakerOnboardingProfiles, cooperativeBulkUploads } from "../drizzle/schema";
+import { deviceSessions, velocityLedger, amlRules, amlFlags, sarReports, settlementCycles, settlementFails, settlementInstructions, regulatoryReports, regulatoryReportSchedules, clearingAccounts, marginCalls, irEvents, irDocuments, shareholderRegistry, marketMakerProfiles, marketMakerObligations, circuitBreakerRules, circuitBreakerEvents, washTradeFlags, futuresContracts, futuresPositions, futuresSettlements, optionsContracts, optionsPositions, portfolioSnapshots, farmerProfiles, farmProfiles, cropListings, traderProfiles, brokerProfiles, warehouseOperatorProfiles, marketMakerOnboardingProfiles, cooperativeBulkUploads, totpSecrets } from "../drizzle/schema";
 import { inArray, eq } from "drizzle-orm";
 import { runAmlDetection } from "./routers/amlRouter";
 
@@ -3743,6 +3743,10 @@ describe("Phase 33 — Integration: Combined Security Features", () => {
   beforeEach(async () => {
     const db = await getDb();
     if (db) {
+      // Clean up TOTP state so lifecycle test always starts fresh
+      await db.delete(totpSecrets).where(
+        inArray(totpSecrets.userId, [33300, 33310, 33311])
+      );
       await db.delete(deviceSessions).where(
         inArray(deviceSessions.userId, [33301])
       );

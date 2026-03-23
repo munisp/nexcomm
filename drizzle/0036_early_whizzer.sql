@@ -1,5 +1,6 @@
-CREATE TYPE "public"."warehouse_message_status" AS ENUM('SENT', 'READ', 'REPLIED', 'CLOSED');--> statement-breakpoint
-CREATE TABLE "warehouse_messages" (
+DO $$ BEGIN
+  CREATE TYPE "public"."warehouse_message_status" AS ENUM('SENT', 'READ', 'REPLIED', 'CLOSED');--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "warehouse_messages" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"warehouse_id" varchar(50) NOT NULL,
@@ -12,3 +13,5 @@ CREATE TABLE "warehouse_messages" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

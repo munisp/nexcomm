@@ -1,6 +1,7 @@
-CREATE TYPE "public"."broker_client_status" AS ENUM('ACTIVE', 'INACTIVE', 'SUSPENDED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."broker_client_status" AS ENUM('ACTIVE', 'INACTIVE', 'SUSPENDED');--> statement-breakpoint
 CREATE TYPE "public"."broker_commission_status" AS ENUM('PENDING', 'PAID', 'CANCELLED');--> statement-breakpoint
-CREATE TABLE "broker_clients" (
+CREATE TABLE IF NOT EXISTS "broker_clients" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"broker_profile_id" integer NOT NULL,
 	"client_user_id" integer NOT NULL,
@@ -14,8 +15,10 @@ CREATE TABLE "broker_clients" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "broker_commissions" (
+CREATE TABLE IF NOT EXISTS "broker_commissions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"broker_profile_id" integer NOT NULL,
 	"client_user_id" integer,

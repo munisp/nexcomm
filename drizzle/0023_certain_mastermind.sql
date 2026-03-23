@@ -1,6 +1,7 @@
-CREATE TYPE "public"."mojaloop_quote_status" AS ENUM('PENDING', 'ACCEPTED', 'REJECTED', 'EXPIRED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."mojaloop_quote_status" AS ENUM('PENDING', 'ACCEPTED', 'REJECTED', 'EXPIRED');--> statement-breakpoint
 CREATE TYPE "public"."mojaloop_transfer_status" AS ENUM('PENDING', 'RESERVED', 'COMMITTED', 'ABORTED', 'EXPIRED');--> statement-breakpoint
-CREATE TABLE "mojaloop_callbacks" (
+CREATE TABLE IF NOT EXISTS "mojaloop_callbacks" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"callback_type" varchar(64) NOT NULL,
 	"resource_id" varchar(64) NOT NULL,
@@ -12,8 +13,10 @@ CREATE TABLE "mojaloop_callbacks" (
 	"error_message" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "mojaloop_dfsps" (
+CREATE TABLE IF NOT EXISTS "mojaloop_dfsps" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"fsp_id" varchar(64) NOT NULL,
 	"name" varchar(128) NOT NULL,
@@ -27,7 +30,7 @@ CREATE TABLE "mojaloop_dfsps" (
 	CONSTRAINT "mojaloop_dfsps_fsp_id_unique" UNIQUE("fsp_id")
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_parties" (
+CREATE TABLE IF NOT EXISTS "mojaloop_parties" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"party_id_type" varchar(32) NOT NULL,
 	"party_identifier" varchar(128) NOT NULL,
@@ -43,7 +46,7 @@ CREATE TABLE "mojaloop_parties" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_quotes" (
+CREATE TABLE IF NOT EXISTS "mojaloop_quotes" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"quote_id" varchar(64) NOT NULL,
 	"transaction_id" varchar(64) NOT NULL,
@@ -68,7 +71,7 @@ CREATE TABLE "mojaloop_quotes" (
 	CONSTRAINT "mojaloop_quotes_quote_id_unique" UNIQUE("quote_id")
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_transfers" (
+CREATE TABLE IF NOT EXISTS "mojaloop_transfers" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"transfer_id" varchar(64) NOT NULL,
 	"quote_id" varchar(64),

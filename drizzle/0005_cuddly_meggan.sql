@@ -1,5 +1,5 @@
 ALTER TYPE "public"."notification_type" ADD VALUE 'MARGIN_CALL';--> statement-breakpoint
-CREATE TABLE "dispute_evidence" (
+CREATE TABLE IF NOT EXISTS "dispute_evidence" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"dispute_id" integer NOT NULL,
 	"uploaded_by" integer NOT NULL,

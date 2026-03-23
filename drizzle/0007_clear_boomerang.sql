@@ -1,7 +1,8 @@
-CREATE TYPE "public"."ip_allowlist_scope" AS ENUM('GLOBAL_ADMIN', 'BULK_OPERATIONS', 'LIQUIDATION_OVERRIDE', 'WITHDRAWAL_APPROVAL');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."ip_allowlist_scope" AS ENUM('GLOBAL_ADMIN', 'BULK_OPERATIONS', 'LIQUIDATION_OVERRIDE', 'WITHDRAWAL_APPROVAL');--> statement-breakpoint
 CREATE TYPE "public"."webhook_event_filter" AS ENUM('ALL', 'HIGH_AND_CRITICAL', 'CRITICAL_ONLY');--> statement-breakpoint
 CREATE TYPE "public"."withdrawal_verification_status" AS ENUM('PENDING', 'PASSED', 'FAILED', 'EXPIRED');--> statement-breakpoint
-CREATE TABLE "ip_allowlist" (
+CREATE TABLE IF NOT EXISTS "ip_allowlist" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"cidr" varchar(50) NOT NULL,
 	"label" varchar(128) NOT NULL,
@@ -11,8 +12,10 @@ CREATE TABLE "ip_allowlist" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "platform_settings" (
+CREATE TABLE IF NOT EXISTS "platform_settings" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"key" varchar(128) NOT NULL,
 	"value" text NOT NULL,
@@ -22,7 +25,7 @@ CREATE TABLE "platform_settings" (
 	CONSTRAINT "platform_settings_key_unique" UNIQUE("key")
 );
 --> statement-breakpoint
-CREATE TABLE "webhook_configs" (
+CREATE TABLE IF NOT EXISTS "webhook_configs" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"name" varchar(128) NOT NULL,
 	"url" varchar(2048) NOT NULL,
@@ -37,7 +40,7 @@ CREATE TABLE "webhook_configs" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "withdrawal_verifications" (
+CREATE TABLE IF NOT EXISTS "withdrawal_verifications" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"amount" numeric(18, 2) NOT NULL,

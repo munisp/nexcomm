@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
     from app.alerts.broadcaster import run_alert_broadcaster
     from app.kafka.order_consumer import run_order_update_consumer
+    from app.kafka.loan_consumer import run_loan_notification_consumer
     from app.telegram.market_broadcast import start_market_broadcast_scheduler
     logger.info("Starting NEXCOM Bot Logic Service...")
     await init_db()
@@ -60,12 +61,15 @@ async def lifespan(app: FastAPI):
     # Start Kafka consumer for order matched events → WhatsApp notifications
     order_consumer_task = asyncio.create_task(run_order_update_consumer())
     app.state.order_consumer_task = order_consumer_task
+    # Start Kafka consumer for loan approval events → WhatsApp + Telegram notifications
+    loan_consumer_task = asyncio.create_task(run_loan_notification_consumer())
+    app.state.loan_consumer_task = loan_consumer_task
     # Start Telegram market open/close broadcast scheduler (APScheduler)
     market_scheduler = await start_market_broadcast_scheduler()
     app.state.market_scheduler = market_scheduler
     logger.info(
         "Bot Logic Service ready on :8040 "
-        "(alert broadcaster + order consumer + market broadcast scheduler running)"
+        "(alert broadcaster + order consumer + loan consumer + market broadcast scheduler running)"
     )
     yield
     logger.info("Shutting down Bot Logic Service...")
@@ -73,7 +77,8 @@ async def lifespan(app: FastAPI):
         market_scheduler.shutdown(wait=False)
     broadcaster_task.cancel()
     order_consumer_task.cancel()
-    for task in (broadcaster_task, order_consumer_task):
+    loan_consumer_task.cancel()
+    for task in (broadcaster_task, order_consumer_task, loan_consumer_task):
         try:
             await task
         except asyncio.CancelledError:

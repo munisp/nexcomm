@@ -1,10 +1,11 @@
-CREATE TYPE "public"."channel_contact_status" AS ENUM('ACTIVE', 'OPTED_OUT', 'BLOCKED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."channel_contact_status" AS ENUM('ACTIVE', 'OPTED_OUT', 'BLOCKED');--> statement-breakpoint
 CREATE TYPE "public"."telegram_contact_status" AS ENUM('ACTIVE', 'BLOCKED', 'OPTED_OUT');--> statement-breakpoint
 CREATE TYPE "public"."telegram_message_direction" AS ENUM('INBOUND', 'OUTBOUND');--> statement-breakpoint
 CREATE TYPE "public"."ussd_session_status" AS ENUM('ACTIVE', 'COMPLETED', 'TIMED_OUT', 'FAILED');--> statement-breakpoint
 CREATE TYPE "public"."whatsapp_message_direction" AS ENUM('INBOUND', 'OUTBOUND');--> statement-breakpoint
 CREATE TYPE "public"."whatsapp_message_status" AS ENUM('QUEUED', 'SENT', 'DELIVERED', 'READ', 'FAILED');--> statement-breakpoint
-CREATE TABLE "telegram_contacts" (
+CREATE TABLE IF NOT EXISTS "telegram_contacts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"telegram_id" varchar(30) NOT NULL,
@@ -24,8 +25,10 @@ CREATE TABLE "telegram_contacts" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "telegram_contacts_telegram_id_unique" UNIQUE("telegram_id")
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "telegram_messages" (
+CREATE TABLE IF NOT EXISTS "telegram_messages" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"contact_id" integer NOT NULL,
 	"telegram_message_id" integer,
@@ -37,7 +40,7 @@ CREATE TABLE "telegram_messages" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "ussd_pins" (
+CREATE TABLE IF NOT EXISTS "ussd_pins" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"pin_hash" varchar(256) NOT NULL,
@@ -48,7 +51,7 @@ CREATE TABLE "ussd_pins" (
 	CONSTRAINT "ussd_pins_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "ussd_sessions" (
+CREATE TABLE IF NOT EXISTS "ussd_sessions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"session_id" varchar(128) NOT NULL,
 	"phone_number" varchar(20) NOT NULL,
@@ -67,7 +70,7 @@ CREATE TABLE "ussd_sessions" (
 	CONSTRAINT "ussd_sessions_session_id_unique" UNIQUE("session_id")
 );
 --> statement-breakpoint
-CREATE TABLE "whatsapp_contacts" (
+CREATE TABLE IF NOT EXISTS "whatsapp_contacts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"phone_number" varchar(20) NOT NULL,
@@ -84,7 +87,7 @@ CREATE TABLE "whatsapp_contacts" (
 	CONSTRAINT "whatsapp_contacts_wa_id_unique" UNIQUE("wa_id")
 );
 --> statement-breakpoint
-CREATE TABLE "whatsapp_messages" (
+CREATE TABLE IF NOT EXISTS "whatsapp_messages" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"contact_id" integer NOT NULL,
 	"wamid" varchar(256),

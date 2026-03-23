@@ -1,6 +1,7 @@
-CREATE TYPE "public"."corporate_action_status" AS ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CANCELLED', 'COMPLETED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."corporate_action_status" AS ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CANCELLED', 'COMPLETED');--> statement-breakpoint
 CREATE TYPE "public"."corporate_action_type" AS ENUM('DIVIDEND', 'STOCK_SPLIT', 'RIGHTS_ISSUE', 'BONUS_ISSUE', 'MERGER', 'DELISTING', 'IPO');--> statement-breakpoint
-CREATE TABLE "corporate_actions" (
+CREATE TABLE IF NOT EXISTS "corporate_actions" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"action_type" "corporate_action_type" NOT NULL,
 	"status" "corporate_action_status" DEFAULT 'DRAFT' NOT NULL,
@@ -27,8 +28,10 @@ CREATE TABLE "corporate_actions" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "live_prices" (
+CREATE TABLE IF NOT EXISTS "live_prices" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"symbol" varchar(64) NOT NULL,
 	"name" varchar(128) NOT NULL,
@@ -46,7 +49,7 @@ CREATE TABLE "live_prices" (
 	CONSTRAINT "live_prices_symbol_unique" UNIQUE("symbol")
 );
 --> statement-breakpoint
-CREATE TABLE "participant_performance_metrics" (
+CREATE TABLE IF NOT EXISTS "participant_performance_metrics" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"participant_type" varchar(32) NOT NULL,

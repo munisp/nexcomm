@@ -1,5 +1,6 @@
-CREATE TYPE "public"."dfsp_kyc_status" AS ENUM('PENDING', 'APPROVED', 'REJECTED', 'EDD_REQUIRED');--> statement-breakpoint
-CREATE TABLE "dfsp_kyc_records" (
+DO $$ BEGIN
+  CREATE TYPE "public"."dfsp_kyc_status" AS ENUM('PENDING', 'APPROVED', 'REJECTED', 'EDD_REQUIRED');--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "dfsp_kyc_records" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"fsp_id" varchar(64) NOT NULL,
 	"legal_entity_name" varchar(256) NOT NULL,
@@ -24,3 +25,5 @@ CREATE TABLE "dfsp_kyc_records" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "dfsp_kyc_records_fsp_id_unique" UNIQUE("fsp_id")
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

@@ -1,4 +1,4 @@
-CREATE TABLE "order_amendments" (
+CREATE TABLE IF NOT EXISTS "order_amendments" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"order_id" integer NOT NULL,
 	"user_id" integer NOT NULL,

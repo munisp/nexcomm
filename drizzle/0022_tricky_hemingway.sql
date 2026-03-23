@@ -1,4 +1,4 @@
-CREATE TABLE "order_book_levels" (
+CREATE TABLE IF NOT EXISTS "order_book_levels" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"symbol" varchar(32) NOT NULL,
 	"side" varchar(4) NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE "order_book_levels" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "pre_trade_risk_checks" (
+CREATE TABLE IF NOT EXISTS "pre_trade_risk_checks" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"order_id" bigint NOT NULL,
 	"user_id" integer NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE "pre_trade_risk_checks" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "trade_fills" (
+CREATE TABLE IF NOT EXISTS "trade_fills" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"aggressor_order_id" bigint NOT NULL,
 	"resting_order_id" bigint NOT NULL,

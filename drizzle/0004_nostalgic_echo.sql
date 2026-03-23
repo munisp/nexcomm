@@ -1,10 +1,11 @@
-CREATE TYPE "public"."collateral_ledger_action" AS ENUM('PLEDGE', 'RELEASE', 'LIQUIDATE', 'REVALUE');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."collateral_ledger_action" AS ENUM('PLEDGE', 'RELEASE', 'LIQUIDATE', 'REVALUE');--> statement-breakpoint
 CREATE TYPE "public"."collateral_status" AS ENUM('ACTIVE', 'RELEASED', 'LIQUIDATED');--> statement-breakpoint
 CREATE TYPE "public"."collateral_type" AS ENUM('WAREHOUSE_RECEIPT', 'CASH', 'BOND', 'EQUITY');--> statement-breakpoint
 CREATE TYPE "public"."dispute_resolution" AS ENUM('SETTLED', 'FAILED', 'WITHDRAWN');--> statement-breakpoint
 CREATE TYPE "public"."dispute_status" AS ENUM('OPEN', 'UNDER_REVIEW', 'RESOLVED_SETTLED', 'RESOLVED_FAILED', 'WITHDRAWN');--> statement-breakpoint
 CREATE TYPE "public"."margin_account_status" AS ENUM('ACTIVE', 'SUSPENDED', 'CLOSED');--> statement-breakpoint
-CREATE TABLE "collateral_items" (
+CREATE TABLE IF NOT EXISTS "collateral_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"margin_account_id" integer NOT NULL,
 	"user_id" integer NOT NULL,
@@ -20,8 +21,10 @@ CREATE TABLE "collateral_items" (
 	"released_at" timestamp,
 	"notes" text
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "collateral_ledger" (
+CREATE TABLE IF NOT EXISTS "collateral_ledger" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"collateral_item_id" integer,
@@ -34,7 +37,7 @@ CREATE TABLE "collateral_ledger" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "dispute_audit_log" (
+CREATE TABLE IF NOT EXISTS "dispute_audit_log" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"dispute_id" integer NOT NULL,
 	"performed_by" integer NOT NULL,
@@ -45,7 +48,7 @@ CREATE TABLE "dispute_audit_log" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "margin_accounts" (
+CREATE TABLE IF NOT EXISTS "margin_accounts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"status" "margin_account_status" DEFAULT 'ACTIVE' NOT NULL,
@@ -60,7 +63,7 @@ CREATE TABLE "margin_accounts" (
 	CONSTRAINT "margin_accounts_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_disputes" (
+CREATE TABLE IF NOT EXISTS "settlement_disputes" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"settlement_id" bigint NOT NULL,
 	"raised_by" integer NOT NULL,

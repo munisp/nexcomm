@@ -1,4 +1,5 @@
-CREATE TYPE "public"."account_type" AS ENUM('FARMER', 'TRADER', 'PROCESSOR', 'BROKER');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."account_type" AS ENUM('FARMER', 'TRADER', 'PROCESSOR', 'BROKER');--> statement-breakpoint
 CREATE TYPE "public"."alert_condition" AS ENUM('ABOVE', 'BELOW');--> statement-breakpoint
 CREATE TYPE "public"."kyc_queue_status" AS ENUM('PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED');--> statement-breakpoint
 CREATE TYPE "public"."kyc_status" AS ENUM('PENDING', 'VERIFIED', 'REJECTED');--> statement-breakpoint
@@ -6,7 +7,7 @@ CREATE TYPE "public"."notification_type" AS ENUM('TRADE', 'SETTLEMENT', 'KYC', '
 CREATE TYPE "public"."order_side" AS ENUM('BUY', 'SELL');--> statement-breakpoint
 CREATE TYPE "public"."order_type" AS ENUM('LIMIT', 'MARKET', 'STOP_LIMIT');--> statement-breakpoint
 CREATE TYPE "public"."role" AS ENUM('user', 'admin', 'farmer', 'trader', 'broker');--> statement-breakpoint
-CREATE TABLE "audit_log" (
+CREATE TABLE IF NOT EXISTS "audit_log" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"action" varchar(128) NOT NULL,
@@ -16,8 +17,10 @@ CREATE TABLE "audit_log" (
 	"ip_address" varchar(45),
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "kyc_queue" (
+CREATE TABLE IF NOT EXISTS "kyc_queue" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"profile_id" integer NOT NULL,
 	"user_id" integer NOT NULL,
@@ -28,7 +31,7 @@ CREATE TABLE "kyc_queue" (
 	"reviewed_at" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "notifications" (
+CREATE TABLE IF NOT EXISTS "notifications" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"title" varchar(256) NOT NULL,
@@ -39,7 +42,7 @@ CREATE TABLE "notifications" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "price_alerts" (
+CREATE TABLE IF NOT EXISTS "price_alerts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"symbol" varchar(32) NOT NULL,
@@ -50,7 +53,7 @@ CREATE TABLE "price_alerts" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "profiles" (
+CREATE TABLE IF NOT EXISTS "profiles" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"account_type" "account_type" NOT NULL,
@@ -67,7 +70,7 @@ CREATE TABLE "profiles" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "saved_orders" (
+CREATE TABLE IF NOT EXISTS "saved_orders" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"name" varchar(128) NOT NULL,
@@ -79,7 +82,7 @@ CREATE TABLE "saved_orders" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"open_id" varchar(64) NOT NULL,
 	"name" text,
@@ -92,7 +95,7 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_open_id_unique" UNIQUE("open_id")
 );
 --> statement-breakpoint
-CREATE TABLE "watchlist" (
+CREATE TABLE IF NOT EXISTS "watchlist" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"symbol" varchar(32) NOT NULL,

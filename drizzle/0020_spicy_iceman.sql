@@ -1,7 +1,8 @@
-CREATE TYPE "public"."bulk_listing_approval_status" AS ENUM('PENDING', 'COUNTERSIGNED', 'REJECTED', 'EXPIRED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."bulk_listing_approval_status" AS ENUM('PENDING', 'COUNTERSIGNED', 'REJECTED', 'EXPIRED');--> statement-breakpoint
 CREATE TYPE "public"."kyc_risk_level" AS ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'UNKNOWN');--> statement-breakpoint
 CREATE TYPE "public"."re_kyc_stakeholder_type" AS ENUM('FARMER', 'TRADER', 'BROKER', 'WAREHOUSE_OPERATOR', 'MARKET_MAKER');--> statement-breakpoint
-CREATE TABLE "bulk_listing_approvals" (
+CREATE TABLE IF NOT EXISTS "bulk_listing_approvals" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"upload_id" integer NOT NULL,
 	"cooperative_user_id" integer NOT NULL,
@@ -19,8 +20,10 @@ CREATE TABLE "bulk_listing_approvals" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "kyc_analysis_results" (
+CREATE TABLE IF NOT EXISTS "kyc_analysis_results" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"stakeholder_type" text NOT NULL,
@@ -45,7 +48,7 @@ CREATE TABLE "kyc_analysis_results" (
 	"service_version" text DEFAULT '1.0.0'
 );
 --> statement-breakpoint
-CREATE TABLE "re_kyc_flags" (
+CREATE TABLE IF NOT EXISTS "re_kyc_flags" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"stakeholder_type" "re_kyc_stakeholder_type" NOT NULL,

@@ -1,9 +1,10 @@
-CREATE TYPE "public"."security_event_severity" AS ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."security_event_severity" AS ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');--> statement-breakpoint
 CREATE TYPE "public"."security_event_status" AS ENUM('OPEN', 'INVESTIGATING', 'RESOLVED', 'FALSE_POSITIVE');--> statement-breakpoint
 CREATE TYPE "public"."security_event_type" AS ENUM('RATE_LIMIT_BREACH', 'ANOMALOUS_ORDER', 'LARGE_WITHDRAWAL', 'REPEATED_AUTH_FAILURE', 'ADMIN_BULK_ACTION', 'SUSPICIOUS_IP', 'UNUSUAL_TRADE_PATTERN', 'ACCOUNT_TAKEOVER_ATTEMPT');--> statement-breakpoint
 ALTER TYPE "public"."notification_type" ADD VALUE 'LIQUIDATED';--> statement-breakpoint
 ALTER TYPE "public"."notification_type" ADD VALUE 'SECURITY_ALERT';--> statement-breakpoint
-CREATE TABLE "rate_limit_counters" (
+CREATE TABLE IF NOT EXISTS "rate_limit_counters" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"action" varchar(64) NOT NULL,
@@ -11,8 +12,10 @@ CREATE TABLE "rate_limit_counters" (
 	"count" integer DEFAULT 1 NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "security_events" (
+CREATE TABLE IF NOT EXISTS "security_events" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"event_type" "security_event_type" NOT NULL,

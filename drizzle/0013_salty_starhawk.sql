@@ -1,4 +1,4 @@
-CREATE TABLE "circuit_breaker_events" (
+CREATE TABLE IF NOT EXISTS "circuit_breaker_events" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"rule_id" integer NOT NULL,
 	"instrument" varchar(32) NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE "circuit_breaker_events" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "circuit_breaker_rules" (
+CREATE TABLE IF NOT EXISTS "circuit_breaker_rules" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"instrument" varchar(32) NOT NULL,
 	"asset_class" varchar(32) DEFAULT 'COMMODITY' NOT NULL,
@@ -29,7 +29,7 @@ CREATE TABLE "circuit_breaker_rules" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "wash_trade_flags" (
+CREATE TABLE IF NOT EXISTS "wash_trade_flags" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"instrument" varchar(32) NOT NULL,

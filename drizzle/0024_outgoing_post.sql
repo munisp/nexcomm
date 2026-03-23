@@ -1,4 +1,4 @@
-CREATE TABLE "mojaloop_dead_letter" (
+CREATE TABLE IF NOT EXISTS "mojaloop_dead_letter" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"transfer_id" varchar(64) NOT NULL,
 	"payer_fsp_id" varchar(64) NOT NULL,

@@ -1,5 +1,6 @@
-CREATE TYPE "public"."mfa_method" AS ENUM('totp', 'webauthn', 'sms', 'email_otp');--> statement-breakpoint
-CREATE TABLE "mfa_otp_codes" (
+DO $$ BEGIN
+  CREATE TYPE "public"."mfa_method" AS ENUM('totp', 'webauthn', 'sms', 'email_otp');--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "mfa_otp_codes" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"method" "mfa_method" NOT NULL,
@@ -8,8 +9,10 @@ CREATE TABLE "mfa_otp_codes" (
 	"used_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "user_mfa_settings" (
+CREATE TABLE IF NOT EXISTS "user_mfa_settings" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"mfa_required" boolean DEFAULT false NOT NULL,
@@ -23,7 +26,7 @@ CREATE TABLE "user_mfa_settings" (
 	CONSTRAINT "user_mfa_settings_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "webauthn_challenges" (
+CREATE TABLE IF NOT EXISTS "webauthn_challenges" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"challenge" text NOT NULL,
@@ -32,7 +35,7 @@ CREATE TABLE "webauthn_challenges" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "webauthn_credentials" (
+CREATE TABLE IF NOT EXISTS "webauthn_credentials" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"credential_id" text NOT NULL,

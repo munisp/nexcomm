@@ -1,4 +1,4 @@
-CREATE TABLE "device_sessions" (
+CREATE TABLE IF NOT EXISTS "device_sessions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"fingerprint" varchar(128) NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE "device_sessions" (
 	"revoked_at" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "totp_secrets" (
+CREATE TABLE IF NOT EXISTS "totp_secrets" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"secret" varchar(64) NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE "totp_secrets" (
 	CONSTRAINT "totp_secrets_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "velocity_ledger" (
+CREATE TABLE IF NOT EXISTS "velocity_ledger" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"amount" numeric(20, 2) NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE "velocity_ledger" (
 	"recorded_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "velocity_limit_config" (
+CREATE TABLE IF NOT EXISTS "velocity_limit_config" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"window_hours" integer DEFAULT 24 NOT NULL,

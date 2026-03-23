@@ -1,4 +1,5 @@
-CREATE TYPE "public"."account_type" AS ENUM('FARMER', 'TRADER', 'PROCESSOR', 'BROKER', 'WAREHOUSE_OPERATOR', 'MARKET_MAKER');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."account_type" AS ENUM('FARMER', 'TRADER', 'PROCESSOR', 'BROKER', 'WAREHOUSE_OPERATOR', 'MARKET_MAKER');--> statement-breakpoint
 CREATE TYPE "public"."alert_condition" AS ENUM('ABOVE', 'BELOW', 'CROSS_ABOVE', 'CROSS_BELOW');--> statement-breakpoint
 CREATE TYPE "public"."asset_class" AS ENUM('COMMODITY', 'FOREX', 'EQUITY', 'DIGITAL_ASSET', 'INDEX');--> statement-breakpoint
 CREATE TYPE "public"."auto_liquidation_status" AS ENUM('PENDING', 'EXECUTING', 'COMPLETED', 'FAILED', 'CANCELLED');--> statement-breakpoint
@@ -63,7 +64,7 @@ CREATE TYPE "public"."warehouse_op_kyc_status" AS ENUM('PENDING', 'UNDER_REVIEW'
 CREATE TYPE "public"."warehouse_receipt_status" AS ENUM('ACTIVE', 'PLEDGED', 'REDEEMED', 'CANCELLED');--> statement-breakpoint
 CREATE TYPE "public"."webhook_event_filter" AS ENUM('ALL', 'HIGH_AND_CRITICAL', 'CRITICAL_ONLY');--> statement-breakpoint
 CREATE TYPE "public"."withdrawal_verification_status" AS ENUM('PENDING', 'PASSED', 'FAILED', 'EXPIRED');--> statement-breakpoint
-CREATE TABLE "aml_flags" (
+CREATE TABLE IF NOT EXISTS "aml_flags" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"rule_id" bigint,
@@ -80,8 +81,10 @@ CREATE TABLE "aml_flags" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "aml_rules" (
+CREATE TABLE IF NOT EXISTS "aml_rules" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"name" varchar(128) NOT NULL,
 	"rule_type" varchar(64) NOT NULL,
@@ -97,7 +100,7 @@ CREATE TABLE "aml_rules" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "api_keys" (
+CREATE TABLE IF NOT EXISTS "api_keys" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"name" varchar(128) NOT NULL,
@@ -110,7 +113,7 @@ CREATE TABLE "api_keys" (
 	"expires_at" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "audit_log" (
+CREATE TABLE IF NOT EXISTS "audit_log" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"action" varchar(128) NOT NULL,
@@ -121,7 +124,7 @@ CREATE TABLE "audit_log" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "auto_liquidation_orders" (
+CREATE TABLE IF NOT EXISTS "auto_liquidation_orders" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"margin_call_id" bigint NOT NULL,
 	"clearing_account_id" bigint NOT NULL,
@@ -138,7 +141,7 @@ CREATE TABLE "auto_liquidation_orders" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "broker_clients" (
+CREATE TABLE IF NOT EXISTS "broker_clients" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"broker_profile_id" integer NOT NULL,
 	"client_user_id" integer NOT NULL,
@@ -153,7 +156,7 @@ CREATE TABLE "broker_clients" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "broker_commissions" (
+CREATE TABLE IF NOT EXISTS "broker_commissions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"broker_profile_id" integer NOT NULL,
 	"client_user_id" integer,
@@ -172,7 +175,7 @@ CREATE TABLE "broker_commissions" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "broker_profiles" (
+CREATE TABLE IF NOT EXISTS "broker_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"firm_name" varchar(200) NOT NULL,
@@ -198,7 +201,7 @@ CREATE TABLE "broker_profiles" (
 	CONSTRAINT "broker_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "bulk_listing_approvals" (
+CREATE TABLE IF NOT EXISTS "bulk_listing_approvals" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"upload_id" integer NOT NULL,
 	"cooperative_user_id" integer NOT NULL,
@@ -217,7 +220,7 @@ CREATE TABLE "bulk_listing_approvals" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "circuit_breaker_events" (
+CREATE TABLE IF NOT EXISTS "circuit_breaker_events" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"rule_id" integer,
 	"instrument" varchar(32) NOT NULL,
@@ -234,7 +237,7 @@ CREATE TABLE "circuit_breaker_events" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "circuit_breaker_rules" (
+CREATE TABLE IF NOT EXISTS "circuit_breaker_rules" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"instrument" varchar(32) NOT NULL,
 	"asset_class" varchar(32) DEFAULT 'COMMODITY' NOT NULL,
@@ -248,7 +251,7 @@ CREATE TABLE "circuit_breaker_rules" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "clearing_accounts" (
+CREATE TABLE IF NOT EXISTS "clearing_accounts" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"account_ref" varchar(32) NOT NULL,
@@ -268,7 +271,7 @@ CREATE TABLE "clearing_accounts" (
 	CONSTRAINT "clearing_accounts_account_ref_unique" UNIQUE("account_ref")
 );
 --> statement-breakpoint
-CREATE TABLE "collateral_items" (
+CREATE TABLE IF NOT EXISTS "collateral_items" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"margin_account_id" integer NOT NULL,
 	"user_id" integer NOT NULL,
@@ -285,7 +288,7 @@ CREATE TABLE "collateral_items" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "collateral_ledger" (
+CREATE TABLE IF NOT EXISTS "collateral_ledger" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"collateral_item_id" integer,
@@ -298,7 +301,7 @@ CREATE TABLE "collateral_ledger" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "compliance_exports" (
+CREATE TABLE IF NOT EXISTS "compliance_exports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"export_type" varchar(32) NOT NULL,
 	"format" varchar(8) NOT NULL,
@@ -313,7 +316,7 @@ CREATE TABLE "compliance_exports" (
 	"status" varchar(16) DEFAULT 'PENDING' NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "cooperative_bulk_uploads" (
+CREATE TABLE IF NOT EXISTS "cooperative_bulk_uploads" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"uploaded_by" integer NOT NULL,
 	"file_name" varchar(256) NOT NULL,
@@ -328,7 +331,7 @@ CREATE TABLE "cooperative_bulk_uploads" (
 	"completed_at" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "corporate_actions" (
+CREATE TABLE IF NOT EXISTS "corporate_actions" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"action_type" "corporate_action_type" NOT NULL,
 	"status" "corporate_action_status" DEFAULT 'DRAFT' NOT NULL,
@@ -356,7 +359,7 @@ CREATE TABLE "corporate_actions" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "crop_listings" (
+CREATE TABLE IF NOT EXISTS "crop_listings" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"farm_id" integer NOT NULL,
@@ -372,7 +375,7 @@ CREATE TABLE "crop_listings" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "delivery_orders" (
+CREATE TABLE IF NOT EXISTS "delivery_orders" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"receipt_id" integer,
@@ -387,7 +390,7 @@ CREATE TABLE "delivery_orders" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "deposit_requests" (
+CREATE TABLE IF NOT EXISTS "deposit_requests" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"commodity" varchar(64) NOT NULL,
@@ -403,7 +406,7 @@ CREATE TABLE "deposit_requests" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "device_sessions" (
+CREATE TABLE IF NOT EXISTS "device_sessions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"fingerprint" varchar(128) NOT NULL,
@@ -418,7 +421,7 @@ CREATE TABLE "device_sessions" (
 	"revoked_at" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "dfsp_kyc_records" (
+CREATE TABLE IF NOT EXISTS "dfsp_kyc_records" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"fsp_id" varchar(64) NOT NULL,
 	"legal_entity_name" varchar(256) NOT NULL,
@@ -444,7 +447,7 @@ CREATE TABLE "dfsp_kyc_records" (
 	CONSTRAINT "dfsp_kyc_records_fsp_id_unique" UNIQUE("fsp_id")
 );
 --> statement-breakpoint
-CREATE TABLE "dfsp_tiers" (
+CREATE TABLE IF NOT EXISTS "dfsp_tiers" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" "dfsp_tier" NOT NULL,
 	"display_name" varchar(64) NOT NULL,
@@ -461,7 +464,7 @@ CREATE TABLE "dfsp_tiers" (
 	CONSTRAINT "dfsp_tiers_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
-CREATE TABLE "dispute_audit_log" (
+CREATE TABLE IF NOT EXISTS "dispute_audit_log" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"dispute_id" integer NOT NULL,
 	"performed_by" integer NOT NULL,
@@ -472,7 +475,7 @@ CREATE TABLE "dispute_audit_log" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "dispute_evidence" (
+CREATE TABLE IF NOT EXISTS "dispute_evidence" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"dispute_id" integer NOT NULL,
 	"uploaded_by" integer NOT NULL,
@@ -484,7 +487,7 @@ CREATE TABLE "dispute_evidence" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "farm_profiles" (
+CREATE TABLE IF NOT EXISTS "farm_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"farm_name" varchar(200) NOT NULL,
@@ -502,7 +505,7 @@ CREATE TABLE "farm_profiles" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "farmer_earnings" (
+CREATE TABLE IF NOT EXISTS "farmer_earnings" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"listing_id" integer,
@@ -517,7 +520,7 @@ CREATE TABLE "farmer_earnings" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "farmer_onboarding_drafts" (
+CREATE TABLE IF NOT EXISTS "farmer_onboarding_drafts" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"step" integer DEFAULT 1 NOT NULL,
@@ -527,7 +530,7 @@ CREATE TABLE "farmer_onboarding_drafts" (
 	CONSTRAINT "farmer_onboarding_drafts_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "farmer_profiles" (
+CREATE TABLE IF NOT EXISTS "farmer_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"full_name" varchar(200) NOT NULL,
@@ -553,7 +556,7 @@ CREATE TABLE "farmer_profiles" (
 	CONSTRAINT "farmer_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "futures_contracts" (
+CREATE TABLE IF NOT EXISTS "futures_contracts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"symbol" varchar(32) NOT NULL,
 	"underlying_asset" varchar(64) NOT NULL,
@@ -574,7 +577,7 @@ CREATE TABLE "futures_contracts" (
 	CONSTRAINT "futures_contracts_symbol_unique" UNIQUE("symbol")
 );
 --> statement-breakpoint
-CREATE TABLE "futures_positions" (
+CREATE TABLE IF NOT EXISTS "futures_positions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"contract_id" integer NOT NULL,
@@ -592,7 +595,7 @@ CREATE TABLE "futures_positions" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "futures_settlements" (
+CREATE TABLE IF NOT EXISTS "futures_settlements" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"contract_id" integer NOT NULL,
 	"settlement_type" varchar(16) NOT NULL,
@@ -605,7 +608,7 @@ CREATE TABLE "futures_settlements" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "ip_allowlist" (
+CREATE TABLE IF NOT EXISTS "ip_allowlist" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"cidr" varchar(50) NOT NULL,
 	"label" varchar(128) NOT NULL,
@@ -616,7 +619,7 @@ CREATE TABLE "ip_allowlist" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "ir_documents" (
+CREATE TABLE IF NOT EXISTS "ir_documents" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"company_symbol" varchar(16) NOT NULL,
 	"company_name" varchar(128) NOT NULL,
@@ -637,7 +640,7 @@ CREATE TABLE "ir_documents" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "ir_events" (
+CREATE TABLE IF NOT EXISTS "ir_events" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"company_symbol" varchar(16) NOT NULL,
 	"company_name" varchar(128) NOT NULL,
@@ -664,7 +667,7 @@ CREATE TABLE "ir_events" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "ir_subscriptions" (
+CREATE TABLE IF NOT EXISTS "ir_subscriptions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"company_symbol" varchar(16) NOT NULL,
@@ -675,7 +678,7 @@ CREATE TABLE "ir_subscriptions" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "kyc_analysis_results" (
+CREATE TABLE IF NOT EXISTS "kyc_analysis_results" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"stakeholder_type" text NOT NULL,
@@ -700,7 +703,7 @@ CREATE TABLE "kyc_analysis_results" (
 	"service_version" text DEFAULT '1.0.0'
 );
 --> statement-breakpoint
-CREATE TABLE "kyc_audit_log" (
+CREATE TABLE IF NOT EXISTS "kyc_audit_log" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"stakeholder_type" "kyc_audit_stakeholder" NOT NULL,
 	"profile_id" integer NOT NULL,
@@ -711,7 +714,7 @@ CREATE TABLE "kyc_audit_log" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "kyc_queue" (
+CREATE TABLE IF NOT EXISTS "kyc_queue" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"status" "kyc_queue_status" DEFAULT 'PENDING' NOT NULL,
@@ -722,7 +725,7 @@ CREATE TABLE "kyc_queue" (
 	"reviewed_at" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "listing_messages" (
+CREATE TABLE IF NOT EXISTS "listing_messages" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"listing_id" integer NOT NULL,
 	"sender_id" integer NOT NULL,
@@ -732,7 +735,7 @@ CREATE TABLE "listing_messages" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "live_prices" (
+CREATE TABLE IF NOT EXISTS "live_prices" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"symbol" varchar(64) NOT NULL,
 	"name" varchar(128) NOT NULL,
@@ -750,7 +753,7 @@ CREATE TABLE "live_prices" (
 	CONSTRAINT "live_prices_symbol_unique" UNIQUE("symbol")
 );
 --> statement-breakpoint
-CREATE TABLE "margin_accounts" (
+CREATE TABLE IF NOT EXISTS "margin_accounts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"status" "margin_account_status" DEFAULT 'ACTIVE' NOT NULL,
@@ -766,7 +769,7 @@ CREATE TABLE "margin_accounts" (
 	CONSTRAINT "margin_accounts_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "margin_call_events" (
+CREATE TABLE IF NOT EXISTS "margin_call_events" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"margin_call_id" bigint NOT NULL,
 	"event_type" "margin_call_event_type" NOT NULL,
@@ -777,7 +780,7 @@ CREATE TABLE "margin_call_events" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "margin_calls" (
+CREATE TABLE IF NOT EXISTS "margin_calls" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"clearing_account_id" bigint NOT NULL,
 	"user_id" integer NOT NULL,
@@ -797,7 +800,7 @@ CREATE TABLE "margin_calls" (
 	CONSTRAINT "margin_calls_call_ref_unique" UNIQUE("call_ref")
 );
 --> statement-breakpoint
-CREATE TABLE "market_maker_obligations" (
+CREATE TABLE IF NOT EXISTS "market_maker_obligations" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"market_maker_id" bigint NOT NULL,
 	"instrument" varchar(32) NOT NULL,
@@ -815,7 +818,7 @@ CREATE TABLE "market_maker_obligations" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "market_maker_onboarding_profiles" (
+CREATE TABLE IF NOT EXISTS "market_maker_onboarding_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"firm_name" varchar(200) NOT NULL,
@@ -840,7 +843,7 @@ CREATE TABLE "market_maker_onboarding_profiles" (
 	CONSTRAINT "market_maker_onboarding_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "market_maker_performance_reports" (
+CREATE TABLE IF NOT EXISTS "market_maker_performance_reports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"market_maker_id" bigint NOT NULL,
 	"obligation_id" bigint NOT NULL,
@@ -863,7 +866,7 @@ CREATE TABLE "market_maker_performance_reports" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "market_maker_profiles" (
+CREATE TABLE IF NOT EXISTS "market_maker_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"firm_name" varchar(128) NOT NULL,
@@ -880,7 +883,7 @@ CREATE TABLE "market_maker_profiles" (
 	CONSTRAINT "market_maker_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "market_maker_quote_snapshots" (
+CREATE TABLE IF NOT EXISTS "market_maker_quote_snapshots" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"market_maker_id" bigint NOT NULL,
 	"obligation_id" bigint NOT NULL,
@@ -896,7 +899,7 @@ CREATE TABLE "market_maker_quote_snapshots" (
 	"trading_session_date" varchar(16) NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mfa_otp_codes" (
+CREATE TABLE IF NOT EXISTS "mfa_otp_codes" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"method" "mfa_method" NOT NULL,
@@ -906,7 +909,7 @@ CREATE TABLE "mfa_otp_codes" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_callbacks" (
+CREATE TABLE IF NOT EXISTS "mojaloop_callbacks" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"callback_type" varchar(64) NOT NULL,
 	"resource_id" varchar(64) NOT NULL,
@@ -919,7 +922,7 @@ CREATE TABLE "mojaloop_callbacks" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_dead_letter" (
+CREATE TABLE IF NOT EXISTS "mojaloop_dead_letter" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"transfer_id" varchar(64) NOT NULL,
 	"payer_fsp_id" varchar(64) NOT NULL,
@@ -940,7 +943,7 @@ CREATE TABLE "mojaloop_dead_letter" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_dfsps" (
+CREATE TABLE IF NOT EXISTS "mojaloop_dfsps" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"fsp_id" varchar(64) NOT NULL,
 	"name" varchar(128) NOT NULL,
@@ -957,7 +960,7 @@ CREATE TABLE "mojaloop_dfsps" (
 	CONSTRAINT "mojaloop_dfsps_fsp_id_unique" UNIQUE("fsp_id")
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_fee_schedules" (
+CREATE TABLE IF NOT EXISTS "mojaloop_fee_schedules" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"tier_name" "dfsp_tier" NOT NULL,
 	"currency" varchar(8) NOT NULL,
@@ -972,7 +975,7 @@ CREATE TABLE "mojaloop_fee_schedules" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_parties" (
+CREATE TABLE IF NOT EXISTS "mojaloop_parties" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"party_id_type" varchar(32) NOT NULL,
 	"party_identifier" varchar(128) NOT NULL,
@@ -988,7 +991,7 @@ CREATE TABLE "mojaloop_parties" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_quotes" (
+CREATE TABLE IF NOT EXISTS "mojaloop_quotes" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"quote_id" varchar(64) NOT NULL,
 	"transaction_id" varchar(64) NOT NULL,
@@ -1013,7 +1016,7 @@ CREATE TABLE "mojaloop_quotes" (
 	CONSTRAINT "mojaloop_quotes_quote_id_unique" UNIQUE("quote_id")
 );
 --> statement-breakpoint
-CREATE TABLE "mojaloop_transfers" (
+CREATE TABLE IF NOT EXISTS "mojaloop_transfers" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"transfer_id" varchar(64) NOT NULL,
 	"quote_id" varchar(64),
@@ -1040,7 +1043,7 @@ CREATE TABLE "mojaloop_transfers" (
 	CONSTRAINT "mojaloop_transfers_transfer_id_unique" UNIQUE("transfer_id")
 );
 --> statement-breakpoint
-CREATE TABLE "notifications" (
+CREATE TABLE IF NOT EXISTS "notifications" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"title" varchar(256) NOT NULL,
@@ -1051,7 +1054,7 @@ CREATE TABLE "notifications" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "open_interest_snapshots" (
+CREATE TABLE IF NOT EXISTS "open_interest_snapshots" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"contract_id" integer NOT NULL,
 	"snapshot_date" timestamp DEFAULT now() NOT NULL,
@@ -1062,7 +1065,7 @@ CREATE TABLE "open_interest_snapshots" (
 	"settlement_price" numeric(20, 8)
 );
 --> statement-breakpoint
-CREATE TABLE "options_contracts" (
+CREATE TABLE IF NOT EXISTS "options_contracts" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"symbol" varchar(50) NOT NULL,
 	"underlying_contract_id" integer,
@@ -1081,7 +1084,7 @@ CREATE TABLE "options_contracts" (
 	CONSTRAINT "options_contracts_symbol_unique" UNIQUE("symbol")
 );
 --> statement-breakpoint
-CREATE TABLE "options_positions" (
+CREATE TABLE IF NOT EXISTS "options_positions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"contract_id" integer NOT NULL,
@@ -1098,7 +1101,7 @@ CREATE TABLE "options_positions" (
 	"closed_at" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "order_amendments" (
+CREATE TABLE IF NOT EXISTS "order_amendments" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"order_id" integer NOT NULL,
 	"user_id" integer NOT NULL,
@@ -1111,7 +1114,7 @@ CREATE TABLE "order_amendments" (
 	"amended_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "order_book_levels" (
+CREATE TABLE IF NOT EXISTS "order_book_levels" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"symbol" varchar(32) NOT NULL,
 	"side" varchar(4) NOT NULL,
@@ -1121,7 +1124,7 @@ CREATE TABLE "order_book_levels" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "orders" (
+CREATE TABLE IF NOT EXISTS "orders" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"symbol" varchar(32) NOT NULL,
@@ -1142,7 +1145,7 @@ CREATE TABLE "orders" (
 	"expires_at" timestamp
 );
 --> statement-breakpoint
-CREATE TABLE "participant_performance_metrics" (
+CREATE TABLE IF NOT EXISTS "participant_performance_metrics" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"participant_type" varchar(32) NOT NULL,
@@ -1160,7 +1163,7 @@ CREATE TABLE "participant_performance_metrics" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "platform_settings" (
+CREATE TABLE IF NOT EXISTS "platform_settings" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"key" varchar(128) NOT NULL,
 	"value" text NOT NULL,
@@ -1170,7 +1173,7 @@ CREATE TABLE "platform_settings" (
 	CONSTRAINT "platform_settings_key_unique" UNIQUE("key")
 );
 --> statement-breakpoint
-CREATE TABLE "portfolio_equity_snapshots" (
+CREATE TABLE IF NOT EXISTS "portfolio_equity_snapshots" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"snapshot_date" timestamp NOT NULL,
@@ -1182,7 +1185,7 @@ CREATE TABLE "portfolio_equity_snapshots" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "portfolio_snapshots" (
+CREATE TABLE IF NOT EXISTS "portfolio_snapshots" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"snapshot_date" timestamp NOT NULL,
@@ -1194,7 +1197,7 @@ CREATE TABLE "portfolio_snapshots" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "positions" (
+CREATE TABLE IF NOT EXISTS "positions" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"symbol" varchar(32) NOT NULL,
@@ -1205,7 +1208,7 @@ CREATE TABLE "positions" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "pre_trade_risk_checks" (
+CREATE TABLE IF NOT EXISTS "pre_trade_risk_checks" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"order_id" bigint NOT NULL,
 	"user_id" integer NOT NULL,
@@ -1220,7 +1223,7 @@ CREATE TABLE "pre_trade_risk_checks" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "price_alerts" (
+CREATE TABLE IF NOT EXISTS "price_alerts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"symbol" varchar(32) NOT NULL,
@@ -1231,7 +1234,7 @@ CREATE TABLE "price_alerts" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "profiles" (
+CREATE TABLE IF NOT EXISTS "profiles" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"account_type" "account_type" DEFAULT 'TRADER' NOT NULL,
@@ -1257,7 +1260,7 @@ CREATE TABLE "profiles" (
 	CONSTRAINT "profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "push_subscriptions" (
+CREATE TABLE IF NOT EXISTS "push_subscriptions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"endpoint" text NOT NULL,
@@ -1273,7 +1276,7 @@ CREATE TABLE "push_subscriptions" (
 	CONSTRAINT "push_subscriptions_endpoint_unique" UNIQUE("endpoint")
 );
 --> statement-breakpoint
-CREATE TABLE "rate_limit_counters" (
+CREATE TABLE IF NOT EXISTS "rate_limit_counters" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"action" varchar(64) NOT NULL,
@@ -1282,7 +1285,7 @@ CREATE TABLE "rate_limit_counters" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "re_kyc_flags" (
+CREATE TABLE IF NOT EXISTS "re_kyc_flags" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"stakeholder_type" "re_kyc_stakeholder_type" NOT NULL,
@@ -1294,7 +1297,7 @@ CREATE TABLE "re_kyc_flags" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "regulatory_report_schedules" (
+CREATE TABLE IF NOT EXISTS "regulatory_report_schedules" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"report_type" varchar(64) NOT NULL,
 	"asset_class" varchar(32),
@@ -1311,7 +1314,7 @@ CREATE TABLE "regulatory_report_schedules" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "regulatory_reports" (
+CREATE TABLE IF NOT EXISTS "regulatory_reports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"report_type" varchar(64) NOT NULL,
 	"report_date" timestamp NOT NULL,
@@ -1330,7 +1333,7 @@ CREATE TABLE "regulatory_reports" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "sar_reports" (
+CREATE TABLE IF NOT EXISTS "sar_reports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"flag_id" bigint,
 	"user_id" integer NOT NULL,
@@ -1353,7 +1356,7 @@ CREATE TABLE "sar_reports" (
 	CONSTRAINT "sar_reports_report_number_unique" UNIQUE("report_number")
 );
 --> statement-breakpoint
-CREATE TABLE "saved_orders" (
+CREATE TABLE IF NOT EXISTS "saved_orders" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"name" varchar(128) NOT NULL,
@@ -1365,7 +1368,7 @@ CREATE TABLE "saved_orders" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "security_events" (
+CREATE TABLE IF NOT EXISTS "security_events" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"event_type" "security_event_type" NOT NULL,
@@ -1382,7 +1385,7 @@ CREATE TABLE "security_events" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_cycles" (
+CREATE TABLE IF NOT EXISTS "settlement_cycles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"cycle_date" timestamp NOT NULL,
 	"settlement_type" varchar(8) DEFAULT 'T+1' NOT NULL,
@@ -1402,7 +1405,7 @@ CREATE TABLE "settlement_cycles" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_disputes" (
+CREATE TABLE IF NOT EXISTS "settlement_disputes" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"settlement_id" bigint NOT NULL,
 	"raised_by" integer NOT NULL,
@@ -1420,7 +1423,7 @@ CREATE TABLE "settlement_disputes" (
 	"sla_breached" boolean DEFAULT false NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_fails" (
+CREATE TABLE IF NOT EXISTS "settlement_fails" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"instruction_id" bigint NOT NULL,
 	"cycle_id" bigint NOT NULL,
@@ -1438,7 +1441,7 @@ CREATE TABLE "settlement_fails" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_instructions" (
+CREATE TABLE IF NOT EXISTS "settlement_instructions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"cycle_id" bigint NOT NULL,
 	"buyer_user_id" integer NOT NULL,
@@ -1458,7 +1461,7 @@ CREATE TABLE "settlement_instructions" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_positions" (
+CREATE TABLE IF NOT EXISTS "settlement_positions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"cycle_id" bigint NOT NULL,
 	"user_id" integer NOT NULL,
@@ -1477,7 +1480,7 @@ CREATE TABLE "settlement_positions" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "settlements" (
+CREATE TABLE IF NOT EXISTS "settlements" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"order_id" bigint NOT NULL,
 	"user_id" integer NOT NULL,
@@ -1498,7 +1501,7 @@ CREATE TABLE "settlements" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "shareholder_registry" (
+CREATE TABLE IF NOT EXISTS "shareholder_registry" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"company_symbol" varchar(16) NOT NULL,
 	"user_id" integer NOT NULL,
@@ -1512,7 +1515,7 @@ CREATE TABLE "shareholder_registry" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "totp_secrets" (
+CREATE TABLE IF NOT EXISTS "totp_secrets" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"secret" varchar(64) NOT NULL,
@@ -1524,7 +1527,7 @@ CREATE TABLE "totp_secrets" (
 	CONSTRAINT "totp_secrets_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "trade_fills" (
+CREATE TABLE IF NOT EXISTS "trade_fills" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"aggressor_order_id" bigint NOT NULL,
 	"resting_order_id" bigint NOT NULL,
@@ -1542,7 +1545,7 @@ CREATE TABLE "trade_fills" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "trader_profiles" (
+CREATE TABLE IF NOT EXISTS "trader_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"full_name" varchar(200) NOT NULL,
@@ -1570,7 +1573,7 @@ CREATE TABLE "trader_profiles" (
 	CONSTRAINT "trader_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "user_mfa_settings" (
+CREATE TABLE IF NOT EXISTS "user_mfa_settings" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"mfa_required" boolean DEFAULT false NOT NULL,
@@ -1584,7 +1587,7 @@ CREATE TABLE "user_mfa_settings" (
 	CONSTRAINT "user_mfa_settings_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "user_preferences" (
+CREATE TABLE IF NOT EXISTS "user_preferences" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"currency" varchar(8) DEFAULT 'NGN' NOT NULL,
@@ -1604,7 +1607,7 @@ CREATE TABLE "user_preferences" (
 	CONSTRAINT "user_preferences_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"open_id" varchar(64) NOT NULL,
 	"name" text,
@@ -1617,7 +1620,7 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_open_id_unique" UNIQUE("open_id")
 );
 --> statement-breakpoint
-CREATE TABLE "velocity_ledger" (
+CREATE TABLE IF NOT EXISTS "velocity_ledger" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"amount" numeric(20, 2) NOT NULL,
@@ -1626,7 +1629,7 @@ CREATE TABLE "velocity_ledger" (
 	"recorded_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "velocity_limit_config" (
+CREATE TABLE IF NOT EXISTS "velocity_limit_config" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"window_hours" integer DEFAULT 24 NOT NULL,
@@ -1638,7 +1641,7 @@ CREATE TABLE "velocity_limit_config" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "warehouse_messages" (
+CREATE TABLE IF NOT EXISTS "warehouse_messages" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"warehouse_id" varchar(50) NOT NULL,
@@ -1653,7 +1656,7 @@ CREATE TABLE "warehouse_messages" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "warehouse_operator_profiles" (
+CREATE TABLE IF NOT EXISTS "warehouse_operator_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"facility_name" varchar(200) NOT NULL,
@@ -1679,7 +1682,7 @@ CREATE TABLE "warehouse_operator_profiles" (
 	CONSTRAINT "warehouse_operator_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "warehouse_receipts" (
+CREATE TABLE IF NOT EXISTS "warehouse_receipts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"receipt_number" varchar(64) NOT NULL,
@@ -1699,7 +1702,7 @@ CREATE TABLE "warehouse_receipts" (
 	CONSTRAINT "warehouse_receipts_receipt_number_unique" UNIQUE("receipt_number")
 );
 --> statement-breakpoint
-CREATE TABLE "wash_trade_flags" (
+CREATE TABLE IF NOT EXISTS "wash_trade_flags" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"instrument" varchar(32) NOT NULL,
@@ -1718,14 +1721,14 @@ CREATE TABLE "wash_trade_flags" (
 	"penalty_applied" boolean DEFAULT false NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "watchlist" (
+CREATE TABLE IF NOT EXISTS "watchlist" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"symbol" varchar(32) NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "webauthn_challenges" (
+CREATE TABLE IF NOT EXISTS "webauthn_challenges" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer,
 	"challenge" text NOT NULL,
@@ -1734,7 +1737,7 @@ CREATE TABLE "webauthn_challenges" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "webauthn_credentials" (
+CREATE TABLE IF NOT EXISTS "webauthn_credentials" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"credential_id" text NOT NULL,
@@ -1750,7 +1753,7 @@ CREATE TABLE "webauthn_credentials" (
 	CONSTRAINT "webauthn_credentials_credential_id_unique" UNIQUE("credential_id")
 );
 --> statement-breakpoint
-CREATE TABLE "webhook_configs" (
+CREATE TABLE IF NOT EXISTS "webhook_configs" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"name" varchar(128) NOT NULL,
 	"url" varchar(2048) NOT NULL,
@@ -1765,7 +1768,7 @@ CREATE TABLE "webhook_configs" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "withdrawal_verifications" (
+CREATE TABLE IF NOT EXISTS "withdrawal_verifications" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"amount" numeric(18, 2) NOT NULL,

@@ -2655,6 +2655,7 @@ export const telegramContacts = pgTable("telegram_contacts", {
   alertsEnabled: boolean("alerts_enabled").default(true).notNull(),
   priceAlertsEnabled: boolean("price_alerts_enabled").default(true).notNull(),
   tradeNotificationsEnabled: boolean("trade_notifications_enabled").default(true).notNull(),
+  marketBroadcasts: boolean("market_broadcasts").default(true).notNull(),
   lastInteractionAt: timestamp("last_interaction_at"),
   totalCommands: integer("total_commands").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

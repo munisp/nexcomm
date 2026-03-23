@@ -1,4 +1,4 @@
-CREATE TABLE "push_subscriptions" (
+CREATE TABLE IF NOT EXISTS "push_subscriptions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"endpoint" text NOT NULL,

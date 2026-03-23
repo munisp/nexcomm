@@ -1,7 +1,8 @@
-CREATE TYPE "public"."crop_status_v2" AS ENUM('ACTIVE', 'SOLD', 'EXPIRED', 'WITHDRAWN');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."crop_status_v2" AS ENUM('ACTIVE', 'SOLD', 'EXPIRED', 'WITHDRAWN');--> statement-breakpoint
 CREATE TYPE "public"."farmer_kyc_status" AS ENUM('PENDING', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED');--> statement-breakpoint
 CREATE TYPE "public"."soil_type" AS ENUM('LOAMY', 'CLAY', 'SANDY', 'SILT', 'PEAT', 'CHALK', 'OTHER');--> statement-breakpoint
-CREATE TABLE "crop_listings" (
+CREATE TABLE IF NOT EXISTS "crop_listings" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"farm_id" integer NOT NULL,
@@ -16,8 +17,10 @@ CREATE TABLE "crop_listings" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "farm_profiles" (
+CREATE TABLE IF NOT EXISTS "farm_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"farm_name" varchar(200) NOT NULL,
@@ -32,7 +35,7 @@ CREATE TABLE "farm_profiles" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "farmer_profiles" (
+CREATE TABLE IF NOT EXISTS "farmer_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"full_name" varchar(200) NOT NULL,
@@ -51,7 +54,7 @@ CREATE TABLE "farmer_profiles" (
 	CONSTRAINT "farmer_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "portfolio_equity_snapshots" (
+CREATE TABLE IF NOT EXISTS "portfolio_equity_snapshots" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"snapshot_date" timestamp NOT NULL,

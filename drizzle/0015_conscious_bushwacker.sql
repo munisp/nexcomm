@@ -1,4 +1,4 @@
-CREATE TABLE "futures_contracts" (
+CREATE TABLE IF NOT EXISTS "futures_contracts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"symbol" varchar(32) NOT NULL,
 	"underlying_asset" varchar(64) NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE "futures_contracts" (
 	CONSTRAINT "futures_contracts_symbol_unique" UNIQUE("symbol")
 );
 --> statement-breakpoint
-CREATE TABLE "futures_positions" (
+CREATE TABLE IF NOT EXISTS "futures_positions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"contract_id" integer NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE "futures_positions" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "futures_settlements" (
+CREATE TABLE IF NOT EXISTS "futures_settlements" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"contract_id" integer NOT NULL,
 	"settlement_type" varchar(16) NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE "futures_settlements" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "open_interest_snapshots" (
+CREATE TABLE IF NOT EXISTS "open_interest_snapshots" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"contract_id" integer NOT NULL,
 	"snapshot_date" timestamp DEFAULT now() NOT NULL,

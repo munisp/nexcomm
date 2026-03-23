@@ -39,6 +39,8 @@ pub struct UssdSessionState {
     pub pending_repayment: Option<PendingRepayment>,
     /// Total interactions in this session
     pub interactions: u32,
+    /// Partial price alert being set from the price check menu
+    pub pending_price_alert: Option<PendingPriceAlert>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +84,21 @@ pub struct PendingLoan {
     pub step: u8,
 }
 
+/// Partial price alert being set from the price check shortcut
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingPriceAlert {
+    /// Commodity symbol, e.g. "MAIZE"
+    pub symbol: String,
+    /// Human-readable commodity name, e.g. "Maize"
+    pub name: String,
+    /// Current market price shown to the user
+    pub current_price: f64,
+    /// Direction chosen: "ABOVE" | "BELOW" (None until step 2)
+    pub condition: Option<String>,
+    /// Step: 1 = choose direction, 2 = enter target price
+    pub step: u8,
+}
+
 impl UssdSessionState {
     pub fn new(session_id: &str, phone_number: &str) -> Self {
         Self {
@@ -95,6 +112,7 @@ impl UssdSessionState {
             pending_pin: None,
             pending_loan: None,
             pending_repayment: None,
+            pending_price_alert: None,
             interactions: 0,
         }
     }

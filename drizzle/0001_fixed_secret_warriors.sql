@@ -1,6 +1,7 @@
-CREATE TYPE "public"."asset_class" AS ENUM('COMMODITY', 'FOREX', 'EQUITY', 'DIGITAL_ASSET', 'INDEX');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."asset_class" AS ENUM('COMMODITY', 'FOREX', 'EQUITY', 'DIGITAL_ASSET', 'INDEX');--> statement-breakpoint
 CREATE TYPE "public"."order_status" AS ENUM('OPEN', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED', 'REJECTED', 'EXPIRED');--> statement-breakpoint
-CREATE TABLE "orders" (
+CREATE TABLE IF NOT EXISTS "orders" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"symbol" varchar(32) NOT NULL,
@@ -20,8 +21,10 @@ CREATE TABLE "orders" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	"expires_at" timestamp
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "positions" (
+CREATE TABLE IF NOT EXISTS "positions" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"symbol" varchar(32) NOT NULL,

@@ -66,6 +66,14 @@ const validatePayload = (input: NotificationPayload): NotificationPayload => {
 export async function notifyOwner(
   payload: NotificationPayload
 ): Promise<boolean> {
+  // ── Test / dev guard ──────────────────────────────────────────────────────
+  // Suppress all owner notifications (emails/alerts) when running in the test
+  // environment or when EMAIL_ENABLED is explicitly set to "false". This
+  // prevents real alerts from firing during vitest / CI runs.
+  if (process.env.NODE_ENV === "test" || process.env.EMAIL_ENABLED === "false") {
+    return false;
+  }
+
   const { title, content } = validatePayload(payload);
 
   if (!ENV.forgeApiUrl) {

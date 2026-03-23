@@ -1,10 +1,11 @@
-CREATE TYPE "public"."auto_liquidation_status" AS ENUM('PENDING', 'EXECUTING', 'COMPLETED', 'FAILED', 'CANCELLED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."auto_liquidation_status" AS ENUM('PENDING', 'EXECUTING', 'COMPLETED', 'FAILED', 'CANCELLED');--> statement-breakpoint
 CREATE TYPE "public"."clearing_account_status" AS ENUM('ACTIVE', 'SUSPENDED', 'CLOSED');--> statement-breakpoint
 CREATE TYPE "public"."ir_document_type" AS ENUM('ANNUAL_REPORT', 'INTERIM_REPORT', 'QUARTERLY_REPORT', 'PROSPECTUS', 'CIRCULAR', 'PRESS_RELEASE', 'PRESENTATION', 'FINANCIAL_STATEMENT', 'REGULATORY_FILING', 'OTHER');--> statement-breakpoint
 CREATE TYPE "public"."ir_event_type" AS ENUM('EARNINGS_RELEASE', 'DIVIDEND_ANNOUNCEMENT', 'AGM', 'EGM', 'RIGHTS_ISSUE', 'BONUS_ISSUE', 'STOCK_SPLIT', 'MERGER_ACQUISITION', 'REGULATORY_FILING', 'INVESTOR_PRESENTATION', 'ROADSHOW', 'OTHER');--> statement-breakpoint
 CREATE TYPE "public"."margin_call_event_type" AS ENUM('ISSUED', 'DEPOSIT_RECEIVED', 'PARTIALLY_MET', 'MET', 'DEFAULTED', 'CANCELLED', 'GRACE_EXTENDED');--> statement-breakpoint
 CREATE TYPE "public"."margin_call_status" AS ENUM('OPEN', 'PARTIALLY_MET', 'MET', 'DEFAULTED', 'CANCELLED');--> statement-breakpoint
-CREATE TABLE "auto_liquidation_orders" (
+CREATE TABLE IF NOT EXISTS "auto_liquidation_orders" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"margin_call_id" bigint NOT NULL,
 	"clearing_account_id" bigint NOT NULL,
@@ -20,8 +21,10 @@ CREATE TABLE "auto_liquidation_orders" (
 	"failure_reason" text,
 	"notes" text
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "clearing_accounts" (
+CREATE TABLE IF NOT EXISTS "clearing_accounts" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"account_ref" varchar(32) NOT NULL,
@@ -41,7 +44,7 @@ CREATE TABLE "clearing_accounts" (
 	CONSTRAINT "clearing_accounts_account_ref_unique" UNIQUE("account_ref")
 );
 --> statement-breakpoint
-CREATE TABLE "ir_documents" (
+CREATE TABLE IF NOT EXISTS "ir_documents" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"company_symbol" varchar(16) NOT NULL,
 	"company_name" varchar(128) NOT NULL,
@@ -62,7 +65,7 @@ CREATE TABLE "ir_documents" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "ir_events" (
+CREATE TABLE IF NOT EXISTS "ir_events" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"company_symbol" varchar(16) NOT NULL,
 	"company_name" varchar(128) NOT NULL,
@@ -89,7 +92,7 @@ CREATE TABLE "ir_events" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "ir_subscriptions" (
+CREATE TABLE IF NOT EXISTS "ir_subscriptions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"company_symbol" varchar(16) NOT NULL,
@@ -100,7 +103,7 @@ CREATE TABLE "ir_subscriptions" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "margin_call_events" (
+CREATE TABLE IF NOT EXISTS "margin_call_events" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"margin_call_id" bigint NOT NULL,
 	"event_type" "margin_call_event_type" NOT NULL,
@@ -111,7 +114,7 @@ CREATE TABLE "margin_call_events" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "margin_calls" (
+CREATE TABLE IF NOT EXISTS "margin_calls" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"clearing_account_id" bigint NOT NULL,
 	"user_id" integer NOT NULL,
@@ -131,7 +134,7 @@ CREATE TABLE "margin_calls" (
 	CONSTRAINT "margin_calls_call_ref_unique" UNIQUE("call_ref")
 );
 --> statement-breakpoint
-CREATE TABLE "shareholder_registry" (
+CREATE TABLE IF NOT EXISTS "shareholder_registry" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"company_symbol" varchar(16) NOT NULL,
 	"user_id" integer NOT NULL,

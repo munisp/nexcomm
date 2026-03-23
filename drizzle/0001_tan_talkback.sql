@@ -1,4 +1,5 @@
-CREATE TYPE "public"."abcp_status" AS ENUM('STRUCTURING', 'SEC_REVIEW', 'APPROVED', 'ISSUED', 'TRADING', 'MATURED', 'DEFAULTED', 'CANCELLED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."abcp_status" AS ENUM('STRUCTURING', 'SEC_REVIEW', 'APPROVED', 'ISSUED', 'TRADING', 'MATURED', 'DEFAULTED', 'CANCELLED');--> statement-breakpoint
 CREATE TYPE "public"."bank_financing_status" AS ENUM('DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'DISBURSED', 'REPAYING', 'CLOSED', 'DEFAULTED');--> statement-breakpoint
 CREATE TYPE "public"."crop_report_type" AS ENUM('PLANTING_PROGRESS', 'CROP_CONDITIONS', 'YIELD_FORECAST', 'HARVEST_PROGRESS', 'STORAGE_STOCKS', 'PRICE_OUTLOOK');--> statement-breakpoint
 CREATE TYPE "public"."field_agent_status" AS ENUM('PENDING', 'ACTIVE', 'SUSPENDED', 'TERMINATED');--> statement-breakpoint
@@ -10,7 +11,7 @@ CREATE TYPE "public"."input_financing_status" AS ENUM('APPLIED', 'APPROVED', 'DI
 CREATE TYPE "public"."input_type" AS ENUM('SEEDS', 'FERTILIZER', 'PESTICIDE', 'HERBICIDE', 'EQUIPMENT', 'IRRIGATION', 'STORAGE', 'CASH');--> statement-breakpoint
 CREATE TYPE "public"."workbench_crop_season" AS ENUM('WET_SEASON', 'DRY_SEASON', 'YEAR_ROUND');--> statement-breakpoint
 CREATE TYPE "public"."workbench_farm_status" AS ENUM('ACTIVE', 'FALLOW', 'HARVESTED', 'ABANDONED');--> statement-breakpoint
-CREATE TABLE "abcp_programs" (
+CREATE TABLE IF NOT EXISTS "abcp_programs" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"program_name" varchar(300) NOT NULL,
 	"isin" varchar(20),
@@ -36,8 +37,10 @@ CREATE TABLE "abcp_programs" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "abcp_programs_isin_unique" UNIQUE("isin")
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "bank_financing_applications" (
+CREATE TABLE IF NOT EXISTS "bank_financing_applications" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"bank_name" varchar(200) NOT NULL,
@@ -59,7 +62,7 @@ CREATE TABLE "bank_financing_applications" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "commodity_index_history" (
+CREATE TABLE IF NOT EXISTS "commodity_index_history" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"index_id" integer NOT NULL,
 	"value" numeric(10, 4) NOT NULL,
@@ -68,7 +71,7 @@ CREATE TABLE "commodity_index_history" (
 	"recorded_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "commodity_indexes" (
+CREATE TABLE IF NOT EXISTS "commodity_indexes" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"ticker" varchar(20) NOT NULL,
 	"name" varchar(200) NOT NULL,
@@ -85,7 +88,7 @@ CREATE TABLE "commodity_indexes" (
 	CONSTRAINT "commodity_indexes_ticker_unique" UNIQUE("ticker")
 );
 --> statement-breakpoint
-CREATE TABLE "crop_production_reports" (
+CREATE TABLE IF NOT EXISTS "crop_production_reports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"report_type" "crop_report_type" NOT NULL,
 	"crop_symbol" varchar(20) NOT NULL,
@@ -106,7 +109,7 @@ CREATE TABLE "crop_production_reports" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "field_agents" (
+CREATE TABLE IF NOT EXISTS "field_agents" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"agent_code" varchar(20) NOT NULL,
@@ -127,7 +130,7 @@ CREATE TABLE "field_agents" (
 	CONSTRAINT "field_agents_agent_code_unique" UNIQUE("agent_code")
 );
 --> statement-breakpoint
-CREATE TABLE "field_visits" (
+CREATE TABLE IF NOT EXISTS "field_visits" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"agent_id" integer NOT NULL,
 	"farmer_id" integer NOT NULL,
@@ -148,7 +151,7 @@ CREATE TABLE "field_visits" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "fixed_income_instruments" (
+CREATE TABLE IF NOT EXISTS "fixed_income_instruments" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"isin" varchar(20),
 	"ticker" varchar(20) NOT NULL,
@@ -173,7 +176,7 @@ CREATE TABLE "fixed_income_instruments" (
 	CONSTRAINT "fixed_income_instruments_isin_unique" UNIQUE("isin")
 );
 --> statement-breakpoint
-CREATE TABLE "fixed_income_trades" (
+CREATE TABLE IF NOT EXISTS "fixed_income_trades" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"instrument_id" integer NOT NULL,
 	"buyer_user_id" integer NOT NULL,
@@ -186,7 +189,7 @@ CREATE TABLE "fixed_income_trades" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "input_financing_loans" (
+CREATE TABLE IF NOT EXISTS "input_financing_loans" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"farmer_id" integer NOT NULL,
 	"agent_id" integer,
@@ -209,7 +212,7 @@ CREATE TABLE "input_financing_loans" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "input_financing_repayments" (
+CREATE TABLE IF NOT EXISTS "input_financing_repayments" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"loan_id" integer NOT NULL,
 	"amount_ngn" numeric(18, 2) NOT NULL,
@@ -219,7 +222,7 @@ CREATE TABLE "input_financing_repayments" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "workbench_crop_plans" (
+CREATE TABLE IF NOT EXISTS "workbench_crop_plans" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"farm_id" integer NOT NULL,
 	"user_id" integer NOT NULL,
@@ -240,7 +243,7 @@ CREATE TABLE "workbench_crop_plans" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "workbench_farms" (
+CREATE TABLE IF NOT EXISTS "workbench_farms" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"farm_name" varchar(200) NOT NULL,
@@ -257,7 +260,7 @@ CREATE TABLE "workbench_farms" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "workbench_soil_tests" (
+CREATE TABLE IF NOT EXISTS "workbench_soil_tests" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"farm_id" integer NOT NULL,
 	"user_id" integer NOT NULL,

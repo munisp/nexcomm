@@ -1,4 +1,4 @@
-CREATE TABLE "market_maker_obligations" (
+CREATE TABLE IF NOT EXISTS "market_maker_obligations" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"market_maker_id" bigint NOT NULL,
 	"instrument" varchar(32) NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE "market_maker_obligations" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "market_maker_performance_reports" (
+CREATE TABLE IF NOT EXISTS "market_maker_performance_reports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"market_maker_id" bigint NOT NULL,
 	"obligation_id" bigint NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE "market_maker_performance_reports" (
 	"notes" text
 );
 --> statement-breakpoint
-CREATE TABLE "market_maker_profiles" (
+CREATE TABLE IF NOT EXISTS "market_maker_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"firm_name" varchar(128) NOT NULL,
@@ -56,7 +56,7 @@ CREATE TABLE "market_maker_profiles" (
 	CONSTRAINT "market_maker_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "market_maker_quote_snapshots" (
+CREATE TABLE IF NOT EXISTS "market_maker_quote_snapshots" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"market_maker_id" bigint NOT NULL,
 	"obligation_id" bigint NOT NULL,

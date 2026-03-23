@@ -1,7 +1,8 @@
-CREATE TYPE "public"."option_position_status" AS ENUM('OPEN', 'EXERCISED', 'EXPIRED', 'CLOSED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."option_position_status" AS ENUM('OPEN', 'EXERCISED', 'EXPIRED', 'CLOSED');--> statement-breakpoint
 CREATE TYPE "public"."option_status" AS ENUM('ACTIVE', 'EXPIRED', 'SETTLED');--> statement-breakpoint
 CREATE TYPE "public"."option_type" AS ENUM('CALL', 'PUT');--> statement-breakpoint
-CREATE TABLE "options_contracts" (
+CREATE TABLE IF NOT EXISTS "options_contracts" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"symbol" varchar(50) NOT NULL,
 	"underlying_contract_id" integer,
@@ -19,8 +20,10 @@ CREATE TABLE "options_contracts" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "options_contracts_symbol_unique" UNIQUE("symbol")
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "options_positions" (
+CREATE TABLE IF NOT EXISTS "options_positions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"contract_id" integer NOT NULL,

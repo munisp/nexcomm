@@ -1,4 +1,4 @@
-CREATE TABLE "aml_flags" (
+CREATE TABLE IF NOT EXISTS "aml_flags" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"rule_id" bigint,
@@ -16,7 +16,7 @@ CREATE TABLE "aml_flags" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "aml_rules" (
+CREATE TABLE IF NOT EXISTS "aml_rules" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"name" varchar(128) NOT NULL,
 	"rule_type" varchar(64) NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE "aml_rules" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "compliance_exports" (
+CREATE TABLE IF NOT EXISTS "compliance_exports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"export_type" varchar(32) NOT NULL,
 	"format" varchar(8) NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE "compliance_exports" (
 	"status" varchar(16) DEFAULT 'PENDING' NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "sar_reports" (
+CREATE TABLE IF NOT EXISTS "sar_reports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"flag_id" bigint,
 	"user_id" integer NOT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE "sar_reports" (
 	CONSTRAINT "sar_reports_report_number_unique" UNIQUE("report_number")
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_cycles" (
+CREATE TABLE IF NOT EXISTS "settlement_cycles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"cycle_date" timestamp NOT NULL,
 	"settlement_type" varchar(8) DEFAULT 'T+1' NOT NULL,
@@ -90,7 +90,7 @@ CREATE TABLE "settlement_cycles" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_fails" (
+CREATE TABLE IF NOT EXISTS "settlement_fails" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"instruction_id" bigint NOT NULL,
 	"cycle_id" bigint NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE "settlement_fails" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_instructions" (
+CREATE TABLE IF NOT EXISTS "settlement_instructions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"cycle_id" bigint NOT NULL,
 	"buyer_user_id" integer NOT NULL,
@@ -128,7 +128,7 @@ CREATE TABLE "settlement_instructions" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "settlement_positions" (
+CREATE TABLE IF NOT EXISTS "settlement_positions" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"cycle_id" bigint NOT NULL,
 	"user_id" integer NOT NULL,

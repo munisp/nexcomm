@@ -1,5 +1,6 @@
-CREATE TYPE "public"."dfsp_tier" AS ENUM('STANDARD', 'PREMIUM', 'INSTITUTIONAL', 'CORRESPONDENT');--> statement-breakpoint
-CREATE TABLE "dfsp_tiers" (
+DO $$ BEGIN
+  CREATE TYPE "public"."dfsp_tier" AS ENUM('STANDARD', 'PREMIUM', 'INSTITUTIONAL', 'CORRESPONDENT');--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "dfsp_tiers" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" "dfsp_tier" NOT NULL,
 	"display_name" varchar(64) NOT NULL,
@@ -15,8 +16,10 @@ CREATE TABLE "dfsp_tiers" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "dfsp_tiers_name_unique" UNIQUE("name")
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "mojaloop_fee_schedules" (
+CREATE TABLE IF NOT EXISTS "mojaloop_fee_schedules" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"tier_name" "dfsp_tier" NOT NULL,
 	"currency" varchar(8) NOT NULL,

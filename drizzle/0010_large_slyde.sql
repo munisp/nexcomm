@@ -1,4 +1,4 @@
-CREATE TABLE "regulatory_report_schedules" (
+CREATE TABLE IF NOT EXISTS "regulatory_report_schedules" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"report_type" varchar(64) NOT NULL,
 	"asset_class" varchar(32),
@@ -15,7 +15,7 @@ CREATE TABLE "regulatory_report_schedules" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "regulatory_reports" (
+CREATE TABLE IF NOT EXISTS "regulatory_reports" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"report_type" varchar(64) NOT NULL,
 	"report_date" timestamp NOT NULL,

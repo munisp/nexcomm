@@ -1,4 +1,4 @@
-CREATE TABLE "farmer_onboarding_drafts" (
+CREATE TABLE IF NOT EXISTS "farmer_onboarding_drafts" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"step" integer DEFAULT 1 NOT NULL,

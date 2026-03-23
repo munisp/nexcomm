@@ -489,3 +489,30 @@ pub async fn get_mini_statement(db: &DbPool, user_id: i32) -> Result<Vec<MiniSta
         })
         .collect())
 }
+
+// ─── Price Alerts ─────────────────────────────────────────────────────────────
+
+/// Create a price alert for a user from the USSD price check shortcut.
+///
+/// `condition` must be `"ABOVE"` or `"BELOW"` — matches the `alert_condition` enum.
+/// Returns the new alert's id.
+pub async fn create_price_alert(
+    db: &DbPool,
+    user_id: i32,
+    symbol: &str,
+    condition: &str,
+    target_price: f64,
+) -> Result<i64> {
+    let row = sqlx::query(
+        r#"INSERT INTO price_alerts (user_id, symbol, condition, target_price, triggered, notified, created_at)
+           VALUES ($1, $2, $3::alert_condition, $4, false, false, NOW())
+           RETURNING id"#,
+    )
+    .bind(user_id)
+    .bind(symbol)
+    .bind(condition)
+    .bind(target_price)
+    .fetch_one(db)
+    .await?;
+    Ok(row.get::<i64, _>("id"))
+}

@@ -16,6 +16,9 @@ export default defineConfig({
     environment: "node",
     include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
     env: {
+      // Suppress owner notifications (emails/alerts) during test runs.
+      NODE_ENV: "test",
+      EMAIL_ENABLED: "false",
       // Permify is not running in CI/test — fail-open so permission-guarded
       // procedures are accessible to admin callers in unit tests.
       PERMIFY_FAIL_OPEN: "true",

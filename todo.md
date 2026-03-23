@@ -228,3 +228,10 @@
 - [x] Telegram market open/close broadcasts: app/telegram/market_broadcast.py with APScheduler (08:00 WAT open + 16:00 WAT close, Mon–Fri); wired into main.py lifespan; apscheduler + aiokafka added to requirements.txt
 - [x] Loan-to-core-banking integration documentation: docs/loan-core-banking-integration.md (10 sections, full flow diagram, DB schema table, Kafka event topology, security notes, config reference)
 - [x] Test suite: 782/782 Node.js tests passing, 18/18 Python NLP tests passing, 0 TypeScript errors
+
+## Round 14 — COMPLETED
+- [x] Suppress test emails — NODE_ENV=test + EMAIL_ENABLED=false in vitest.config.ts; notifyOwner() returns early when EMAIL_ENABLED != "true" in non-production environments
+- [x] Loan approval WhatsApp/Telegram notifications — app/kafka/loan_consumer.py consumes nexcom.loan.approved; sends formatted approval/rejection message to borrower's preferred channel via channel-gateway; wired into main.py lifespan
+- [x] Telegram /subscribe and /unsubscribe commands — marketBroadcasts column added to telegram_contacts schema; subscribeMarketBroadcasts, unsubscribeMarketBroadcasts, getMarketBroadcastStatus procedures added to telegramRouter; DB migration applied (123 tables)
+- [x] USSD price alert shortcut — PendingPriceAlert struct added to session.rs; create_price_alert() DB function added to db.rs; handle_price() updated: after viewing a price, authenticated users see "9. Set Alert"; PRICE_ALERT_STEP1 (choose ABOVE/BELOW) and PRICE_ALERT_STEP2 (enter target price) sub-states added; PRICE_ALERT_STEP1|PRICE_ALERT_STEP2 wired into main dispatch
+- [x] Test suite fixes — totpSecrets cleanup added to Phase 33 Integration beforeEach; missing notification_type enum values added (SECURITY_ALERT, PRICE_ALERT, LOAN, ORDER, DEPOSIT, WITHDRAWAL); farm_profiles centroid/geom columns added as text fallback (PostGIS not installed); 782/782 tests passing

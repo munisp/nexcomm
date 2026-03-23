@@ -1,4 +1,5 @@
-CREATE TYPE "public"."broker_account_status" AS ENUM('INACTIVE', 'ACTIVE', 'SUSPENDED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."broker_account_status" AS ENUM('INACTIVE', 'ACTIVE', 'SUSPENDED');--> statement-breakpoint
 CREATE TYPE "public"."broker_kyc_status" AS ENUM('PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED');--> statement-breakpoint
 CREATE TYPE "public"."mm_onboarding_account_status" AS ENUM('INACTIVE', 'ACTIVE', 'SUSPENDED');--> statement-breakpoint
 CREATE TYPE "public"."mm_onboarding_kyc_status" AS ENUM('PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED');--> statement-breakpoint
@@ -8,7 +9,7 @@ CREATE TYPE "public"."trader_kyc_status" AS ENUM('PENDING', 'UNDER_REVIEW', 'APP
 CREATE TYPE "public"."trader_risk_profile" AS ENUM('CONSERVATIVE', 'MODERATE', 'AGGRESSIVE');--> statement-breakpoint
 CREATE TYPE "public"."warehouse_op_account_status" AS ENUM('INACTIVE', 'ACTIVE', 'SUSPENDED');--> statement-breakpoint
 CREATE TYPE "public"."warehouse_op_kyc_status" AS ENUM('PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED');--> statement-breakpoint
-CREATE TABLE "broker_profiles" (
+CREATE TABLE IF NOT EXISTS "broker_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"firm_name" varchar(200) NOT NULL,
@@ -33,8 +34,10 @@ CREATE TABLE "broker_profiles" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "broker_profiles_user_id_unique" UNIQUE("user_id")
 );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
-CREATE TABLE "farmer_earnings" (
+CREATE TABLE IF NOT EXISTS "farmer_earnings" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"listing_id" integer,
@@ -49,7 +52,7 @@ CREATE TABLE "farmer_earnings" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "listing_messages" (
+CREATE TABLE IF NOT EXISTS "listing_messages" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"listing_id" integer NOT NULL,
 	"sender_id" integer NOT NULL,
@@ -59,7 +62,7 @@ CREATE TABLE "listing_messages" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "market_maker_onboarding_profiles" (
+CREATE TABLE IF NOT EXISTS "market_maker_onboarding_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"firm_name" varchar(200) NOT NULL,
@@ -84,7 +87,7 @@ CREATE TABLE "market_maker_onboarding_profiles" (
 	CONSTRAINT "market_maker_onboarding_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "trader_profiles" (
+CREATE TABLE IF NOT EXISTS "trader_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"full_name" varchar(200) NOT NULL,
@@ -112,7 +115,7 @@ CREATE TABLE "trader_profiles" (
 	CONSTRAINT "trader_profiles_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "warehouse_operator_profiles" (
+CREATE TABLE IF NOT EXISTS "warehouse_operator_profiles" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
 	"facility_name" varchar(200) NOT NULL,
