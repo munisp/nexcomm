@@ -2676,3 +2676,44 @@ export const telegramMessages = pgTable("telegram_messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 export type TelegramMessage = typeof telegramMessages.$inferSelect;
+
+// ─── Banking Accounts & Transactions ─────────────────────────────────────────
+export const bankAccountTypeEnum = pgEnum("bank_account_type", [
+  "ESCROW", "SETTLEMENT", "SAVINGS", "CURRENT", "MARGIN"
+]);
+export const bankAccountStatusEnum = pgEnum("bank_account_status", [
+  "ACTIVE", "DORMANT", "FROZEN", "CLOSED"
+]);
+export const bankAccounts = pgTable("bank_accounts", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: integer("user_id").notNull(),
+  accountRef: varchar("account_ref", { length: 50 }).notNull().unique(),
+  type: bankAccountTypeEnum("type").notNull().default("ESCROW"),
+  label: varchar("label", { length: 100 }).notNull(),
+  currency: varchar("currency", { length: 10 }).notNull().default("NGN"),
+  balanceKobo: bigint("balance_kobo", { mode: "number" }).notNull().default(0),
+  availBalanceKobo: bigint("avail_balance_kobo", { mode: "number" }).notNull().default(0),
+  status: bankAccountStatusEnum("status").notNull().default("ACTIVE"),
+  cbsAccountId: varchar("cbs_account_id", { length: 100 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type BankAccount = typeof bankAccounts.$inferSelect;
+
+export const bankTransactionTypeEnum = pgEnum("bank_transaction_type", [
+  "CREDIT", "DEBIT", "REVERSAL", "FEE", "INTEREST"
+]);
+export const bankTransactions = pgTable("bank_transactions", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  accountId: bigint("account_id", { mode: "number" }).notNull(),
+  userId: integer("user_id").notNull(),
+  type: bankTransactionTypeEnum("type").notNull(),
+  amountKobo: bigint("amount_kobo", { mode: "number" }).notNull(),
+  balanceAfterKobo: bigint("balance_after_kobo", { mode: "number" }).notNull(),
+  currency: varchar("currency", { length: 10 }).notNull().default("NGN"),
+  narrative: text("narrative"),
+  reference: varchar("reference", { length: 100 }),
+  valueDate: timestamp("value_date").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type BankTransaction = typeof bankTransactions.$inferSelect;

@@ -145,9 +145,10 @@ export default function Analytics() {
   const [tick, setTick] = useState(0);
 
   // Real data from analytics router
-  const { data: summary } = trpc.analytics.summary.useQuery();
-  const { data: topSymbols } = trpc.analytics.topSymbols.useQuery({ limit: 10 });
-  const { data: volumeByAsset } = trpc.analytics.volumeByAssetClass.useQuery();
+  const { data: summary, isLoading: summaryLoading, error: summaryError } = trpc.analytics.summary.useQuery();
+  const { data: topSymbols, isLoading: symbolsLoading } = trpc.analytics.topSymbols.useQuery({ limit: 10 });
+  const { data: volumeByAsset, isLoading: volumeLoading } = trpc.analytics.volumeByAssetClass.useQuery();
+  const isLoading = summaryLoading || symbolsLoading || volumeLoading;
 
   // Build live KPIs from real data, falling back to static values when DB unavailable
   const liveKpis = useMemo<KPI[]>(() => [

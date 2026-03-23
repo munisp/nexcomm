@@ -13,6 +13,8 @@ import {
   farmerProfiles,
   inputFinancingLoans,
   notifications,
+  bankAccounts,
+  bankTransactions,
 } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 
@@ -39,56 +41,48 @@ const InsuranceStatusEnum = z.enum([
   "REJECTED",
 ]);
 
-// ─── Helper: mock bank account data (replaced by CBS adapter when configured) ─
+// ─── Helper: get or create bank accounts for a user ─────────────────────────
 
-function mockAccounts(userId: number) {
-  return [
+async function getOrCreateBankAccounts(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, userId: number) {
+  const existing = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
+  if (existing.length > 0) return existing;
+  // Auto-provision two accounts on first access
+  const created = await db.insert(bankAccounts).values([
     {
-      id: `ACC-${userId}-001`,
-      type: "ESCROW",
+      userId,
+      accountRef: `ESC-${userId}-001`,
+      type: "ESCROW" as const,
       label: "Trading Escrow",
       currency: "NGN",
-      balance: 2_450_000.0,
-      availBalance: 2_100_000.0,
-      status: "ACTIVE",
+      balanceKobo: 0,
+      availBalanceKobo: 0,
+      status: "ACTIVE" as const,
     },
     {
-      id: `ACC-${userId}-002`,
-      type: "SETTLEMENT",
+      userId,
+      accountRef: `SET-${userId}-001`,
+      type: "SETTLEMENT" as const,
       label: "Settlement Account",
       currency: "NGN",
-      balance: 850_000.0,
-      availBalance: 850_000.0,
-      status: "ACTIVE",
+      balanceKobo: 0,
+      availBalanceKobo: 0,
+      status: "ACTIVE" as const,
     },
-  ];
+  ]).returning();
+  return created;
 }
 
-function mockTransactions(accountId: string, limit: number) {
-  const types = ["CREDIT", "DEBIT"] as const;
-  const narratives = [
-    "Commodity sale proceeds — Ginger Grade A",
-    "Input loan disbursement",
-    "Warehouse receipt pledge fee",
-    "Settlement — NGGI-2024-0042",
-    "Insurance premium payment",
-    "Loan repayment — principal",
-    "Loan repayment — interest",
-    "Margin deposit",
-    "Withdrawal to bank",
-    "Platform fee",
-  ];
-  return Array.from({ length: Math.min(limit, 20) }, (_, i) => ({
-    id: `TXN-${accountId}-${String(i + 1).padStart(4, "0")}`,
-    accountId,
-    type: types[i % 2],
-    amount: Math.round((Math.random() * 500_000 + 10_000) * 100) / 100,
-    currency: "NGN",
-    balanceAfter: Math.round((Math.random() * 3_000_000 + 100_000) * 100) / 100,
-    valueDate: new Date(Date.now() - i * 86_400_000).toISOString(),
-    narrative: narratives[i % narratives.length],
-    reference: `REF-${Date.now()}-${i}`,
-  }));
+function formatAccount(a: typeof bankAccounts.$inferSelect) {
+  return {
+    id: String(a.id),
+    accountRef: a.accountRef,
+    type: a.type,
+    label: a.label,
+    currency: a.currency,
+    balance: a.balanceKobo / 100,
+    availBalance: a.availBalanceKobo / 100,
+    status: a.status,
+  };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -104,8 +98,12 @@ export const bankingRouter = router({
     const db = await getDb();
     const userId = ctx.user.id;
 
-    // Accounts (mock until CBS adapter is configured)
-    const accounts = mockAccounts(userId);
+    // Accounts — real DB-backed, auto-provisioned on first access
+    let accounts: ReturnType<typeof formatAccount>[] = [];
+    if (db) {
+      const rows = await getOrCreateBankAccounts(db, userId);
+      accounts = rows.map(formatAccount);
+    }
     const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
 
     // Active loans from local DB
@@ -152,8 +150,25 @@ export const bankingRouter = router({
       }
     }
 
-    // Recent transactions (mock)
-    const recentTransactions = mockTransactions(accounts[0].id, 5);
+    // Recent transactions — real DB
+    let recentTransactions: object[] = [];
+    if (db && accounts.length > 0) {
+      const txns = await db.select().from(bankTransactions)
+        .where(eq(bankTransactions.userId, userId))
+        .orderBy(desc(bankTransactions.valueDate))
+        .limit(5);
+      recentTransactions = txns.map(t => ({
+        id: String(t.id),
+        accountId: String(t.accountId),
+        type: t.type,
+        amount: t.amountKobo / 100,
+        currency: t.currency,
+        balanceAfter: t.balanceAfterKobo / 100,
+        valueDate: t.valueDate.toISOString(),
+        narrative: t.narrative,
+        reference: t.reference,
+      }));
+    }
 
     // Upcoming repayments
     const upcomingRepayments = activeLoans
@@ -178,7 +193,10 @@ export const bankingRouter = router({
   // ── Accounts ───────────────────────────────────────────────────────────────
 
   listAccounts: protectedProcedure.query(async ({ ctx }) => {
-    return mockAccounts(ctx.user.id);
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await getOrCreateBankAccounts(db, ctx.user.id);
+    return rows.map(formatAccount);
   }),
 
   // ── Transaction history ────────────────────────────────────────────────────
@@ -193,12 +211,34 @@ export const bankingRouter = router({
         offset: z.number().int().min(0).default(0),
       })
     )
-    .query(async ({ input }) => {
-      const txns = mockTransactions(input.accountId, input.limit);
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { transactions: [], total: 0, hasMore: false };
+      const accountId = parseInt(input.accountId, 10);
+      const conditions = [eq(bankTransactions.userId, ctx.user.id)];
+      if (!isNaN(accountId)) conditions.push(eq(bankTransactions.accountId, accountId));
+      if (input.from) conditions.push(gte(bankTransactions.valueDate, new Date(input.from)));
+      if (input.to) conditions.push(lte(bankTransactions.valueDate, new Date(input.to)));
+      const [{ count }] = await db.select({ count: sql<number>`count(*)::int` })
+        .from(bankTransactions).where(and(...conditions));
+      const rows = await db.select().from(bankTransactions)
+        .where(and(...conditions))
+        .orderBy(desc(bankTransactions.valueDate))
+        .limit(input.limit).offset(input.offset);
       return {
-        transactions: txns.slice(input.offset, input.offset + input.limit),
-        total: txns.length,
-        hasMore: input.offset + input.limit < txns.length,
+        transactions: rows.map(t => ({
+          id: String(t.id),
+          accountId: String(t.accountId),
+          type: t.type,
+          amount: t.amountKobo / 100,
+          currency: t.currency,
+          balanceAfter: t.balanceAfterKobo / 100,
+          valueDate: t.valueDate.toISOString(),
+          narrative: t.narrative,
+          reference: t.reference,
+        })),
+        total: count,
+        hasMore: input.offset + input.limit < count,
       };
     }),
 

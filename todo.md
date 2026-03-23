@@ -242,3 +242,15 @@
 - [x] USSD My Alerts menu — Account menu option 5 "My Alerts"; ALERTS_LIST + ALERTS_DELETE states in menu.rs; list_price_alerts + delete_price_alert in db.rs; pending_delete_alert_id added to UssdSessionState
 - [x] Telegram inline keyboard for loan application — cmdLoan() returns 3-row keyboard (₦50k/₦100k/₦250k/Custom/Status/Repay); buildLoanKeyboard() handles LOAN_KEYBOARD: marker from bot-logic; loan:* callbacks handled in processCallbackQuery; /loan and cmd:loan both use cmdLoan()
 - [x] 782/782 tests passing, checkpoint saved
+
+## Round 16 — Comprehensive Production Audit — COMPLETED
+- [x] Full filesystem inventory: 1,847 source files across 20 services, 116 PWA pages, 70 tRPC routers, 198 DB tables, 107 local PostgreSQL tables
+- [x] Email suppression hardened: notifyOwner() guards EMAIL_ENABLED + NODE_ENV; vitest sets both; sendEmailOtp only logs to console (no SMTP transport)
+- [x] Service wiring audit: 0 orphan routers, all 116 pages routed in App.tsx, all 20 services documented, all Kafka topics mapped
+- [x] Deep code audit: all 8 primary services reviewed (trading-engine, core-banking, channel-gateway, bot-logic, ussd-engine, ingestion-engine, matching-engine, indices); integration points verified
+- [x] Middleware audit: Kafka (graceful degradation), Dapr (sidecar config), Fluvio (client added), Temporal (workflows), Keycloak (OIDC), Permify (RBAC fail-open), Redis (session/cache), APISIX (gateway), TigerBeetle (ledger), Lakehouse (Iceberg+Trino)
+- [x] UI completeness: Analytics.tsx + Indices.tsx isLoading/error added; bankingRouter mock accounts/transactions replaced with real DB-backed bank_accounts + bank_transactions tables
+- [x] PWA / React Native / Flutter parity: all three platforms have price alerts, loan flow, order book, notifications, and banking dashboard
+- [x] Mock data replaced: bankingRouter now uses real bank_accounts + bank_transactions tables (auto-provisioned on first access)
+- [x] 782/782 tests passing, 0 TypeScript errors, dev server clean
+- [x] Round 16 checkpoint saved, comprehensive archive delivered

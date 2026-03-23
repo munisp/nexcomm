@@ -94,7 +94,7 @@ export default function Indices() {
   const [indices, setIndices] = useState(INDICES);
 
   // Fetch live index values from the database and merge with static metadata
-  const { data: liveIndices } = trpc.marketData.indices.useQuery(undefined, {
+  const { data: liveIndices, isLoading, error } = trpc.marketData.indices.useQuery(undefined, {
     refetchInterval: 10_000,
   });
 
