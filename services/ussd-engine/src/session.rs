@@ -153,13 +153,13 @@ impl SessionStore {
     pub async fn set(&mut self, state: &UssdSessionState) -> Result<()> {
         let raw = serde_json::to_string(state)?;
         self.conn
-            .set_ex(Self::key(&state.session_id), raw, SESSION_TTL_SECS)
+            .set_ex::<_, _, ()>(Self::key(&state.session_id), raw, SESSION_TTL_SECS)
             .await?;
         Ok(())
     }
 
     pub async fn delete(&mut self, session_id: &str) -> Result<()> {
-        self.conn.del(Self::key(session_id)).await?;
+        self.conn.del::<_, ()>(Self::key(session_id)).await?;
         Ok(())
     }
 
@@ -168,7 +168,7 @@ impl SessionStore {
         let full_key = format!("nexcom:ussd:rl:{}", key);
         let count: i64 = self.conn.incr(&full_key, 1).await?;
         if count == 1 {
-            self.conn.expire(&full_key, ttl as i64).await?;
+            self.conn.expire::<_, ()>(&full_key, ttl as i64).await?;
         }
         Ok(count)
     }

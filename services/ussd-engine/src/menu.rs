@@ -106,7 +106,7 @@ async fn route_input(
         "ALERTS_DELETE" => handle_alerts_delete(state, session, input).await,
         "SET_PIN" => handle_set_pin(session, input).await,
         "SET_PIN_CONFIRM" => handle_set_pin_confirm(state, session, input).await,
-        _ => Ok(MenuResponse::End("Invalid session state. Please dial again.")),
+        _ => Ok(MenuResponse::End("Invalid session state. Please dial again.".to_string())),
     }
 }
 
@@ -119,13 +119,13 @@ async fn handle_main(
 ) -> Result<MenuResponse> {
     // First call — show main menu
     if input.is_empty() {
-        return Ok(MenuResponse::Continue(main_menu_text()));
+        return Ok(MenuResponse::Continue(main_menu_text().to_string()));
     }
 
     match input {
         "1" => {
             session.current_menu = "PRICE".to_string();
-            Ok(MenuResponse::Continue(price_menu_text()))
+            Ok(MenuResponse::Continue(price_menu_text().to_string()))
         }
         "2" => {
             // Portfolio requires auth
@@ -135,18 +135,18 @@ async fn handle_main(
             } else {
                 session.current_menu = "AUTH".to_string();
                 session.menu_path.push("PORTFOLIO".to_string());
-                Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:"))
+                Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:".to_string()))
             }
         }
         "3" => {
             // Order requires auth
             if session.is_authenticated() {
                 session.current_menu = "ORDER_SIDE".to_string();
-                Ok(MenuResponse::Continue("Place Order:\n1. Buy\n2. Sell\n0. Back"))
+                Ok(MenuResponse::Continue("Place Order:\n1. Buy\n2. Sell\n0. Back".to_string()))
             } else {
                 session.current_menu = "AUTH".to_string();
                 session.menu_path.push("ORDER_SIDE".to_string());
-                Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:"))
+                Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:".to_string()))
             }
         }
         "4" => {
@@ -157,21 +157,21 @@ async fn handle_main(
             } else {
                 session.current_menu = "AUTH".to_string();
                 session.menu_path.push("LOAN".to_string());
-                Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:"))
+                Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:".to_string()))
             }
         }
         "5" => {
             if session.is_authenticated() {
                 session.current_menu = "ACCOUNT".to_string();
-                Ok(MenuResponse::Continue(account_menu_text()))
+                Ok(MenuResponse::Continue(account_menu_text().to_string()))
             } else {
                 session.current_menu = "AUTH".to_string();
                 session.menu_path.push("ACCOUNT".to_string());
-                Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:"))
+                Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:".to_string()))
             }
         }
         "0" => Ok(MenuResponse::End(
-            "Thank you for using NEXCOM Exchange.\nDial *347*99# anytime.",
+            "Thank you for using NEXCOM Exchange.\nDial *347*99# anytime.".to_string(),
         )),
         _ => Ok(MenuResponse::Continue(format!(
             "Invalid option.\n{}",
@@ -188,13 +188,13 @@ async fn handle_auth(
     input: &str,
 ) -> Result<MenuResponse> {
     if input.is_empty() {
-        return Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:"));
+        return Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN:".to_string()));
     }
 
     // Rate limit: max 3 attempts per session
     if session.auth_attempts >= 3 {
         return Ok(MenuResponse::End(
-            "Too many failed attempts. Your account is temporarily locked.\nContact support: 0800-NEXCOM",
+            "Too many failed attempts. Your account is temporarily locked.\nContact support: 0800-NEXCOM".to_string(),
         ));
     }
 
@@ -214,7 +214,7 @@ async fn handle_auth(
             let remaining = 3 - session.auth_attempts;
             if remaining == 0 {
                 Ok(MenuResponse::End(
-                    "Incorrect PIN. Account locked for 30 minutes.\nContact support: 0800-NEXCOM",
+                    "Incorrect PIN. Account locked for 30 minutes.\nContact support: 0800-NEXCOM".to_string(),
                 ))
             } else {
                 Ok(MenuResponse::Continue(format!(
@@ -228,7 +228,7 @@ async fn handle_auth(
             session.current_menu = "SET_PIN".to_string();
             session.pending_pin = Some(PendingPin { new_pin: None, step: 1 });
             Ok(MenuResponse::Continue(
-                "No PIN set. Create a 4-digit PIN:\n(You will be asked to confirm it)",
+                "No PIN set. Create a 4-digit PIN:\n(You will be asked to confirm it)".to_string(),
             ))
         }
     }
@@ -274,7 +274,7 @@ async fn handle_price(
 
     if input == "0" {
         session.current_menu = "MAIN".to_string();
-        return Ok(MenuResponse::Continue(main_menu_text()));
+        return Ok(MenuResponse::Continue(main_menu_text().to_string()));
     }
 
     let selected = commodities.iter().find(|(n, _, _)| *n == input);
@@ -346,7 +346,7 @@ async fn handle_price_alert_step1(
     if input == "0" {
         session.current_menu = "PRICE".to_string();
         session.pending_price_alert = None;
-        return Ok(MenuResponse::Continue(price_menu_text()));
+        return Ok(MenuResponse::Continue(price_menu_text().to_string()));
     }
     let condition = match input {
         "1" => "ABOVE",
@@ -371,7 +371,7 @@ async fn handle_price_alert_step1(
     }
     // No pending alert context — restart
     session.current_menu = "PRICE".to_string();
-    Ok(MenuResponse::Continue(price_menu_text()))
+    Ok(MenuResponse::Continue(price_menu_text().to_string()))
 }
 
 // ─── PRICE ALERT STEP 2: Enter target price ──────────────────────────────────
@@ -383,7 +383,7 @@ async fn handle_price_alert_step2(
     if input == "0" {
         session.current_menu = "PRICE".to_string();
         session.pending_price_alert = None;
-        return Ok(MenuResponse::Continue(price_menu_text()));
+        return Ok(MenuResponse::Continue(price_menu_text().to_string()));
     }
     let target: f64 = match input.trim().parse() {
         Ok(v) if v > 0.0 => v,
@@ -397,7 +397,7 @@ async fn handle_price_alert_step2(
         Some(a) => a,
         None => {
             session.current_menu = "PRICE".to_string();
-            return Ok(MenuResponse::Continue(price_menu_text()));
+            return Ok(MenuResponse::Continue(price_menu_text().to_string()));
         }
     };
     let user_id = match session.user_id {
@@ -433,7 +433,7 @@ async fn handle_portfolio(
 ) -> Result<MenuResponse> {
     let user_id = match session.user_id {
         Some(id) => id,
-        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
     };
 
     match db::get_portfolio_summary(&state.db, user_id).await? {
@@ -449,7 +449,7 @@ async fn handle_portfolio(
             )))
         }
         None => Ok(MenuResponse::End(
-            "No portfolio found.\nDial *347*99# to start trading.",
+            "No portfolio found.\nDial *347*99# to start trading.".to_string(),
         )),
     }
 }
@@ -469,7 +469,7 @@ async fn handle_order_side(
             });
             session.current_menu = "ORDER_SYM".to_string();
             Ok(MenuResponse::Continue(
-                "Buy Order — Select commodity:\n1. MAIZE\n2. SORGHUM\n3. SOYBEANS\n4. SESAME\n5. COCOA\n0. Back",
+                "Buy Order — Select commodity:\n1. MAIZE\n2. SORGHUM\n3. SOYBEANS\n4. SESAME\n5. COCOA\n0. Back".to_string(),
             ))
         }
         "2" => {
@@ -480,15 +480,15 @@ async fn handle_order_side(
             });
             session.current_menu = "ORDER_SYM".to_string();
             Ok(MenuResponse::Continue(
-                "Sell Order — Select commodity:\n1. MAIZE\n2. SORGHUM\n3. SOYBEANS\n4. SESAME\n5. COCOA\n0. Back",
+                "Sell Order — Select commodity:\n1. MAIZE\n2. SORGHUM\n3. SOYBEANS\n4. SESAME\n5. COCOA\n0. Back".to_string(),
             ))
         }
         "0" => {
             session.current_menu = "MAIN".to_string();
-            Ok(MenuResponse::Continue(main_menu_text()))
+            Ok(MenuResponse::Continue(main_menu_text().to_string()))
         }
         _ => Ok(MenuResponse::Continue(
-            "Place Order:\n1. Buy\n2. Sell\n0. Back",
+            "Place Order:\n1. Buy\n2. Sell\n0. Back".to_string(),
         )),
     }
 }
@@ -501,7 +501,7 @@ async fn handle_order_symbol(
     if input == "0" {
         session.current_menu = "ORDER_SIDE".to_string();
         return Ok(MenuResponse::Continue(
-            "Place Order:\n1. Buy\n2. Sell\n0. Back",
+            "Place Order:\n1. Buy\n2. Sell\n0. Back".to_string(),
         ));
     }
     let idx: usize = input.parse().unwrap_or(0);
@@ -511,11 +511,11 @@ async fn handle_order_symbol(
         }
         session.current_menu = "ORDER_QTY".to_string();
         Ok(MenuResponse::Continue(
-            "Enter quantity in metric tonnes (e.g. 10):",
+            "Enter quantity in metric tonnes (e.g. 10):".to_string(),
         ))
     } else {
         Ok(MenuResponse::Continue(
-            "Invalid option. Select 1-5 or 0 to go back:",
+            "Invalid option. Select 1-5 or 0 to go back:".to_string(),
         ))
     }
 }
@@ -528,7 +528,7 @@ async fn handle_order_qty(
         Ok(q) if q > 0.0 && q <= 10_000.0 => q,
         _ => {
             return Ok(MenuResponse::Continue(
-                "Invalid quantity. Enter a number between 1 and 10,000 MT:",
+                "Invalid quantity. Enter a number between 1 and 10,000 MT:".to_string(),
             ))
         }
     };
@@ -580,12 +580,12 @@ async fn handle_order_confirm(
                     Err(e) => {
                         tracing::error!("Order placement failed: {}", e);
                         Ok(MenuResponse::End(
-                            "Order failed. Please try again or contact support: 0800-NEXCOM",
+                            "Order failed. Please try again or contact support: 0800-NEXCOM".to_string(),
                         ))
                     }
                 }
             } else {
-                Ok(MenuResponse::End("Session expired. Please dial again."))
+                Ok(MenuResponse::End("Session expired. Please dial again.".to_string()))
             }
         }
         "2" => {
@@ -606,7 +606,7 @@ async fn handle_order_confirm(
                     o.quantity.unwrap_or(0.0)
                 )))
             } else {
-                Ok(MenuResponse::End("Session expired. Please dial again."))
+                Ok(MenuResponse::End("Session expired. Please dial again.".to_string()))
             }
         }
     }
@@ -621,22 +621,22 @@ async fn handle_loan(
 ) -> Result<MenuResponse> {
     let user_id = match session.user_id {
         Some(id) => id,
-        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
     };
     // First call — show loan menu
     if input.is_empty() {
-        return Ok(MenuResponse::Continue(loan_menu_text()));
+        return Ok(MenuResponse::Continue(loan_menu_text().to_string()));
     }
     match input {
         "1" => {
             // View existing loan status
             match db::get_loan_summary(&state.db, user_id).await? {
                 Some(loan) => Ok(MenuResponse::Continue(format!(
-                    "Loan Status\nBank: {}\nAmount: \u{{20a6}}{:.2}\nStatus: {}\nDue: {}\nBalance: \u{{20a6}}{:.2}\n\n0. Back",
+                    "Loan Status\nBank: {}\nAmount: ₦{:.2}\nStatus: {}\nDue: {}\nBalance: ₦{:.2}\n\n0. Back",
                     loan.bank_name, loan.amount, loan.status, loan.due_date, loan.balance
                 ))),
                 None => Ok(MenuResponse::Continue(
-                    "No active loans found.\n\n2. Apply for Loan\n0. Back",
+                    "No active loans found.\n\n2. Apply for Loan\n0. Back".to_string(),
                 )),
             }
         }
@@ -650,7 +650,7 @@ async fn handle_loan(
                 step: 1,
             });
             session.current_menu = "LOAN_APPLY_TYPE".to_string();
-            Ok(MenuResponse::Continue(loan_type_menu_text()))
+            Ok(MenuResponse::Continue(loan_type_menu_text().to_string()))
         }
         "3" => {
             // Start loan repayment flow
@@ -668,7 +668,7 @@ async fn handle_loan(
                     let mut menu = "Select Loan to Repay:\n".to_string();
                     for (i, loan) in loans.iter().enumerate() {
                         menu.push_str(&format!(
-                            "{}. {} \u{{20a6}}{:.0} ({})\n",
+                            "{}. {} ₦{:.0} ({})\n",
                             i + 1,
                             loan.bank_name,
                             loan.outstanding,
@@ -682,14 +682,14 @@ async fn handle_loan(
                     session.pending_repayment = None;
                     session.current_menu = "LOAN".to_string();
                     Ok(MenuResponse::Continue(
-                        "No active loans found.\n\n1. View Status\n2. Apply\n0. Back"
+                        "No active loans found.\n\n1. View Status\n2. Apply\n0. Back".to_string()
                     ))
                 }
             }
         }
         "0" => {
             session.current_menu = "MAIN".to_string();
-            Ok(MenuResponse::Continue(main_menu_text()))
+            Ok(MenuResponse::Continue(main_menu_text().to_string()))
         }
         _ => Ok(MenuResponse::Continue(format!("Invalid option.\n{}", loan_menu_text()))),
     }
@@ -709,7 +709,7 @@ async fn handle_loan_apply_type(
         "5" => "STORAGE",
         "0" => {
             session.current_menu = "LOAN".to_string();
-            return Ok(MenuResponse::Continue(loan_menu_text()));
+            return Ok(MenuResponse::Continue(loan_menu_text().to_string()));
         }
         _ => return Ok(MenuResponse::Continue(format!("Invalid option.\n{}", loan_type_menu_text()))),
     };
@@ -718,7 +718,7 @@ async fn handle_loan_apply_type(
         pl.step = 2;
     }
     session.current_menu = "LOAN_APPLY_AMOUNT".to_string();
-    Ok(MenuResponse::Continue("Enter loan amount (NGN):\nMin: 5,000  Max: 10,000,000\nE.g. 50000"))
+    Ok(MenuResponse::Continue("Enter loan amount (NGN):\nMin: 5,000  Max: 10,000,000\nE.g. 50000".to_string()))
 }
 
 // ─── LOAN APPLY — STEP 2: Amount ─────────────────────────────────────────────
@@ -730,10 +730,10 @@ async fn handle_loan_apply_amount(
     let amount: f64 = match input.trim().parse::<f64>() {
         Ok(v) if v >= 5_000.0 && v <= 10_000_000.0 => v,
         Ok(_) => return Ok(MenuResponse::Continue(
-            "Amount must be between \u{20a6}5,000 and \u{20a6}10,000,000.\nEnter loan amount:"
+            "Amount must be between \u{20a6}5,000 and \u{20a6}10,000,000.\nEnter loan amount:".to_string()
         )),
         Err(_) => return Ok(MenuResponse::Continue(
-            "Invalid amount. Enter numbers only.\nE.g. 50000"
+            "Invalid amount. Enter numbers only.\nE.g. 50000".to_string()
         )),
     };
     if let Some(ref mut pl) = session.pending_loan {
@@ -742,7 +742,7 @@ async fn handle_loan_apply_amount(
     }
     session.current_menu = "LOAN_APPLY_TENOR".to_string();
     Ok(MenuResponse::Continue(
-        "Select repayment period:\n1. 3 months\n2. 6 months\n3. 12 months\n4. 18 months\n5. 24 months"
+        "Select repayment period:\n1. 3 months\n2. 6 months\n3. 12 months\n4. 18 months\n5. 24 months".to_string()
     ))
 }
 
@@ -759,7 +759,7 @@ async fn handle_loan_apply_tenor(
         "4" => 18,
         "5" => 24,
         _ => return Ok(MenuResponse::Continue(
-            "Invalid option.\nSelect period:\n1. 3mo  2. 6mo  3. 12mo  4. 18mo  5. 24mo"
+            "Invalid option.\nSelect period:\n1. 3mo  2. 6mo  3. 12mo  4. 18mo  5. 24mo".to_string()
         )),
     };
     if let Some(ref mut pl) = session.pending_loan {
@@ -774,7 +774,7 @@ async fn handle_loan_apply_tenor(
     session.current_menu = "LOAN_APPLY_CONFIRM".to_string();
     let summary = if let Some(ref pl) = session.pending_loan {
         format!(
-            "Confirm Loan Application:\nType: {}\nAmount: \u{{20a6}}{:.2}\nTenor: {} months\nRepayment: Harvest Deduction\n\n1. Confirm\n2. Cancel",
+            "Confirm Loan Application:\nType: {}\nAmount: ₦{:.2}\nTenor: {} months\nRepayment: Harvest Deduction\n\n1. Confirm\n2. Cancel",
             pl.input_type.as_deref().unwrap_or("-"),
             pl.amount_ngn.unwrap_or(0.0),
             pl.tenor_months.unwrap_or(6)
@@ -795,14 +795,14 @@ async fn handle_loan_apply_confirm(
     match input {
         "1" => {
             session.current_menu = "LOAN_APPLY_PIN".to_string();
-            Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN to confirm:"))
+            Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN to confirm:".to_string()))
         }
         "2" => {
             session.pending_loan = None;
             session.current_menu = "MAIN".to_string();
             Ok(MenuResponse::Continue(format!("Loan application cancelled.\n{}", main_menu_text())))
         }
-        _ => Ok(MenuResponse::Continue("Invalid option.\n1. Confirm\n2. Cancel")),
+        _ => Ok(MenuResponse::Continue("Invalid option.\n1. Confirm\n2. Cancel".to_string())),
     }
 }
 
@@ -815,13 +815,13 @@ async fn handle_loan_apply_pin(
 ) -> Result<MenuResponse> {
     let user_id = match session.user_id {
         Some(id) => id,
-        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
     };
     match db::verify_pin(&state.db, &session.phone_number.clone(), input).await {
         Ok(Some(_)) => {
             let loan = match session.pending_loan.take() {
                 Some(l) => l,
-                None => return Ok(MenuResponse::End("Session error. Please dial again.")),
+                None => return Ok(MenuResponse::End("Session error. Please dial again.".to_string())),
             };
             let input_type = loan.input_type.as_deref().unwrap_or("CASH").to_string();
             let amount = loan.amount_ngn.unwrap_or(0.0);
@@ -842,14 +842,14 @@ async fn handle_loan_apply_pin(
                     ).await;
                     session.current_menu = "MAIN".to_string();
                     Ok(MenuResponse::End(format!(
-                        "Loan Application Submitted!\nRef: LOAN-{}\nAmount: \u{{20a6}}{:.2}\nType: {}\nStatus: Under Review\n\nYou will be notified via SMS.",
+                        "Loan Application Submitted!\nRef: LOAN-{}\nAmount: ₦{:.2}\nType: {}\nStatus: Under Review\n\nYou will be notified via SMS.",
                         loan_id, amount, input_type
                     )))
                 }
                 Err(e) => {
                     tracing::error!("USSD apply_loan failed: {}", e);
                     Ok(MenuResponse::End(
-                        "Loan application failed. Please try again or visit nexcom.exchange"
+                        "Loan application failed. Please try again or visit nexcom.exchange".to_string()
                     ))
                 }
             }
@@ -858,7 +858,7 @@ async fn handle_loan_apply_pin(
             session.auth_attempts += 1;
             if session.auth_attempts >= 3 {
                 session.pending_loan = None;
-                Ok(MenuResponse::End("Too many incorrect PINs. Application cancelled."))
+                Ok(MenuResponse::End("Too many incorrect PINs. Application cancelled.".to_string()))
             } else {
                 Ok(MenuResponse::Continue(format!(
                     "Incorrect PIN. {} attempt(s) remaining.\nEnter PIN:",
@@ -867,7 +867,7 @@ async fn handle_loan_apply_pin(
             }
         }
         Err(_) => Ok(MenuResponse::End(
-            "PIN verification failed. Please set your PIN first via Account menu."
+            "PIN verification failed. Please set your PIN first via Account menu.".to_string()
         )),
     }
 }
@@ -880,7 +880,7 @@ async fn handle_account(
     input: &str,
 ) -> Result<MenuResponse> {
     if input.is_empty() {
-        return Ok(MenuResponse::Continue(account_menu_text()));
+        return Ok(MenuResponse::Continue(account_menu_text().to_string()));
     }
     match input {
         "1" => {
@@ -894,10 +894,10 @@ async fn handle_account(
         "3" => {
             session.current_menu = "SET_PIN".to_string();
             session.pending_pin = Some(PendingPin { new_pin: None, step: 1 });
-            Ok(MenuResponse::Continue("Enter new 4-digit PIN:"))
+            Ok(MenuResponse::Continue("Enter new 4-digit PIN:".to_string()))
         }
         "4" => Ok(MenuResponse::End(
-            "USSD alerts disabled.\nRe-enable at nexcom.exchange/settings",
+            "USSD alerts disabled.\nRe-enable at nexcom.exchange/settings".to_string(),
         )),
         "5" => {
             session.current_menu = "ALERTS_LIST".to_string();
@@ -905,7 +905,7 @@ async fn handle_account(
         }
         "0" => {
             session.current_menu = "MAIN".to_string();
-            Ok(MenuResponse::Continue(main_menu_text()))
+            Ok(MenuResponse::Continue(main_menu_text().to_string()))
         }
         _ => Ok(MenuResponse::Continue(format!(
             "Invalid option.\n{}",
@@ -920,7 +920,7 @@ async fn handle_account_balance(
 ) -> Result<MenuResponse> {
     let user_id = match session.user_id {
         Some(id) => id,
-        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
     };
     let bal = db::get_wallet_balance(&state.db, user_id).await
         .unwrap_or(db::WalletBalance {
@@ -931,7 +931,7 @@ async fn handle_account_balance(
         });
     session.current_menu = "ACCOUNT".to_string();
     Ok(MenuResponse::Continue(format!(
-        "Account Balance\nCash: \u{{20a6}}{:.2}\nPortfolio: \u{{20a6}}{:.2}\nActive Loans: {}\nLoan Balance: \u{{20a6}}{:.2}\n\n0. Back",
+        "Account Balance\nCash: ₦{:.2}\nPortfolio: ₦{:.2}\nActive Loans: {}\nLoan Balance: ₦{:.2}\n\n0. Back",
         bal.cash_balance, bal.portfolio_value, bal.active_loans, bal.outstanding_loan_balance
     )))
 }
@@ -942,7 +942,7 @@ async fn handle_account_mini_stmt(
 ) -> Result<MenuResponse> {
     let user_id = match session.user_id {
         Some(id) => id,
-        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
     };
     let lines = db::get_mini_statement(&state.db, user_id).await
         .unwrap_or_default();
@@ -955,7 +955,7 @@ async fn handle_account_mini_stmt(
     let mut msg = String::from("Mini-Statement (last 5):\n");
     for l in &lines {
         msg.push_str(&format!(
-            "{} {} \u{{20a6}}{:.0} {}\n",
+            "{} {} ₦{:.0} {}\n",
             l.date, l.description, l.amount, l.direction
         ));
     }
@@ -971,7 +971,7 @@ async fn handle_set_pin(
 ) -> Result<MenuResponse> {
     if input.len() != 4 || input.chars().any(|c| !c.is_ascii_digit()) {
         return Ok(MenuResponse::Continue(
-            "PIN must be exactly 4 digits.\nEnter new PIN:",
+            "PIN must be exactly 4 digits.\nEnter new PIN:".to_string(),
         ));
     }
     if let Some(ref mut pp) = session.pending_pin {
@@ -979,7 +979,7 @@ async fn handle_set_pin(
         pp.step = 2;
     }
     session.current_menu = "SET_PIN_CONFIRM".to_string();
-    Ok(MenuResponse::Continue("Confirm new PIN:"))
+    Ok(MenuResponse::Continue("Confirm new PIN:".to_string()))
 }
 
 async fn handle_set_pin_confirm(
@@ -1004,17 +1004,17 @@ async fn handle_set_pin_confirm(
                 Err(e) => {
                     tracing::error!("PIN set failed: {}", e);
                     Ok(MenuResponse::End(
-                        "Failed to set PIN. Please try again later.",
+                        "Failed to set PIN. Please try again later.".to_string(),
                     ))
                 }
             }
         } else {
             session.pending_pin = Some(PendingPin { new_pin: pp.new_pin, step: 2 });
             session.current_menu = "SET_PIN".to_string();
-            Ok(MenuResponse::Continue("PINs do not match.\nEnter new PIN:"))
+            Ok(MenuResponse::Continue("PINs do not match.\nEnter new PIN:".to_string()))
         }
     } else {
-        Ok(MenuResponse::End("Session expired. Please dial again."))
+        Ok(MenuResponse::End("Session expired. Please dial again.".to_string()))
     }
 }
 
@@ -1028,7 +1028,7 @@ async fn handle_loan_repay_select(
     if input == "0" {
         session.pending_repayment = None;
         session.current_menu = "LOAN".to_string();
-        return Ok(MenuResponse::Continue(loan_menu_text()));
+        return Ok(MenuResponse::Continue(loan_menu_text().to_string()));
     }
     let user_id = session.user_id.unwrap_or(0);
     let loans = db::get_active_loans(&state.db, user_id).await.unwrap_or_default();
@@ -1036,7 +1036,7 @@ async fn handle_loan_repay_select(
         Ok(n) if n >= 1 && n <= loans.len() => n - 1,
         _ => {
             return Ok(MenuResponse::Continue(
-                "Invalid selection. Enter the loan number or 0 to go back."
+                "Invalid selection. Enter the loan number or 0 to go back.".to_string()
             ));
         }
     };
@@ -1047,7 +1047,7 @@ async fn handle_loan_repay_select(
     }
     session.current_menu = "LOAN_REPAY_AMOUNT".to_string();
     Ok(MenuResponse::Continue(format!(
-        "Loan #{}: {}\nOutstanding: \u{{20a6}}{:.2}\nDue: {}\n\nEnter repayment amount (NGN):",
+        "Loan #{}: {}\nOutstanding: ₦{:.2}\nDue: {}\n\nEnter repayment amount (NGN):",
         loan.id, loan.bank_name, loan.outstanding, loan.due_date
     )))
 }
@@ -1061,10 +1061,10 @@ async fn handle_loan_repay_amount(
     let amount: f64 = match input.trim().parse::<f64>() {
         Ok(v) if v >= 100.0 => v,
         Ok(_) => return Ok(MenuResponse::Continue(
-            "Minimum repayment is \u{20a6}100.\nEnter amount:"
+            "Minimum repayment is \u{20a6}100.\nEnter amount:".to_string()
         )),
         Err(_) => return Ok(MenuResponse::Continue(
-            "Invalid amount. Enter numbers only.\nE.g. 5000"
+            "Invalid amount. Enter numbers only.\nE.g. 5000".to_string()
         )),
     };
     if let Some(ref mut pr) = session.pending_repayment {
@@ -1073,7 +1073,7 @@ async fn handle_loan_repay_amount(
     }
     session.current_menu = "LOAN_REPAY_PROVIDER".to_string();
     Ok(MenuResponse::Continue(
-        "Select Mobile Money Provider:\n1. MTN MoMo\n2. Airtel Money\n3. Glo Pay\n4. 9Mobile\n0. Cancel"
+        "Select Mobile Money Provider:\n1. MTN MoMo\n2. Airtel Money\n3. Glo Pay\n4. 9Mobile\n0. Cancel".to_string()
     ))
 }
 
@@ -1094,7 +1094,7 @@ async fn handle_loan_repay_provider(
         "3" => "Glo Pay",
         "4" => "9Mobile",
         _ => return Ok(MenuResponse::Continue(
-            "Invalid option.\n1. MTN  2. Airtel  3. Glo  4. 9Mobile  0. Cancel"
+            "Invalid option.\n1. MTN  2. Airtel  3. Glo  4. 9Mobile  0. Cancel".to_string()
         )),
     };
     if let Some(ref mut pr) = session.pending_repayment {
@@ -1104,7 +1104,7 @@ async fn handle_loan_repay_provider(
     session.current_menu = "LOAN_REPAY_CONFIRM".to_string();
     let summary = if let Some(ref pr) = session.pending_repayment {
         format!(
-            "Confirm Repayment:\nLoan ID: #{}\nAmount: \u{{20a6}}{:.2}\nProvider: {}\n\n1. Confirm & Enter PIN\n2. Cancel",
+            "Confirm Repayment:\nLoan ID: #{}\nAmount: ₦{:.2}\nProvider: {}\n\n1. Confirm & Enter PIN\n2. Cancel",
             pr.loan_id.unwrap_or(0),
             pr.amount_ngn.unwrap_or(0.0),
             pr.provider.as_deref().unwrap_or("-")
@@ -1124,14 +1124,14 @@ async fn handle_loan_repay_confirm(
     match input {
         "1" => {
             session.current_menu = "LOAN_REPAY_PIN".to_string();
-            Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN to authorise payment:"))
+            Ok(MenuResponse::Continue("Enter your 4-digit USSD PIN to authorise payment:".to_string()))
         }
         "2" => {
             session.pending_repayment = None;
             session.current_menu = "MAIN".to_string();
             Ok(MenuResponse::Continue(format!("Repayment cancelled.\n{}", main_menu_text())))
         }
-        _ => Ok(MenuResponse::Continue("Invalid option.\n1. Confirm & Enter PIN\n2. Cancel")),
+        _ => Ok(MenuResponse::Continue("Invalid option.\n1. Confirm & Enter PIN\n2. Cancel".to_string())),
     }
 }
 
@@ -1144,13 +1144,13 @@ async fn handle_loan_repay_pin(
 ) -> Result<MenuResponse> {
     let user_id = match session.user_id {
         Some(id) => id,
-        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
     };
     match db::verify_pin(&state.db, &session.phone_number.clone(), input).await {
         Ok(Some(_)) => {
             let pr = match session.pending_repayment.take() {
                 Some(p) => p,
-                None => return Ok(MenuResponse::End("Session error. Please dial again.")),
+                None => return Ok(MenuResponse::End("Session error. Please dial again.".to_string())),
             };
             let loan_id = pr.loan_id.unwrap_or(0);
             let amount = pr.amount_ngn.unwrap_or(0.0);
@@ -1171,14 +1171,14 @@ async fn handle_loan_repay_pin(
                     ).await;
                     session.current_menu = "MAIN".to_string();
                     Ok(MenuResponse::End(format!(
-                        "Repayment Initiated!\nRef: {}\nAmount: \u{{20a6}}{:.2}\nProvider: {}\n\nYou will receive an SMS confirmation shortly.",
+                        "Repayment Initiated!\nRef: {}\nAmount: ₦{:.2}\nProvider: {}\n\nYou will receive an SMS confirmation shortly.",
                         reference, amount, provider
                     )))
                 }
                 Err(e) => {
                     tracing::error!("USSD make_repayment failed: {}", e);
                     Ok(MenuResponse::End(
-                        "Repayment failed. Please try again or visit nexcom.exchange"
+                        "Repayment failed. Please try again or visit nexcom.exchange".to_string()
                     ))
                 }
             }
@@ -1187,7 +1187,7 @@ async fn handle_loan_repay_pin(
             session.auth_attempts += 1;
             if session.auth_attempts >= 3 {
                 session.pending_repayment = None;
-                Ok(MenuResponse::End("Too many incorrect PINs. Repayment cancelled."))
+                Ok(MenuResponse::End("Too many incorrect PINs. Repayment cancelled.".to_string()))
             } else {
                 Ok(MenuResponse::Continue(format!(
                     "Incorrect PIN. {} attempt(s) remaining.\nEnter PIN:",
@@ -1196,7 +1196,7 @@ async fn handle_loan_repay_pin(
             }
         }
         Err(_) => Ok(MenuResponse::End(
-            "PIN verification failed. Please set your PIN first via Account menu."
+            "PIN verification failed. Please set your PIN first via Account menu.".to_string()
         )),
     }
 }
@@ -1232,12 +1232,12 @@ async fn handle_alerts_list(
 ) -> Result<MenuResponse> {
     let user_id = match session.user_id {
         Some(id) => id,
-        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
     };
 
     if input == "0" {
         session.current_menu = "ACCOUNT".to_string();
-        return Ok(MenuResponse::Continue(account_menu_text()));
+        return Ok(MenuResponse::Continue(account_menu_text().to_string()));
     }
 
     // If user enters a number, treat it as "select alert at position N to delete"
@@ -1250,7 +1250,7 @@ async fn handle_alerts_list(
                 session.current_menu = "ALERTS_DELETE".to_string();
                 let cond = if alert.condition == "ABOVE" { "above" } else { "below" };
                 return Ok(MenuResponse::Continue(format!(
-                    "Delete alert #{}?\n{} {} \u{{20a6}}{:.0}/MT\n\n1. Confirm\n0. Cancel",
+                    "Delete alert #{}?\n{} {} ₦{:.0}/MT\n\n1. Confirm\n0. Cancel",
                     alert.id, alert.symbol, cond, alert.target_price
                 )));
             }
@@ -1269,7 +1269,7 @@ async fn handle_alerts_list(
     for (i, a) in alerts.iter().enumerate() {
         let cond = if a.condition == "ABOVE" { "\u{2191}" } else { "\u{2193}" };
         msg.push_str(&format!(
-            "{}. {} {} \u{{20a6}}{:.0}\n",
+            "{}. {} {} ₦{:.0}\n",
             i + 1, a.symbol, cond, a.target_price
         ));
     }
@@ -1285,7 +1285,7 @@ async fn handle_alerts_delete(
 ) -> Result<MenuResponse> {
     let user_id = match session.user_id {
         Some(id) => id,
-        None => return Ok(MenuResponse::End("Session expired. Please dial again.")),
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
     };
     let alert_id = match session.pending_delete_alert_id {
         Some(id) => id,

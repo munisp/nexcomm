@@ -68,6 +68,11 @@ impl KafkaProducer {
         self.emit("nexcom.ussd.order.placed", &payload.to_string()).await
     }
 
+    /// Generic publish method for ad-hoc topic/payload pairs
+    pub async fn send(&self, topic: &str, payload: &str) -> Result<()> {
+        self.emit(topic, payload).await
+    }
+
     async fn emit(&self, topic: &str, payload: &str) -> Result<()> {
         let producer = match &self.producer {
             Some(p) => p,
