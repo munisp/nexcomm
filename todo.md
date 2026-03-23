@@ -254,3 +254,11 @@
 - [x] Mock data replaced: bankingRouter now uses real bank_accounts + bank_transactions tables (auto-provisioned on first access)
 - [x] 782/782 tests passing, 0 TypeScript errors, dev server clean
 - [x] Round 16 checkpoint saved, comprehensive archive delivered
+
+## Round 17 — Final Production Hardening — COMPLETED
+- [x] USSD My Watchlist menu — Account menu option 6 "My Watchlist"; WATCHLIST_LIST + WATCHLIST_DELETE states in menu.rs; get_watchlist + add_to_watchlist + remove_from_watchlist in db.rs; pending_delete_watchlist_id added to UssdSessionState
+- [x] Flutter Banking screen — nexcom-flutter/lib/screens/banking/banking_screen.dart (Overview/Loans/Transactions tabs, loan application dialog); wired into router.dart at /banking
+- [x] React Native Banking screen — nexcom-mobile/app/banking/index.tsx (Overview/Loans/Transactions tabs); registered in root _layout.tsx
+- [x] React Native Notifications screen — nexcom-mobile/app/notifications/index.tsx (mark read, mark all read, type-based icons); registered in root _layout.tsx
+- [x] React Native profile quick links — Banking & Loans + Notifications added to Services section of profile.tsx
+- [x] 782/782 tests passing, 0 TypeScript errors, dev server clean

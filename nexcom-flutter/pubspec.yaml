@@ -1,0 +1,98 @@
+name: nexcom_exchange
+description: NEXCOM Exchange — African Commodity Trading Platform (Flutter)
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  flutter: '>=3.16.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navigation
+  go_router: ^13.2.0
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # HTTP & API
+  dio: ^5.4.3
+  retrofit: ^4.1.0
+
+  # Local storage
+  flutter_secure_storage: ^9.0.0
+  shared_preferences: ^2.2.3
+  hive_flutter: ^1.1.0
+  hive: ^2.2.3
+
+  # UI components
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  fl_chart: ^0.67.0
+  syncfusion_flutter_charts: ^25.1.41
+  intl: ^0.19.0
+  timeago: ^3.6.1
+  badges: ^3.1.2
+  lottie: ^3.1.0
+
+  # Push notifications
+  firebase_core: ^2.31.1
+  firebase_messaging: ^14.9.1
+  flutter_local_notifications: ^17.1.2
+
+  # Biometrics & security
+  local_auth: ^2.2.0
+
+  # File handling
+  file_picker: ^8.0.3
+  image_picker: ^1.1.2
+  path_provider: ^2.1.3
+
+  # Connectivity
+  connectivity_plus: ^6.0.3
+
+  # WebSocket
+  web_socket_channel: ^2.4.5
+
+  # Utilities
+  equatable: ^2.0.5
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.9.0
+  uuid: ^4.4.0
+  logger: ^2.3.0
+  url_launcher: ^6.3.0
+  package_info_plus: ^8.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.9
+  freezed: ^2.5.2
+  json_serializable: ^6.8.0
+  retrofit_generator: ^8.1.0
+  riverpod_generator: ^2.4.0
+  hive_generator: ^2.0.1
+  mockito: ^5.4.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/fonts/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

@@ -173,6 +173,18 @@ async def dispatch(intent, channel, from_id, user, redis, kafka) -> str:
             "Reply with the number or type the amount (e.g. *loan 75000*)."
         )
 
+    if name == "LOAN_REPAY":
+        if not user:
+            return _auth_required_message(channel)
+        if channel == "telegram":
+            return await handle_loan_repay_telegram(user["id"], from_id, redis)
+        return (
+            "💳 *Loan Repayment*\n\n"
+            "Enter the amount you want to repay (₦):\n"
+            "Example: *repay 5000*\n\n"
+            "Type *loan status* to check your current balance."
+        )
+
     if name == "SUBSCRIBE_BROADCASTS":
         if channel != "telegram":
             return "Market broadcasts are only available on Telegram. Join us at t.me/nexcom_exchange"
@@ -498,6 +510,79 @@ async def handle_flow(channel, from_id, text, conv_state, user, redis, kafka) ->
         else:
             return "Please reply *confirm* to place the order or *cancel* to cancel."
 
+    if flow == "loan_repay":
+        text_lower = text.lower().strip()
+        if text_lower in ("cancel", "no", "stop", "0", "/cancel"):
+            await redis.delete(state_key)
+            return "❌ Repayment cancelled."
+        # Try to parse amount
+        import re as _re
+        amount_match = _re.search(r"[\d,]+(?:\.\d+)?", text_lower.replace(",", ""))
+        if amount_match:
+            try:
+                amount = float(amount_match.group().replace(",", ""))
+                if amount <= 0:
+                    return "⚠️ Please enter a valid amount greater than ₦0."
+                user_id = int(conv_state.get("user_id", 0))
+                return await handle_loan_repay_amount(user_id, from_id, amount, redis, kafka)
+            except ValueError:
+                pass
+        return "⚠️ Please enter a valid amount (e.g. *5000*) or type *cancel* to abort."
+
+    if flow == "loan_apply":
+        step = conv_state.get("step", "amount")
+        text_lower = text.lower().strip()
+        if text_lower in ("cancel", "/cancel"):
+            await redis.delete(state_key)
+            return "❌ Loan application cancelled."
+        # Handle amount step
+        if step == "amount":
+            import re as _re
+            amount_match = _re.search(r"[\d,]+(?:\.\d+)?", text_lower.replace(",", ""))
+            if amount_match:
+                try:
+                    amount = float(amount_match.group().replace(",", ""))
+                    if amount < 10_000:
+                        return "⚠️ Minimum loan amount is ₦10,000."
+                    await redis.hset(state_key, mapping={"step": "tenor", "amount": str(amount)})
+                    return (
+                        f"✅ Amount: ₦{amount:,.0f}\n\n"
+                        "Select repayment period:\n"
+                        "1️⃣  3 months\n"
+                        "2️⃣  6 months\n"
+                        "3️⃣  12 months\n\n"
+                        "Reply with 1, 2, or 3."
+                    )
+                except ValueError:
+                    pass
+            return "⚠️ Please enter a valid amount (e.g. *50000*)."
+        # Handle tenor step
+        if step == "tenor":
+            tenor_map = {"1": 3, "2": 6, "3": 12, "3 months": 3, "6 months": 6, "12 months": 12}
+            tenor = tenor_map.get(text_lower.strip())
+            if tenor:
+                amount = float(conv_state.get("amount", 0))
+                user_id = int(conv_state.get("user_id", 0))
+                await redis.delete(state_key)
+                if kafka:
+                    import json
+                    event = {"user_id": user_id, "amount": amount, "tenor_months": tenor, "channel": channel, "channel_id": from_id}
+                    try:
+                        await kafka.send_and_wait("nexcom.loan.apply", json.dumps(event).encode())
+                    except Exception:
+                        pass
+                return (
+                    f"✅ *Loan Application Submitted*\n\n"
+                    f"Amount: ₦{amount:,.0f}\n"
+                    f"Tenor: {tenor} months\n"
+                    f"Status: Under Review\n\n"
+                    "You'll receive a decision within 24 hours.\n"
+                    "Track at nexcom.exchange/banking"
+                )
+            return "⚠️ Please reply with 1 (3 months), 2 (6 months), or 3 (12 months)."
+        await redis.delete(state_key)
+        return "Something went wrong with your application. Please try again."
+
     # Unknown flow — clear state
     await redis.delete(state_key)
     return "Something went wrong. Please try again."
@@ -550,3 +635,75 @@ async def handle_loan_apply_telegram(user_id: int, from_id: str, redis) -> str:
     # Return a special marker that the Go gateway converts to an inline keyboard.
     # Format: LOAN_KEYBOARD:<user_id>
     return f"LOAN_KEYBOARD:{user_id}"
+
+
+async def handle_loan_repay_telegram(user_id: int, from_id: str, redis) -> str:
+    """
+    Initiate loan repayment flow for Telegram.
+    Stores repayment state in Redis and prompts user for amount.
+    """
+    loan = await get_loan_summary(user_id)
+    if not loan:
+        return (
+            "💳 *Loan Repayment*\n\n"
+            "No active loans found.\n\n"
+            "Type *apply for loan* to get started."
+        )
+
+    state_key = f"bot:telegram:{from_id}:state"
+    await redis.hset(state_key, mapping={
+        "flow": "loan_repay",
+        "step": "amount",
+        "user_id": str(user_id),
+    })
+    await redis.expire(state_key, 600)  # 10 min TTL
+
+    return (
+        f"💳 *Loan Repayment*\n\n"
+        f"Current Loan: ₦{loan['amount']:,.0f}\n"
+        f"Status: {loan['status']}\n"
+        f"Due Date: {loan['due_date']}\n\n"
+        "Please enter the amount you want to repay (₦):\n"
+        "Example: *5000*\n\n"
+        "Type /cancel to abort."
+    )
+
+
+async def handle_loan_repay_amount(user_id: int, from_id: str, amount: float, redis, kafka) -> str:
+    """
+    Process loan repayment amount — publish Kafka event and confirm.
+    Called when user responds with an amount during loan_repay flow.
+    """
+    loan = await get_loan_summary(user_id)
+    if not loan:
+        return "⚠️ No active loan found. Repayment cancelled."
+
+    # Publish repayment event to Kafka
+    if kafka:
+        try:
+            import json
+            event = {
+                "user_id": user_id,
+                "amount": amount,
+                "channel": "telegram",
+                "telegram_id": from_id,
+                "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            }
+            await kafka.send_and_wait(
+                "nexcom.loan.repayment",
+                json.dumps(event).encode(),
+            )
+        except Exception:
+            pass  # Non-blocking; repayment still confirmed to user
+
+    # Clear Redis state
+    state_key = f"bot:telegram:{from_id}:state"
+    await redis.delete(state_key)
+
+    return (
+        f"✅ *Repayment Submitted*\n\n"
+        f"Amount: ₦{amount:,.0f}\n"
+        f"Status: Processing\n\n"
+        "Your repayment is being processed. You'll receive a confirmation shortly.\n"
+        "For full details, visit nexcom.exchange/banking"
+    )

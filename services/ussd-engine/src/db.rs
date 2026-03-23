@@ -574,3 +574,67 @@ pub async fn delete_price_alert(
     .await?;
     Ok(result.rows_affected() > 0)
 }
+
+// ─── Watchlist ────────────────────────────────────────────────────────────────
+
+/// A single watchlist entry returned to the USSD menu.
+pub struct WatchlistEntry {
+    pub id: i64,
+    pub symbol: String,
+    pub current_price: Option<f64>,
+}
+
+/// Get the user's watchlist (up to 8 items) with latest prices.
+pub async fn get_watchlist(db: &DbPool, user_id: i32) -> Result<Vec<WatchlistEntry>> {
+    let rows = sqlx::query(
+        r#"SELECT w.id, w.symbol,
+                  (SELECT mp.price::float8 FROM market_prices mp
+                   WHERE mp.symbol = w.symbol
+                   ORDER BY mp.timestamp DESC LIMIT 1) as current_price
+           FROM watchlists w
+           WHERE w.user_id = $1
+           ORDER BY w.created_at DESC
+           LIMIT 8"#,
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| WatchlistEntry {
+            id: r.get::<i64, _>("id"),
+            symbol: r.get("symbol"),
+            current_price: r.try_get::<f64, _>("current_price").ok(),
+        })
+        .collect())
+}
+
+/// Add a symbol to the user's watchlist (no-op if already present).
+/// Returns the watchlist entry id.
+pub async fn add_to_watchlist(db: &DbPool, user_id: i32, symbol: &str) -> Result<i64> {
+    let row = sqlx::query(
+        r#"INSERT INTO watchlists (user_id, symbol, created_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (user_id, symbol) DO UPDATE SET symbol = EXCLUDED.symbol
+           RETURNING id"#,
+    )
+    .bind(user_id)
+    .bind(symbol)
+    .fetch_one(db)
+    .await?;
+    Ok(row.get::<i64, _>("id"))
+}
+
+/// Remove a symbol from the user's watchlist.
+/// Returns true if a row was deleted.
+pub async fn remove_from_watchlist(db: &DbPool, user_id: i32, watchlist_id: i64) -> Result<bool> {
+    let result = sqlx::query(
+        "DELETE FROM watchlists WHERE id = $1 AND user_id = $2",
+    )
+    .bind(watchlist_id)
+    .bind(user_id)
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}

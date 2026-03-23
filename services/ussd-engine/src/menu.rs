@@ -104,6 +104,8 @@ async fn route_input(
         "ACCOUNT_MINI_STMT" => handle_account_mini_stmt(state, session).await,
         "ALERTS_LIST" => handle_alerts_list(state, session, input).await,
         "ALERTS_DELETE" => handle_alerts_delete(state, session, input).await,
+        "WATCHLIST_LIST" => handle_watchlist_list(state, session, input).await,
+        "WATCHLIST_DELETE" => handle_watchlist_delete(state, session, input).await,
         "SET_PIN" => handle_set_pin(session, input).await,
         "SET_PIN_CONFIRM" => handle_set_pin_confirm(state, session, input).await,
         _ => Ok(MenuResponse::End("Invalid session state. Please dial again.".to_string())),
@@ -903,6 +905,10 @@ async fn handle_account(
             session.current_menu = "ALERTS_LIST".to_string();
             handle_alerts_list(state, session, "").await
         }
+        "6" => {
+            session.current_menu = "WATCHLIST_LIST".to_string();
+            handle_watchlist_list(state, session, "").await
+        }
         "0" => {
             session.current_menu = "MAIN".to_string();
             Ok(MenuResponse::Continue(main_menu_text().to_string()))
@@ -1220,7 +1226,7 @@ fn price_menu_text() -> &'static str {
 }
 
 fn account_menu_text() -> &'static str {
-    "Account:\n1. Balance\n2. Mini-Statement\n3. Change PIN\n4. Disable Alerts\n5. My Alerts\n0. Back"
+    "Account:\n1. Balance\n2. Mini-Statement\n3. Change PIN\n4. Disable Alerts\n5. My Alerts\n6. My Watchlist\n0. Back"
 }
 
 // ─── MY ALERTS ───────────────────────────────────────────────────────────────
@@ -1314,6 +1320,104 @@ async fn handle_alerts_delete(
             session.pending_delete_alert_id = None;
             session.current_menu = "ALERTS_LIST".to_string();
             handle_alerts_list(state, session, "").await
+        }
+    }
+}
+
+// ─── MY WATCHLIST ────────────────────────────────────────────────────────────
+
+async fn handle_watchlist_list(
+    state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let user_id = match session.user_id {
+        Some(id) => id,
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
+    };
+
+    if input == "0" {
+        session.current_menu = "ACCOUNT".to_string();
+        return Ok(MenuResponse::Continue(account_menu_text().to_string()));
+    }
+
+    // If user enters a number, treat it as "select watchlist entry at position N to delete"
+    if !input.is_empty() {
+        if let Ok(pos) = input.parse::<usize>() {
+            let entries = db::get_watchlist(&state.db, user_id).await.unwrap_or_default();
+            if pos >= 1 && pos <= entries.len() {
+                let entry = &entries[pos - 1];
+                session.pending_delete_watchlist_id = Some(entry.id);
+                session.current_menu = "WATCHLIST_DELETE".to_string();
+                let price_str = entry.current_price
+                    .map(|p| format!(" ₦{:.2}/MT", p))
+                    .unwrap_or_default();
+                return Ok(MenuResponse::Continue(format!(
+                    "Remove {} from watchlist?{}\n\n1. Confirm\n0. Cancel",
+                    entry.symbol, price_str
+                )));
+            }
+        }
+    }
+
+    let entries = db::get_watchlist(&state.db, user_id).await.unwrap_or_default();
+    if entries.is_empty() {
+        session.current_menu = "ACCOUNT".to_string();
+        return Ok(MenuResponse::Continue(
+            "Your watchlist is empty.\nAdd commodities from nexcom.exchange/markets.\n\n0. Back".to_string(),
+        ));
+    }
+
+    let mut msg = String::from("My Watchlist (tap to remove):\n");
+    for (i, e) in entries.iter().enumerate() {
+        let price_str = e.current_price
+            .map(|p| format!(" ₦{:.0}", p))
+            .unwrap_or_default();
+        msg.push_str(&format!(
+            "{}. {}{}\n",
+            i + 1, e.symbol, price_str
+        ));
+    }
+    msg.push_str("0. Back");
+    session.current_menu = "WATCHLIST_LIST".to_string();
+    Ok(MenuResponse::Continue(msg))
+}
+
+async fn handle_watchlist_delete(
+    state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let user_id = match session.user_id {
+        Some(id) => id,
+        None => return Ok(MenuResponse::End("Session expired. Please dial again.".to_string())),
+    };
+    let entry_id = match session.pending_delete_watchlist_id {
+        Some(id) => id,
+        None => {
+            session.current_menu = "WATCHLIST_LIST".to_string();
+            return handle_watchlist_list(state, session, "").await;
+        }
+    };
+
+    match input {
+        "1" => {
+            let deleted = db::remove_from_watchlist(&state.db, user_id, entry_id)
+                .await
+                .unwrap_or(false);
+            session.pending_delete_watchlist_id = None;
+            session.current_menu = "WATCHLIST_LIST".to_string();
+            let msg = if deleted {
+                "Removed from watchlist.\n\n0. Back".to_string()
+            } else {
+                "Entry not found.\n\n0. Back".to_string()
+            };
+            Ok(MenuResponse::Continue(msg))
+        }
+        _ => {
+            session.pending_delete_watchlist_id = None;
+            session.current_menu = "WATCHLIST_LIST".to_string();
+            handle_watchlist_list(state, session, "").await
         }
     }
 }

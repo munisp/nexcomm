@@ -43,6 +43,8 @@ pub struct UssdSessionState {
     pub pending_price_alert: Option<PendingPriceAlert>,
     /// Alert id pending deletion confirmation in the My Alerts menu
     pub pending_delete_alert_id: Option<i64>,
+    /// Watchlist entry id pending deletion confirmation in the My Watchlist menu
+    pub pending_delete_watchlist_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +118,7 @@ impl UssdSessionState {
             pending_repayment: None,
             pending_price_alert: None,
             pending_delete_alert_id: None,
+            pending_delete_watchlist_id: None,
             interactions: 0,
         }
     }
