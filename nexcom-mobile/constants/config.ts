@@ -79,3 +79,7 @@ export const TYPOGRAPHY = {
     '4xl': 36,
   },
 };
+
+// Convenience URL exports used by screen components
+export const API_BASE_URL = CONFIG.BASE_URL;
+export const WS_BASE_URL = CONFIG.BASE_URL.replace(/^https?/, (p) => (p === 'https' ? 'wss' : 'ws'));
