@@ -17,7 +17,7 @@ stringData:
   POSTGRES_DB: oncall
   POSTGRES_USER: oncall
   # Replace with a strong password before deploying to production
-  POSTGRES_PASSWORD: "oncall_secure_2026_CHANGEME"
+  POSTGRES_PASSWORD: "EBKx-_IbydQqSdswF86m_Wypknf-fBLf"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

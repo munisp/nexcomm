@@ -25,7 +25,7 @@ type: Opaque
 stringData:
   # Grafana admin credentials — change before production deployment
   GF_SECURITY_ADMIN_USER: "admin"
-  GF_SECURITY_ADMIN_PASSWORD: "nexcom_grafana_CHANGEME_2026"
+  GF_SECURITY_ADMIN_PASSWORD: "nexcom_grafana_2026_t-QlvM07HIY"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -43,7 +43,7 @@ data:
     host = grafana-oncall-postgres.monitoring.svc.cluster.local:5432
     name = grafana
     user = oncall
-    password = oncall_secure_2026_CHANGEME
+    password = EBKx-_IbydQqSdswF86m_Wypknf-fBLf
 
     [auth]
     disable_login_form = false

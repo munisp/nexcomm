@@ -335,3 +335,17 @@
 - [x] My Passkeys section added to Account page
 - [x] TigerBeetle auto-provisioning on KYC approval (3 accounts: Trading/Settlement/Margin)
 - [x] Mojaloop settlement callback wired to TigerBeetle ledger transfer
+
+## Round 24 — Final Production Hardening (2026-03-31)
+- [x] Stripe payment integration: createDepositSession, listPayments, getPayment, adminListPayments
+- [x] Stripe webhook handler at /api/stripe/webhook (registered before express.json())
+- [x] stripe_payments table created in database (128 tables total)
+- [x] Payments.tsx page with deposit form, preset amounts, payment history table
+- [x] /payments route registered in App.tsx and sidebar nav
+- [x] Playwright E2E tests: 11 test suites covering homepage, markets, trade, portfolio, payments, responsive, auth, dashboard, analytics, compliance, accessibility
+- [x] playwright.config.ts with chromium/firefox/mobile-chrome projects
+- [x] test:e2e, test:e2e:ui, test:e2e:report scripts added to package.json
+- [x] seed-admin.mjs: promotes OWNER_OPEN_ID account to admin role
+- [x] seed:admin script added to package.json
+- [x] stripe.test.ts: 6 unit tests for Stripe router exports and webhook registration
+- [x] All 819 tests passing (9 test files)

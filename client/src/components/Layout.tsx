@@ -12,7 +12,7 @@ import {
   Shield, Activity, Zap, User,
   DollarSign, Cpu, BarChart2, Users, Eye,
   ClipboardList, BarChart, Star, Calendar, Globe, BellRing,
-  Layers, Tractor, UserCheck, Sprout, BookOpen, Landmark
+  Layers, Tractor, UserCheck, Sprout, BookOpen, Landmark, CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,8 +52,9 @@ const NAV_GROUPS: { key: string; label: string; items: { href: string; icon: Rea
     label: "Warehouse Ops",
     items: [
       { href: "/receipts",   icon: FileText,  label: "Warehouse Receipts" },
-      { href: "/deposits",   icon: Package,   label: "Deposits" },
-      { href: "/warehouses", icon: Warehouse, label: "Warehouses" },
+      { href: "/deposits",   icon: Package,     label: "Deposits" },
+      { href: "/payments",   icon: CreditCard,  label: "Payments" },
+      { href: "/warehouses", icon: Warehouse,   label: "Warehouses" },
       { href: "/delivery",   icon: Truck,     label: "Delivery" },
     ],
   },

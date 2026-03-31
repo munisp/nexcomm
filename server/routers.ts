@@ -25,6 +25,7 @@ import { portfolioRouter as portfolioAnalyticsRouter } from "./routers/portfolio
 import { notificationsRouter } from "./routers/notificationsRouter";
 import { receiptsRouter } from "./routers/receipts";
 import { depositsRouter } from "./routers/depositsRouter";
+import { stripeRouter } from "./routers/stripeRouter";
 import { deliveryRouter } from "./routers/deliveryRouter";
 import { analyticsRouter } from "./routers/analyticsRouter";
 import { apiKeysRouter } from "./routers/apiKeysRouter";
@@ -112,6 +113,7 @@ export const appRouter = router({
   notifications: notificationsRouter,
   receipts: receiptsRouter,
   deposits: depositsRouter,
+  stripe: stripeRouter,
   delivery: deliveryRouter,
   analytics: analyticsRouter,
   apiKeys: apiKeysRouter,

@@ -16,7 +16,7 @@ metadata:
 type: Opaque
 stringData:
   # Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
-  SECRET_KEY: "CHANGEME_generate_with_python3_secrets_token_hex_32"
+  SECRET_KEY: "3f27cfe7e045c350b3fc8bbab56f50b15f1bd5ed39da4467721fc460c480e10b"
   # Grafana URL for OAuth callback (update with your actual Grafana URL)
   GRAFANA_API_URL: "http://grafana.monitoring.svc.cluster.local:3000"
   # Database
@@ -24,7 +24,7 @@ stringData:
   DATABASE_PORT: "5432"
   DATABASE_NAME: "oncall"
   DATABASE_USER: "oncall"
-  DATABASE_PASSWORD: "oncall_secure_2026_CHANGEME"
+  DATABASE_PASSWORD: "EBKx-_IbydQqSdswF86m_Wypknf-fBLf"
   # Redis
   REDIS_URI: "redis://grafana-oncall-redis.monitoring.svc.cluster.local:6379/0"
   # Slack integration (optional — leave empty to disable)

@@ -34,9 +34,9 @@ stringData:
   # Replace with the token from: Grafana OnCall → Integrations → Wazuh SIEM → Webhook URL
   # kubectl create secret generic wazuh-oncall-token -n wazuh \
   #   --from-literal=token=<YOUR_ONCALL_WEBHOOK_TOKEN>
-  token: "CHANGEME_AFTER_CREATING_ONCALL_INTEGRATION"
+  token: "nexcom-wazuh-integration"
   # Full webhook URL (assembled for convenience)
-  webhook-url: "https://oncall.nexcom.exchange/integrations/v1/webhook/CHANGEME_AFTER_CREATING_ONCALL_INTEGRATION/"
+  webhook-url: "https://oncall.nexcom.exchange/integrations/v1/webhook/nexcom-wazuh-integration/"
 
 ---
 # ─── Secret: Slack webhook URL (secondary channel) ───────────────────────────

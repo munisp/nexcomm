@@ -2717,3 +2717,29 @@ export const bankTransactions = pgTable("bank_transactions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 export type BankTransaction = typeof bankTransactions.$inferSelect;
+
+// ============================================================
+// Stripe Payments — fiat on-ramp / off-ramp tracking
+// ============================================================
+export const stripePaymentStatusEnum = pgEnum("stripe_payment_status", [
+  "PENDING", "SUCCEEDED", "FAILED", "CANCELED", "REFUNDED"
+]);
+export const stripePaymentTypeEnum = pgEnum("stripe_payment_type", [
+  "DEPOSIT", "WITHDRAWAL"
+]);
+
+export const stripePayments = pgTable("stripe_payments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 128 }).unique(),
+  stripeCheckoutSessionId: varchar("stripe_checkout_session_id", { length: 128 }).unique(),
+  type: stripePaymentTypeEnum("type").notNull().default("DEPOSIT"),
+  amountCents: integer("amount_cents").notNull(),
+  currency: varchar("currency", { length: 10 }).notNull().default("usd"),
+  status: stripePaymentStatusEnum("status").notNull().default("PENDING"),
+  bankTransactionId: bigint("bank_transaction_id", { mode: "number" }),
+  metadata: json("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type StripePayment = typeof stripePayments.$inferSelect;

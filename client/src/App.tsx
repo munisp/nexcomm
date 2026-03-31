@@ -31,6 +31,7 @@ const Indices           = lazy(() => import("./pages/Indices"));
 // Commodity operations
 const WarehouseReceipts = lazy(() => import("./pages/WarehouseReceipts"));
 const Deposits          = lazy(() => import("./pages/Deposits"));
+const Payments          = lazy(() => import("./pages/Payments"));
 const Warehouses        = lazy(() => import("./pages/Warehouses"));
 const Delivery          = lazy(() => import("./pages/Delivery"));
 
@@ -177,6 +178,7 @@ function Router() {
         {/* Commodity operations */}
         <Route path="/receipts"          component={WarehouseReceipts} />
         <Route path="/deposits"          component={Deposits} />
+        <Route path="/payments"          component={Payments} />
         <Route path="/warehouses"        component={Warehouses} />
         <Route path="/delivery"          component={Delivery} />
 

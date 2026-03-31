@@ -29,7 +29,7 @@ metadata:
 data:
   # Grafana OnCall webhook URL — update after creating integration in OnCall UI
   # Format: https://oncall.nexcom.exchange/integrations/v1/webhook/<TOKEN>/
-  ONCALL_WEBHOOK_URL: "https://oncall.nexcom.exchange/integrations/v1/webhook/CHANGEME_AFTER_CREATING_INTEGRATION/"
+  ONCALL_WEBHOOK_URL: "https://oncall.nexcom.exchange/integrations/v1/webhook/nexcom-wazuh-integration/"
 
   # Python integration script — placed at /var/ossec/integrations/custom-oncall.py
   custom-oncall.py: |
@@ -148,7 +148,7 @@ data:
     <!-- Grafana OnCall integration — fires for level 7+ alerts -->
     <integration>
       <name>custom-oncall</name>
-      <hook_url>CHANGEME_AFTER_CREATING_INTEGRATION</hook_url>
+      <hook_url>nexcom-wazuh-integration</hook_url>
       <level>7</level>
       <alert_format>json</alert_format>
     </integration>
@@ -156,7 +156,7 @@ data:
     <!-- Grafana OnCall — critical alerts only (level 10+) with faster retry -->
     <integration>
       <name>custom-oncall</name>
-      <hook_url>CHANGEME_AFTER_CREATING_INTEGRATION</hook_url>
+      <hook_url>nexcom-wazuh-integration</hook_url>
       <level>10</level>
       <alert_format>json</alert_format>
     </integration>
