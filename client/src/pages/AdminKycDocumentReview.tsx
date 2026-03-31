@@ -286,7 +286,7 @@ function DecisionDialog({ record, onClose, onDecide, isPending }: DecisionDialog
 const PAGE_SIZE = 20;
 
 export default function AdminKycDocumentReview() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [statusFilter, setStatusFilter] = useState<QueueStatus>("PENDING");
   const [page, setPage] = useState(0);
   const [reviewTarget, setReviewTarget] = useState<KycQueueRecord | null>(null);
@@ -317,8 +317,9 @@ export default function AdminKycDocumentReview() {
     { enabled: userIds.length > 0 }
   );
 
+  type AiResult = NonNullable<typeof aiResults>[number];
   const aiByUserId = useMemo(() => {
-    const map: Record<number, (typeof aiResults)[0]> = {};
+    const map: Record<number, AiResult> = {};
     (aiResults ?? []).forEach((r) => { map[r.userId] = r; });
     return map;
   }, [aiResults]);

@@ -128,7 +128,7 @@ export const webauthnRouter = router({
 
     const credentials = await db
       .select({
-        id: webauthnCredentials.id,
+        id: webauthnCredentials.credentialId,
         deviceName: webauthnCredentials.deviceName,
         aaguid: webauthnCredentials.aaguid,
         uvCapable: webauthnCredentials.uvCapable,
@@ -437,25 +437,24 @@ export const webauthnRouter = router({
 
   /** Rename a registered passkey. */
   renameCredential: protectedProcedure
-    .input(z.object({ credentialId: z.number(), deviceName: z.string().min(1).max(128) }))
+    .input(z.object({ credentialId: z.string(), name: z.string().min(1).max(128) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db
         .update(webauthnCredentials)
-        .set({ deviceName: input.deviceName })
+        .set({ deviceName: input.name })
         .where(
           and(
-            eq(webauthnCredentials.id, input.credentialId),
+            eq(webauthnCredentials.credentialId, input.credentialId),
             eq(webauthnCredentials.userId, ctx.user.id)
           )
         );
       return { success: true };
     }),
-
   /** Remove a registered passkey. */
   removeCredential: protectedProcedure
-    .input(z.object({ credentialId: z.number() }))
+    .input(z.object({ credentialId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -463,7 +462,7 @@ export const webauthnRouter = router({
         .delete(webauthnCredentials)
         .where(
           and(
-            eq(webauthnCredentials.id, input.credentialId),
+            eq(webauthnCredentials.credentialId, input.credentialId),
             eq(webauthnCredentials.userId, ctx.user.id)
           )
         );
@@ -712,7 +711,7 @@ export const webauthnRouter = router({
       // Update signCount and lastUsed
       await db
         .update(webauthnCredentials)
-        .set({ signCount: newSignCount, lastUsed: new Date() })
+        .set({ signCount: newSignCount, lastUsedAt: new Date() })
         .where(eq(webauthnCredentials.id, cred.id));
       // Clean up challenge
       await db.delete(webauthnChallenges).where(eq(webauthnChallenges.id, storedChallenge.id)).catch(() => {});
@@ -730,4 +729,22 @@ export const webauthnRouter = router({
         user: { id: user.id, name: user.name, email: user.email, role: user.role },
       };
     }),
+
+  // ── List user's passkey credentials ─────────────────────────────────────────
+  listCredentials: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const uid = ctx.user.id;
+    return db
+      .select({
+        id: webauthnCredentials.credentialId,
+        name: webauthnCredentials.deviceName,
+        createdAt: webauthnCredentials.createdAt,
+        signCount: webauthnCredentials.signCount,
+        lastUsedAt: webauthnCredentials.lastUsedAt,
+      })
+      .from(webauthnCredentials)
+      .where(eq(webauthnCredentials.userId, uid))
+      .orderBy(webauthnCredentials.createdAt);
+  }),
 });

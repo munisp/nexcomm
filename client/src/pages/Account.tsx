@@ -71,11 +71,25 @@ export default function Account() {
   async function handleRegisterPasskey() {
     setRegisterPasskeyLoading(true);
     try {
-      const opts = await registrationOptionsMutation.mutateAsync();
-      // Use the browser WebAuthn API
+      const opts = await registrationOptionsMutation.mutateAsync({});
+      // Use the browser WebAuthn API — our server returns raw WebAuthn options
+      // We pass them through as-is since we do manual verification server-side
       const { startRegistration } = await import("@simplewebauthn/browser");
-      const attResp = await startRegistration(opts as Parameters<typeof startRegistration>[0]);
-      await verifyRegistrationMutation.mutateAsync({ response: attResp as unknown as Record<string, unknown> });
+      const attResp = await startRegistration({ optionsJSON: opts as unknown as Parameters<typeof startRegistration>[0]["optionsJSON"] });
+      // Extract fields from the authenticator response
+      const resp = attResp as unknown as {
+        id: string;
+        rawId: string;
+        response: { clientDataJSON: string; attestationObject: string };
+        type: string;
+      };
+      await verifyRegistrationMutation.mutateAsync({
+        credentialId: resp.id,
+        clientDataJSON: resp.response.clientDataJSON,
+        attestationObject: resp.response.attestationObject,
+        publicKey: resp.rawId, // server extracts from attestationObject
+        deviceName: "Passkey",
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       if (!msg.includes("cancelled") && !msg.includes("NotAllowedError")) {
@@ -440,7 +454,7 @@ export default function Account() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {passkeyCreds.map((cred) => (
+                  {passkeyCreds.map((cred: { id: string; name: string | null; createdAt: Date; signCount: number }) => (
                     <div key={cred.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-3 bg-muted/20">
                       <div className="flex items-center gap-3">
                         <Fingerprint className="w-4 h-4 text-muted-foreground" />

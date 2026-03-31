@@ -190,7 +190,7 @@ function TotpTab() {
 
 function PasskeysTab() {
   const utils = trpc.useUtils();
-  const [renameId, setRenameId] = useState<number | null>(null);
+  const [renameId, setRenameId] = useState<string | null>(null);
   const [renameName, setRenameName] = useState("");
   const [registering, setRegistering] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -456,7 +456,7 @@ function PasskeysTab() {
                                 if (e.key === "Enter")
                                   renameCredentialMut.mutate({
                                     credentialId: cred.id,
-                                    deviceName: renameName,
+                                    name: renameName,
                                   });
                                 if (e.key === "Escape") setRenameId(null);
                               }}
@@ -467,7 +467,7 @@ function PasskeysTab() {
                               onClick={() =>
                                 renameCredentialMut.mutate({
                                   credentialId: cred.id,
-                                  deviceName: renameName,
+                                  name: renameName,
                                 })
                               }
                               disabled={renameCredentialMut.isPending}

@@ -370,15 +370,15 @@ describe("WebAuthn Phase W6 — renameCredential", () => {
 
     const caller = appRouter.createCaller(makeCtx());
     const result = await caller.webauthn.renameCredential({
-      credentialId: cred!.id,
-      deviceName: "New Name",
+      credentialId: cred!.credentialId,
+      name: "New Name",
     });
     expect(result.success).toBe(true);
 
     const [updated] = await db
       .select({ deviceName: webauthnCredentials.deviceName })
       .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.id, cred!.id));
+      .where(eq(webauthnCredentials.credentialId, cred!.credentialId));
     expect(updated?.deviceName).toBe("New Name");
   });
 
@@ -400,14 +400,14 @@ describe("WebAuthn Phase W6 — renameCredential", () => {
       .returning();
     const caller = appRouter.createCaller(makeCtx());
     // Router silently ignores updates to credentials not owned by the calling user
-    const result = await caller.webauthn.renameCredential({ credentialId: cred!.id, deviceName: "Hacked Name" });
+    const result = await caller.webauthn.renameCredential({ credentialId: cred!.credentialId, name: "Hacked Name" });
     expect(result.success).toBe(true);
     // Verify the name was NOT changed
     const [row] = await db.select({ deviceName: webauthnCredentials.deviceName })
-      .from(webauthnCredentials).where(eq(webauthnCredentials.id, cred!.id));
+      .from(webauthnCredentials).where(eq(webauthnCredentials.credentialId, cred!.credentialId));
     expect(row?.deviceName).toBe("Other User Device");
     // Clean up
-    await db.delete(webauthnCredentials).where(eq(webauthnCredentials.id, cred!.id));
+    await db.delete(webauthnCredentials).where(eq(webauthnCredentials.credentialId, cred!.credentialId));
   });
 });
 
@@ -431,13 +431,13 @@ describe("WebAuthn Phase W7 — removeCredential", () => {
       .returning();
 
     const caller = appRouter.createCaller(makeCtx());
-    const result = await caller.webauthn.removeCredential({ credentialId: cred!.id });
+    const result = await caller.webauthn.removeCredential({ credentialId: cred!.credentialId });
     expect(result.success).toBe(true);
 
     const rows = await db
       .select()
       .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.id, cred!.id));
+      .where(eq(webauthnCredentials.credentialId, cred!.credentialId));
     expect(rows.length).toBe(0);
   });
 
@@ -460,13 +460,13 @@ describe("WebAuthn Phase W7 — removeCredential", () => {
 
     const caller = appRouter.createCaller(makeCtx());
     // Router silently ignores - returns success but does not delete
-    const result = await caller.webauthn.removeCredential({ credentialId: cred!.id });
+    const result = await caller.webauthn.removeCredential({ credentialId: cred!.credentialId });
     expect(result.success).toBe(true);
     // Verify credential still exists
-    const rows = await db.select().from(webauthnCredentials).where(eq(webauthnCredentials.id, cred!.id));
+    const rows = await db.select().from(webauthnCredentials).where(eq(webauthnCredentials.credentialId, cred!.credentialId));
     expect(rows.length).toBe(1);
     // Clean up
-    await db.delete(webauthnCredentials).where(eq(webauthnCredentials.id, cred!.id));
+    await db.delete(webauthnCredentials).where(eq(webauthnCredentials.credentialId, cred!.credentialId));
   });
 });
 
