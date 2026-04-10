@@ -195,7 +195,7 @@ async def send_whatsapp(wa_id: str, message: str) -> bool:
             resp = await client.post(
                 f"{CHANNEL_GATEWAY_URL}/internal/whatsapp/send",
                 json={"to": wa_id, "message": message},
-                headers={"X-Internal-Key": os.getenv("INTERNAL_API_KEY", "nexcom-internal")},
+                headers={"X-Internal-Key": os.getenv("INTERNAL_API_KEY", os.getenv("JWT_SECRET", ""))},
             )
             return resp.status_code == 200
     except Exception as exc:
@@ -210,7 +210,7 @@ async def send_telegram(chat_id: str, message: str) -> bool:
             resp = await client.post(
                 f"{CHANNEL_GATEWAY_URL}/internal/telegram/send",
                 json={"chat_id": chat_id, "message": message, "parse_mode": "MarkdownV2"},
-                headers={"X-Internal-Key": os.getenv("INTERNAL_API_KEY", "nexcom-internal")},
+                headers={"X-Internal-Key": os.getenv("INTERNAL_API_KEY", os.getenv("JWT_SECRET", ""))},
             )
             return resp.status_code == 200
     except Exception as exc:

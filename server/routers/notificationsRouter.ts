@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { timingSafeEqual } from "crypto";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { notifications, priceAlerts, pushTokens } from "../../drizzle/schema";
@@ -226,8 +227,15 @@ export const notificationsRouter = router({
       secret: z.string(),
     }))
     .mutation(async ({ input }) => {
-      const expectedSecret = process.env.INTERNAL_JOB_SECRET ?? 'nexcom-internal';
-      if (input.secret !== expectedSecret) throw new TRPCError({ code: 'UNAUTHORIZED' });
+      const expectedSecret = process.env.INTERNAL_JOB_SECRET;
+      if (!expectedSecret || expectedSecret.length < 32) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'INTERNAL_JOB_SECRET env var must be at least 32 characters' });
+      }
+      // Timing-safe comparison to prevent timing attacks
+      const a = Buffer.from(input.secret);
+      const b = Buffer.from(expectedSecret);
+      const match = a.length === b.length && timingSafeEqual(a, b);
+      if (!match) throw new TRPCError({ code: 'UNAUTHORIZED' });
       const db = await getDb();
       if (!db) return { triggered: 0, alertIds: [] };
 

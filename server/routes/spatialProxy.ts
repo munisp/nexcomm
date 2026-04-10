@@ -2,15 +2,28 @@
  * Spatial proxy route — forwards /api/spatial/* to the Sedona Python service
  * running on port 7474. This keeps the Sedona service internal and lets the
  * frontend call /api/spatial/boundary-stats etc. via the same Express server.
+ *
+ * Security: requires a valid session cookie (same JWT used by tRPC context).
+ * Unauthenticated requests receive 401.
  */
 
 import { Router, Request, Response } from "express";
+import { sdk } from "../_core/sdk";
 
 const SEDONA_BASE = process.env.SEDONA_URL ?? "http://localhost:7474";
 
 export const spatialProxyRouter = Router();
 
 spatialProxyRouter.all("/api/spatial/*", async (req: Request, res: Response) => {
+  // ── Authentication guard ──────────────────────────────────────────────────
+  try {
+    await sdk.authenticateRequest(req);
+  } catch {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  // ── Proxy to internal Sedona service ─────────────────────────────────────
   // Strip /api prefix — Sedona routes are /spatial/...
   const sedonaPath = req.path.replace(/^\/api/, "");
   const url = `${SEDONA_BASE}${sedonaPath}`;

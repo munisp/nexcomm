@@ -118,7 +118,7 @@ async def send_whatsapp_alert(
             resp = await client.post(
                 f"{CHANNEL_GATEWAY_URL}/internal/whatsapp/send",
                 json={"to": wa_id, "message": message},
-                headers={"X-Internal-Key": os.getenv("INTERNAL_API_KEY", "nexcom-internal")},
+                headers={"X-Internal-Key": os.getenv("INTERNAL_API_KEY", os.getenv("JWT_SECRET", ""))},
             )
             if resp.status_code == 200:
                 logger.info(

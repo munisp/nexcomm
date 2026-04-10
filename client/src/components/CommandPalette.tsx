@@ -9,6 +9,7 @@
  * via the exported `useCommandPalette()` hook.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import { Clock, Trash2, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { Command } from "cmdk";
@@ -164,8 +165,9 @@ function HighlightText({
     return <span className={className}>{fallback}</span>;
   }
   // Replace <em>...</em> with a styled span, then render as HTML.
-  // We sanitise by only allowing the exact <em> tag pattern.
-  const safe = highlight.replace(
+  // First sanitize with DOMPurify allowing only <em> tags, then replace <em> with <mark>.
+  const purified = DOMPurify.sanitize(highlight, { ALLOWED_TAGS: ["em"], ALLOWED_ATTR: [] });
+  const safe = purified.replace(
     /<em>(.*?)<\/em>/g,
     '<mark class="bg-transparent text-amber-400 font-semibold not-italic">$1</mark>'
   );

@@ -22,10 +22,10 @@ import {
 import { TRPCError } from "@trpc/server";
 
 // ── Stripe client ─────────────────────────────────────────────────────────────
-const STRIPE_SECRET_KEY =
-  process.env.STRIPE_SECRET_KEY ?? "sk_test_placeholder_nexcom_exchange_2026";
-const STRIPE_WEBHOOK_SECRET =
-  process.env.STRIPE_WEBHOOK_SECRET ?? "whsec_placeholder_nexcom_exchange_2026";
+// Keys are injected by the platform; empty string causes Stripe to throw on first use
+// rather than silently accepting requests with a known placeholder.
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? "";
 
 export const stripeClient = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: "2025-01-27.acacia",

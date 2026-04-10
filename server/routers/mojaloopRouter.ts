@@ -623,7 +623,7 @@ export const mojaloopRouter = router({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-internal-secret": process.env.INTERNAL_SECRET ?? "nexcom-internal",
+            "x-internal-secret": process.env.INTERNAL_SECRET ?? process.env.JWT_SECRET ?? "",
           },
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout(10_000),

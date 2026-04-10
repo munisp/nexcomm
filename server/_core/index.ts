@@ -2,6 +2,10 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+import { randomUUID } from "crypto";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStripeWebhook } from "../routers/stripeRouter";
@@ -56,12 +60,88 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // ── Security headers (Helmet) ───────────────────────────────────────────────
+  // Applied before all other middleware so every response gets security headers.
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://js.stripe.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "wss:", "ws:", "https:"],
+        frameSrc: ["https://js.stripe.com"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // Required for Stripe.js
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  }));
+
+  // ── CORS policy ─────────────────────────────────────────────────────────────
+  const allowedOrigins = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://localhost:5432")
+    .split(",")
+    .map(o => o.trim())
+    .filter(Boolean);
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (same-origin, curl, Postman)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin) || origin.endsWith(".manus.space") || origin.endsWith(".manus.computer")) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS: origin '${origin}' not allowed`));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Source", "X-Admin-Token", "X-Request-ID"],
+    exposedHeaders: ["X-Request-ID"],
+    maxAge: 86400,
+  }));
+
+  // ── Request ID correlation ────────────────────────────────────────────────
+  // Assigns a UUID to every request for distributed tracing and log correlation.
+  app.use((req, res, next) => {
+    const requestId = (req.headers["x-request-id"] as string) || randomUUID();
+    req.headers["x-request-id"] = requestId;
+    res.setHeader("X-Request-ID", requestId);
+    next();
+  });
+
+  // ── Rate limiting ──────────────────────────────────────────────────────────
+  // General API rate limit: 300 requests per minute per IP
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later." },
+    skip: (req) => req.path === "/api/ha/status" || req.path === "/api/ha/status/metrics",
+  });
+  app.use("/api", apiLimiter);
+
+  // Strict auth rate limit: 20 requests per 15 minutes per IP (prevents brute force)
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many authentication attempts, please try again later." },
+  });
+  app.use("/api/oauth", authLimiter);
+
   // Stripe webhook MUST be registered before express.json() to preserve raw body for signature verification
   registerStripeWebhook(app);
 
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Configure body parser — 10 MB is sufficient for JSON payloads; file uploads use multipart
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
