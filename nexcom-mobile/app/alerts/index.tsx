@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,17 +9,17 @@ import {
   Alert,
   TextInput,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
 import {
   registerForPushNotifications,
-  sendLocalPriceAlert,
-  cancelNotification,
-  type PriceAlert,
-  type AlertCondition,
 } from '../../lib/notifications';
+import { trpc } from '../../lib/trpc';
+
+type AlertCondition = 'ABOVE' | 'BELOW' | 'CROSS_ABOVE' | 'CROSS_BELOW';
 
 // Demo commodity data
 const COMMODITIES = [
@@ -33,64 +33,56 @@ const COMMODITIES = [
   { symbol: 'GROUNDNUT', name: 'Groundnut', price: 680000, unit: 'MT' },
 ];
 
-const CONDITION_LABELS: Record<AlertCondition, string> = {
+const CONDITION_LABELS: Record<string, string> = {
   ABOVE: 'Price goes above',
   BELOW: 'Price goes below',
-  PERCENT_CHANGE: 'Price changes by %',
-  VOLUME_SPIKE: 'Volume spike',
+  CROSS_ABOVE: 'Crosses above',
+  CROSS_BELOW: 'Crosses below',
 };
 
-const CONDITION_ICONS: Record<AlertCondition, string> = {
+const CONDITION_ICONS: Record<string, string> = {
   ABOVE: '▲',
   BELOW: '▼',
-  PERCENT_CHANGE: '%',
-  VOLUME_SPIKE: '📊',
+  CROSS_ABOVE: '⇑',
+  CROSS_BELOW: '⇓',
 };
 
 export default function AlertsScreen() {
-  const [alerts, setAlerts] = useState<PriceAlert[]>([
-    {
-      id: 'alert-1',
-      symbol: 'MAIZE',
-      commodityName: 'White Maize',
-      condition: 'ABOVE',
-      targetPrice: 300000,
-      currentPrice: 285000,
-      isActive: true,
-      createdAt: Date.now() - 86400000,
-    },
-    {
-      id: 'alert-2',
-      symbol: 'COCOA',
-      commodityName: 'Cocoa Beans',
-      condition: 'BELOW',
-      targetPrice: 4500000,
-      currentPrice: 4850000,
-      isActive: true,
-      createdAt: Date.now() - 3600000,
-    },
-  ]);
-
+  const utils = trpc.useUtils();
   const [showAddModal, setShowAddModal] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushToken, setPushToken] = useState<string | null>(null);
-
-  // New alert form state
   const [selectedSymbol, setSelectedSymbol] = useState('MAIZE');
   const [selectedCondition, setSelectedCondition] = useState<AlertCondition>('ABOVE');
   const [targetPriceInput, setTargetPriceInput] = useState('');
 
-  useEffect(() => {
-    checkPushPermissions();
-  }, []);
+  const alertsQuery = trpc.priceAlerts.list.useQuery();
+  const createAlertMutation = trpc.priceAlerts.create.useMutation({
+    onSuccess: () => {
+      utils.priceAlerts.list.invalidate();
+      setShowAddModal(false);
+      setTargetPriceInput('');
+    },
+    onError: (err) => Alert.alert('Error', err.message),
+  });
+  const deleteAlertMutation = trpc.priceAlerts.delete.useMutation({
+    onSuccess: () => utils.priceAlerts.list.invalidate(),
+    onError: (err) => Alert.alert('Error', err.message),
+  });
+  const updateAlertMutation = trpc.priceAlerts.update.useMutation({
+    onSuccess: () => utils.priceAlerts.list.invalidate(),
+  });
 
-  const checkPushPermissions = async () => {
-    const token = await registerForPushNotifications();
-    if (token) {
-      setPushToken(token);
-      setPushEnabled(true);
-    }
-  };
+  const allAlerts = [
+    ...(alertsQuery.data?.active ?? []),
+    ...(alertsQuery.data?.triggered ?? []),
+  ];
+
+  useEffect(() => {
+    registerForPushNotifications().then((token) => {
+      if (token) { setPushToken(token); setPushEnabled(true); }
+    });
+  }, []);
 
   const handleEnablePush = async () => {
     const token = await registerForPushNotifications();
@@ -99,53 +91,23 @@ export default function AlertsScreen() {
       setPushEnabled(true);
       Alert.alert('Push Notifications Enabled', 'You will receive price alerts for your watchlist.');
     } else {
-      Alert.alert(
-        'Permission Required',
-        'Please enable notifications in your device settings to receive price alerts.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Permission Required', 'Please enable notifications in your device settings.', [{ text: 'OK' }]);
     }
   };
 
-  const handleToggleAlert = useCallback((alertId: string, enabled: boolean) => {
-    setAlerts((prev) =>
-      prev.map((a) => (a.id === alertId ? { ...a, isActive: enabled } : a))
-    );
-  }, []);
+  const handleToggleAlert = (alertId: number, enabled: boolean) => {
+    updateAlertMutation.mutate({ id: alertId, isActive: enabled });
+  };
 
-  const handleDeleteAlert = useCallback(
-    (alert: PriceAlert) => {
-      Alert.alert(
-        'Delete Alert',
-        `Remove price alert for ${alert.symbol} (${CONDITION_LABELS[alert.condition]} ₦${alert.targetPrice?.toLocaleString()})?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              if (alert.notificationId) {
-                await cancelNotification(alert.notificationId);
-              }
-              setAlerts((prev) => prev.filter((a) => a.id !== alertId));
-            },
-          },
-        ]
-      );
-    },
-    []
-  );
-
-  const handleTestAlert = async (alert: PriceAlert) => {
-    if (!alert.targetPrice) return;
-    const notifId = await sendLocalPriceAlert(
-      alert.symbol,
-      alert.commodityName,
-      alert.currentPrice,
-      alert.targetPrice,
-      alert.condition
+  const handleDeleteAlert = (alert: any) => {
+    Alert.alert(
+      'Delete Alert',
+      `Remove price alert for ${alert.symbol}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteAlertMutation.mutate({ id: alert.id }) },
+      ]
     );
-    Alert.alert('Test Sent', `Test notification sent (ID: ${notifId.slice(0, 8)}...)`);
   };
 
   const handleAddAlert = () => {
@@ -154,23 +116,9 @@ export default function AlertsScreen() {
       Alert.alert('Invalid Price', 'Please enter a valid target price.');
       return;
     }
-
-    const commodity = COMMODITIES.find((c) => c.symbol === selectedSymbol)!;
-    const newAlert: PriceAlert = {
-      id: `alert-${Date.now()}`,
-      symbol: selectedSymbol,
-      commodityName: commodity.name,
-      condition: selectedCondition,
-      targetPrice,
-      currentPrice: commodity.price,
-      isActive: true,
-      createdAt: Date.now(),
-    };
-
-    setAlerts((prev) => [newAlert, ...prev]);
-    setShowAddModal(false);
-    setTargetPriceInput('');
-    Alert.alert('Alert Created', `You will be notified when ${commodity.name} price ${CONDITION_LABELS[selectedCondition].toLowerCase()} ₦${targetPrice.toLocaleString()}.`);
+    const commodity = COMMODITIES.find((c) => c.symbol === selectedSymbol);
+    createAlertMutation.mutate({ symbol: selectedSymbol, condition: selectedCondition, targetPrice });
+    Alert.alert('Alert Created', `Alert set for ${commodity?.name ?? selectedSymbol} at ₦${targetPrice.toLocaleString()}.`);
   };
 
   const selectedCommodity = COMMODITIES.find((c) => c.symbol === selectedSymbol);
@@ -222,7 +170,7 @@ export default function AlertsScreen() {
           {/* Active Alerts */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Active Alerts ({alerts.length})</Text>
+              <Text style={styles.sectionTitle}>Active Alerts ({allAlerts.length})</Text>
               <TouchableOpacity
                 style={styles.addBtn}
                 onPress={() => setShowAddModal(true)}
@@ -231,66 +179,47 @@ export default function AlertsScreen() {
               </TouchableOpacity>
             </View>
 
-            {alerts.length === 0 ? (
+            {alertsQuery.isLoading ? (
+              <ActivityIndicator color={COLORS.primary} style={{ marginTop: 24 }} />
+            ) : allAlerts.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyIcon}>🔔</Text>
                 <Text style={styles.emptyTitle}>No alerts set</Text>
                 <Text style={styles.emptySub}>
                   Create price alerts to get notified when commodities hit your target prices.
                 </Text>
-                <TouchableOpacity
-                  style={styles.emptyBtn}
-                  onPress={() => setShowAddModal(true)}
-                >
+                <TouchableOpacity style={styles.emptyBtn} onPress={() => setShowAddModal(true)}>
                   <Text style={styles.emptyBtnText}>Create First Alert</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              alerts.map((alert) => (
+              allAlerts.map((alert: any) => (
                 <View key={alert.id} style={styles.alertCard}>
                   <View style={styles.alertTop}>
                     <View style={styles.alertLeft}>
                       <Text style={styles.alertSymbol}>{alert.symbol}</Text>
-                      <Text style={styles.alertName}>{alert.commodityName}</Text>
+                      <Text style={styles.alertName}>{alert.symbol}</Text>
                     </View>
                     <Switch
-                      value={alert.isActive}
+                      value={!alert.triggered && alert.isActive !== false}
                       onValueChange={(v) => handleToggleAlert(alert.id, v)}
                       trackColor={{ false: COLORS.border, true: `${COLORS.primary}60` }}
-                      thumbColor={alert.isActive ? COLORS.primary : COLORS.textMuted}
+                      thumbColor={!alert.triggered ? COLORS.primary : COLORS.textMuted}
                     />
                   </View>
-
                   <View style={styles.alertCondition}>
-                    <Text style={styles.alertConditionIcon}>
-                      {CONDITION_ICONS[alert.condition]}
-                    </Text>
-                    <Text style={styles.alertConditionText}>
-                      {CONDITION_LABELS[alert.condition]}
-                    </Text>
-                    <Text style={styles.alertTargetPrice}>
-                      ₦{alert.targetPrice?.toLocaleString()}
-                    </Text>
+                    <Text style={styles.alertConditionIcon}>{CONDITION_ICONS[alert.condition] ?? '▲'}</Text>
+                    <Text style={styles.alertConditionText}>{CONDITION_LABELS[alert.condition] ?? alert.condition}</Text>
+                    <Text style={styles.alertTargetPrice}>₦{Number(alert.targetPrice).toLocaleString()}</Text>
                   </View>
-
                   <View style={styles.alertFooter}>
-                    <Text style={styles.alertCurrentPrice}>
-                      Current: ₦{alert.currentPrice.toLocaleString()}
-                    </Text>
+                    <Text style={styles.alertCurrentPrice}>{alert.triggered ? '✓ Triggered' : 'Active'}</Text>
                     <View style={styles.alertActions}>
-                      <TouchableOpacity
-                        style={styles.alertActionBtn}
-                        onPress={() => handleTestAlert(alert)}
-                      >
-                        <Text style={styles.alertActionText}>Test</Text>
-                      </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.alertActionBtn, styles.alertDeleteBtn]}
                         onPress={() => handleDeleteAlert(alert)}
                       >
-                        <Text style={[styles.alertActionText, { color: COLORS.error }]}>
-                          Delete
-                        </Text>
+                        <Text style={[styles.alertActionText, { color: COLORS.error }]}>Delete</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -350,7 +279,7 @@ export default function AlertsScreen() {
 
               {/* Condition Selector */}
               <Text style={[styles.fieldLabel, { marginTop: 20 }]}>Alert Condition</Text>
-              {(['ABOVE', 'BELOW', 'PERCENT_CHANGE'] as AlertCondition[]).map((cond) => (
+              {(['ABOVE', 'BELOW', 'CROSS_ABOVE', 'CROSS_BELOW'] as AlertCondition[]).map((cond) => (
                 <TouchableOpacity
                   key={cond}
                   style={[
@@ -376,23 +305,23 @@ export default function AlertsScreen() {
 
               {/* Target Price Input */}
               <Text style={[styles.fieldLabel, { marginTop: 20 }]}>
-                {selectedCondition === 'PERCENT_CHANGE' ? 'Percent Change (%)' : 'Target Price (₦)'}
+                Target Price (₦)
               </Text>
               <TextInput
                 style={styles.priceInput}
                 value={targetPriceInput}
                 onChangeText={setTargetPriceInput}
-                placeholder={
-                  selectedCondition === 'PERCENT_CHANGE'
-                    ? 'e.g. 5 (for 5%)'
-                    : `e.g. ${selectedCommodity ? Math.round(selectedCommodity.price * 1.1).toLocaleString() : '300000'}`
-                }
+                placeholder={`e.g. ${selectedCommodity ? Math.round(selectedCommodity.price * 1.1).toLocaleString() : '300000'}`}
                 placeholderTextColor={COLORS.textMuted}
                 keyboardType="numeric"
               />
 
-              <TouchableOpacity style={styles.createBtn} onPress={handleAddAlert}>
-                <Text style={styles.createBtnText}>Create Alert</Text>
+              <TouchableOpacity
+                style={[styles.createBtn, createAlertMutation.isPending && { opacity: 0.6 }]}
+                onPress={handleAddAlert}
+                disabled={createAlertMutation.isPending}
+              >
+                <Text style={styles.createBtnText}>{createAlertMutation.isPending ? 'Creating...' : 'Create Alert'}</Text>
               </TouchableOpacity>
             </ScrollView>
           </SafeAreaView>

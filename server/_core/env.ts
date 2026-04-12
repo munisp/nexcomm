@@ -12,4 +12,10 @@ export const ENV = {
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
   // KEDA namespace — used when generating kubectl bootstrap instructions
   kedaNamespace: process.env.KEDA_NAMESPACE ?? "nexcom",
+  // Microservice base URLs — override in production secrets
+  coreBankingUrl: process.env.CORE_BANKING_URL ?? "",
+  channelGatewayUrl: process.env.CHANNEL_GATEWAY_URL ?? "",
+  botLogicUrl: process.env.BOT_LOGIC_URL ?? "",
+  ussdEngineUrl: process.env.USSD_ENGINE_URL ?? "",
+  indicesServiceUrl: process.env.INDICES_SERVICE_URL ?? "",
 };

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
+import { trpc } from '../../lib/trpc';
 
 const COMMODITIES = ['MAIZE', 'SOYBEAN', 'COCOA', 'SESAME', 'SORGHUM', 'CASHEW', 'COTTON'];
 const ORDER_TYPES = ['LIMIT', 'MARKET', 'STOP', 'STOP_LIMIT'];
@@ -50,6 +51,18 @@ export default function TradeScreen() {
     setPrice(String(PRICES[sym] || 0));
   };
 
+  const createOrder = trpc.orders.create.useMutation({
+    onSuccess: () => {
+      setIsSubmitting(false);
+      setQuantity('');
+      Alert.alert('Order Submitted', `Your ${side} order for ${qty} MT of ${commodity} has been placed.`);
+    },
+    onError: (err) => {
+      setIsSubmitting(false);
+      Alert.alert('Order Failed', err.message);
+    },
+  });
+
   const handleSubmit = () => {
     if (!quantity || !price) {
       Alert.alert('Missing Fields', 'Please enter quantity and price.');
@@ -70,11 +83,16 @@ export default function TradeScreen() {
           style: side === 'SELL' ? 'destructive' : 'default',
           onPress: () => {
             setIsSubmitting(true);
-            setTimeout(() => {
-              setIsSubmitting(false);
-              Alert.alert('Order Submitted', `Your ${side} order for ${qty} MT of ${commodity} has been placed.`);
-              setQuantity('');
-            }, 1500);
+            createOrder.mutate({
+              symbol: commodity,
+              side,
+              orderType: orderType as 'LIMIT' | 'MARKET' | 'STOP' | 'STOP_LIMIT',
+              marketType: marketType as 'SPOT' | 'FUTURES' | 'OPTIONS',
+              quantity: String(qty),
+              price: orderType !== 'MARKET' ? String(lmt) : undefined,
+              stopPrice: stopPrice ? String(parseFloat(stopPrice)) : undefined,
+              tif: tif as 'GTC' | 'DAY' | 'IOC' | 'FOK',
+            });
           },
         },
       ]

@@ -349,3 +349,28 @@
 - [x] seed:admin script added to package.json
 - [x] stripe.test.ts: 6 unit tests for Stripe router exports and webhook registration
 - [x] All 819 tests passing (9 test files)
+
+## Round 25 — Comprehensive Audit & Production Readiness (2026-04-12)
+- [x] bankFinancingRouter: fixed enum values (PENDING/UNDER_REVIEW/APPROVED/REJECTED/DISBURSED), removed invalid cast
+- [x] commodityIndexRouter: full CRUD (list, get, create, update, delete) wired to DB
+- [x] orderBookLevelsRouter: full CRUD (list, get, create, delete) wired to DB
+- [x] bankFinancingRouter and commodityIndexRouter imported and registered in appRouter
+- [x] CORE_BANKING_URL, CHANNEL_GATEWAY_URL, BOT_LOGIC_URL, INDICES_SERVICE_URL, USSD_ENGINE_URL added to env.ts
+- [x] env.test.ts: validates all 5 microservice URL env vars are present
+- [x] React Native dashboard screen: wired to portfolio.summary + banking.getDashboard + orders.list tRPC
+- [x] React Native markets screen: wired to livePrices.getAll tRPC query
+- [x] React Native trade screen: wired to orders.create tRPC mutation
+- [x] React Native warehouse screen: wired to warehouseInventory.myInventory tRPC query
+- [x] React Native profile screen: wired to profile.getMyProfile + auth.me tRPC queries
+- [x] React Native banking screen: wired to banking.getDashboard + banking.getTransactions tRPC
+- [x] React Native notifications screen: wired to notifications.list + notifications.markRead tRPC
+- [x] React Native alerts screen: wired to priceAlerts.list/create/delete/update tRPC
+- [x] React Native portfolio screen: wired to portfolio.summary tRPC query
+- [x] React Native KYC screen: wired to onboarding.getStatus + onboarding.submit tRPC
+- [x] React Native security screen: wired to deviceSession.listMySessions + revokeDevice + revokeAllOtherSessions tRPC
+- [x] Flutter api_service.dart: added getTotpStatus, generateTotpSecret, confirmTotpSetup, verifyTotpCode, disableTotp, regenerateTotpBackupCodes
+- [x] Flutter api_service.dart: added getDeviceSessions, revokeDeviceSession, revokeAllOtherSessions, trustDevice
+- [x] Flutter security_settings_screen.dart: wired to real getTotpStatus, getDeviceSessions, revokeAllOtherSessions, revokeDeviceSession, disableTotp
+- [x] Flutter totp_setup_screen.dart: wired to real generateTotpSecret, confirmTotpSetup (removed mock secret)
+- [x] PWA pages (Indices, MarketMakers, Markets, OnboardingHub, FarmerEarnings, FarmerMarketPrices): confirmed all use real tRPC queries
+- [x] All 825 vitest tests passing (10 test files)

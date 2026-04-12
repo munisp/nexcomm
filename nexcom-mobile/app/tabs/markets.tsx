@@ -7,43 +7,27 @@ import {
   TextInput,
   TouchableOpacity,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
+import { trpc } from '../../lib/trpc';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CATEGORIES = ['All', 'COMMODITY', 'EQUITY', 'FIXED_INCOME', 'INDEX'];
+const CATEGORY_LABELS: Record<string, string> = {
+  All: 'All', COMMODITY: 'Commodities', EQUITY: 'Equities',
+  FIXED_INCOME: 'Fixed Income', INDEX: 'Indices',
+};
 
-const CATEGORIES = ['All', 'Grains', 'Oilseeds', 'Cash Crops', 'Livestock', 'Indices'];
+type PriceRow = { id: number; symbol: string; name: string | null; assetClass: string; lastPrice: string | null; changePct: string | null; volume24h: string | null; unit: string | null };
 
-const COMMODITIES = [
-  // Grains
-  { symbol: 'MAIZE', name: 'White Maize', category: 'Grains', price: 285000, change: 2.4, volume: 1250, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'SORGHUM', name: 'Sorghum', category: 'Grains', price: 195000, change: -0.5, volume: 890, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'WHEAT', name: 'Wheat', category: 'Grains', price: 420000, change: 1.1, volume: 340, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'MILLET', name: 'Pearl Millet', category: 'Grains', price: 165000, change: 0.8, volume: 520, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'RICE', name: 'Paddy Rice', category: 'Grains', price: 380000, change: -1.8, volume: 670, unit: 'MT', exchange: 'SPOT' },
-  // Oilseeds
-  { symbol: 'SOYBEAN', name: 'Soybean', category: 'Oilseeds', price: 520000, change: -1.2, volume: 980, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'SESAME', name: 'Sesame Seeds', category: 'Oilseeds', price: 1250000, change: 0.9, volume: 210, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'GROUNDNUT', name: 'Groundnut', category: 'Oilseeds', price: 680000, change: 2.1, volume: 430, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'SUNFLOWER', name: 'Sunflower Seed', category: 'Oilseeds', price: 490000, change: -0.3, volume: 180, unit: 'MT', exchange: 'SPOT' },
-  // Cash Crops
-  { symbol: 'COCOA', name: 'Cocoa Beans', category: 'Cash Crops', price: 4850000, change: 3.8, volume: 125, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'CASHEW', name: 'Cashew Nuts', category: 'Cash Crops', price: 3200000, change: 1.6, volume: 89, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'COTTON', name: 'Cotton Lint', category: 'Cash Crops', price: 1850000, change: -2.3, volume: 156, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'COFFEE', name: 'Arabica Coffee', category: 'Cash Crops', price: 5200000, change: 4.2, volume: 67, unit: 'MT', exchange: 'SPOT' },
-  { symbol: 'GINGER', name: 'Dried Ginger', category: 'Cash Crops', price: 2100000, change: 1.9, volume: 94, unit: 'MT', exchange: 'SPOT' },
-  // Livestock
-  { symbol: 'CATTLE', name: 'Beef Cattle', category: 'Livestock', price: 850000, change: 0.6, volume: 45, unit: 'HEAD', exchange: 'SPOT' },
-  { symbol: 'GOAT', name: 'Goat', category: 'Livestock', price: 95000, change: 1.2, volume: 320, unit: 'HEAD', exchange: 'SPOT' },
-  // Indices
-  { symbol: 'NAXI', name: 'NEXCOM Agri Index', category: 'Indices', price: 12450, change: 1.8, volume: 0, unit: 'PTS', exchange: 'INDEX' },
-  { symbol: 'NGGI', name: 'Nigeria Grain Index', category: 'Indices', price: 8920, change: 0.9, volume: 0, unit: 'PTS', exchange: 'INDEX' },
-];
-
-function CommodityRow({ item }: { item: typeof COMMODITIES[0] }) {
-  const isPositive = item.change >= 0;
+function CommodityRow({ item }: { item: PriceRow }) {
+  const change = Number(item.changePct ?? 0);
+  const isPositive = change >= 0;
+  const price = Number(item.lastPrice ?? 0);
   return (
     <TouchableOpacity
       style={styles.row}
@@ -51,30 +35,18 @@ function CommodityRow({ item }: { item: typeof COMMODITIES[0] }) {
     >
       <View style={styles.rowLeft}>
         <Text style={styles.symbol}>{item.symbol}</Text>
-        <Text style={styles.name}>{item.name}</Text>
+        <Text style={styles.name}>{item.name ?? item.symbol}</Text>
         <Text style={styles.volume}>
-          {item.volume > 0 ? `Vol: ${item.volume.toLocaleString()} ${item.unit}` : item.exchange}
+          {item.volume24h ? `Vol: ${Number(item.volume24h).toLocaleString()} ${item.unit ?? ''}` : item.assetClass}
         </Text>
       </View>
       <View style={styles.rowRight}>
         <Text style={styles.price}>
-          ₦{item.price >= 1_000_000
-            ? `${(item.price / 1_000_000).toFixed(2)}M`
-            : `${(item.price / 1_000).toFixed(0)}K`}
+          ₦{price >= 1_000_000 ? `${(price / 1_000_000).toFixed(2)}M` : `${(price / 1_000).toFixed(0)}K`}
         </Text>
-        <View
-          style={[
-            styles.changeBadge,
-            { backgroundColor: isPositive ? `${COLORS.success}20` : `${COLORS.error}20` },
-          ]}
-        >
-          <Text
-            style={[
-              styles.change,
-              { color: isPositive ? COLORS.success : COLORS.error },
-            ]}
-          >
-            {isPositive ? '▲' : '▼'} {Math.abs(item.change).toFixed(1)}%
+        <View style={[styles.changeBadge, { backgroundColor: isPositive ? `${COLORS.success}20` : `${COLORS.error}20` }]}>
+          <Text style={[styles.change, { color: isPositive ? COLORS.success : COLORS.error }]}>
+            {isPositive ? '▲' : '▼'} {Math.abs(change).toFixed(1)}%
           </Text>
         </View>
       </View>
@@ -85,21 +57,26 @@ function CommodityRow({ item }: { item: typeof COMMODITIES[0] }) {
 export default function MarketsScreen() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const pricesQuery = trpc.livePrices.getAll.useQuery();
+  const allPrices = pricesQuery.data ?? [];
 
   const filtered = useMemo(() => {
-    return COMMODITIES.filter((c) => {
+    return allPrices.filter((c) => {
       const matchesSearch =
         search === '' ||
         c.symbol.toLowerCase().includes(search.toLowerCase()) ||
-        c.name.toLowerCase().includes(search.toLowerCase());
+        (c.name ?? '').toLowerCase().includes(search.toLowerCase());
       const matchesCategory =
-        activeCategory === 'All' || c.category === activeCategory;
+        activeCategory === 'All' || c.assetClass === activeCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [search, activeCategory]);
+  }, [allPrices, search, activeCategory]);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {pricesQuery.isLoading && (
+        <ActivityIndicator color={COLORS.primary} style={{ marginTop: 20 }} />
+      )}
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Text style={styles.searchIcon}>🔍</Text>
@@ -120,24 +97,24 @@ export default function MarketsScreen() {
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item}
         contentContainerStyle={styles.categoryList}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.categoryBtn,
-              activeCategory === item && styles.categoryBtnActive,
-            ]}
-            onPress={() => setActiveCategory(item)}
-          >
-            <Text
+          renderItem={({ item }) => (
+            <TouchableOpacity
               style={[
-                styles.categoryText,
-                activeCategory === item && styles.categoryTextActive,
+                styles.categoryBtn,
+                activeCategory === item && styles.categoryBtnActive,
               ]}
+              onPress={() => setActiveCategory(item)}
             >
-              {item}
-            </Text>
-          </TouchableOpacity>
-        )}
+              <Text
+                style={[
+                  styles.categoryText,
+                  activeCategory === item && styles.categoryTextActive,
+                ]}
+              >
+                {CATEGORY_LABELS[item] ?? item}
+              </Text>
+            </TouchableOpacity>
+          )}
       />
 
       {/* Market Stats Bar */}
@@ -145,21 +122,21 @@ export default function MarketsScreen() {
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Gainers</Text>
           <Text style={[styles.statValue, { color: COLORS.success }]}>
-            {filtered.filter((c) => c.change > 0).length}
+            {filtered.filter((c) => Number(c.changePct ?? 0) > 0).length}
           </Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statLabel}>Losers</Text>
           <Text style={[styles.statValue, { color: COLORS.error }]}>
-            {filtered.filter((c) => c.change < 0).length}
+            {filtered.filter((c) => Number(c.changePct ?? 0) < 0).length}
           </Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Unchanged</Text>
+          <Text style={styles.statLabel}>Total</Text>
           <Text style={[styles.statValue, { color: COLORS.textMuted }]}>
-            {filtered.filter((c) => c.change === 0).length}
+            {filtered.length}
           </Text>
         </View>
       </View>
@@ -173,12 +150,22 @@ export default function MarketsScreen() {
       {/* Commodity List */}
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.symbol}
+        keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => <CommodityRow item={item} />}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={pricesQuery.isFetching}
+            onRefresh={() => pricesQuery.refetch()}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>No commodities found</Text>
+            <Text style={styles.emptyText}>
+              {pricesQuery.isLoading ? 'Loading...' : 'No prices found'}
+            </Text>
           </View>
         }
       />

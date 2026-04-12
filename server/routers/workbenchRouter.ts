@@ -34,7 +34,7 @@ export const workbenchRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { success: true, farmId: Math.floor(Math.random() * 1000) };
+      if (!db) throw new Error("Database unavailable");
       const [farm] = await db.insert(workbenchFarms).values({
         userId: ctx.user.id,
         ...input,

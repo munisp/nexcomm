@@ -6,12 +6,31 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
+import { trpc } from '../../lib/trpc';
 
-const RECEIPTS = [
+type InventoryItem = {
+  id: number;
+  receiptNumber: string;
+  commodityName: string | null;
+  quantity: string;
+  unit: string | null;
+  warehouseName: string | null;
+  location: string | null;
+  depositDate: number | null;
+  expiryDate: number | null;
+  qualityGrade: string | null;
+  status: string;
+  estimatedValue: string | null;
+  isPledged: boolean | null;
+};
+
+const RECEIPTS_PLACEHOLDER = [
   {
     id: 'WR-2024-001',
     commodity: 'White Maize',
@@ -70,6 +89,9 @@ const RECEIPTS = [
   },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _RECEIPTS_PLACEHOLDER = RECEIPTS_PLACEHOLDER;
+
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: COLORS.success,
   PLEDGED: COLORS.warning,
@@ -86,8 +108,9 @@ const STATUS_LABELS: Record<string, string> = {
   RELEASED: 'Released',
 };
 
-function ReceiptCard({ item }: { item: typeof RECEIPTS[0] }) {
+function ReceiptCard({ item }: { item: InventoryItem }) {
   const statusColor = STATUS_COLORS[item.status] || COLORS.textMuted;
+  const value = Number(item.estimatedValue ?? 0);
   return (
     <TouchableOpacity
       style={styles.card}
@@ -95,12 +118,12 @@ function ReceiptCard({ item }: { item: typeof RECEIPTS[0] }) {
     >
       <View style={styles.cardHeader}>
         <View>
-          <Text style={styles.receiptId}>{item.id}</Text>
-          <Text style={styles.commodity}>{item.commodity}</Text>
+          <Text style={styles.receiptId}>{item.receiptNumber}</Text>
+          <Text style={styles.commodity}>{item.commodityName ?? 'Unknown'}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
           <Text style={[styles.statusText, { color: statusColor }]}>
-            {STATUS_LABELS[item.status]}
+            {STATUS_LABELS[item.status] ?? item.status}
           </Text>
         </View>
       </View>
@@ -109,38 +132,44 @@ function ReceiptCard({ item }: { item: typeof RECEIPTS[0] }) {
         <View style={styles.infoRow}>
           <Text style={styles.infoIcon}>📦</Text>
           <Text style={styles.infoText}>
-            {item.quantity.toLocaleString()} {item.unit} · {item.quality}
+            {Number(item.quantity).toLocaleString()} {item.unit ?? 'MT'} · {item.qualityGrade ?? 'N/A'}
           </Text>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoIcon}>🏭</Text>
-          <Text style={styles.infoText}>{item.warehouse}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoIcon}>📍</Text>
-          <Text style={styles.infoText}>{item.location}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoIcon}>📅</Text>
-          <Text style={styles.infoText}>
-            Expires: {item.expiryDate}
-          </Text>
-        </View>
+        {item.warehouseName && (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoIcon}>🏭</Text>
+            <Text style={styles.infoText}>{item.warehouseName}</Text>
+          </View>
+        )}
+        {item.location && (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoIcon}>📍</Text>
+            <Text style={styles.infoText}>{item.location}</Text>
+          </View>
+        )}
+        {item.expiryDate && (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoIcon}>📅</Text>
+            <Text style={styles.infoText}>
+              Expires: {new Date(item.expiryDate).toLocaleDateString()}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.cardFooter}>
         <View>
           <Text style={styles.valueLabel}>Estimated Value</Text>
           <Text style={styles.valueAmount}>
-            ₦{(item.value / 1_000_000).toFixed(1)}M
+            ₦{value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : value.toLocaleString()}
           </Text>
         </View>
-        {item.pledged && (
+        {item.isPledged && (
           <View style={styles.pledgedBadge}>
             <Text style={styles.pledgedText}>🔒 Pledged as Collateral</Text>
           </View>
         )}
-        {!item.pledged && item.status === 'ACTIVE' && (
+        {!item.isPledged && item.status === 'ACTIVE' && (
           <TouchableOpacity style={styles.actionBtn}>
             <Text style={styles.actionBtnText}>Pledge →</Text>
           </TouchableOpacity>
@@ -153,14 +182,16 @@ function ReceiptCard({ item }: { item: typeof RECEIPTS[0] }) {
 export default function WarehouseScreen() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
+  const inventoryQuery = trpc.warehouseInventory.myInventory.useQuery();
+  const allItems: InventoryItem[] = (inventoryQuery.data ?? []) as InventoryItem[];
 
   const filters = ['All', 'Active', 'Pledged', 'Inspection Due'];
 
-  const filtered = RECEIPTS.filter((r) => {
+  const filtered = allItems.filter((r) => {
     const matchSearch =
       search === '' ||
-      r.id.toLowerCase().includes(search.toLowerCase()) ||
-      r.commodity.toLowerCase().includes(search.toLowerCase());
+      r.receiptNumber.toLowerCase().includes(search.toLowerCase()) ||
+      (r.commodityName ?? '').toLowerCase().includes(search.toLowerCase());
     const matchFilter =
       filter === 'All' ||
       (filter === 'Active' && r.status === 'ACTIVE') ||
@@ -169,16 +200,17 @@ export default function WarehouseScreen() {
     return matchSearch && matchFilter;
   });
 
-  const totalValue = RECEIPTS.reduce((sum, r) => sum + r.value, 0);
-  const totalQty = RECEIPTS.reduce((sum, r) => sum + r.quantity, 0);
+  const totalValue = allItems.reduce((sum, r) => sum + Number(r.estimatedValue ?? 0), 0);
+  const totalQty = allItems.reduce((sum, r) => sum + Number(r.quantity), 0);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {inventoryQuery.isLoading && <ActivityIndicator color={COLORS.primary} style={{ marginTop: 16 }} />}
       {/* Summary Cards */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Total WRs</Text>
-          <Text style={styles.summaryValue}>{RECEIPTS.length}</Text>
+          <Text style={styles.summaryValue}>{allItems.length}</Text>
         </View>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Total Qty</Text>
@@ -227,14 +259,24 @@ export default function WarehouseScreen() {
       {/* Receipt List */}
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => <ReceiptCard item={item} />}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={inventoryQuery.isFetching}
+            onRefresh={() => inventoryQuery.refetch()}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>🏭</Text>
-            <Text style={styles.emptyText}>No warehouse receipts found</Text>
+            <Text style={styles.emptyText}>
+              {inventoryQuery.isLoading ? 'Loading...' : 'No warehouse receipts found'}
+            </Text>
           </View>
         }
       />

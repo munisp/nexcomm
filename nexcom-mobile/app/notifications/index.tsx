@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -9,26 +9,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
-type NotificationType = 'TRADE' | 'LOAN' | 'PRICE_ALERT' | 'SYSTEM' | 'WAREHOUSE';
+import { trpc } from '../../lib/trpc';
 
-interface Notification {
-  id: number;
-  type: NotificationType;
-  title: string;
-  message: string;
-  read: boolean;
-  createdAt: string;
-}
-
-const MOCK_NOTIFICATIONS: Notification[] = [
-  { id: 1, type: 'TRADE', title: 'Order Filled', message: 'Your BUY order for 10MT MAIZE at ₦285,000/MT has been filled.', read: false, createdAt: '2026-03-23T10:30:00Z' },
-  { id: 2, type: 'PRICE_ALERT', title: 'Price Alert Triggered', message: 'SOYBEANS has crossed your alert threshold of ₦520,000/MT.', read: false, createdAt: '2026-03-23T09:15:00Z' },
-  { id: 3, type: 'LOAN', title: 'Loan Application Update', message: 'Your loan application #LOAN-1042 has been approved by Access Bank.', read: true, createdAt: '2026-03-22T14:00:00Z' },
-  { id: 4, type: 'WAREHOUSE', title: 'Warehouse Receipt Issued', message: 'Receipt WR-2025-0891 for 50MT Maize has been issued at Kano Central Warehouse.', read: true, createdAt: '2026-03-21T11:20:00Z' },
-  { id: 5, type: 'SYSTEM', title: 'KYC Verification Complete', message: 'Your identity verification has been approved. Full trading access is now enabled.', read: true, createdAt: '2026-03-20T08:45:00Z' },
-];
-
-const TYPE_CONFIG: Record<NotificationType, { icon: string; color: string }> = {
+const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
   TRADE: { icon: '📈', color: '#2563eb' },
   LOAN: { icon: '🏦', color: '#d97706' },
   PRICE_ALERT: { icon: '🔔', color: '#7c3aed' },
@@ -37,27 +20,21 @@ const TYPE_CONFIG: Record<NotificationType, { icon: string; color: string }> = {
 };
 
 export default function NotificationsScreen() {
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
-  const [refreshing, setRefreshing] = useState(false);
+  const utils = trpc.useUtils();
+  const notificationsQuery = trpc.notifications.list.useQuery({ limit: 50 });
+  const markReadMutation = trpc.notifications.markRead.useMutation({
+    onSuccess: () => utils.notifications.list.invalidate(),
+  });
+  const markAllReadMutation = trpc.notifications.markAllRead.useMutation({
+    onSuccess: () => utils.notifications.list.invalidate(),
+  });
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setRefreshing(false);
-  }, []);
+  const notifications = notificationsQuery.data?.notifications ?? [];
+  const unreadCount = notifications.filter((n: any) => !n.isRead).length;
 
-  const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const markRead = (id: number) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
-
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const formatTime = (isoString: string) => {
-    const date = new Date(isoString);
+  const formatTime = (ts: number | string | null | undefined) => {
+    if (!ts) return '';
+    const date = new Date(typeof ts === 'number' ? ts : ts);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -68,12 +45,12 @@ export default function NotificationsScreen() {
     return date.toLocaleDateString();
   };
 
-  const renderItem = ({ item }: { item: Notification }) => {
-    const config = TYPE_CONFIG[item.type] ?? TYPE_CONFIG.SYSTEM;
+  const renderItem = ({ item }: { item: any }) => {
+    const config = TYPE_CONFIG[item.type as string] ?? TYPE_CONFIG.SYSTEM;
     return (
       <TouchableOpacity
-        style={[styles.notifCard, !item.read && styles.unreadCard]}
-        onPress={() => markRead(item.id)}
+        style={[styles.notifCard, !item.isRead && styles.unreadCard]}
+        onPress={() => !item.isRead && markReadMutation.mutate({ id: item.id })}
         activeOpacity={0.7}
       >
         <View style={[styles.iconContainer, { backgroundColor: config.color + '20' }]}>
@@ -81,7 +58,7 @@ export default function NotificationsScreen() {
         </View>
         <View style={styles.notifContent}>
           <View style={styles.notifHeader}>
-            <Text style={[styles.notifTitle, !item.read && styles.unreadTitle]}>
+            <Text style={[styles.notifTitle, !item.isRead && styles.unreadTitle]}>
               {item.title}
             </Text>
             <Text style={styles.notifTime}>{formatTime(item.createdAt)}</Text>
@@ -89,7 +66,7 @@ export default function NotificationsScreen() {
           <Text style={styles.notifMessage} numberOfLines={2}>
             {item.message}
           </Text>
-          {!item.read && <View style={styles.unreadDot} />}
+          {!item.isRead && <View style={styles.unreadDot} />}
         </View>
       </TouchableOpacity>
     );
@@ -105,7 +82,11 @@ export default function NotificationsScreen() {
           )}
         </View>
         {unreadCount > 0 && (
-          <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
+          <TouchableOpacity
+            onPress={() => markAllReadMutation.mutate()}
+            style={styles.markAllBtn}
+            disabled={markAllReadMutation.isPending}
+          >
             <Text style={styles.markAllText}>Mark all read</Text>
           </TouchableOpacity>
         )}
@@ -113,19 +94,30 @@ export default function NotificationsScreen() {
 
       <FlatList
         data={notifications}
-        keyExtractor={(item) => String(item.id)}
+        keyExtractor={(item: any) => String(item.id)}
         renderItem={renderItem}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={notificationsQuery.isFetching}
+            onRefresh={() => notificationsQuery.refetch()}
+            colors={['#16a34a']}
+            tintColor="#16a34a"
+          />
+        }
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🔔</Text>
-            <Text style={styles.emptyText}>No notifications yet</Text>
-            <Text style={styles.emptySubtext}>
-              You'll be notified about trades, price alerts, and loan updates here.
-            </Text>
-          </View>
+          notificationsQuery.isLoading ? (
+            <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>🔔</Text>
+              <Text style={styles.emptyText}>No notifications yet</Text>
+              <Text style={styles.emptySubtext}>
+                You'll be notified about trades, price alerts, and loan updates here.
+              </Text>
+            </View>
+          )
         }
       />
     </View>

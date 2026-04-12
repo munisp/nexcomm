@@ -9,155 +9,203 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS } from "../../constants/config";
+import { trpc } from "../../lib/trpc";
 
-type KycStep = "intro" | "personal" | "document" | "selfie" | "submitted";
+type KycStep = "intro" | "personal" | "document" | "submitted";
 
 interface PersonalInfo {
   firstName: string; lastName: string; dateOfBirth: string;
-  nationality: string; phone: string; address: string;
+  nationality: string; phone: string; address: string; email: string;
 }
 
 export default function KycScreen() {
+  const utils = trpc.useUtils();
   const [step, setStep] = useState<KycStep>("intro");
-  const [loading, setLoading] = useState(false);
   const [info, setInfo] = useState<PersonalInfo>({
     firstName: "", lastName: "", dateOfBirth: "",
-    nationality: "Nigerian", phone: "", address: "",
+    nationality: "Nigerian", phone: "", address: "", email: "",
   });
 
-  const submit = async () => {
-    setLoading(true);
-    try {
-      await new Promise((r) => setTimeout(r, 1500)); // simulate upload
+  const statusQuery = trpc.onboarding.getStatus.useQuery();
+  const submitMutation = trpc.onboarding.submit.useMutation({
+    onSuccess: () => {
+      utils.onboarding.getStatus.invalidate();
       setStep("submitted");
-    } catch {
-      Alert.alert("Error", "Submission failed. Please try again.");
-    } finally {
-      setLoading(false);
+    },
+    onError: (err) => Alert.alert("Submission Error", err.message),
+  });
+
+  const kycStatus = statusQuery.data?.kycStatus ?? "NOT_STARTED";
+
+  const submit = () => {
+    if (!info.firstName || !info.lastName || !info.phone || !info.email || !info.address) {
+      Alert.alert("Missing Fields", "Please fill in all required fields.");
+      return;
     }
+    submitMutation.mutate({
+      stakeholderType: "TRADER",
+      personalInfo: {
+        firstName: info.firstName,
+        lastName: info.lastName,
+        email: info.email,
+        phone: info.phone,
+        country: info.nationality,
+        state: "Lagos",
+        address: info.address,
+      },
+      businessInfo: {},
+      stakeholderSpecific: {},
+      agreedToTerms: true,
+      agreedToKyc: true,
+    });
   };
 
+  // If already submitted/approved
+  if (kycStatus === "PENDING" || kycStatus === "APPROVED" || step === "submitted") {
+    return (
+      <SafeAreaView style={s.container}>
+        <View style={s.center}>
+          <Text style={s.bigIcon}>{kycStatus === "APPROVED" ? "✅" : "⏳"}</Text>
+          <Text style={s.submittedTitle}>
+            {kycStatus === "APPROVED" ? "KYC Approved" : "Application Submitted"}
+          </Text>
+          <Text style={s.submittedSub}>
+            {kycStatus === "APPROVED"
+              ? "Your identity has been verified. Full trading access is enabled."
+              : "Your application is under review. This usually takes 1–2 business days."}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === "intro") {
+    return (
+      <SafeAreaView style={s.container}>
+        <ScrollView contentContainerStyle={s.scrollContent}>
+          <Text style={s.title}>Identity Verification</Text>
+          <Text style={s.subtitle}>
+            Complete KYC to unlock full trading access on NEXCOM Exchange.
+          </Text>
+          <View style={s.stepList}>
+            {[
+              { icon: "👤", label: "Personal Information", desc: "Name, phone, address" },
+              { icon: "📄", label: "Document Upload", desc: "NIN, BVN, or passport" },
+              { icon: "✅", label: "Review & Submit", desc: "Confirm your details" },
+            ].map((item, i) => (
+              <View key={i} style={s.stepItem}>
+                <Text style={s.stepIcon}>{item.icon}</Text>
+                <View style={s.stepText}>
+                  <Text style={s.stepLabel}>{item.label}</Text>
+                  <Text style={s.stepDesc}>{item.desc}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity style={s.btn} onPress={() => setStep("personal")}>
+            <Text style={s.btnText}>Start Verification</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === "personal") {
+    return (
+      <SafeAreaView style={s.container}>
+        <ScrollView contentContainerStyle={s.scrollContent}>
+          <Text style={s.title}>Personal Information</Text>
+          {[
+            { label: "First Name *", key: "firstName", placeholder: "e.g. Amara" },
+            { label: "Last Name *", key: "lastName", placeholder: "e.g. Okafor" },
+            { label: "Email *", key: "email", placeholder: "e.g. amara@example.com" },
+            { label: "Phone *", key: "phone", placeholder: "e.g. 08012345678" },
+            { label: "Address *", key: "address", placeholder: "e.g. 12 Lagos Road, Abuja" },
+            { label: "Nationality", key: "nationality", placeholder: "e.g. Nigerian" },
+          ].map(({ label, key, placeholder }) => (
+            <View key={key} style={s.field}>
+              <Text style={s.fieldLabel}>{label}</Text>
+              <TextInput
+                style={s.input}
+                value={(info as any)[key]}
+                onChangeText={(v) => setInfo((prev) => ({ ...prev, [key]: v }))}
+                placeholder={placeholder}
+                placeholderTextColor={COLORS.textMuted}
+                keyboardType={key === "phone" ? "phone-pad" : key === "email" ? "email-address" : "default"}
+              />
+            </View>
+          ))}
+          <TouchableOpacity style={s.btn} onPress={() => setStep("document")}>
+            <Text style={s.btnText}>Continue</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // document step
   return (
     <SafeAreaView style={s.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <View style={s.header}>
-          <Text style={s.title}>Identity Verification</Text>
-          <Text style={s.sub}>Complete KYC to unlock full trading access</Text>
-        </View>
-
-        {/* Progress */}
-        <View style={s.progress}>
-          {(["intro", "personal", "document", "selfie"] as KycStep[]).map((st, i) => (
-            <View key={st} style={[s.dot, step === st ? s.dotActive : (["personal","document","selfie","submitted"].indexOf(step) > i ? s.dotDone : {})]}>
-              <Text style={s.dotText}>{i + 1}</Text>
+      <ScrollView contentContainerStyle={s.scrollContent}>
+        <Text style={s.title}>Review & Submit</Text>
+        <Text style={s.subtitle}>Please confirm your details before submitting.</Text>
+        <View style={s.reviewCard}>
+          {[
+            ["Name", `${info.firstName} ${info.lastName}`],
+            ["Email", info.email],
+            ["Phone", info.phone],
+            ["Address", info.address],
+            ["Nationality", info.nationality],
+          ].map(([label, value]) => (
+            <View key={label} style={s.reviewRow}>
+              <Text style={s.reviewLabel}>{label}</Text>
+              <Text style={s.reviewValue}>{value || "—"}</Text>
             </View>
           ))}
         </View>
-
-        {step === "intro" && (
-          <View style={s.card}>
-            <Text style={s.cardTitle}>What you will need</Text>
-            {["Government-issued ID (NIN, Passport, or Driver's Licence)", "A clear selfie photo", "Proof of address (utility bill or bank statement)"].map((item) => (
-              <View key={item} style={s.listItem}>
-                <Text style={s.bullet}>•</Text>
-                <Text style={s.listText}>{item}</Text>
-              </View>
-            ))}
-            <TouchableOpacity style={s.btn} onPress={() => setStep("personal")}>
-              <Text style={s.btnText}>Start Verification</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {step === "personal" && (
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Personal Information</Text>
-            {(["firstName", "lastName", "dateOfBirth", "nationality", "phone", "address"] as (keyof PersonalInfo)[]).map((field) => (
-              <View key={field} style={s.fieldGroup}>
-                <Text style={s.label}>{field.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}</Text>
-                <TextInput
-                  style={s.input}
-                  value={info[field]}
-                  onChangeText={(v) => setInfo((p) => ({ ...p, [field]: v }))}
-                  placeholder={field === "dateOfBirth" ? "YYYY-MM-DD" : ""}
-                  placeholderTextColor={COLORS.textDim}
-                  keyboardType={field === "phone" ? "phone-pad" : "default"}
-                />
-              </View>
-            ))}
-            <TouchableOpacity style={s.btn} onPress={() => {
-              if (!info.firstName || !info.lastName || !info.phone) {
-                Alert.alert("Required", "Please fill in all required fields.");
-                return;
-              }
-              setStep("document");
-            }}>
-              <Text style={s.btnText}>Continue</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {step === "document" && (
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Upload ID Document</Text>
-            <Text style={s.bodyText}>Select your document type and upload a clear photo of both sides.</Text>
-            {["National ID (NIN)", "International Passport", "Driver's Licence"].map((doc) => (
-              <TouchableOpacity key={doc} style={s.docOption} onPress={() => setStep("selfie")}>
-                <Text style={s.docText}>{doc}</Text>
-                <Text style={{ color: COLORS.textMuted }}>›</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {step === "selfie" && (
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Take a Selfie</Text>
-            <Text style={s.bodyText}>Position your face clearly in the frame. Ensure good lighting and no glasses.</Text>
-            <View style={s.selfieBox}>
-              <Text style={{ fontSize: 48 }}>📷</Text>
-              <Text style={{ color: COLORS.textMuted, marginTop: 8 }}>Camera access required</Text>
-            </View>
-            <TouchableOpacity style={s.btn} onPress={submit} disabled={loading}>
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Submit for Review</Text>}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {step === "submitted" && (
-          <View style={[s.card, { alignItems: "center" }]}>
-            <Text style={{ fontSize: 48, marginBottom: 16 }}>✅</Text>
-            <Text style={s.cardTitle}>Submitted!</Text>
-            <Text style={[s.bodyText, { textAlign: "center" }]}>Your documents are under review. You will be notified within 1–2 business days.</Text>
-          </View>
-        )}
+        <TouchableOpacity
+          style={[s.btn, submitMutation.isPending && { opacity: 0.6 }]}
+          onPress={submit}
+          disabled={submitMutation.isPending}
+        >
+          {submitMutation.isPending ? (
+            <ActivityIndicator color="#000" />
+          ) : (
+            <Text style={s.btnText}>Submit Application</Text>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity style={s.backBtn} onPress={() => setStep("personal")}>
+          <Text style={s.backBtnText}>← Edit Details</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0d1117" },
-  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
-  title: { fontSize: 24, fontWeight: "700", color: "#e6edf3" },
-  sub: { fontSize: 14, color: "#8b949e", marginTop: 4 },
-  progress: { flexDirection: "row", justifyContent: "center", gap: 12, paddingVertical: 16 },
-  dot: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#21262d", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#30363d" },
-  dotActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  dotDone: { backgroundColor: "#1f6feb", borderColor: "#1f6feb" },
-  dotText: { color: "#fff", fontSize: 13, fontWeight: "600" },
-  card: { margin: 16, padding: 20, backgroundColor: "#161b22", borderRadius: 12, borderWidth: 1, borderColor: "#30363d" },
-  cardTitle: { fontSize: 18, fontWeight: "700", color: "#e6edf3", marginBottom: 12 },
-  bodyText: { fontSize: 14, color: "#8b949e", lineHeight: 20, marginBottom: 16 },
-  listItem: { flexDirection: "row", marginBottom: 8 },
-  bullet: { color: COLORS.primary, marginRight: 8, fontSize: 16 },
-  listText: { flex: 1, color: "#8b949e", fontSize: 14 },
-  btn: { backgroundColor: COLORS.primary, borderRadius: 8, paddingVertical: 14, alignItems: "center", marginTop: 16 },
-  btnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  fieldGroup: { marginBottom: 12 },
-  label: { fontSize: 13, color: "#8b949e", marginBottom: 4 },
-  input: { backgroundColor: "#0d1117", borderWidth: 1, borderColor: "#30363d", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: "#e6edf3", fontSize: 15 },
-  docOption: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#21262d" },
-  docText: { fontSize: 15, color: "#e6edf3" },
-  selfieBox: { height: 200, backgroundColor: "#0d1117", borderRadius: 12, borderWidth: 2, borderColor: "#30363d", borderStyle: "dashed", alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
+  bigIcon: { fontSize: 64, marginBottom: 16 },
+  submittedTitle: { fontSize: 24, fontWeight: "700", color: COLORS.text, textAlign: "center", marginBottom: 12 },
+  submittedSub: { fontSize: 15, color: COLORS.textMuted, textAlign: "center", lineHeight: 22 },
+  title: { fontSize: 24, fontWeight: "700", color: COLORS.text, marginBottom: 8 },
+  subtitle: { fontSize: 15, color: COLORS.textMuted, marginBottom: 24, lineHeight: 22 },
+  stepList: { gap: 12, marginBottom: 32 },
+  stepItem: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border },
+  stepIcon: { fontSize: 28 },
+  stepText: {},
+  stepLabel: { fontSize: 15, fontWeight: "700", color: COLORS.text },
+  stepDesc: { fontSize: 13, color: COLORS.textMuted, marginTop: 2 },
+  field: { marginBottom: 16 },
+  fieldLabel: { fontSize: 12, color: COLORS.textMuted, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 },
+  input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 13, color: COLORS.text, fontSize: 15 },
+  reviewCard: { backgroundColor: COLORS.surface, borderRadius: 14, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: COLORS.border, gap: 12 },
+  reviewRow: { flexDirection: "row", justifyContent: "space-between" },
+  reviewLabel: { fontSize: 13, color: COLORS.textMuted, fontWeight: "600" },
+  reviewValue: { fontSize: 13, color: COLORS.text, fontWeight: "500", flex: 1, textAlign: "right" },
+  btn: { backgroundColor: COLORS.primary, borderRadius: 14, padding: 16, alignItems: "center", marginBottom: 12 },
+  btnText: { color: "#000", fontSize: 16, fontWeight: "700" },
+  backBtn: { alignItems: "center", padding: 12 },
+  backBtnText: { color: COLORS.textMuted, fontSize: 14 },
 });

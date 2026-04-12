@@ -33,7 +33,7 @@ export const inputFinancingRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { success: true, loanId: Math.floor(Math.random() * 1000) };
+      if (!db) throw new Error("Database unavailable");
       const [loan] = await db.insert(inputFinancingLoans).values({
         farmerId: ctx.user.id,
         inputType: input.inputType,

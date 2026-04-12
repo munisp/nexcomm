@@ -7,23 +7,13 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
-
-const USER = {
-  name: 'Adebayo Okonkwo',
-  email: 'adebayo@nexcom.ng',
-  phone: '+234 801 234 5678',
-  accountType: 'INSTITUTIONAL',
-  kycStatus: 'VERIFIED',
-  memberSince: 'January 2024',
-  tradingId: 'NXC-TRD-001234',
-  accountBalance: 45820500,
-  availableBalance: 38200000,
-  marginUsed: 7620500,
-};
+import { trpc } from '../../lib/trpc';
+import { useAuthStore } from '../../lib/store';
 
 const MENU_SECTIONS = [
   {
@@ -70,6 +60,14 @@ export default function ProfileScreen() {
   const [notifications, setNotifications] = useState(true);
   const [biometric, setBiometric] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
+  const { user: authUser } = useAuthStore();
+  const profileQuery = trpc.profile.get.useQuery(undefined, { enabled: !!authUser });
+  const portfolioQuery = trpc.portfolio.summary.useQuery(undefined, { enabled: !!authUser });
+  const profile = profileQuery.data;
+  const portfolio = portfolioQuery.data;
+  const displayName = profile?.displayName ?? authUser?.name ?? 'User';
+  const displayEmail = profile?.email ?? authUser?.email ?? '';
+  const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
 
   const handleLogout = () => {
     Alert.alert(
@@ -92,25 +90,29 @@ export default function ProfileScreen() {
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {USER.name.split(' ').map((n) => n[0]).join('')}
-            </Text>
+            <Text style={styles.avatarText}>{initials}</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{USER.name}</Text>
-            <Text style={styles.profileEmail}>{USER.email}</Text>
-            <View style={styles.profileBadges}>
-              <View style={[styles.badge, { backgroundColor: `${COLORS.success}20` }]}>
-                <Text style={[styles.badgeText, { color: COLORS.success }]}>
-                  ✓ KYC Verified
-                </Text>
-              </View>
-              <View style={[styles.badge, { backgroundColor: `${COLORS.primary}20` }]}>
-                <Text style={[styles.badgeText, { color: COLORS.primary }]}>
-                  {USER.accountType}
-                </Text>
-              </View>
-            </View>
+            {profileQuery.isLoading ? (
+              <ActivityIndicator color={COLORS.primary} />
+            ) : (
+              <>
+                <Text style={styles.profileName}>{displayName}</Text>
+                <Text style={styles.profileEmail}>{displayEmail}</Text>
+                <View style={styles.profileBadges}>
+                  {profile?.kycStatus === 'VERIFIED' && (
+                    <View style={[styles.badge, { backgroundColor: `${COLORS.success}20` }]}>
+                      <Text style={[styles.badgeText, { color: COLORS.success }]}>✓ KYC Verified</Text>
+                    </View>
+                  )}
+                  {profile?.accountType && (
+                    <View style={[styles.badge, { backgroundColor: `${COLORS.primary}20` }]}>
+                      <Text style={[styles.badgeText, { color: COLORS.primary }]}>{profile.accountType}</Text>
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -118,27 +120,27 @@ export default function ProfileScreen() {
         <View style={styles.balanceCard}>
           <View style={styles.balanceRow}>
             <View style={styles.balanceItem}>
-              <Text style={styles.balanceLabel}>Total Balance</Text>
+              <Text style={styles.balanceLabel}>Portfolio Value</Text>
               <Text style={styles.balanceValue}>
-                ₦{(USER.accountBalance / 1_000_000).toFixed(2)}M
+                ₦{((portfolio?.totalValue ?? 0) / 1_000_000).toFixed(2)}M
               </Text>
             </View>
             <View style={styles.balanceDivider} />
             <View style={styles.balanceItem}>
-              <Text style={styles.balanceLabel}>Available</Text>
-              <Text style={[styles.balanceValue, { color: COLORS.success }]}>
-                ₦{(USER.availableBalance / 1_000_000).toFixed(2)}M
+              <Text style={styles.balanceLabel}>Unrealized P&L</Text>
+              <Text style={[styles.balanceValue, { color: (portfolio?.unrealizedPnl ?? 0) >= 0 ? COLORS.success : COLORS.error }]}>
+                ₦{((portfolio?.unrealizedPnl ?? 0) / 1_000_000).toFixed(2)}M
               </Text>
             </View>
             <View style={styles.balanceDivider} />
             <View style={styles.balanceItem}>
-              <Text style={styles.balanceLabel}>Margin Used</Text>
-              <Text style={[styles.balanceValue, { color: COLORS.warning }]}>
-                ₦{(USER.marginUsed / 1_000_000).toFixed(2)}M
+              <Text style={styles.balanceLabel}>Positions</Text>
+              <Text style={[styles.balanceValue, { color: COLORS.primary }]}>
+                {portfolio?.positionCount ?? 0}
               </Text>
             </View>
           </View>
-          <Text style={styles.tradingId}>Trading ID: {USER.tradingId}</Text>
+          <Text style={styles.tradingId}>Member ID: {authUser?.id ?? '-'}</Text>
         </View>
 
         {/* Quick Settings */}
@@ -210,7 +212,11 @@ export default function ProfileScreen() {
         {/* App Version */}
         <View style={styles.versionSection}>
           <Text style={styles.versionText}>NEXCOM Exchange v1.0.0</Text>
-          <Text style={styles.versionSubtext}>Member since {USER.memberSince}</Text>
+          {profile?.createdAt && (
+            <Text style={styles.versionSubtext}>
+              Member since {new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </Text>
+          )}
         </View>
 
         {/* Logout Button */}

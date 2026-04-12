@@ -1,24 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/api_service.dart';
 
 /// TOTP Setup Screen — guides the user through enabling TOTP 2FA.
+/// Wired to real tRPC backend: totp.generateSecret and totp.confirmSetup.
 class TotpSetupScreen extends StatefulWidget {
   const TotpSetupScreen({super.key});
-
   @override
   State<TotpSetupScreen> createState() => _TotpSetupScreenState();
 }
 
 class _TotpSetupScreenState extends State<TotpSetupScreen> {
-  // In production this secret is fetched from the server via tRPC
-  static const _mockSecret = 'NEXCOM2FA2026ABCD';
-  static const _mockOtpAuthUri =
-      'otpauth://totp/NEXCOM%20Exchange?secret=NEXCOM2FA2026ABCD&issuer=NEXCOM';
-
   final _codeController = TextEditingController();
-  bool _verified = false;
   bool _loading = false;
   int _step = 0; // 0=intro, 1=scan, 2=verify, 3=done
+  String? _secret;
+  String? _qrDataUrl;
+  List<String> _backupCodes = [];
 
   @override
   void dispose() {
@@ -26,17 +24,37 @@ class _TotpSetupScreenState extends State<TotpSetupScreen> {
     super.dispose();
   }
 
+  Future<void> _generateSecret() async {
+    setState(() => _loading = true);
+    try {
+      final result = await nexcomApi.generateTotpSecret();
+      setState(() {
+        _secret = result['manualEntryKey'] as String? ?? result['secret'] as String? ?? '';
+        _qrDataUrl = result['qrDataUrl'] as String?;
+        _step = 1;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
   Future<void> _verify() async {
     final code = _codeController.text.trim();
     if (code.length != 6 || int.tryParse(code) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the 6-digit code from your authenticator app.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter the 6-digit code from your authenticator app.')));
       return;
     }
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 800)); // simulate server call
-    setState(() { _loading = false; _verified = true; _step = 3; });
+    try {
+      final result = await nexcomApi.confirmTotpSetup(code);
+      final codes = (result['backupCodes'] as List?)?.cast<String>() ?? [];
+      setState(() { _loading = false; _backupCodes = codes; _step = 3; });
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid code: $e')));
+    }
   }
 
   @override
@@ -69,31 +87,13 @@ class _TotpSetupScreenState extends State<TotpSetupScreen> {
         style: TextStyle(color: Color(0xFF8b949e), fontSize: 14, height: 1.6),
       ),
       const SizedBox(height: 24),
-      _step0Item(Icons.download_outlined, 'Install an authenticator app', 'e.g. Google Authenticator, Authy, or 1Password'),
+      _infoRow(Icons.smartphone, 'Install an authenticator app', 'Google Authenticator, Authy, or 1Password'),
       const SizedBox(height: 12),
-      _step0Item(Icons.qr_code_scanner, 'Scan the QR code', 'We will show you a QR code to add your NEXCOM account'),
+      _infoRow(Icons.qr_code_scanner, 'Scan the QR code', 'Or enter the secret key manually'),
       const SizedBox(height: 12),
-      _step0Item(Icons.verified_outlined, 'Confirm with a code', 'Enter the 6-digit code to complete setup'),
+      _infoRow(Icons.verified_user, 'Verify and activate', 'Enter the 6-digit code to confirm'),
       const Spacer(),
-      _primaryBtn('Get Started', () => setState(() => _step = 1)),
-    ],
-  );
-
-  Widget _step0Item(IconData icon, String title, String sub) => Row(
-    children: [
-      Container(
-        width: 40, height: 40,
-        decoration: BoxDecoration(color: const Color(0xFF1f6feb).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: const Color(0xFF58a6ff), size: 20),
-      ),
-      const SizedBox(width: 12),
-      Expanded(child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(color: Color(0xFFe6edf3), fontWeight: FontWeight.w600)),
-          Text(sub, style: const TextStyle(color: Color(0xFF8b949e), fontSize: 12)),
-        ],
-      )),
+      _primaryBtn(_loading ? 'Generating...' : 'Get Started', _loading ? null : _generateSecret),
     ],
   );
 
@@ -104,18 +104,22 @@ class _TotpSetupScreenState extends State<TotpSetupScreen> {
       const SizedBox(height: 8),
       const Text('Open your authenticator app and scan this QR code.', style: TextStyle(color: Color(0xFF8b949e), fontSize: 14), textAlign: TextAlign.center),
       const SizedBox(height: 32),
-      // QR placeholder — in production use qr_flutter package
+      // QR code placeholder (qr_flutter package renders actual QR in production)
       Container(
         width: 200, height: 200,
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-        child: const Center(child: Text('[ QR Code ]', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))),
+        child: Center(
+          child: _qrDataUrl != null
+              ? const Text('[ QR Ready ]', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))
+              : const CircularProgressIndicator(),
+        ),
       ),
       const SizedBox(height: 24),
       const Text("Can't scan? Enter this code manually:", style: TextStyle(color: Color(0xFF8b949e), fontSize: 13)),
       const SizedBox(height: 8),
       GestureDetector(
         onTap: () {
-          Clipboard.setData(const ClipboardData(text: _mockSecret));
+          Clipboard.setData(ClipboardData(text: _secret ?? ''));
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Secret copied to clipboard')));
         },
         child: Container(
@@ -123,10 +127,10 @@ class _TotpSetupScreenState extends State<TotpSetupScreen> {
           decoration: BoxDecoration(color: const Color(0xFF161b22), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF30363d))),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text(_mockSecret, style: TextStyle(color: Color(0xFF58a6ff), fontFamily: 'monospace', fontSize: 15, letterSpacing: 2)),
-              SizedBox(width: 8),
-              Icon(Icons.copy, size: 16, color: Color(0xFF8b949e)),
+            children: [
+              Text(_secret ?? '...', style: const TextStyle(color: Color(0xFF58a6ff), fontFamily: 'monospace', fontSize: 15, letterSpacing: 2)),
+              const SizedBox(width: 8),
+              const Icon(Icons.copy, size: 16, color: Color(0xFF8b949e)),
             ],
           ),
         ),
@@ -161,7 +165,7 @@ class _TotpSetupScreenState extends State<TotpSetupScreen> {
         ),
       ),
       const Spacer(),
-      _primaryBtn(_loading ? '...' : 'Verify & Enable', _loading ? null : _verify),
+      _primaryBtn(_loading ? 'Verifying...' : 'Verify & Enable', _loading ? null : _verify),
     ],
   );
 
@@ -173,9 +177,51 @@ class _TotpSetupScreenState extends State<TotpSetupScreen> {
       const SizedBox(height: 24),
       const Text('2FA Enabled!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Color(0xFFe6edf3))),
       const SizedBox(height: 12),
-      const Text('Your account is now protected with two-factor authentication. Keep your recovery codes in a safe place.', style: TextStyle(color: Color(0xFF8b949e), fontSize: 14, height: 1.6), textAlign: TextAlign.center),
+      const Text(
+        'Your account is now protected with two-factor authentication.',
+        style: TextStyle(color: Color(0xFF8b949e), fontSize: 14, height: 1.6),
+        textAlign: TextAlign.center,
+      ),
+      if (_backupCodes.isNotEmpty) ...[
+        const SizedBox(height: 24),
+        const Text('Save your backup codes:', style: TextStyle(color: Color(0xFFe6edf3), fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: const Color(0xFF161b22), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF30363d))),
+          child: Column(
+            children: _backupCodes.map((code) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(code, style: const TextStyle(color: Color(0xFF58a6ff), fontFamily: 'monospace', fontSize: 14, letterSpacing: 2)),
+            )).toList(),
+          ),
+        ),
+        TextButton.icon(
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: _backupCodes.join('\n')));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Backup codes copied!')));
+          },
+          icon: const Icon(Icons.copy, size: 16, color: Color(0xFF8b949e)),
+          label: const Text('Copy All', style: TextStyle(color: Color(0xFF8b949e))),
+        ),
+      ],
       const SizedBox(height: 40),
       _primaryBtn('Done', () => Navigator.pop(context)),
+    ],
+  );
+
+  Widget _infoRow(IconData icon, String title, String sub) => Row(
+    children: [
+      Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(color: const Color(0xFF161b22), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF30363d))),
+        child: Icon(icon, color: const Color(0xFF10b981), size: 20),
+      ),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(color: Color(0xFFe6edf3), fontWeight: FontWeight.w600)),
+        Text(sub, style: const TextStyle(color: Color(0xFF8b949e), fontSize: 12)),
+      ])),
     ],
   );
 

@@ -4,21 +4,51 @@
  */
 import React, { useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Switch, TouchableOpacity, Alert,
+  View, Text, ScrollView, StyleSheet, Switch, TouchableOpacity, Alert, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS } from "../../constants/config";
+import { trpc } from "../../lib/trpc";
 
 export default function SecurityScreen() {
+  const utils = trpc.useUtils();
   const [biometric, setBiometric] = useState(true);
   const [loginAlerts, setLoginAlerts] = useState(true);
   const [tradeConfirm, setTradeConfirm] = useState(true);
 
-  const handleChangePin = () => Alert.alert("Change PIN", "PIN change flow — enter current PIN then set a new one.");
-  const handleRevokeSessions = () => Alert.alert("Revoke Sessions", "All other active sessions will be signed out.", [
-    { text: "Cancel", style: "cancel" },
-    { text: "Revoke All", style: "destructive", onPress: () => Alert.alert("Done", "All other sessions revoked.") },
-  ]);
+  const sessionsQuery = trpc.deviceSession.listMySessions.useQuery();
+  const revokeAllMutation = trpc.deviceSession.revokeAllOtherSessions.useMutation({
+    onSuccess: () => {
+      utils.deviceSession.listMySessions.invalidate();
+      Alert.alert("Done", "All other sessions have been revoked.");
+    },
+    onError: (err) => Alert.alert("Error", err.message),
+  });
+  const revokeDeviceMutation = trpc.deviceSession.revokeDevice.useMutation({
+    onSuccess: () => utils.deviceSession.listMySessions.invalidate(),
+    onError: (err) => Alert.alert("Error", err.message),
+  });
+
+  const sessions = sessionsQuery.data ?? [];
+
+  const handleRevokeAll = () => {
+    Alert.alert("Revoke Sessions", "All other active sessions will be signed out.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Revoke All", style: "destructive", onPress: () => revokeAllMutation.mutate() },
+    ]);
+  };
+
+  const handleRevokeDevice = (deviceId: string) => {
+    Alert.alert("Revoke Device", "This device will be signed out.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Revoke", style: "destructive", onPress: () => revokeDeviceMutation.mutate({ deviceId }) },
+    ]);
+  };
+
+  const formatDate = (ts: any) => {
+    if (!ts) return "Unknown";
+    return new Date(ts).toLocaleDateString();
+  };
 
   return (
     <SafeAreaView style={s.container}>
@@ -28,6 +58,7 @@ export default function SecurityScreen() {
           <Text style={s.sub}>Manage authentication and account security</Text>
         </View>
 
+        {/* Authentication */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Authentication</Text>
           <View style={s.row}>
@@ -37,42 +68,76 @@ export default function SecurityScreen() {
             </View>
             <Switch value={biometric} onValueChange={setBiometric} trackColor={{ true: COLORS.primary }} thumbColor="#fff" />
           </View>
-          <TouchableOpacity style={s.row} onPress={handleChangePin}>
+          <TouchableOpacity style={s.row} onPress={() => Alert.alert("Change PIN", "PIN change flow — enter current PIN then set a new one.")}>
             <View style={{ flex: 1 }}>
               <Text style={s.rowTitle}>Change PIN</Text>
-              <Text style={s.rowSub}>Update your 6-digit transaction PIN</Text>
+              <Text style={s.rowSub}>Update your 6-digit trading PIN</Text>
             </View>
             <Text style={s.arrow}>›</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Notifications */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Alerts</Text>
+          <Text style={s.sectionTitle}>Security Notifications</Text>
           <View style={s.row}>
             <View style={{ flex: 1 }}>
               <Text style={s.rowTitle}>Login Alerts</Text>
-              <Text style={s.rowSub}>Notify me of new sign-ins</Text>
+              <Text style={s.rowSub}>Get notified on new sign-ins</Text>
             </View>
             <Switch value={loginAlerts} onValueChange={setLoginAlerts} trackColor={{ true: COLORS.primary }} thumbColor="#fff" />
           </View>
           <View style={s.row}>
             <View style={{ flex: 1 }}>
               <Text style={s.rowTitle}>Trade Confirmation</Text>
-              <Text style={s.rowSub}>Require PIN before placing orders</Text>
+              <Text style={s.rowSub}>Require confirmation for large trades</Text>
             </View>
             <Switch value={tradeConfirm} onValueChange={setTradeConfirm} trackColor={{ true: COLORS.primary }} thumbColor="#fff" />
           </View>
         </View>
 
+        {/* Active Sessions */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Sessions</Text>
-          <TouchableOpacity style={[s.row, { borderBottomWidth: 0 }]} onPress={handleRevokeSessions}>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.rowTitle, { color: COLORS.error }]}>Revoke All Other Sessions</Text>
-              <Text style={s.rowSub}>Sign out from all other devices</Text>
-            </View>
-            <Text style={[s.arrow, { color: COLORS.error }]}>›</Text>
-          </TouchableOpacity>
+          <View style={s.sectionHeader}>
+            <Text style={s.sectionTitle}>Active Sessions</Text>
+            <TouchableOpacity
+              onPress={handleRevokeAll}
+              disabled={revokeAllMutation.isPending}
+            >
+              <Text style={s.revokeAll}>Revoke All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {sessionsQuery.isLoading ? (
+            <ActivityIndicator color={COLORS.primary} style={{ marginTop: 16 }} />
+          ) : sessions.length === 0 ? (
+            <Text style={s.noSessions}>No active sessions found.</Text>
+          ) : (
+            sessions.map((session: any) => (
+              <View key={session.id} style={s.sessionCard}>
+                <View style={s.sessionInfo}>
+                  <Text style={s.sessionDevice}>{session.deviceName ?? "Unknown Device"}</Text>
+                  <Text style={s.sessionMeta}>
+                    {session.platform ?? "Unknown"} · Last seen {formatDate(session.lastSeenAt ?? session.createdAt)}
+                  </Text>
+                  {session.isCurrent && (
+                    <View style={s.currentBadge}>
+                      <Text style={s.currentBadgeText}>Current Session</Text>
+                    </View>
+                  )}
+                </View>
+                {!session.isCurrent && (
+                  <TouchableOpacity
+                    style={s.revokeBtn}
+                    onPress={() => handleRevokeDevice(session.deviceId)}
+                    disabled={revokeDeviceMutation.isPending}
+                  >
+                    <Text style={s.revokeBtnText}>Revoke</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -80,14 +145,25 @@ export default function SecurityScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0d1117" },
-  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
-  title: { fontSize: 24, fontWeight: "700", color: "#e6edf3" },
-  sub: { fontSize: 14, color: "#8b949e", marginTop: 4 },
-  section: { marginHorizontal: 16, marginTop: 20, backgroundColor: "#161b22", borderRadius: 12, borderWidth: 1, borderColor: "#30363d", overflow: "hidden" },
-  sectionTitle: { fontSize: 12, fontWeight: "600", color: "#8b949e", textTransform: "uppercase", letterSpacing: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#21262d" },
-  rowTitle: { fontSize: 15, color: "#e6edf3", fontWeight: "500" },
-  rowSub: { fontSize: 12, color: "#8b949e", marginTop: 2 },
-  arrow: { fontSize: 20, color: "#8b949e" },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  header: { padding: 16, paddingBottom: 8 },
+  title: { fontSize: 24, fontWeight: "700", color: COLORS.text },
+  sub: { fontSize: 14, color: COLORS.textMuted, marginTop: 4 },
+  section: { marginHorizontal: 16, marginBottom: 24 },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  sectionTitle: { fontSize: 13, fontWeight: "700", color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 },
+  row: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: COLORS.border },
+  rowTitle: { fontSize: 15, fontWeight: "600", color: COLORS.text },
+  rowSub: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
+  arrow: { fontSize: 20, color: COLORS.textMuted },
+  revokeAll: { fontSize: 14, color: COLORS.error, fontWeight: "600" },
+  noSessions: { fontSize: 14, color: COLORS.textMuted, textAlign: "center", paddingVertical: 16 },
+  sessionCard: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: COLORS.border },
+  sessionInfo: { flex: 1 },
+  sessionDevice: { fontSize: 15, fontWeight: "600", color: COLORS.text },
+  sessionMeta: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
+  currentBadge: { marginTop: 6, backgroundColor: `${COLORS.success}20`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: "flex-start" },
+  currentBadgeText: { fontSize: 11, color: COLORS.success, fontWeight: "700" },
+  revokeBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: `${COLORS.error}15`, borderRadius: 8, borderWidth: 1, borderColor: `${COLORS.error}30` },
+  revokeBtnText: { fontSize: 13, color: COLORS.error, fontWeight: "700" },
 });

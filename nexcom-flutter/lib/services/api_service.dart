@@ -206,20 +206,77 @@ class NexcomApiService {
 
   // ─── KYC ──────────────────────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>> getKycStatus() => _query('kyc.status');
+  Future<Map<String, dynamic>> getKycStatus() => _query('onboarding.getStatus');
 
   Future<Map<String, dynamic>> submitKycApplication(Map<String, dynamic> data) =>
-      _mutate('kyc.submit', data);
+      _mutate('onboarding.submit', data);
 
   Future<Map<String, dynamic>> uploadKycDocument({
     required String documentType,
     required String fileUrl,
     required String fileName,
-  }) => _mutate('kyc.uploadDocument', {
+  }) => _mutate('onboarding.uploadKycDocument', {
     'documentType': documentType,
     'fileUrl': fileUrl,
     'fileName': fileName,
   });
+
+  // ─── TOTP (Two-Factor Authentication) ─────────────────────────────────────
+
+  /// Get current TOTP status for the logged-in user.
+  /// Returns: { isEnabled: bool, isSetup: bool, confirmedAt: DateTime? }
+  Future<Map<String, dynamic>> getTotpStatus() => _query('totp.getStatus');
+
+  /// Generate a new TOTP secret and QR code data URL.
+  /// Returns: { secret: String, qrDataUrl: String, otpauthUrl: String, manualEntryKey: String }
+  Future<Map<String, dynamic>> generateTotpSecret() => _mutate('totp.generateSecret', {});
+
+  /// Confirm TOTP setup by verifying the first 6-digit code from the authenticator app.
+  /// Returns: { success: bool, backupCodes: List<String> }
+  Future<Map<String, dynamic>> confirmTotpSetup(String code) =>
+      _mutate('totp.confirmSetup', {'code': code});
+
+  /// Verify a TOTP code (used during login step-up or manual verification).
+  /// Returns: { valid: bool }
+  Future<Map<String, dynamic>> verifyTotpCode(String code) =>
+      _mutate('totp.verifyCode', {'code': code});
+
+  /// Disable TOTP for the current user (requires current TOTP code).
+  /// Returns: { success: bool }
+  Future<Map<String, dynamic>> disableTotp(String code) =>
+      _mutate('totp.disable', {'code': code});
+
+  /// Regenerate backup codes (requires current TOTP code).
+  /// Returns: { backupCodes: List<String> }
+  Future<Map<String, dynamic>> regenerateTotpBackupCodes(String code) =>
+      _mutate('totp.regenerateBackupCodes', {'code': code});
+
+  // ─── Device Sessions ───────────────────────────────────────────────────────
+
+  /// List all active device sessions for the current user.
+  /// Returns a list of session objects with deviceId, deviceName, platform, lastSeenAt, isCurrent.
+  Future<List<dynamic>> getDeviceSessions() async {
+    final result = await _query('deviceSession.listMySessions');
+    if (result is Map && result['sessions'] != null) {
+      return result['sessions'] as List;
+    }
+    return [];
+  }
+
+  /// Revoke a specific device session by deviceId.
+  Future<void> revokeDeviceSession(String deviceId) async {
+    await _mutate('deviceSession.revokeDevice', {'deviceId': deviceId});
+  }
+
+  /// Revoke all device sessions except the current one.
+  Future<void> revokeAllOtherSessions() async {
+    await _mutate('deviceSession.revokeAllOtherSessions', {});
+  }
+
+  /// Trust a specific device (prevents future step-up auth prompts).
+  Future<void> trustDevice(String deviceId) async {
+    await _mutate('deviceSession.trustDevice', {'deviceId': deviceId});
+  }
 
   // ─── Farmer / Field Agent ─────────────────────────────────────────────────
 

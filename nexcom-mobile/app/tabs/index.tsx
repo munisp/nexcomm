@@ -7,43 +7,16 @@ import {
   RefreshControl,
   TouchableOpacity,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
 import { useLoanNotifications, getLoanEventLabel } from '../../lib/useLoanNotifications';
 import { useAuthStore } from '../../lib/store';
+import { trpc } from '../../lib/trpc';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Demo data for dashboard
-const PORTFOLIO_DATA = {
-  totalValue: 45_820_500,
-  pnl: 1_234_500,
-  pnlPercent: 2.77,
-  currency: 'NGN',
-};
-
-const MARKET_SUMMARY = [
-  { symbol: 'MAIZE', name: 'White Maize', price: 285000, change: 2.4, unit: '/MT' },
-  { symbol: 'SOYBEAN', name: 'Soybean', price: 520000, change: -1.2, unit: '/MT' },
-  { symbol: 'COCOA', name: 'Cocoa Beans', price: 4850000, change: 3.8, unit: '/MT' },
-  { symbol: 'SESAME', name: 'Sesame Seeds', price: 1250000, change: 0.9, unit: '/MT' },
-  { symbol: 'SORGHUM', name: 'Sorghum', price: 195000, change: -0.5, unit: '/MT' },
-  { symbol: 'CASHEW', name: 'Cashew Nuts', price: 3200000, change: 1.6, unit: '/MT' },
-];
-
-const RECENT_TRADES = [
-  { id: '1', symbol: 'MAIZE', side: 'BUY', qty: 50, price: 283000, time: '10:24 AM', status: 'FILLED' },
-  { id: '2', symbol: 'COCOA', side: 'SELL', qty: 10, price: 4820000, time: '09:15 AM', status: 'FILLED' },
-  { id: '3', symbol: 'SOYBEAN', side: 'BUY', qty: 25, price: 522000, time: 'Yesterday', status: 'PARTIAL' },
-];
-
-const ALERTS = [
-  { id: '1', type: 'PRICE', message: 'MAIZE hit your target price of ₦285,000/MT', time: '5m ago', icon: '🎯' },
-  { id: '2', type: 'WAREHOUSE', message: 'WR-2024-001 inspection due in 3 days', time: '1h ago', icon: '🏭' },
-  { id: '3', type: 'LOAN', message: 'Loan repayment of ₦2.5M due in 7 days', time: '2h ago', icon: '💰' },
-];
 
 function formatCurrency(value: number, currency = 'NGN'): string {
   if (value >= 1_000_000_000) return `₦${(value / 1_000_000_000).toFixed(2)}B`;
@@ -58,10 +31,35 @@ export default function DashboardScreen() {
   const userId = user ? parseInt(user.id) : null;
   const { events: loanEvents, unreadCount, markAllRead } = useLoanNotifications(userId);
 
-  const onRefresh = useCallback(() => {
+  // Real API calls
+  const portfolioQuery = trpc.portfolio.summary.useQuery(undefined, { enabled: !!user });
+  const recentOrdersQuery = trpc.orders.list.useQuery({ limit: 5 }, { enabled: !!user });
+  const marketPricesQuery = trpc.livePrices.getAll.useQuery();
+  const notificationsQuery = trpc.notifications.list.useQuery(
+    { page: 1, limit: 5 },
+    { enabled: !!user }
+  );
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1500);
-  }, []);
+    await Promise.all([
+      portfolioQuery.refetch(),
+      recentOrdersQuery.refetch(),
+      marketPricesQuery.refetch(),
+      notificationsQuery.refetch(),
+    ]);
+    setRefreshing(false);
+  }, [portfolioQuery, recentOrdersQuery, marketPricesQuery, notificationsQuery]);
+
+  // Derive display data
+  const portfolio = portfolioQuery.data;
+  const totalValue = portfolio?.totalValue ?? 0;
+  const totalPnl = portfolio?.unrealizedPnl ?? 0;
+  const pnlPercent = totalValue > 0 ? (totalPnl / (totalValue - totalPnl)) * 100 : 0;
+  const marketSummary = (marketPricesQuery.data ?? []).slice(0, 6);
+  const recentTrades = recentOrdersQuery.data ?? [];
+  const notifItems = notificationsQuery.data?.notifications ?? [];
+  const notifUnread = notificationsQuery.data?.unreadCount ?? 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -80,54 +78,30 @@ export default function DashboardScreen() {
         {/* Portfolio Card */}
         <View style={styles.portfolioCard}>
           <Text style={styles.portfolioLabel}>Portfolio Value</Text>
-          <Text style={styles.portfolioValue}>
-            {formatCurrency(PORTFOLIO_DATA.totalValue)}
-          </Text>
-          <View style={styles.pnlRow}>
-            <Text
-              style={[
-                styles.pnlText,
-                { color: PORTFOLIO_DATA.pnl >= 0 ? COLORS.success : COLORS.error },
-              ]}
-            >
-              {PORTFOLIO_DATA.pnl >= 0 ? '+' : ''}
-              {formatCurrency(PORTFOLIO_DATA.pnl)}
-            </Text>
-            <View
-              style={[
-                styles.pnlBadge,
-                {
-                  backgroundColor:
-                    PORTFOLIO_DATA.pnlPercent >= 0
-                      ? `${COLORS.success}20`
-                      : `${COLORS.error}20`,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.pnlPercent,
-                  {
-                    color:
-                      PORTFOLIO_DATA.pnlPercent >= 0
-                        ? COLORS.success
-                        : COLORS.error,
-                  },
-                ]}
-              >
-                {PORTFOLIO_DATA.pnlPercent >= 0 ? '▲' : '▼'}{' '}
-                {Math.abs(PORTFOLIO_DATA.pnlPercent).toFixed(2)}%
-              </Text>
-            </View>
-          </View>
-
+          {portfolioQuery.isLoading ? (
+            <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 12 }} />
+          ) : (
+            <>
+              <Text style={styles.portfolioValue}>{formatCurrency(totalValue)}</Text>
+              <View style={styles.pnlRow}>
+                <Text style={[styles.pnlText, { color: totalPnl >= 0 ? COLORS.success : COLORS.error }]}>
+                  {totalPnl >= 0 ? '+' : ''}{formatCurrency(totalPnl)}
+                </Text>
+                <View style={[styles.pnlBadge, { backgroundColor: totalPnl >= 0 ? `${COLORS.success}20` : `${COLORS.error}20` }]}>
+                  <Text style={[styles.pnlPercent, { color: totalPnl >= 0 ? COLORS.success : COLORS.error }]}>
+                    {totalPnl >= 0 ? '▲' : '▼'} {Math.abs(pnlPercent).toFixed(2)}%
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
           {/* Quick Action Buttons */}
           <View style={styles.quickActions}>
             {[
-              { label: 'Deposit', icon: '⬇️', route: '/deposit' },
-              { label: 'Withdraw', icon: '⬆️', route: '/withdraw' },
-              { label: 'Transfer', icon: '↔️', route: '/transfer' },
-              { label: 'History', icon: '📋', route: '/history' },
+              { label: 'Trade', icon: '📈', route: '/tabs/trade' },
+              { label: 'Warehouse', icon: '🏭', route: '/tabs/warehouse' },
+              { label: 'Banking', icon: '🏦', route: '/banking' },
+              { label: 'Alerts', icon: '🔔', route: '/alerts' },
             ].map((action) => (
               <TouchableOpacity
                 key={action.label}
@@ -147,161 +121,123 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Market Prices</Text>
-            <TouchableOpacity onPress={() => router.push('/tabs/markets')}>
+            <TouchableOpacity onPress={() => router.push('/tabs/markets' as any)}>
               <Text style={styles.sectionLink}>View All →</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.marketScroll}
-          >
-            {MARKET_SUMMARY.map((item) => (
-              <TouchableOpacity
-                key={item.symbol}
-                style={styles.marketCard}
-                onPress={() => router.push(`/trading/${item.symbol}` as any)}
-              >
-                <Text style={styles.marketSymbol}>{item.symbol}</Text>
-                <Text style={styles.marketName}>{item.name}</Text>
-                <Text style={styles.marketPrice}>
-                  ₦{(item.price / 1000).toFixed(0)}K{item.unit}
-                </Text>
-                <View
-                  style={[
-                    styles.marketChangeBadge,
-                    {
-                      backgroundColor:
-                        item.change >= 0
-                          ? `${COLORS.success}20`
-                          : `${COLORS.error}20`,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.marketChange,
-                      { color: item.change >= 0 ? COLORS.success : COLORS.error },
-                    ]}
+          {marketPricesQuery.isLoading ? (
+            <ActivityIndicator color={COLORS.primary} />
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.marketScroll}>
+              {marketSummary.map((item) => {
+                const change = Number(item.changePct ?? 0);
+                const isPositive = change >= 0;
+                return (
+                  <TouchableOpacity
+                    key={item.symbol}
+                    style={styles.marketCard}
+                    onPress={() => router.push(`/trading/${item.symbol}` as any)}
                   >
-                    {item.change >= 0 ? '▲' : '▼'} {Math.abs(item.change)}%
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                    <Text style={styles.marketSymbol}>{item.symbol}</Text>
+                    <Text style={styles.marketName}>{item.name ?? item.symbol}</Text>
+                    <Text style={styles.marketPrice}>₦{Number(item.lastPrice ?? 0).toLocaleString()}</Text>
+                    <View style={[styles.marketChangeBadge, { backgroundColor: isPositive ? `${COLORS.success}20` : `${COLORS.error}20` }]}>
+                      <Text style={[styles.marketChange, { color: isPositive ? COLORS.success : COLORS.error }]}>
+                        {isPositive ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
         </View>
 
         {/* Recent Trades */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Trades</Text>
-            <TouchableOpacity>
+            <Text style={styles.sectionTitle}>Recent Orders</Text>
+            <TouchableOpacity onPress={() => router.push('/portfolio' as any)}>
               <Text style={styles.sectionLink}>View All →</Text>
             </TouchableOpacity>
           </View>
-          {RECENT_TRADES.map((trade) => (
-            <View key={trade.id} style={styles.tradeRow}>
-              <View
-                style={[
-                  styles.tradeSideBadge,
-                  {
-                    backgroundColor:
-                      trade.side === 'BUY'
-                        ? `${COLORS.success}20`
-                        : `${COLORS.error}20`,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.tradeSide,
-                    { color: trade.side === 'BUY' ? COLORS.success : COLORS.error },
-                  ]}
-                >
-                  {trade.side}
-                </Text>
-              </View>
-              <View style={styles.tradeInfo}>
-                <Text style={styles.tradeSymbol}>{trade.symbol}</Text>
-                <Text style={styles.tradeDetails}>
-                  {trade.qty} MT @ ₦{(trade.price / 1000).toFixed(0)}K
-                </Text>
-              </View>
-              <View style={styles.tradeRight}>
-                <Text style={styles.tradeTime}>{trade.time}</Text>
-                <Text
-                  style={[
-                    styles.tradeStatus,
-                    {
-                      color:
-                        trade.status === 'FILLED'
-                          ? COLORS.success
-                          : COLORS.warning,
-                    },
-                  ]}
-                >
-                  {trade.status}
-                </Text>
-              </View>
-            </View>
-          ))}
+          {recentOrdersQuery.isLoading ? (
+            <ActivityIndicator color={COLORS.primary} />
+          ) : recentTrades.length === 0 ? (
+            <Text style={{ color: COLORS.textMuted, fontSize: TYPOGRAPHY.sizes.sm, paddingVertical: 8 }}>No orders yet.</Text>
+          ) : (
+            recentTrades.map((trade) => {
+              const isBuy = trade.side === 'BUY';
+              return (
+                <View key={trade.id} style={styles.tradeRow}>
+                  <View style={[styles.tradeSideBadge, { backgroundColor: isBuy ? `${COLORS.buy}20` : `${COLORS.sell}20` }]}>
+                    <Text style={[styles.tradeSide, { color: isBuy ? COLORS.buy : COLORS.sell }]}>{trade.side}</Text>
+                  </View>
+                  <View style={styles.tradeInfo}>
+                    <Text style={styles.tradeSymbol}>{trade.symbol}</Text>
+                    <Text style={styles.tradeDetails}>
+                      {Number(trade.quantity).toLocaleString()} MT @ ₦{Number(trade.price ?? 0).toLocaleString()}
+                    </Text>
+                  </View>
+                  <View style={styles.tradeRight}>
+                    <Text style={styles.tradeTime}>
+                      {new Date(trade.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    <Text style={[styles.tradeStatus, {
+                      color: trade.status === 'FILLED' ? COLORS.success
+                        : trade.status === 'CANCELLED' ? COLORS.error
+                        : COLORS.warning
+                    }]}>{trade.status}</Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
         </View>
 
-        {/* Loan Notifications (real-time) */}
-        {loanEvents.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.sectionTitle}>Loan Notifications</Text>
-                {unreadCount > 0 && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
-                  </View>
-                )}
-              </View>
-              <TouchableOpacity onPress={markAllRead}>
-                <Text style={styles.sectionLink}>Mark Read</Text>
-              </TouchableOpacity>
-            </View>
-            {loanEvents.slice(0, 5).map((event, i) => (
-              <View key={`loan-${i}`} style={styles.alertRow}>
-                <Text style={styles.alertIcon}>
-                  {event.event.startsWith('LOAN') ? '💰' : '🛡️'}
-                </Text>
-                <View style={styles.alertContent}>
-                  <Text style={styles.alertMessage}>{getLoanEventLabel(event.event)}</Text>
-                  {event.message && (
-                    <Text style={styles.alertTime} numberOfLines={2}>{event.message}</Text>
-                  )}
-                  {event.amount && (
-                    <Text style={[styles.alertTime, { color: COLORS.primary }]}>
-                      ₦{event.amount.toLocaleString()}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Alerts */}
+        {/* Notifications */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Alerts</Text>
-            <TouchableOpacity>
-              <Text style={styles.sectionLink}>Manage →</Text>
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            <TouchableOpacity onPress={() => { markAllRead(); router.push('/notifications' as any); }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {(notifUnread + unreadCount) > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>{notifUnread + unreadCount}</Text>
+                  </View>
+                )}
+                <Text style={styles.sectionLink}>Manage →</Text>
+              </View>
             </TouchableOpacity>
           </View>
-          {ALERTS.map((alert) => (
-            <View key={alert.id} style={styles.alertRow}>
-              <Text style={styles.alertIcon}>{alert.icon}</Text>
-              <View style={styles.alertContent}>
-                <Text style={styles.alertMessage}>{alert.message}</Text>
-                <Text style={styles.alertTime}>{alert.time}</Text>
-              </View>
-            </View>
-          ))}
+          {notificationsQuery.isLoading ? (
+            <ActivityIndicator color={COLORS.primary} />
+          ) : notifItems.length === 0 && loanEvents.length === 0 ? (
+            <Text style={{ color: COLORS.textMuted, fontSize: TYPOGRAPHY.sizes.sm, paddingVertical: 8 }}>No notifications.</Text>
+          ) : (
+            <>
+              {loanEvents.slice(0, 2).map((event, i) => (
+                <View key={`loan-${i}`} style={styles.alertRow}>
+                  <Text style={styles.alertIcon}>{event.event.startsWith('LOAN') ? '💰' : '🛡️'}</Text>
+                  <View style={styles.alertContent}>
+                    <Text style={styles.alertMessage}>{getLoanEventLabel(event.event)}</Text>
+                    {event.message && <Text style={styles.alertTime} numberOfLines={2}>{event.message}</Text>}
+                  </View>
+                </View>
+              ))}
+              {notifItems.slice(0, 3).map((n) => (
+                <View key={n.id} style={styles.alertRow}>
+                  <Text style={styles.alertIcon}>
+                    {n.type === 'TRADE' ? '📈' : n.type === 'PRICE_ALERT' ? '🔔' : n.type === 'WAREHOUSE' ? '🏭' : 'ℹ️'}
+                  </Text>
+                  <View style={styles.alertContent}>
+                    <Text style={styles.alertMessage}>{n.message}</Text>
+                    <Text style={styles.alertTime}>{new Date(n.createdAt).toLocaleTimeString()}</Text>
+                  </View>
+                </View>
+              ))}
+            </>
+          )}
         </View>
 
         {/* Bottom padding */}

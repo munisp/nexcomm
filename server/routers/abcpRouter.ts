@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { abcpPrograms } from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, count, sum, avg } from "drizzle-orm";
 
 export const abcpRouter = router({
   list: publicProcedure.query(async () => {
@@ -42,7 +42,7 @@ export const abcpRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { success: true, programId: Math.floor(Math.random() * 1000) };
+      if (!db) throw new Error("Database unavailable");
       const [prog] = await db.insert(abcpPrograms).values({
         ...input,
         sponsorUserId: ctx.user.id,
@@ -52,12 +52,23 @@ export const abcpRouter = router({
     }),
 
   stats: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { totalPrograms: 0, totalIssuanceNgn: 0, outstandingNgn: 0, avgYieldPct: 0, avgCoverageRatioPct: 0 };
+    const [row] = await db
+      .select({
+        totalPrograms: count(),
+        totalIssuanceNgn: sum(abcpPrograms.programSizeNgn),
+        outstandingNgn: sum(abcpPrograms.outstandingNgn),
+        avgYieldPct: avg(abcpPrograms.yieldPct),
+        avgCoverageRatioPct: avg(abcpPrograms.coverageRatioPct),
+      })
+      .from(abcpPrograms);
     return {
-      totalPrograms: 4,
-      totalIssuanceNgn: 87500000000,
-      outstandingNgn: 72000000000,
-      avgYieldPct: 14.6,
-      avgCoverageRatioPct: 142.5,
+      totalPrograms: Number(row?.totalPrograms ?? 0),
+      totalIssuanceNgn: Number(row?.totalIssuanceNgn ?? 0),
+      outstandingNgn: Number(row?.outstandingNgn ?? 0),
+      avgYieldPct: Number(Number(row?.avgYieldPct ?? 0).toFixed(2)),
+      avgCoverageRatioPct: Number(Number(row?.avgCoverageRatioPct ?? 0).toFixed(2)),
     };
   }),
 });

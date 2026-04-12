@@ -17,6 +17,7 @@ import {
   bankTransactions,
 } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { ENV } from "../_core/env";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -514,8 +515,27 @@ export const bankingRouter = router({
         throw new Error(`Farmer KYC status is ${farmer.kycStatus}, not APPROVED`);
       }
 
-      // Create escrow account via CBS (mock response when CBS not configured)
-      const escrowAccountRef = `ESC-${farmer.id}-${Date.now()}`;
+      // Create escrow account via CBS if CORE_BANKING_URL is configured
+      let escrowAccountRef = `ESC-${farmer.id}-${Date.now()}`;
+      if (ENV.coreBankingUrl) {
+        try {
+          const cbsRes = await fetch(`${ENV.coreBankingUrl}/v1/accounts/escrow`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              farmerId: farmer.id,
+              userId: farmer.userId,
+              currency: input.currency ?? "NGN",
+            }),
+          });
+          if (cbsRes.ok) {
+            const cbsData = await cbsRes.json() as { accountRef?: string };
+            if (cbsData.accountRef) escrowAccountRef = cbsData.accountRef;
+          }
+        } catch (err) {
+          console.warn("[CBS] Escrow account creation failed, using local ref:", err);
+        }
+      }
 
       // Notify the farmer
       await db.insert(notifications).values({
