@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { trpc, getTRPCClient } from '../lib/trpc';
+import { usePushDeepLink } from '../lib/usePushDeepLink';
 import { useAuthStore } from '../lib/store';
 import { CONFIG, COLORS } from '../constants/config';
 
@@ -19,6 +20,11 @@ const queryClient = new QueryClient({
 });
 
 const trpcClient = getTRPCClient(CONFIG.BASE_URL);
+
+function DeepLinkHandler() {
+  usePushDeepLink();
+  return null;
+}
 
 export default function RootLayout() {
   const { setLoading } = useAuthStore();
@@ -44,6 +50,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <trpc.Provider client={trpcClient} queryClient={queryClient}>
           <QueryClientProvider client={queryClient}>
+            <DeepLinkHandler />
             <StatusBar style="light" backgroundColor={COLORS.background} />
             <Stack
               screenOptions={{

@@ -90,6 +90,7 @@ import { whatsappRouter } from "./routers/whatsapp";
 import { telegramRouter } from "./routers/telegram";
 import { bankFinancingRouter } from "./routers/bankFinancingRouter";
 import { indicesRouter } from "./routers/indicesRouter";
+import { ussdWhatsappReceiptRouter } from "./routers/ussdWhatsappReceiptRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -180,6 +181,7 @@ export const appRouter = router({
   telegram: telegramRouter,
   bankFinancing: bankFinancingRouter,
   indices: indicesRouter,
+  ussdWhatsappReceipt: ussdWhatsappReceiptRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure

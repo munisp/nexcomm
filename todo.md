@@ -374,3 +374,25 @@
 - [x] Flutter totp_setup_screen.dart: wired to real generateTotpSecret, confirmTotpSetup (removed mock secret)
 - [x] PWA pages (Indices, MarketMakers, Markets, OnboardingHub, FarmerEarnings, FarmerMarketPrices): confirmed all use real tRPC queries
 - [x] All 825 vitest tests passing (10 test files)
+
+## Round 26 — Production Finalization (All Features)
+- [x] ussdWhatsappReceiptRouter: sendRepaymentReceipt, sendLoanApprovalNotice, sendLoanDisbursementNotice
+- [x] React Native push deep-link handler (usePushDeepLink.ts) wired into _layout.tsx
+- [x] Flutter push deep-link service (push_deep_link_service.dart) with FCM support
+- [x] Flutter push_deep_link_service: subscribeToTopic, unsubscribeFromTopic, getDeviceToken
+- [x] README.production.md: full deployment guide for all 8 services (Web, RN, Flutter, Go, Python, Rust)
+- [x] All env vars documented with defaults (WHATSAPP, TELEGRAM, AFRICASTALKING, SENDGRID, VAPID, KAFKA, REDIS)
+- [x] server/config.ts: centralized production config with all defaults
+- [x] shared/platformConstants.ts: commodity list, exchange config, supported currencies
+- [x] 825 tests passing (10 test files)
+
+## Round 26 — Production Finalization (All Features)
+- [x] ussdWhatsappReceiptRouter: sendRepaymentReceipt, sendLoanApprovalNotice, sendLoanDisbursementNotice
+- [x] React Native push deep-link handler (usePushDeepLink.ts) wired into _layout.tsx
+- [x] Flutter push deep-link service (push_deep_link_service.dart) with FCM support
+- [x] Flutter push_deep_link_service: subscribeToTopic, unsubscribeFromTopic, getDeviceToken
+- [x] README.production.md: full deployment guide for all 8 services (Web, RN, Flutter, Go, Python, Rust)
+- [x] All env vars documented with defaults (WHATSAPP, TELEGRAM, AFRICASTALKING, SENDGRID, VAPID, KAFKA, REDIS)
+- [x] server/config.ts: centralized production config with all defaults
+- [x] shared/platformConstants.ts: commodity list, exchange config, supported currencies
+- [x] 825 tests passing (10 test files, 0 failures)
