@@ -37,11 +37,10 @@ class _BankingScreenState extends ConsumerState<BankingScreen>
       _error = null;
     });
     try {
-      final api = ref.read(apiServiceProvider);
       final results = await Future.wait([
-        api.get('/banking/summary'),
-        api.get('/banking/loans'),
-        api.get('/banking/transactions'),
+        nexcomApi.getBankingDashboard(),
+        nexcomApi.listLoans(),
+        nexcomApi.getBankingTransactions(),
       ]);
       setState(() {
         _summary = results[0] as Map<String, dynamic>?;
@@ -143,8 +142,20 @@ class _BankingScreenState extends ConsumerState<BankingScreen>
 
   Widget _buildLoans() {
     if (_loans.isEmpty) {
-      return const Center(
-        child: Text('No active loans.\nTap Overview to apply.'),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.credit_card_off, size: 48, color: Colors.grey),
+            const SizedBox(height: 12),
+            const Text('No active loans.'),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _showLoanApplicationDialog,
+              child: const Text('Apply for a Loan'),
+            ),
+          ],
+        ),
       );
     }
     return RefreshIndicator(
@@ -163,8 +174,11 @@ class _BankingScreenState extends ConsumerState<BankingScreen>
                 backgroundColor: statusColor.withOpacity(0.2),
                 child: Icon(Icons.credit_card, color: statusColor),
               ),
-              title: Text('₦${_formatAmount(loan['amount'] ?? 0)}'),
-              subtitle: Text('${loan['bankName'] ?? 'Bank'} • Due: ${loan['dueDate'] ?? 'N/A'}'),
+              title: Text('₦${_formatAmount(loan['requestedValueNgn'] ?? loan['amount'] ?? 0)}'),
+              subtitle: Text(
+                '${loan['inputType'] ?? loan['bankName'] ?? 'Loan'} • '
+                '${loan['tenorMonths'] ?? 0} months',
+              ),
               trailing: Chip(
                 label: Text(status, style: const TextStyle(fontSize: 11)),
                 backgroundColor: statusColor.withOpacity(0.1),
@@ -213,24 +227,124 @@ class _BankingScreenState extends ConsumerState<BankingScreen>
     );
   }
 
+  /// Full loan application form that calls nexcomApi.applyLoan
   void _showLoanApplicationDialog() {
+    final formKey = GlobalKey<FormState>();
+    String inputType = 'SEEDS';
+    final descCtrl = TextEditingController();
+    final amountCtrl = TextEditingController();
+    int tenorMonths = 6;
+    bool submitting = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Apply for Loan'),
-        content: const Text(
-          'Visit nexcom.exchange/banking to complete your full loan application with document upload.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Apply for Input Financing Loan'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: inputType,
+                    decoration: const InputDecoration(labelText: 'Input Type'),
+                    items: [
+                      'SEEDS', 'FERTILIZER', 'PESTICIDE',
+                      'HERBICIDE', 'EQUIPMENT', 'IRRIGATION', 'STORAGE', 'CASH'
+                    ].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                    onChanged: (v) => setDialogState(() => inputType = v ?? inputType),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: descCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      hintText: 'Describe the input you need (min 10 chars)',
+                    ),
+                    maxLines: 2,
+                    validator: (v) =>
+                        (v == null || v.trim().length < 10)
+                            ? 'Please describe the input needed (min 10 chars)'
+                            : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: amountCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Amount (NGN)',
+                      prefixText: '₦',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      final n = double.tryParse(v ?? '');
+                      return (n == null || n <= 0) ? 'Enter a valid amount' : null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    value: tenorMonths,
+                    decoration: const InputDecoration(labelText: 'Repayment Tenor'),
+                    items: [3, 6, 9, 12, 18, 24]
+                        .map((m) => DropdownMenuItem(value: m, child: Text('$m months')))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() => tenorMonths = v ?? tenorMonths),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => submitting = true);
+                      try {
+                        await nexcomApi.applyLoan(
+                          inputType: inputType,
+                          inputDescription: descCtrl.text.trim(),
+                          requestedValueNgn: double.parse(amountCtrl.text),
+                          tenorMonths: tenorMonths,
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Loan application submitted successfully!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                          _loadData();
+                        }
+                      } catch (e) {
+                        setDialogState(() => submitting = false);
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: submitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Submit Application'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Open Web App'),
-          ),
-        ],
       ),
     );
   }

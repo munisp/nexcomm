@@ -316,6 +316,70 @@ class NexcomApiService {
   Future<void> revokeApiKey(int id) async {
     await _mutate('account.revokeApiKey', {'id': id});
   }
+
+  // ─── Banking ────────────────────────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getBankingDashboard() => _query('banking.getDashboard');
+
+  Future<List<dynamic>> getBankingTransactions({int page = 1, int limit = 20}) async {
+    final result = await _query('banking.getTransactions', {'page': page, 'limit': limit});
+    return result['transactions'] as List? ?? [];
+  }
+
+  Future<List<dynamic>> listLoans() async {
+    final result = await _query('banking.listLoans');
+    return result['loans'] as List? ?? [];
+  }
+
+  /// Apply for an input financing loan.
+  Future<Map<String, dynamic>> applyLoan({
+    required String inputType,
+    required String inputDescription,
+    required double requestedValueNgn,
+    int tenorMonths = 6,
+    String repaymentMethod = 'HARVEST_DEDUCTION',
+    int? collateralEwrId,
+    String? notes,
+  }) => _mutate('banking.applyLoan', {
+    'inputType': inputType,
+    'inputDescription': inputDescription,
+    'requestedValueNgn': requestedValueNgn,
+    'tenorMonths': tenorMonths,
+    'repaymentMethod': repaymentMethod,
+    if (collateralEwrId != null) 'collateralEwrId': collateralEwrId,
+    if (notes != null) 'notes': notes,
+  });
+
+  /// Submit an insurance claim with optional evidence photo URLs.
+  Future<Map<String, dynamic>> submitInsuranceClaim({
+    required int policyId,
+    required String lossType,
+    required double affectedAreaHectares,
+    required double estimatedLossNgn,
+    required String incidentDate,
+    required String description,
+    List<String> evidenceUrls = const [],
+  }) => _mutate('banking.submitInsuranceClaim', {
+    'policyId': policyId,
+    'lossType': lossType,
+    'affectedAreaHectares': affectedAreaHectares,
+    'estimatedLossNgn': estimatedLossNgn,
+    'incidentDate': incidentDate,
+    'description': description,
+    'evidenceUrls': evidenceUrls,
+  });
+
+  // ─── Biometric Preference ──────────────────────────────────────────────────────────────────
+
+  /// Persist biometric login preference to the user's security settings.
+  Future<Map<String, dynamic>> setBiometricEnabled(bool enabled) =>
+      _mutate('security.setBiometricPreference', {'enabled': enabled});
+
+  /// Get the user's current biometric preference.
+  Future<bool> getBiometricEnabled() async {
+    final result = await _query('security.getBiometricPreference');
+    return (result['enabled'] as bool?) ?? false;
+  }
 }
 
 // Singleton instance

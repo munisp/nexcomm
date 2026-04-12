@@ -391,6 +391,7 @@ export const userPreferences = pgTable("user_preferences", {
   notifEmail:            boolean("notif_email").default(true).notNull(),
   notifSms:              boolean("notif_sms").default(false).notNull(),
   notifPush:             boolean("notif_push").default(true).notNull(),
+  biometricEnabled:      boolean("biometric_enabled").default(false).notNull(),
 });
 export type UserPreferences = typeof userPreferences.$inferSelect;
 

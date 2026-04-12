@@ -26,6 +26,30 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     super.initState();
     _loadTotpStatus();
     _loadSessions();
+    _loadBiometricPreference();
+  }
+
+  Future<void> _loadBiometricPreference() async {
+    try {
+      final enabled = await nexcomApi.getBiometricEnabled();
+      if (mounted) setState(() => _biometric = enabled);
+    } catch (_) {
+      // keep default value
+    }
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    setState(() => _biometric = value);
+    try {
+      await nexcomApi.setBiometricEnabled(value);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _biometric = !value); // rollback
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update biometric setting: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _loadTotpStatus() async {
@@ -139,7 +163,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         children: [
           _sectionHeader('Authentication'),
           _card([
-            _switchTile('Biometric Login', 'Use Face ID or fingerprint to sign in', _biometric, (v) => setState(() => _biometric = v)),
+            _switchTile('Biometric Login', 'Use Face ID or fingerprint to sign in', _biometric, _toggleBiometric),
             _divider(),
             ListTile(
               title: const Text('Change PIN', style: TextStyle(color: Color(0xFFe6edf3))),

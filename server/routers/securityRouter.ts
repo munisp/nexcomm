@@ -30,6 +30,7 @@ import {
   rateLimitCounters,
   notifications,
   orders,
+  userPreferences,
 } from "../../drizzle/schema";
 import { and, desc, eq, gte, sql, count } from "drizzle-orm";
 
@@ -372,4 +373,31 @@ export const securityRouter = router({
 
       return event;
     }),
+
+  // ─── Biometric Preference ─────────────────────────────────────────────────
+  setBiometricPreference: protectedProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db
+        .insert(userPreferences)
+        .values({ userId: ctx.user.id, biometricEnabled: input.enabled })
+        .onConflictDoUpdate({
+          target: userPreferences.userId,
+          set: { biometricEnabled: input.enabled, updatedAt: new Date() },
+        });
+      return { success: true, enabled: input.enabled };
+    }),
+
+  getBiometricPreference: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+    const [pref] = await db
+      .select({ biometricEnabled: userPreferences.biometricEnabled })
+      .from(userPreferences)
+      .where(eq(userPreferences.userId, ctx.user.id))
+      .limit(1);
+    return { enabled: pref?.biometricEnabled ?? false };
+  }),
 });

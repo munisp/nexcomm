@@ -1,0 +1,1 @@
+ALTER TABLE "user_preferences" ADD COLUMN "biometric_enabled" boolean DEFAULT false NOT NULL;

@@ -63,8 +63,26 @@ export default function ProfileScreen() {
   const { user: authUser } = useAuthStore();
   const profileQuery = trpc.profile.get.useQuery(undefined, { enabled: !!authUser });
   const portfolioQuery = trpc.portfolio.summary.useQuery(undefined, { enabled: !!authUser });
+  const biometricQuery = trpc.security.getBiometricPreference.useQuery(undefined, { enabled: !!authUser });
+  const setBiometricMutation = trpc.security.setBiometricPreference.useMutation();
   const profile = profileQuery.data;
   const portfolio = portfolioQuery.data;
+
+  // Sync biometric state from server on load
+  React.useEffect(() => {
+    if (biometricQuery.data !== undefined) {
+      setBiometric(biometricQuery.data.enabled ?? false);
+    }
+  }, [biometricQuery.data]);
+
+  const handleBiometricToggle = async (value: boolean) => {
+    setBiometric(value);
+    try {
+      await setBiometricMutation.mutateAsync({ enabled: value });
+    } catch {
+      setBiometric(!value); // rollback on error
+    }
+  };
   const displayName = profile?.displayName ?? authUser?.name ?? 'User';
   const displayEmail = profile?.email ?? authUser?.email ?? '';
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
@@ -166,7 +184,7 @@ export default function ProfileScreen() {
               </View>
               <Switch
                 value={biometric}
-                onValueChange={setBiometric}
+                onValueChange={handleBiometricToggle}
                 trackColor={{ false: COLORS.border, true: `${COLORS.primary}60` }}
                 thumbColor={biometric ? COLORS.primary : COLORS.textDim}
               />

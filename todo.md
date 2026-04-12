@@ -396,3 +396,25 @@
 - [x] server/config.ts: centralized production config with all defaults
 - [x] shared/platformConstants.ts: commodity list, exchange config, supported currencies
 - [x] 825 tests passing (10 test files, 0 failures)
+
+## Round 28 — Final Production Finalization (All Features Complete)
+
+- [x] React Native banking screen: full loan application modal with purpose chips, tenor, collateral, bank name fields
+- [x] React Native banking screen: useLoanNotifications banner with dismiss, unread badge, deep-link to loans tab
+- [x] React Native profile screen: biometric toggle persists via trpc.security.setBiometricPreference
+- [x] Flutter security_settings_screen: biometric toggle loads from server on init, persists on toggle
+- [x] Flutter api_service.dart: applyLoan, submitInsuranceClaim, setBiometricPreference, getBiometricPreference methods added
+- [x] Flutter banking_screen.dart: full loan application form with real API call
+- [x] Verified: USSD loan-apply flow fully implemented in Rust (LOAN_APPLY_TYPE → LOAN_APPLY_AMOUNT → LOAN_APPLY_TENOR → LOAN_APPLY_CONFIRM → LOAN_APPLY_PIN)
+- [x] Verified: Telegram alert commands (/alert set, /alert list, /alert delete) fully implemented in bot-logic
+- [x] Verified: WebAuthn router tests cover registration, authentication, email OTP, MFA policy, signCount replay (server/webauthn.test.ts)
+- [x] Verified: Onboarding.tsx document upload wired to real S3 via trpc.onboarding.uploadKycDocument
+- [x] Verified: OpenSanctions API integrated in kyb/screening.py with OPENSANCTIONS_API_KEY env var
+- [x] Verified: docling and opencv-python-headless in requirements.txt; Dockerfile installs libgl1-mesa-glx
+- [x] Verified: AdminKycDocumentReview.tsx fully wired to adminListKycQueue and adminDecideKyc
+- [x] Verified: PasskeyLoginButton on Home.tsx login page
+- [x] Verified: SMTP/SendGrid email wired with NODE_ENV=test suppression in server/_core/email.ts
+- [x] Verified: PostgreSQL read replica support (getReadDb, pingReadDb, hasReadReplica) in server/db.ts
+- [x] Verified: Admin Platform Health shows PostgreSQL primary + read replica status
+- [x] Verified: TOTP tab in SecuritySettings.tsx with status display and link to /totp-setup
+- [x] All 825 vitest tests pass

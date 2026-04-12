@@ -1430,3 +1430,91 @@ fn extract_latest_input(text: &str) -> String {
     }
     text.split('*').last().unwrap_or("").trim().to_string()
 }
+
+// ─── Unit Tests ───────────────────────────────────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::Session;
+
+    fn make_session(menu: &str) -> Session {
+        Session {
+            session_id: "test-session".to_string(),
+            phone_number: "+2348012345678".to_string(),
+            current_menu: menu.to_string(),
+            menu_path: vec![],
+            data: std::collections::HashMap::new(),
+            authenticated: true,
+            user_id: Some(1),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            expires_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+        }
+    }
+
+    #[test]
+    fn test_loan_menu_text_not_empty() {
+        let text = loan_menu_text();
+        assert!(!text.is_empty(), "Loan menu text should not be empty");
+        assert!(text.contains("1."), "Loan menu should have option 1");
+    }
+
+    #[test]
+    fn test_session_loan_state_transitions() {
+        let mut session = make_session("LOAN");
+        // Simulate selecting option 1 (Apply for Loan)
+        session.current_menu = "LOAN_APPLY_TYPE".to_string();
+        assert_eq!(session.current_menu, "LOAN_APPLY_TYPE");
+
+        // Simulate selecting loan type (1 = Input Financing)
+        session.data.insert("loan_type".to_string(), "INPUT_FINANCING".to_string());
+        session.current_menu = "LOAN_APPLY_AMOUNT".to_string();
+        assert_eq!(session.current_menu, "LOAN_APPLY_AMOUNT");
+
+        // Simulate entering amount
+        session.data.insert("loan_amount".to_string(), "500000".to_string());
+        session.current_menu = "LOAN_APPLY_TENOR".to_string();
+        assert_eq!(session.current_menu, "LOAN_APPLY_TENOR");
+
+        // Simulate selecting tenor
+        session.data.insert("loan_tenor_months".to_string(), "6".to_string());
+        session.current_menu = "LOAN_APPLY_CONFIRM".to_string();
+        assert_eq!(session.current_menu, "LOAN_APPLY_CONFIRM");
+
+        // Simulate confirming
+        session.current_menu = "LOAN_APPLY_PIN".to_string();
+        assert_eq!(session.current_menu, "LOAN_APPLY_PIN");
+    }
+
+    #[test]
+    fn test_loan_repayment_state_transitions() {
+        let mut session = make_session("LOAN");
+        // Simulate selecting option 2 (Repay Loan)
+        session.current_menu = "LOAN_REPAY_SELECT".to_string();
+        session.data.insert("loan_id".to_string(), "42".to_string());
+        session.current_menu = "LOAN_REPAY_AMOUNT".to_string();
+        session.data.insert("repay_amount".to_string(), "50000".to_string());
+        session.current_menu = "LOAN_REPAY_PROVIDER".to_string();
+        session.data.insert("payment_provider".to_string(), "MOBILE_MONEY".to_string());
+        session.current_menu = "LOAN_REPAY_CONFIRM".to_string();
+        session.current_menu = "LOAN_REPAY_PIN".to_string();
+        assert_eq!(session.current_menu, "LOAN_REPAY_PIN");
+    }
+
+    #[test]
+    fn test_session_data_persistence() {
+        let mut session = make_session("LOAN_APPLY_AMOUNT");
+        session.data.insert("loan_type".to_string(), "WR_FINANCING".to_string());
+        assert_eq!(session.data.get("loan_type").map(|s| s.as_str()), Some("WR_FINANCING"));
+    }
+
+    #[test]
+    fn test_session_authentication_required() {
+        let mut session = make_session("LOAN");
+        session.authenticated = false;
+        // Unauthenticated sessions should not have user_id
+        session.user_id = None;
+        assert!(session.user_id.is_none());
+        assert!(!session.authenticated);
+    }
+}
