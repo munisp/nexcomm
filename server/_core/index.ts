@@ -60,6 +60,10 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // ── Trust proxy (required for rate-limiting behind reverse proxies / Manus gateway)
+  // '1' means trust the first hop (the Manus edge proxy).
+  app.set('trust proxy', 1);
+
   // ── Security headers (Helmet) ───────────────────────────────────────────────
   // Applied before all other middleware so every response gets security headers.
   app.use(helmet({

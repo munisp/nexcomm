@@ -434,3 +434,22 @@
 - [x] server/_core/env.ts — all 40+ env vars with safe defaults
 - [x] shared/platformConstants.ts — all PORTS, KAFKA_TOPICS, and business constants
 - [x] 825/825 vitest tests pass
+
+## Round 30 — PWA UI Render & Final Hardening
+- [x] React Native notifications screen: fixed `isRead` → `read` field name to match server schema
+- [x] Flutter api_service.dart: fixed `orders.place` → `orders.create` (correct procedure name)
+- [x] Flutter api_service.dart: fixed `orders.open` → `orders.list` with status=OPEN filter
+- [x] Flutter api_service.dart: fixed `orders.history` → `orders.list` without status filter
+- [x] Flutter api_service.dart: fixed `prices.list` → `livePrices.getAll` (correct router key)
+- [x] Flutter api_service.dart: fixed `prices.history` → `commodities.priceHistory`
+- [x] Flutter api_service.dart: fixed `prices.marketSummary` → `commodities.list`
+- [x] Flutter api_service.dart: fixed `warehouse.list/get/create/update` → `receipts.list/get/create/updateStatus`
+- [x] Flutter api_service.dart: fixed `account.profile` → `profile.get`
+- [x] Flutter api_service.dart: fixed `account.updateProfile` → `profile.update`
+- [x] Flutter api_service.dart: fixed `account.balance` → `portfolio.summary`
+- [x] Flutter api_service.dart: fixed `account.apiKeys` → `apiKeys.list`
+- [x] Flutter api_service.dart: fixed `account.createApiKey` → `apiKeys.generate`
+- [x] Flutter api_service.dart: fixed `account.revokeApiKey` → `apiKeys.revoke`
+- [x] Flutter api_service.dart: fixed `farmers.list/get/create/update/crops` → `farmer.getMyFarmerProfile/updateMyFarmerProfile/getMyFarms/getMyCropListings/publicListCropListings`
+- [x] Flutter api_service.dart: fixed `notifications.unreadCount` return type (returns number directly, not { count: N })
+- [x] 825/825 vitest tests pass (zero regressions)

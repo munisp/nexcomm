@@ -118,12 +118,22 @@ export default function OrderBookDepthChart({ book, height = 140 }: Props) {
   useEffect(() => {
     if (!bidSeriesRef.current || !askSeriesRef.current || !chartRef.current) return;
 
-    // Bids: sorted ascending by price for the chart (lowest price → smallest cumulative qty)
-    const sortedBids = [...book.bids].sort((a, b) => a.price - b.price);
-    // Asks: sorted ascending by price (lowest ask first)
-    const sortedAsks = [...book.asks].sort((a, b) => a.price - b.price);
+    // Deduplicate by price (keep highest total for each price level), then sort ascending
+    const dedupLevels = (levels: typeof book.bids) => {
+      const map = new Map<number, number>();
+      for (const l of levels) {
+        const existing = map.get(l.price) ?? 0;
+        if (l.total > existing) map.set(l.price, l.total);
+      }
+      return Array.from(map.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([price, total]) => ({ price, total }));
+    };
 
-    // Use price as the "time" axis (lightweight-charts expects monotonically increasing time)
+    const sortedBids = dedupLevels(book.bids);
+    const sortedAsks = dedupLevels(book.asks);
+
+    // Use price as the "time" axis (lightweight-charts expects strictly monotonically increasing time)
     const bidData: AreaData[] = sortedBids.map(level => ({
       time: level.price as unknown as Time,
       value: level.total,

@@ -30,7 +30,7 @@ export default function NotificationsScreen() {
   });
 
   const notifications = notificationsQuery.data?.notifications ?? [];
-  const unreadCount = notifications.filter((n: any) => !n.isRead).length;
+  const unreadCount = notifications.filter((n: any) => !n.read).length;
 
   const formatTime = (ts: number | string | null | undefined) => {
     if (!ts) return '';
@@ -49,8 +49,8 @@ export default function NotificationsScreen() {
     const config = TYPE_CONFIG[item.type as string] ?? TYPE_CONFIG.SYSTEM;
     return (
       <TouchableOpacity
-        style={[styles.notifCard, !item.isRead && styles.unreadCard]}
-        onPress={() => !item.isRead && markReadMutation.mutate({ id: item.id })}
+        style={[styles.notifCard, !item.read && styles.unreadCard]}
+        onPress={() => !item.read && markReadMutation.mutate({ id: item.id })}
         activeOpacity={0.7}
       >
         <View style={[styles.iconContainer, { backgroundColor: config.color + '20' }]}>
@@ -58,7 +58,7 @@ export default function NotificationsScreen() {
         </View>
         <View style={styles.notifContent}>
           <View style={styles.notifHeader}>
-            <Text style={[styles.notifTitle, !item.isRead && styles.unreadTitle]}>
+            <Text style={[styles.notifTitle, !item.read && styles.unreadTitle]}>
               {item.title}
             </Text>
             <Text style={styles.notifTime}>{formatTime(item.createdAt)}</Text>
@@ -66,7 +66,7 @@ export default function NotificationsScreen() {
           <Text style={styles.notifMessage} numberOfLines={2}>
             {item.message}
           </Text>
-          {!item.isRead && <View style={styles.unreadDot} />}
+          {!item.read && <View style={styles.unreadDot} />}
         </View>
       </TouchableOpacity>
     );

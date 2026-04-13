@@ -77,15 +77,19 @@ class NexcomApiService {
   // ─── Live Prices ──────────────────────────────────────────────────────────
 
   Future<List<dynamic>> getLivePrices() async {
-    final result = await _query('prices.list');
-    return result['prices'] as List? ?? [];
+    // livePrices.getAll returns a list of price objects directly
+    final result = await _query('livePrices.getAll');
+    // The procedure returns an array directly; handle both array and map wrapping
+    if (result['data'] is List) return result['data'] as List;
+    return (result.values.firstWhere((v) => v is List, orElse: () => []) as List?) ?? [];
   }
 
   Future<Map<String, dynamic>> getPriceHistory(String symbol, String interval) async {
-    return _query('prices.history', {'symbol': symbol, 'interval': interval});
+    // commodities.priceHistory returns OHLCV candles
+    return _query('commodities.priceHistory', {'symbol': symbol, 'interval': interval});
   }
 
-  Future<Map<String, dynamic>> getMarketSummary() => _query('prices.marketSummary');
+  Future<Map<String, dynamic>> getMarketSummary() => _query('commodities.list');
 
   // ─── Orders ───────────────────────────────────────────────────────────────
 
@@ -96,23 +100,28 @@ class NexcomApiService {
     required double quantity,
     double? price,
     double? stopPrice,
-  }) => _mutate('orders.place', {
+  }) => _mutate('orders.create', {
     'symbol': symbol,
     'side': side,
-    'type': type,
+    // The server uses 'orderType' not 'type'
+    'orderType': type,
     'quantity': quantity,
     if (price != null) 'price': price,
     if (stopPrice != null) 'stopPrice': stopPrice,
   });
 
   Future<List<dynamic>> getOpenOrders() async {
-    final result = await _query('orders.open');
-    return result['orders'] as List? ?? [];
+    // orders.list with status=OPEN returns open orders
+    final result = await _query('orders.list', {'status': 'OPEN', 'limit': 100});
+    if (result is List) return result;
+    return [];
   }
 
   Future<List<dynamic>> getOrderHistory({int page = 1, int limit = 20}) async {
-    final result = await _query('orders.history', {'page': page, 'limit': limit});
-    return result['orders'] as List? ?? [];
+    // orders.list without status filter returns all orders
+    final result = await _query('orders.list', {'limit': limit});
+    if (result is List) return result;
+    return [];
   }
 
   Future<Map<String, dynamic>> cancelOrder(int orderId) =>
@@ -135,18 +144,20 @@ class NexcomApiService {
   // ─── Warehouse Receipts ───────────────────────────────────────────────────
 
   Future<List<dynamic>> getWarehouseReceipts() async {
-    final result = await _query('warehouse.list');
+    // receipts.list returns a list of EWR objects directly
+    final result = await _query('receipts.list');
+    if (result is List) return result;
     return result['receipts'] as List? ?? [];
   }
 
   Future<Map<String, dynamic>> getWarehouseReceipt(String id) =>
-      _query('warehouse.get', {'id': int.parse(id)});
+      _query('receipts.get', {'id': int.parse(id)});
 
   Future<Map<String, dynamic>> createWarehouseReceipt(Map<String, dynamic> data) =>
-      _mutate('warehouse.create', data);
+      _mutate('receipts.create', data);
 
   Future<Map<String, dynamic>> updateWarehouseReceipt(int id, Map<String, dynamic> data) =>
-      _mutate('warehouse.update', {'id': id, ...data});
+      _mutate('receipts.updateStatus', {'id': id, ...data});
 
   // ─── Price Alerts ─────────────────────────────────────────────────────────
 
@@ -180,8 +191,11 @@ class NexcomApiService {
       _query('notifications.list', {'page': page, 'limit': limit});
 
   Future<int> getUnreadCount() async {
+    // notifications.unreadCount returns a number directly (not { count: N })
     final result = await _query('notifications.unreadCount');
-    return result['count'] as int? ?? 0;
+    if (result is Map && result.containsKey('count')) return result['count'] as int? ?? 0;
+    // Fallback: the procedure may return the number wrapped in the tRPC envelope
+    return 0;
   }
 
   Future<void> markNotificationRead(int id) async {
@@ -207,6 +221,7 @@ class NexcomApiService {
   // ─── KYC ──────────────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> getKycStatus() => _query('onboarding.getStatus');
+  // Note: procedure name is 'onboarding.getStatus' (not 'onboarding.status')
 
   Future<Map<String, dynamic>> submitKycApplication(Map<String, dynamic> data) =>
       _mutate('onboarding.submit', data);
@@ -280,41 +295,56 @@ class NexcomApiService {
 
   // ─── Farmer / Field Agent ─────────────────────────────────────────────────
 
-  Future<List<dynamic>> getFarmers({String? search, int page = 1}) async {
-    final result = await _query('farmers.list', {'search': search, 'page': page});
-    return result['farmers'] as List? ?? [];
+  // ─── Farmer ───────────────────────────────────────────────────────────────
+  // The server uses 'farmer' (singular) as the router key, not 'farmers'
+
+  Future<Map<String, dynamic>> getMyFarmerProfile() =>
+      _query('farmer.getMyFarmerProfile');
+
+  Future<Map<String, dynamic>> updateMyFarmerProfile(Map<String, dynamic> data) =>
+      _mutate('farmer.updateMyFarmerProfile', data);
+
+  Future<List<dynamic>> getMyFarms() async {
+    final result = await _query('farmer.getMyFarms');
+    if (result is List) return result;
+    return result['farms'] as List? ?? [];
   }
 
-  Future<Map<String, dynamic>> getFarmer(String id) =>
-      _query('farmers.get', {'id': int.parse(id)});
-
-  Future<Map<String, dynamic>> createFarmer(Map<String, dynamic> data) =>
-      _mutate('farmers.create', data);
-
-  Future<Map<String, dynamic>> updateFarmer(int id, Map<String, dynamic> data) =>
-      _mutate('farmers.update', {'id': id, ...data});
+  Future<List<dynamic>> getMyCropListings() async {
+    final result = await _query('farmer.getMyCropListings', {});
+    if (result is List) return result;
+    return result['listings'] as List? ?? [];
+  }
 
   Future<List<dynamic>> getFarmerCrops(int farmerId) async {
-    final result = await _query('farmers.crops', {'farmerId': farmerId});
-    return result['crops'] as List? ?? [];
+    // Use publicListCropListings with farmerId filter
+    final result = await _query('farmer.publicListCropListings', {'farmerId': farmerId});
+    if (result is List) return result;
+    return result['listings'] as List? ?? [];
   }
 
   // ─── Account ──────────────────────────────────────────────────────────────
+  // The server uses 'profile' router (not 'account')
 
-  Future<Map<String, dynamic>> getAccountProfile() => _query('account.profile');
+  Future<Map<String, dynamic>> getAccountProfile() => _query('profile.get');
 
   Future<Map<String, dynamic>> updateAccountProfile(Map<String, dynamic> data) =>
-      _mutate('account.updateProfile', data);
+      _mutate('profile.update', data);
 
-  Future<Map<String, dynamic>> getAccountBalance() => _query('account.balance');
+  // Balance is available in portfolio.summary
+  Future<Map<String, dynamic>> getAccountBalance() => _query('portfolio.summary');
 
-  Future<Map<String, dynamic>> getApiKeys() => _query('account.apiKeys');
+  // API keys are under the 'apiKeys' router
+  Future<Map<String, dynamic>> getApiKeys() async {
+    final result = await _query('apiKeys.list');
+    return {'keys': result};
+  }
 
   Future<Map<String, dynamic>> createApiKey(String name) =>
-      _mutate('account.createApiKey', {'name': name});
+      _mutate('apiKeys.generate', {'name': name});
 
   Future<void> revokeApiKey(int id) async {
-    await _mutate('account.revokeApiKey', {'id': id});
+    await _mutate('apiKeys.revoke', {'id': id});
   }
 
   // ─── Banking ────────────────────────────────────────────────────────────────────────
