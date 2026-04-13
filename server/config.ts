@@ -15,7 +15,7 @@ import {
   BROKER_DEFAULT_COMMISSION_PCT, WR_DEFAULT_STORAGE_FEE_PCT_PER_MONTH,
   API_RATE_LIMIT_PER_MINUTE, WS_HEARTBEAT_INTERVAL_MS,
   KAFKA_TOPICS, PORTS,
-} from "../../shared/platformConstants";
+} from "../shared/platformConstants";
 
 export const config = {
   // ─── Server ───────────────────────────────────────────────────────────────

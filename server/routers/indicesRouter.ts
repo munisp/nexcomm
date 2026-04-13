@@ -155,7 +155,7 @@ export const indicesRouter = router({
       }
       const [updated] = await db
         .update(commodityIndexes)
-        .set(updates as Parameters<typeof db.update>[0])
+        .set(updates as any)
         .where(eq(commodityIndexes.id, input.id))
         .returning();
       return { success: true, index: updated };

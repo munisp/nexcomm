@@ -16,7 +16,7 @@ import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { ENV } from "../_core/env";
 import {
-  bankFinancingApplications, users, notifications,
+  bankFinancingApplications, users, notifications, farmerProfiles,
 } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 
@@ -84,12 +84,12 @@ export const ussdWhatsappReceiptRouter = router({
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid internal service key" });
       }
 
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
       // Look up user phone number
       const [user] = await db
-        .select({ id: users.id, phone: users.phone, name: users.name, email: users.email })
+        .select({ id: users.id, name: users.name, email: users.email })
         .from(users)
         .where(eq(users.id, input.userId))
         .limit(1);
@@ -100,8 +100,8 @@ export const ussdWhatsappReceiptRouter = router({
       const [loan] = await db
         .select({
           id: bankFinancingApplications.id,
-          loanAmount: bankFinancingApplications.loanAmount,
-          currency: bankFinancingApplications.currency,
+          loanAmount: bankFinancingApplications.requestedAmountNgn,
+          approvedAmount: bankFinancingApplications.approvedAmountNgn,
           status: bankFinancingApplications.status,
         })
         .from(bankFinancingApplications)
@@ -114,7 +114,7 @@ export const ussdWhatsappReceiptRouter = router({
       if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
 
       const now = Date.now();
-      const currency = input.currency || loan.currency || "NGN";
+      const currency = input.currency || "NGN";
 
       // Build WhatsApp receipt message
       const receiptMessage = [
@@ -138,7 +138,9 @@ export const ussdWhatsappReceiptRouter = router({
       ].join("\n");
 
       // Send WhatsApp message
-      const phone = user.phone;
+      // Look up phone from farmerProfiles (users table has no phone column)
+      const [fp1] = await db.select({ phone: farmerProfiles.phone }).from(farmerProfiles).where(eq(farmerProfiles.userId, input.userId)).limit(1);
+      const phone = fp1?.phone ?? null;
       let whatsappSent = false;
       if (phone) {
         whatsappSent = await sendWhatsAppMessage(phone, receiptMessage);
@@ -148,9 +150,9 @@ export const ussdWhatsappReceiptRouter = router({
       await db.insert(notifications).values({
         userId: input.userId,
         title: "Loan Repayment Confirmed",
-        body: `Your payment of ${formatCurrency(input.amountPaid, currency)} has been received. Ref: ${input.referenceNumber}`,
-        type: "LOAN_REPAYMENT",
-        isRead: false,
+        message: `Your payment of ${formatCurrency(input.amountPaid, currency)} has been received. Ref: ${input.referenceNumber}`,
+        type: "SYSTEM",
+        read: false,
         metadata: JSON.stringify({
           loanId: input.loanId,
           amountPaid: input.amountPaid,
@@ -159,7 +161,6 @@ export const ussdWhatsappReceiptRouter = router({
           channel: input.channel,
           whatsappSent,
         }),
-        createdAt: now,
       });
 
       return {
@@ -187,11 +188,11 @@ export const ussdWhatsappReceiptRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
       }
 
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [user] = await db
-        .select({ id: users.id, phone: users.phone, name: users.name })
+        .select({ id: users.id, name: users.name, email: users.email })
         .from(users)
         .where(eq(users.id, input.targetUserId))
         .limit(1);
@@ -200,8 +201,8 @@ export const ussdWhatsappReceiptRouter = router({
 
       const [loan] = await db
         .select({
-          loanAmount: bankFinancingApplications.loanAmount,
-          currency: bankFinancingApplications.currency,
+          loanAmount: bankFinancingApplications.requestedAmountNgn,
+          approvedAmount: bankFinancingApplications.approvedAmountNgn,
         })
         .from(bankFinancingApplications)
         .where(eq(bankFinancingApplications.id, input.loanId))
@@ -209,7 +210,7 @@ export const ussdWhatsappReceiptRouter = router({
 
       if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
 
-      const currency = loan.currency || "NGN";
+      const currency = "NGN";
       const message = [
         "🎉 *NEXCOM Exchange — Loan Approved!*",
         "",
@@ -219,7 +220,7 @@ export const ussdWhatsappReceiptRouter = router({
         "",
         `💰 *Loan Details*`,
         `• Loan ID: #${input.loanId}`,
-        `• Approved Amount: ${formatCurrency(loan.loanAmount, currency)}`,
+        `• Approved Amount: ${formatCurrency(Number(loan.loanAmount ?? loan.approvedAmount ?? 0), currency)}`,
         `• Date: ${formatDate(Date.now())}`,
         "",
         `Funds will be disbursed to your registered account within 2 business days.`,
@@ -231,18 +232,19 @@ export const ussdWhatsappReceiptRouter = router({
       ].join("\n");
 
       let whatsappSent = false;
-      if (user.phone) {
-        whatsappSent = await sendWhatsAppMessage(user.phone, message);
+      const [fpLookup1] = await db.select({ phone: farmerProfiles.phone }).from(farmerProfiles).where(eq(farmerProfiles.userId, input.targetUserId)).limit(1);
+      const recipientPhone1 = fpLookup1?.phone ?? null;
+      if (recipientPhone1) {
+        whatsappSent = await sendWhatsAppMessage(recipientPhone1, message);
       }
 
       await db.insert(notifications).values({
         userId: input.targetUserId,
         title: "Loan Application Approved",
-        body: `Your loan of ${formatCurrency(loan.loanAmount, currency)} has been approved.`,
-        type: "LOAN_APPROVED",
-        isRead: false,
+        message: `Your loan of ${formatCurrency(Number(loan.loanAmount ?? loan.approvedAmount ?? 0), currency)} has been approved.`,
+        type: "SYSTEM",
+        read: false,
         metadata: JSON.stringify({ loanId: input.loanId, whatsappSent }),
-        createdAt: Date.now(),
       });
 
       return { success: true, whatsappSent };
@@ -264,11 +266,11 @@ export const ussdWhatsappReceiptRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
       }
 
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [user] = await db
-        .select({ id: users.id, phone: users.phone, name: users.name })
+        .select({ id: users.id, name: users.name, email: users.email })
         .from(users)
         .where(eq(users.id, input.targetUserId))
         .limit(1);
@@ -295,18 +297,19 @@ export const ussdWhatsappReceiptRouter = router({
       ].filter(Boolean).join("\n");
 
       let whatsappSent = false;
-      if (user.phone) {
-        whatsappSent = await sendWhatsAppMessage(user.phone, message);
+      const [fpLookup2] = await db.select({ phone: farmerProfiles.phone }).from(farmerProfiles).where(eq(farmerProfiles.userId, input.targetUserId)).limit(1);
+      const recipientPhone2 = fpLookup2?.phone ?? null;
+      if (recipientPhone2) {
+        whatsappSent = await sendWhatsAppMessage(recipientPhone2, message);
       }
 
       await db.insert(notifications).values({
         userId: input.targetUserId,
         title: "Loan Disbursed",
-        body: `Your loan of ${formatCurrency(input.disbursedAmount, "NGN")} has been disbursed.`,
-        type: "LOAN_DISBURSED",
-        isRead: false,
+        message: `Your loan of ${formatCurrency(input.disbursedAmount, "NGN")} has been disbursed.`,
+        type: "SYSTEM",
+        read: false,
         metadata: JSON.stringify({ loanId: input.loanId, disbursedAmount: input.disbursedAmount, whatsappSent }),
-        createdAt: Date.now(),
       });
 
       return { success: true, whatsappSent };

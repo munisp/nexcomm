@@ -21,7 +21,7 @@ class _BankingScreenState extends ConsumerState<BankingScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadData();
   }
 
@@ -67,6 +67,7 @@ class _BankingScreenState extends ConsumerState<BankingScreen>
             Tab(text: 'Overview'),
             Tab(text: 'Loans'),
             Tab(text: 'Transactions'),
+            Tab(text: 'Insurance'),
           ],
         ),
       ),
@@ -92,6 +93,7 @@ class _BankingScreenState extends ConsumerState<BankingScreen>
                     _buildOverview(),
                     _buildLoans(),
                     _buildTransactions(),
+                    _buildInsurance(),
                   ],
                 ),
     );
@@ -349,6 +351,28 @@ class _BankingScreenState extends ConsumerState<BankingScreen>
     );
   }
 
+  Widget _buildInsurance() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Crop & Asset Insurance',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Protect your farm assets and crops against natural disasters, pests, and market volatility.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 16),
+          _InsuranceClaimFormWidget(onSuccess: _loadData),
+        ],
+      ),
+    );
+  }
+
   String _formatAmount(dynamic amount) {
     final num value = amount is num ? amount : num.tryParse(amount.toString()) ?? 0;
     if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
@@ -414,6 +438,131 @@ class _SummaryCard extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InsuranceClaimFormWidget extends StatefulWidget {
+  final VoidCallback? onSuccess;
+  const _InsuranceClaimFormWidget({this.onSuccess});
+
+  @override
+  State<_InsuranceClaimFormWidget> createState() => _InsuranceClaimFormWidgetState();
+}
+
+class _InsuranceClaimFormWidgetState extends State<_InsuranceClaimFormWidget> {
+  final _formKey = GlobalKey<FormState>();
+  String _claimType = 'CROP_DAMAGE';
+  final _descCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
+  bool _submitting = false;
+
+  static const _claimTypes = [
+    'CROP_DAMAGE', 'LIVESTOCK_LOSS', 'EQUIPMENT_DAMAGE',
+    'DROUGHT', 'FLOOD', 'PEST_INFESTATION', 'FIRE', 'OTHER',
+  ];
+
+  @override
+  void dispose() {
+    _descCtrl.dispose();
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    try {
+      await nexcomApi.submitInsuranceClaim(
+        claimType: _claimType,
+        description: _descCtrl.text.trim(),
+        estimatedLossNgn: double.parse(_amountCtrl.text.trim()),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Insurance claim submitted! Our team will review within 48 hours.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _descCtrl.clear();
+        _amountCtrl.clear();
+        setState(() { _claimType = 'CROP_DAMAGE'; _submitting = false; });
+        widget.onSuccess?.call();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Submit Insurance Claim',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _claimType,
+                decoration: const InputDecoration(labelText: 'Claim Type', border: OutlineInputBorder()),
+                items: _claimTypes
+                    .map((t) => DropdownMenuItem(value: t, child: Text(t.replaceAll('_', ' '))))
+                    .toList(),
+                onChanged: (v) => setState(() => _claimType = v ?? _claimType),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _descCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Description of Damage',
+                  hintText: 'Describe what happened and the extent of damage',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+                validator: (v) => (v == null || v.trim().length < 20)
+                    ? 'Please provide a detailed description (min 20 chars)'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _amountCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Estimated Loss (NGN)',
+                  prefixText: '₦',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  final n = double.tryParse(v ?? '');
+                  return (n == null || n <= 0) ? 'Enter a valid amount' : null;
+                },
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _submitting ? null : _submit,
+                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  child: _submitting
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Submit Claim'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -418,3 +418,19 @@
 - [x] Verified: Admin Platform Health shows PostgreSQL primary + read replica status
 - [x] Verified: TOTP tab in SecuritySettings.tsx with status display and link to /totp-setup
 - [x] All 825 vitest tests pass
+
+## Round 29 — Final Production Completion
+
+- [x] React Native farmer agent screen — all 4 quick actions wired to real tRPC (onboard farmer, crop report, loan request, field visit)
+- [x] Flutter banking screen — Insurance tab added with full _InsuranceClaimFormWidget (claimType, description, estimatedLoss)
+- [x] Flutter banking screen — tab count updated from 3 to 4 (Overview, Loans, Transactions, Insurance)
+- [x] Flutter api_service.dart — submitInsuranceClaim method wired to real banking.submitInsuranceClaim tRPC procedure
+- [x] React Native profile screen — biometric toggle persists via trpc.security.setBiometricPreference
+- [x] Flutter security settings screen — biometric toggle loads on init and persists on toggle via api_service
+- [x] All Go service env defaults verified (channel-gateway, core-banking, indices, aml-alert-subscriber)
+- [x] All Python service env defaults verified (analytics-engine, bot-logic, kyc-service)
+- [x] All Rust service env defaults verified (blockchain chains.rs, fabric_gateway.rs, ipfs.rs)
+- [x] server/config.ts — all 80+ env vars with safe defaults
+- [x] server/_core/env.ts — all 40+ env vars with safe defaults
+- [x] shared/platformConstants.ts — all PORTS, KAFKA_TOPICS, and business constants
+- [x] 825/825 vitest tests pass

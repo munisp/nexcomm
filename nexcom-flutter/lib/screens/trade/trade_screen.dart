@@ -9,6 +9,10 @@ final _openOrdersProvider = FutureProvider.autoDispose<List<dynamic>>((ref) asyn
   return nexcomApi.getOpenOrders();
 });
 
+final _orderHistoryProvider = FutureProvider.autoDispose<List<dynamic>>((ref) async {
+  return nexcomApi.getOrderHistory(page: 1, limit: 50);
+});
+
 final _pricesProvider = FutureProvider.autoDispose<List<dynamic>>((ref) async {
   return nexcomApi.getLivePrices();
 });
@@ -33,7 +37,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -101,7 +105,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen> with SingleTickerProv
         title: const Text('Trade'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: 'Place Order'), Tab(text: 'Open Orders')],
+          tabs: const [Tab(text: 'Place Order'), Tab(text: 'Open Orders'), Tab(text: 'History')],
           labelColor: NexcomTheme.primary,
           unselectedLabelColor: Color(0xFF6B7280),
           indicatorColor: NexcomTheme.primary,
@@ -280,10 +284,95 @@ class _TradeScreenState extends ConsumerState<TradeScreen> with SingleTickerProv
                         ),
                       );
                     },
-                  ),
-          ),
+                              );
+
+          // Order History Tab
+          Builder(builder: (context) {
+            final orderHistoryAsync = ref.watch(_orderHistoryProvider);
+            final fmt = NumberFormat.currency(symbol: '₦', decimalDigits: 2);
+            return orderHistoryAsync.when(
+              loading: () => const Padding(padding: EdgeInsets.all(16), child: LoadingShimmerList()),
+              error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: NexcomTheme.negative))),
+              data: (orders) => orders.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.history_outlined, size: 48, color: Color(0xFF374151)),
+                          SizedBox(height: 12),
+                          Text('No order history', style: TextStyle(color: Color(0xFF6B7280))),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () async => ref.invalidate(_orderHistoryProvider),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: orders.length,
+                        itemBuilder: (context, i) {
+                          final order = orders[i];
+                          final side = order['side'] as String? ?? 'BUY';
+                          final status = order['status'] as String? ?? 'FILLED';
+                          final sideColor = side == 'BUY' ? NexcomTheme.positive : NexcomTheme.negative;
+                          final statusColor = status == 'FILLED'
+                              ? NexcomTheme.positive
+                              : status == 'CANCELLED'
+                                  ? NexcomTheme.negative
+                                  : NexcomTheme.primary;
+                          final createdAt = order['createdAt'] != null
+                              ? DateFormat('dd MMM yyyy HH:mm').format(DateTime.tryParse(order['createdAt'].toString()) ?? DateTime.now())
+                              : '';
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: NexcomTheme.darkCard,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: NexcomTheme.darkBorder),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: sideColor.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(side, style: TextStyle(color: sideColor, fontWeight: FontWeight.w700, fontSize: 11)),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('${order['symbol']} — ${order['type']}',
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                      Text('Qty: ${order['quantity']} @ ${fmt.format((order['price'] as num?)?.toDouble() ?? 0)}',
+                                        style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12)),
+                                      if (createdAt.isNotEmpty)
+                                        Text(createdAt, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11)),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: statusColor.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.w600, fontSize: 11)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+            );
+          }),
         ],
       ),
     );
   }
 }
+
