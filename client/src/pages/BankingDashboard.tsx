@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,13 @@ import {
   Clock,
   XCircle,
   PlusCircle,
+  TrendingUp,
+  Award,
+  BarChart3,
+  Users,
+  AlertTriangle,
+  DollarSign,
+  Search,
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -686,17 +694,55 @@ function RepaymentSchedule({ loanId }: { loanId: number }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function BankingDashboard() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
   const [insuranceOpen, setInsuranceOpen] = useState(false);
   const [loanApplyOpen, setLoanApplyOpen] = useState(false);
   const [claimPolicyId, setClaimPolicyId] = useState<number | null>(null);
+  const [adminLoanSearch, setAdminLoanSearch] = useState("");
+  const [adminLoanStatus, setAdminLoanStatus] = useState("all");
+  const [adminLoanPage, setAdminLoanPage] = useState(1);
+  const [repayLoanId, setRepayLoanId] = useState<number | null>(null);
+  const [repayAmount, setRepayAmount] = useState("");
 
   const utils = trpc.useUtils();
 
   const { data: dashboard, isLoading: dashLoading } = trpc.banking.getDashboard.useQuery();
   const { data: loans, isLoading: loansLoading } = trpc.banking.listLoans.useQuery({ limit: 20 });
   const { data: insuranceApps } = trpc.banking.listInsuranceApplications.useQuery({ limit: 10 });
+  const { data: creditScore } = trpc.banking.getCreditScore.useQuery();
+  const { data: adminLoans, isLoading: adminLoansLoading } = trpc.banking.adminListLoans.useQuery(
+    { page: adminLoanPage, limit: 20, status: adminLoanStatus === "all" ? undefined : adminLoanStatus },
+    { enabled: isAdmin }
+  );
+  const { data: portfolioStats } = trpc.banking.adminPortfolioStats.useQuery(undefined, { enabled: isAdmin });
+
+  const creditCheck = trpc.banking.requestCreditCheck.useMutation({
+    onSuccess: (d) => { toast.success(`Credit Score: ${d.score} (${d.band})`); utils.banking.getCreditScore.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const approveLoan = trpc.banking.adminApproveLoan.useMutation({
+    onSuccess: () => { toast.success("Loan approved"); utils.banking.adminListLoans.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const disburseLoan = trpc.banking.adminDisburseLoan.useMutation({
+    onSuccess: () => { toast.success("Loan disbursed"); utils.banking.adminListLoans.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const rejectLoan = trpc.banking.adminRejectLoan.useMutation({
+    onSuccess: () => { toast.success("Loan rejected"); utils.banking.adminListLoans.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const markDefault = trpc.banking.adminMarkDefault.useMutation({
+    onSuccess: () => { toast.success("Marked as default"); utils.banking.adminListLoans.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const makeRepayment = trpc.banking.makeRepayment.useMutation({
+    onSuccess: (d) => { toast.success(`Repayment recorded. Status: ${d.newStatus}`); utils.banking.listLoans.invalidate(); setRepayLoanId(null); setRepayAmount(""); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const activeAccount = selectedAccountId
     ? dashboard?.accounts.find((a) => a.id === selectedAccountId)
@@ -832,11 +878,13 @@ export default function BankingDashboard() {
 
       {/* Main Tabs */}
       <Tabs defaultValue="accounts">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="flex flex-wrap gap-1 h-auto">
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
           <TabsTrigger value="loans">Loans</TabsTrigger>
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
           <TabsTrigger value="insurance">Insurance</TabsTrigger>
+          <TabsTrigger value="credit">Credit Score</TabsTrigger>
+          {isAdmin && <TabsTrigger value="admin">Admin Portal</TabsTrigger>}
         </TabsList>
 
         {/* ── Accounts Tab ── */}
@@ -1169,6 +1217,269 @@ export default function BankingDashboard() {
             )}
           </div>
         </TabsContent>
+
+        {/* ── Credit Score Tab ── */}
+        <TabsContent value="credit" className="mt-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Award className="h-4 w-4 text-amber-500" />
+                  NEXCOM Agri Credit Score
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {creditScore ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center">
+                      <div className="relative flex h-32 w-32 items-center justify-center rounded-full border-8 border-primary/20">
+                        <div className="text-center">
+                          <p className="text-3xl font-bold text-primary">{creditScore.score}</p>
+                          <p className="text-xs text-muted-foreground">{creditScore.band}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-lg bg-muted/50 p-3">
+                        <p className="text-xs text-muted-foreground">Max Loan</p>
+                        <p className="font-semibold">{fmt(creditScore.maxLoanNgn)}</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/50 p-3">
+                        <p className="text-xs text-muted-foreground">Interest Rate</p>
+                        <p className="font-semibold">{creditScore.interestRatePct}% p.a.</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/50 p-3">
+                        <p className="text-xs text-muted-foreground">Model</p>
+                        <p className="font-semibold text-xs">{creditScore.model}</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/50 p-3">
+                        <p className="text-xs text-muted-foreground">Valid Until</p>
+                        <p className="font-semibold text-xs">{fmtDate(creditScore.validUntil)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <TrendingUp className="mx-auto mb-2 h-8 w-8 opacity-30" />
+                    <p className="text-sm">No credit score yet</p>
+                    <p className="text-xs mt-1">Request a credit check to get started</p>
+                  </div>
+                )}
+                <Button
+                  className="w-full mt-4"
+                  onClick={() => creditCheck.mutate()}
+                  disabled={creditCheck.isPending}
+                >
+                  {creditCheck.isPending ? "Checking..." : "Request Credit Check"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-blue-500" />
+                  Credit Score Bands
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {[
+                    { band: "EXCELLENT", range: "750–850", color: "bg-green-500", desc: "Best rates, max limits" },
+                    { band: "VERY GOOD", range: "680–749", color: "bg-emerald-400", desc: "Preferred rates" },
+                    { band: "GOOD", range: "580–679", color: "bg-yellow-400", desc: "Standard rates" },
+                    { band: "FAIR", range: "480–579", color: "bg-orange-400", desc: "Higher rates" },
+                    { band: "POOR", range: "300–479", color: "bg-red-500", desc: "Limited access" },
+                  ].map((b) => (
+                    <div key={b.band} className="flex items-center gap-3">
+                      <div className={`h-3 w-3 rounded-full ${b.color}`} />
+                      <div className="flex-1">
+                        <span className="text-sm font-medium">{b.band}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{b.range}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{b.desc}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 p-3 text-xs text-blue-700 dark:text-blue-300">
+                  <p className="font-semibold mb-1">How to improve your score:</p>
+                  <ul className="space-y-1 list-disc list-inside">
+                    <li>Repay loans on time</li>
+                    <li>Maintain active accounts</li>
+                    <li>Keep utilization below 70%</li>
+                    <li>Complete KYC verification</li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Repayment quick action */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-green-500" />
+                Make a Loan Repayment
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-3 items-end">
+                <div className="flex-1 space-y-1.5">
+                  <Label>Select Loan</Label>
+                  <Select value={repayLoanId?.toString() ?? ""} onValueChange={(v) => setRepayLoanId(Number(v))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a loan..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(loans?.loans ?? []).filter(l => ["DISBURSED","REPAYING","OVERDUE"].includes(l.status)).map(l => (
+                        <SelectItem key={l.id} value={String(l.id)}>Loan #{l.id} — {l.inputType} ({l.status})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <Label>Amount (₦)</Label>
+                  <Input type="number" min="100" placeholder="e.g. 50000" value={repayAmount} onChange={e => setRepayAmount(e.target.value)} />
+                </div>
+                <Button
+                  disabled={!repayLoanId || !repayAmount || makeRepayment.isPending}
+                  onClick={() => repayLoanId && repayAmount && makeRepayment.mutate({ loanId: repayLoanId, amountNgn: Number(repayAmount) })}
+                >
+                  {makeRepayment.isPending ? "Processing..." : "Pay"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Admin Portal Tab ── */}
+        {isAdmin && (
+          <TabsContent value="admin" className="mt-4 space-y-4">
+            {/* Portfolio Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "Total Loans", value: portfolioStats?.totalLoans ?? 0, icon: Users, color: "text-blue-500" },
+                { label: "Total Disbursed", value: fmt(portfolioStats?.totalDisbursed ?? 0), icon: DollarSign, color: "text-green-500" },
+                { label: "Total Repaid", value: fmt(portfolioStats?.totalRepaid ?? 0), icon: CheckCircle2, color: "text-emerald-500" },
+                { label: "Default Rate", value: `${portfolioStats?.defaultRate ?? "0.00"}%`, icon: AlertTriangle, color: "text-red-500" },
+              ].map((s) => (
+                <Card key={s.label}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center gap-2">
+                      <s.icon className={`h-5 w-5 ${s.color}`} />
+                      <div>
+                        <p className="text-xs text-muted-foreground">{s.label}</p>
+                        <p className="font-bold text-sm">{String(s.value)}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Loan Management Table */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-base">Loan Management</CardTitle>
+                  <div className="flex gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        className="pl-8 h-8 w-40 text-sm"
+                        placeholder="Search..."
+                        value={adminLoanSearch}
+                        onChange={e => setAdminLoanSearch(e.target.value)}
+                      />
+                    </div>
+                    <Select value={adminLoanStatus} onValueChange={setAdminLoanStatus}>
+                      <SelectTrigger className="h-8 w-32 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="APPLIED">Applied</SelectItem>
+                        <SelectItem value="APPROVED">Approved</SelectItem>
+                        <SelectItem value="DISBURSED">Disbursed</SelectItem>
+                        <SelectItem value="REPAYING">Repaying</SelectItem>
+                        <SelectItem value="REPAID">Repaid</SelectItem>
+                        <SelectItem value="DEFAULTED">Defaulted</SelectItem>
+                        <SelectItem value="WRITTEN_OFF">Written Off</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {adminLoansLoading ? (
+                  <div className="space-y-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} className="h-14 w-full" />)}</div>
+                ) : (adminLoans?.loans ?? []).length === 0 ? (
+                  <p className="text-center py-8 text-muted-foreground text-sm">No loans found</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(adminLoans?.loans ?? []).filter(l => !adminLoanSearch || String(l.id).includes(adminLoanSearch) || String(l.farmerId).includes(adminLoanSearch)).map((loan) => (
+                      <div key={loan.id} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm">Loan #{loan.id}</span>
+                              <LoanStatusBadge status={loan.status} />
+                              <span className="text-xs text-muted-foreground">Farmer #{loan.farmerId}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {loan.inputType} · Requested: {fmt(parseFloat(String(loan.requestedValueNgn ?? 0)))}
+                              {loan.disbursedValueNgn ? ` · Disbursed: ${fmt(parseFloat(String(loan.disbursedValueNgn)))}` : ""}
+                              {loan.repaidValueNgn && parseFloat(String(loan.repaidValueNgn)) > 0 ? ` · Repaid: ${fmt(parseFloat(String(loan.repaidValueNgn)))}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex gap-1 flex-wrap justify-end">
+                            {loan.status === "APPLIED" && (
+                              <>
+                                <Button size="sm" variant="default" className="h-7 text-xs"
+                                  disabled={approveLoan.isPending}
+                                  onClick={() => approveLoan.mutate({ loanId: loan.id, approvedValueNgn: parseFloat(String(loan.requestedValueNgn ?? 0)) })}>
+                                  Approve
+                                </Button>
+                                <Button size="sm" variant="destructive" className="h-7 text-xs"
+                                  disabled={rejectLoan.isPending}
+                                  onClick={() => rejectLoan.mutate({ loanId: loan.id, reason: "Does not meet eligibility criteria" })}>
+                                  Reject
+                                </Button>
+                              </>
+                            )}
+                            {loan.status === "APPROVED" && (
+                              <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                                disabled={disburseLoan.isPending}
+                                onClick={() => disburseLoan.mutate({ loanId: loan.id, disbursedValueNgn: parseFloat(String(loan.approvedValueNgn ?? loan.requestedValueNgn ?? 0)) })}>
+                                Disburse
+                              </Button>
+                            )}
+                            {["DISBURSED","REPAYING"].includes(loan.status) && (
+                              <Button size="sm" variant="destructive" className="h-7 text-xs"
+                                disabled={markDefault.isPending}
+                                onClick={() => markDefault.mutate({ loanId: loan.id })}>
+                                Mark Default
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {/* Pagination */}
+                    <div className="flex items-center justify-between pt-2">
+                      <p className="text-xs text-muted-foreground">Total: {adminLoans?.total ?? 0} loans</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="h-7 text-xs" disabled={adminLoanPage <= 1} onClick={() => setAdminLoanPage(p => p - 1)}>Prev</Button>
+                        <span className="text-xs self-center">Page {adminLoanPage}</span>
+                        <Button size="sm" variant="outline" className="h-7 text-xs" disabled={(adminLoans?.loans ?? []).length < 20} onClick={() => setAdminLoanPage(p => p + 1)}>Next</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

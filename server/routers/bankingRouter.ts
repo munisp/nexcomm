@@ -16,6 +16,7 @@ import {
   bankAccounts,
   bankTransactions,
 } from "../../drizzle/schema";
+import { TRPCError } from "@trpc/server";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import { ENV } from "../_core/env";
 
@@ -635,4 +636,262 @@ export const bankingRouter = router({
       });
       return { success: true, claimRef, status: "SUBMITTED" };
     }),
+
+  // ── Admin: Loan Lifecycle ──────────────────────────────────────────────────
+
+  adminListLoans: protectedProcedure
+    .input(z.object({
+      page: z.number().int().min(1).default(1),
+      limit: z.number().int().min(1).max(100).default(20),
+      status: z.string().optional(),
+      search: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) return { loans: [], total: 0 };
+      const offset = (input.page - 1) * input.limit;
+      const [loans, countResult] = await Promise.all([
+        db.select({
+          id: inputFinancingLoans.id,
+          farmerId: inputFinancingLoans.farmerId,
+          status: inputFinancingLoans.status,
+          inputType: inputFinancingLoans.inputType,
+          requestedValueNgn: inputFinancingLoans.requestedValueNgn,
+          approvedValueNgn: inputFinancingLoans.approvedValueNgn,
+          disbursedValueNgn: inputFinancingLoans.disbursedValueNgn,
+          repaidValueNgn: inputFinancingLoans.repaidValueNgn,
+          interestRatePct: inputFinancingLoans.interestRatePct,
+          tenorMonths: inputFinancingLoans.tenorMonths,
+          disbursedAt: inputFinancingLoans.disbursedAt,
+          repaymentDueDate: inputFinancingLoans.repaymentDueDate,
+          createdAt: inputFinancingLoans.createdAt,
+        })
+          .from(inputFinancingLoans)
+          .orderBy(desc(inputFinancingLoans.createdAt))
+          .limit(input.limit).offset(offset),
+        db.select({ count: sql<number>`count(*)` }).from(inputFinancingLoans),
+      ]);
+      return { loans, total: Number(countResult[0]?.count ?? 0) };
+    }),
+
+  adminApproveLoan: protectedProcedure
+    .input(z.object({
+      loanId: z.number().int().positive(),
+      approvedValueNgn: z.number().positive(),
+      interestRatePct: z.number().min(0).max(100).default(8.5),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      await db.update(inputFinancingLoans)
+        .set({
+          status: "APPROVED",
+          approvedValueNgn: String(input.approvedValueNgn),
+          interestRatePct: String(input.interestRatePct),
+          updatedAt: new Date(),
+        })
+        .where(eq(inputFinancingLoans.id, input.loanId));
+      const [loan] = await db.select().from(inputFinancingLoans).where(eq(inputFinancingLoans.id, input.loanId));
+      if (loan) {
+        await db.insert(notifications).values({
+          userId: loan.farmerId,
+          title: "Loan Approved! 🎉",
+          message: `Your loan application has been approved for ₦${Number(input.approvedValueNgn).toLocaleString()} at ${input.interestRatePct}% p.a.`,
+          type: "SYSTEM",
+          read: false,
+        });
+      }
+      return { success: true };
+    }),
+
+  adminDisburseLoan: protectedProcedure
+    .input(z.object({
+      loanId: z.number().int().positive(),
+      disbursedValueNgn: z.number().positive(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      const repaymentDueDate = new Date();
+      const [loan] = await db.select().from(inputFinancingLoans).where(eq(inputFinancingLoans.id, input.loanId));
+      if (!loan) throw new Error("Loan not found");
+      repaymentDueDate.setMonth(repaymentDueDate.getMonth() + (loan.tenorMonths ?? 6));
+      await db.update(inputFinancingLoans)
+        .set({
+          status: "DISBURSED",
+          disbursedValueNgn: String(input.disbursedValueNgn),
+          disbursedAt: new Date(),
+          repaymentDueDate,
+          updatedAt: new Date(),
+        })
+        .where(eq(inputFinancingLoans.id, input.loanId));
+      await db.insert(notifications).values({
+        userId: loan.farmerId,
+        title: "Loan Disbursed 💰",
+        message: `₦${Number(input.disbursedValueNgn).toLocaleString()} has been disbursed. Repayment due: ${repaymentDueDate.toLocaleDateString()}.`,
+        type: "SYSTEM",
+        read: false,
+      });
+      return { success: true };
+    }),
+
+  adminRejectLoan: protectedProcedure
+    .input(z.object({
+      loanId: z.number().int().positive(),
+      reason: z.string().min(10).max(500),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      const [loan] = await db.select().from(inputFinancingLoans).where(eq(inputFinancingLoans.id, input.loanId));
+      if (!loan) throw new Error("Loan not found");
+      await db.update(inputFinancingLoans)
+        .set({ status: "WRITTEN_OFF", notes: `REJECTED: ${input.reason}`, updatedAt: new Date() })
+        .where(eq(inputFinancingLoans.id, input.loanId));
+      await db.insert(notifications).values({
+        userId: loan.farmerId,
+        title: "Loan Application Declined",
+        message: `Your loan application has been declined. Reason: ${input.reason}`,
+        type: "SYSTEM",
+        read: false,
+      });
+      return { success: true };
+    }),
+
+  adminMarkDefault: protectedProcedure
+    .input(z.object({
+      loanId: z.number().int().positive(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      await db.update(inputFinancingLoans)
+        .set({ status: "DEFAULTED", updatedAt: new Date() })
+        .where(eq(inputFinancingLoans.id, input.loanId));
+      return { success: true };
+    }),
+
+  adminWriteOff: protectedProcedure
+    .input(z.object({
+      loanId: z.number().int().positive(),
+      notes: z.string().min(10),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      await db.update(inputFinancingLoans)
+        .set({ status: "WRITTEN_OFF", notes: input.notes, updatedAt: new Date() })
+        .where(eq(inputFinancingLoans.id, input.loanId));
+      return { success: true };
+    }),
+
+  adminPortfolioStats: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+    const db = await getDb();
+    if (!db) return { totalLoans: 0, totalDisbursed: 0, totalRepaid: 0, defaultRate: "0.00", activePolicies: 0 };
+    const [stats] = await db.select({
+      total: sql<number>`count(*)`,
+      disbursed: sql<number>`COALESCE(sum(CAST(disbursed_value_ngn AS DECIMAL)), 0)`,
+      repaid: sql<number>`COALESCE(sum(CAST(repaid_value_ngn AS DECIMAL)), 0)`,
+      defaults: sql<number>`sum(CASE WHEN status = 'DEFAULTED' THEN 1 ELSE 0 END)`,
+    }).from(inputFinancingLoans);
+    const total = Number(stats?.total ?? 0);
+    return {
+      totalLoans: total,
+      totalDisbursed: Number(stats?.disbursed ?? 0),
+      totalRepaid: Number(stats?.repaid ?? 0),
+      defaultRate: total > 0 ? ((Number(stats?.defaults ?? 0) / total) * 100).toFixed(2) : "0.00",
+      activePolicies: 0,
+    };
+  }),
+
+  makeRepayment: protectedProcedure
+    .input(z.object({
+      loanId: z.number().int().positive(),
+      amountNgn: z.number().positive(),
+      paymentRef: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      const [loan] = await db.select().from(inputFinancingLoans)
+        .where(eq(inputFinancingLoans.id, input.loanId));
+      if (!loan) throw new Error("Loan not found");
+      const newRepaid = Number(loan.repaidValueNgn ?? 0) + input.amountNgn;
+      const disbursed = Number(loan.disbursedValueNgn ?? loan.requestedValueNgn);
+      const newStatus = newRepaid >= disbursed ? "REPAID" : "REPAYING";
+      await db.update(inputFinancingLoans)
+        .set({ repaidValueNgn: String(newRepaid), status: newStatus, updatedAt: new Date() })
+        .where(eq(inputFinancingLoans.id, input.loanId));
+      await db.insert(notifications).values({
+        userId: ctx.user.id,
+        title: "Repayment Received",
+        message: `₦${input.amountNgn.toLocaleString()} repayment recorded. Total repaid: ₦${newRepaid.toLocaleString()}.`,
+        type: "SYSTEM",
+        read: false,
+      });
+      return { success: true, newStatus, totalRepaid: newRepaid };
+    }),
+
+  getCreditScore: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return null;
+    // Compute a simple score based on loan history
+    const loans = await db.select().from(inputFinancingLoans)
+      .where(eq(inputFinancingLoans.farmerId, ctx.user.id));
+    const defaults = loans.filter(l => l.status === "DEFAULTED").length;
+    const repaid = loans.filter(l => l.status === "REPAID").length;
+    let score = 600;
+    score += repaid * 20;
+    score -= defaults * 80;
+    score = Math.max(300, Math.min(850, score));
+    let band = "FAIR";
+    if (score >= 750) band = "EXCELLENT";
+    else if (score >= 680) band = "VERY_GOOD";
+    else if (score >= 580) band = "GOOD";
+    else if (score >= 480) band = "FAIR";
+    else band = "POOR";
+    return {
+      score,
+      band,
+      maxLoanNgn: score * 10000,
+      interestRatePct: Math.max(5, 8.5 - Math.floor((score - 500) / 50) * 0.5),
+      model: "NEXCOM_AGRI_V1",
+      validUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    };
+  }),
+
+  requestCreditCheck: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database unavailable");
+    const loans = await db.select().from(inputFinancingLoans)
+      .where(eq(inputFinancingLoans.farmerId, ctx.user.id));
+    const defaults = loans.filter(l => l.status === "DEFAULTED").length;
+    const repaid = loans.filter(l => l.status === "REPAID").length;
+    let score = 600 + repaid * 20 - defaults * 80;
+    score = Math.max(300, Math.min(850, score));
+    let band = "FAIR";
+    if (score >= 750) band = "EXCELLENT";
+    else if (score >= 680) band = "VERY_GOOD";
+    else if (score >= 580) band = "GOOD";
+    else if (score >= 480) band = "FAIR";
+    else band = "POOR";
+    await db.insert(notifications).values({
+      userId: ctx.user.id,
+      title: "Credit Check Complete",
+      message: `Your NEXCOM Agri credit score is ${score} (${band}). Max loan: ₦${(score * 10000).toLocaleString()}.`,
+      type: "SYSTEM",
+      read: false,
+    });
+    return { score, band, maxLoanNgn: score * 10000, interestRatePct: Math.max(5, 8.5 - Math.floor((score - 500) / 50) * 0.5) };
+  }),
 });

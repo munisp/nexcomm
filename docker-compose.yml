@@ -875,3 +875,122 @@ services:
       - redis
     networks: [nexcom]
     profiles: ["tools"]
+
+  # ─── Credit Scoring Engine (Rust) ─────────────────────────────────────────
+  credit-scoring:
+    build:
+      context: services/credit-scoring
+      dockerfile: Dockerfile
+    container_name: nexcom-credit-scoring
+    environment:
+      CREDIT_SCORING_PORT: "8089"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      REDIS_URL: redis://redis:6379
+      CORE_BANKING_URL: http://core-banking:8083
+      MIN_SCORE_AUTO_APPROVE: "680"
+      MIN_SCORE_MANUAL_REVIEW: "550"
+      MAX_DTI_RATIO: "0.45"
+      MAX_LOAN_TO_INCOME_RATIO: "3.0"
+      RUST_LOG: info
+    ports:
+      - "8089:8089"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [nexcom]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8089/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ─── AML Alert Subscriber (Go/Dapr) ───────────────────────────────────────
+  aml-alert-subscriber:
+    build:
+      context: services/aml-alert-subscriber
+      dockerfile: Dockerfile
+    container_name: nexcom-aml-alert-subscriber
+    environment:
+      AML_PORT: "8091"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      ALERT_WEBHOOK_URL: ${AML_ALERT_WEBHOOK_URL:-http://nexcom:3000/api/aml-alerts}
+      SAR_AUTO_FILE_THRESHOLD: "3"
+    ports:
+      - "8091:8091"
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    networks: [nexcom]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8091/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ─── Market Data Service (Go) ─────────────────────────────────────────────
+  market-data:
+    build:
+      context: services/market-data
+      dockerfile: Dockerfile
+    container_name: nexcom-market-data
+    environment:
+      MARKET_DATA_PORT: "8092"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      YAHOO_FINANCE_ENABLED: "true"
+      BLOOMBERG_API_KEY: ${BLOOMBERG_API_KEY:-}
+      REFINITIV_API_KEY: ${REFINITIV_API_KEY:-}
+      PRICE_CACHE_TTL_SECONDS: "30"
+      WEBSOCKET_MAX_CONNECTIONS: "10000"
+    ports:
+      - "8092:8092"
+    depends_on:
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [nexcom]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8092/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ─── Middleware Hub (TypeScript/Express) ──────────────────────────────────
+  middleware-hub:
+    build:
+      context: services/middleware-hub
+      dockerfile: Dockerfile
+    container_name: nexcom-middleware-hub
+    environment:
+      MIDDLEWARE_HUB_PORT: "8093"
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      CORE_BANKING_URL: http://core-banking:8083
+      CHANNEL_GATEWAY_URL: http://channel-gateway:8082
+      MOJALOOP_URL: http://ml-api-adapter:3000
+      USSD_ENGINE_URL: http://ussd-engine:8080
+      BOT_LOGIC_URL: http://bot-logic:3001
+      JWT_SECRET: ${JWT_SECRET:-nexcom-dev-secret-change-in-prod}
+    ports:
+      - "8093:8093"
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [nexcom]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8093/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

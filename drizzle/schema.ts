@@ -2744,3 +2744,125 @@ export const stripePayments = pgTable("stripe_payments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 export type StripePayment = typeof stripePayments.$inferSelect;
+
+// ─── Credit Scoring ───────────────────────────────────────────────────────────
+export const creditScoreModelEnum = pgEnum("credit_score_model", [
+  "NEXCOM_AGRI_V1", "BUREAU_CREDITCHEK", "BUREAU_FIRSTCENTRAL", "MANUAL"
+]);
+export const creditScores = pgTable("credit_scores", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  userId: integer("user_id").notNull(),
+  farmerId: integer("farmer_id"),
+  model: creditScoreModelEnum("model").notNull().default("NEXCOM_AGRI_V1"),
+  score: integer("score").notNull(),
+  band: varchar("band", { length: 20 }).notNull(),
+  maxLoanNgn: numeric("max_loan_ngn", { precision: 18, scale: 2 }),
+  interestRatePct: numeric("interest_rate_pct", { precision: 6, scale: 3 }),
+  factors: jsonb("factors"),
+  bureauRef: varchar("bureau_ref", { length: 100 }),
+  validUntil: timestamp("valid_until"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type CreditScore = typeof creditScores.$inferSelect;
+
+// ─── Collateral Registry ──────────────────────────────────────────────────────
+// collateralTypeEnum and collateralStatusEnum already defined above
+export const collateralRegistry = pgTable("collateral_registry", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  loanId: bigint("loan_id", { mode: "number" }),
+  ownerId: integer("owner_id").notNull(),
+  type: collateralTypeEnum("type").notNull(),
+  status: collateralStatusEnum("status").notNull().default("REGISTERED"),
+  description: text("description").notNull(),
+  valuationNgn: numeric("valuation_ngn", { precision: 18, scale: 2 }).notNull(),
+  ltvPct: numeric("ltv_pct", { precision: 6, scale: 3 }).default("70"),
+  registryRef: varchar("registry_ref", { length: 100 }).notNull().unique(),
+  ewrId: integer("ewr_id"),
+  landTitleRef: varchar("land_title_ref", { length: 100 }),
+  documentUrls: jsonb("document_urls").default("[]"),
+  valuationDate: timestamp("valuation_date"),
+  expiresAt: timestamp("expires_at"),
+  pledgedAt: timestamp("pledged_at"),
+  releasedAt: timestamp("released_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type CollateralRecord = typeof collateralRegistry.$inferSelect;
+
+// ─── Loan Repayment Schedules ─────────────────────────────────────────────────
+export const repaymentStatusEnum = pgEnum("repayment_status", [
+  "SCHEDULED", "DUE", "PAID", "OVERDUE", "WAIVED", "WRITTEN_OFF"
+]);
+export const loanRepaymentSchedules = pgTable("loan_repayment_schedules", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  loanId: bigint("loan_id", { mode: "number" }).notNull(),
+  installmentNo: integer("installment_no").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  principalNgn: numeric("principal_ngn", { precision: 18, scale: 2 }).notNull(),
+  interestNgn: numeric("interest_ngn", { precision: 18, scale: 2 }).notNull(),
+  totalNgn: numeric("total_ngn", { precision: 18, scale: 2 }).notNull(),
+  paidNgn: numeric("paid_ngn", { precision: 18, scale: 2 }).default("0"),
+  status: repaymentStatusEnum("status").notNull().default("SCHEDULED"),
+  paidAt: timestamp("paid_at"),
+  paymentRef: varchar("payment_ref", { length: 100 }),
+  penaltyNgn: numeric("penalty_ngn", { precision: 18, scale: 2 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type LoanRepaymentSchedule = typeof loanRepaymentSchedules.$inferSelect;
+
+// ─── Crop Insurance Policies ──────────────────────────────────────────────────
+export const insurancePolicyStatusEnum = pgEnum("insurance_policy_status", [
+  "DRAFT", "ACTIVE", "EXPIRED", "CANCELLED", "CLAIMED", "SETTLED"
+]);
+export const insuranceCoverageTypeEnum = pgEnum("insurance_coverage_type", [
+  "YIELD_PROTECTION", "REVENUE_PROTECTION", "MULTI_PERIL", "DROUGHT",
+  "FLOOD", "PEST_DISEASE", "FIRE", "COMPREHENSIVE"
+]);
+export const cropInsurancePolicies = pgTable("crop_insurance_policies", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  farmerId: integer("farmer_id").notNull(),
+  userId: integer("user_id").notNull(),
+  policyRef: varchar("policy_ref", { length: 50 }).notNull().unique(),
+  coverageType: insuranceCoverageTypeEnum("coverage_type").notNull(),
+  status: insurancePolicyStatusEnum("status").notNull().default("DRAFT"),
+  cropType: varchar("crop_type", { length: 100 }).notNull(),
+  farmId: integer("farm_id"),
+  coveredAreaHectares: numeric("covered_area_hectares", { precision: 10, scale: 4 }).notNull(),
+  sumInsuredNgn: numeric("sum_insured_ngn", { precision: 18, scale: 2 }).notNull(),
+  premiumNgn: numeric("premium_ngn", { precision: 18, scale: 2 }).notNull(),
+  premiumPaidNgn: numeric("premium_paid_ngn", { precision: 18, scale: 2 }).default("0"),
+  deductiblePct: numeric("deductible_pct", { precision: 6, scale: 3 }).default("10"),
+  season: varchar("season", { length: 50 }),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  providerName: varchar("provider_name", { length: 100 }).default("NEXCOM Agri Insurance"),
+  providerPolicyRef: varchar("provider_policy_ref", { length: 100 }),
+  claimAmountNgn: numeric("claim_amount_ngn", { precision: 18, scale: 2 }),
+  claimSettledNgn: numeric("claim_settled_ngn", { precision: 18, scale: 2 }),
+  claimedAt: timestamp("claimed_at"),
+  settledAt: timestamp("settled_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type CropInsurancePolicy = typeof cropInsurancePolicies.$inferSelect;
+
+// ─── Loan Lifecycle Events ────────────────────────────────────────────────────
+export const loanEventTypeEnum = pgEnum("loan_event_type", [
+  "APPLIED", "CREDIT_CHECKED", "APPROVED", "REJECTED", "DISBURSED",
+  "REPAYMENT_RECEIVED", "OVERDUE_NOTICE", "DEFAULT_NOTICE",
+  "WRITTEN_OFF", "RESTRUCTURED", "CLOSED"
+]);
+export const loanLifecycleEvents = pgTable("loan_lifecycle_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  loanId: bigint("loan_id", { mode: "number" }).notNull(),
+  eventType: loanEventTypeEnum("event_type").notNull(),
+  performedBy: integer("performed_by"),
+  notes: text("notes"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type LoanLifecycleEvent = typeof loanLifecycleEvents.$inferSelect;

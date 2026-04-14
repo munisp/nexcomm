@@ -95,4 +95,23 @@ export const livePricesRouter = router({
       throw new Error(`Price feed refresh failed: ${msg}`);
     }
   }),
+  /**
+   * Get price feed health status — used by the Markets page status indicator.
+   */
+  feedStatus: publicProcedure.query(async () => {
+    try {
+      const db = await getDb();
+      if (!db) return { live: 0, fallback: 0, total: 0, lastUpdated: null, healthy: false };
+      const rows = await db.select({ source: livePrices.source, updatedAt: livePrices.updatedAt }).from(livePrices);
+      const live = rows.filter(r => r.source === "yahoo").length;
+      const fallback = rows.filter(r => r.source !== "yahoo").length;
+      const lastUpdated = rows.length > 0
+        ? rows.reduce((latest, r) => r.updatedAt > latest ? r.updatedAt : latest, rows[0].updatedAt)
+        : null;
+      const ageMs = lastUpdated ? Date.now() - new Date(lastUpdated).getTime() : Infinity;
+      return { live, fallback, total: rows.length, lastUpdated, healthy: ageMs < 5 * 60 * 1000 };
+    } catch {
+      return { live: 0, fallback: 0, total: 0, lastUpdated: null, healthy: false };
+    }
+  }),
 });
