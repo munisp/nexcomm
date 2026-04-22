@@ -9,6 +9,7 @@ import { runPriceFeedJob } from "../jobs/priceFeedJob";
 import { getDb } from "../db";
 import { livePrices } from "../../drizzle/schema";
 import { eq, inArray } from "drizzle-orm";
+import { getOrSet, cacheDel, CacheKeys, TTL } from "../cache";
 
 export const livePricesRouter = router({
   /**
@@ -16,17 +17,19 @@ export const livePricesRouter = router({
    * Returns an empty array if the DB is unavailable or no prices have been fetched yet.
    */
   getAll: publicProcedure.query(async () => {
-    try {
-      const db = await getDb();
-      if (!db) return { prices: [], lastUpdated: null };
-      const rows = await db.select().from(livePrices).orderBy(livePrices.assetClass, livePrices.symbol);
-      const lastUpdated = rows.length > 0
-        ? rows.reduce((latest, r) => r.updatedAt > latest ? r.updatedAt : latest, rows[0].updatedAt)
-        : null;
-      return { prices: rows, lastUpdated };
-    } catch {
-      return { prices: [], lastUpdated: null };
-    }
+    return getOrSet(CacheKeys.livePrices(), TTL.PRICE_FEED, async () => {
+      try {
+        const db = await getDb();
+        if (!db) return { prices: [], lastUpdated: null };
+        const rows = await db.select().from(livePrices).orderBy(livePrices.assetClass, livePrices.symbol);
+        const lastUpdated = rows.length > 0
+          ? rows.reduce((latest, r) => r.updatedAt > latest ? r.updatedAt : latest, rows[0].updatedAt)
+          : null;
+        return { prices: rows, lastUpdated };
+      } catch {
+        return { prices: [], lastUpdated: null };
+      }
+    });
   }),
 
   /**

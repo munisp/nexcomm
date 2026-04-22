@@ -47,7 +47,7 @@ export async function getKafkaProducer(): Promise<Producer | null> {
     const kafka = createKafkaClient();
     _producer = kafka.producer({
       allowAutoTopicCreation: true,
-      idempotent: false,
+      idempotent: true,
     });
     await _producer.connect();
     _isConnected = true;

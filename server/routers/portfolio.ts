@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { positions, orders, portfolioSnapshots } from "../../drizzle/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { getOrSet, cacheDel, CacheKeys, TTL } from "../cache";
 
 export const portfolioRouter = router({
   // GET all positions for current user

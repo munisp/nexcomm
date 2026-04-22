@@ -167,6 +167,30 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // ── Production build optimizations ──────────────────────────────────────
+    target: "es2020",
+    minify: "esbuild",
+    cssMinify: true,
+    sourcemap: false,
+    // Chunk splitting strategy for optimal long-term caching
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes("node_modules")) {
+            if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
+            if (id.includes("recharts") || id.includes("d3") || id.includes("lightweight-charts")) return "vendor-charts";
+            if (id.includes("@radix-ui") || id.includes("lucide")) return "vendor-ui";
+            if (id.includes("@trpc") || id.includes("@tanstack")) return "vendor-trpc";
+            if (id.includes("date-fns") || id.includes("dayjs") || id.includes("luxon")) return "vendor-date";
+            return "vendor";
+          }
+        },
+        chunkFileNames: "assets/[name]-[hash].js",
+        entryFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash].[ext]",
+      },
+    },
+    chunkSizeWarningLimit: 600,
   },
   server: {
     host: true,

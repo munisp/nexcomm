@@ -1,7 +1,9 @@
 import {
+  bigint,
   bigserial,
   boolean,
   customType,
+  index,
   integer,
   json,
   jsonb,
@@ -12,6 +14,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
 
@@ -328,8 +331,6 @@ export type ApiKey = typeof apiKeys.$inferSelect;
 // ============================================================
 // Settlements (T+2 clearing for filled orders)
 // ============================================================
-import { bigint, uniqueIndex } from "drizzle-orm/pg-core";
-
 export const settlementStatusEnum = pgEnum("settlement_status", ["PENDING", "MATCHED", "SETTLED", "FAILED", "DISPUTED"]);
 
 export const settlements = pgTable("settlements", {

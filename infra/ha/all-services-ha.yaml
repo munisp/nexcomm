@@ -1,0 +1,1865 @@
+---
+# =============================================================================
+# NEXCOM Exchange — Kubernetes HA Manifests for All 22 Services
+# =============================================================================
+# Applies: Deployment (3 replicas), HPA (3-10 replicas), PodDisruptionBudget
+# Namespace: nexcom-production
+# Strategy: RollingUpdate with maxSurge=1, maxUnavailable=0 (zero-downtime)
+# =============================================================================
+
+# ─── Namespace ────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom-production
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+    environment: production
+
+---
+# =============================================================================
+# CORE BANKING SERVICE (Go)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core-banking
+  namespace: nexcom-production
+  labels:
+    app: core-banking
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: core-banking
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: core-banking
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: [core-banking]
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: core-banking
+        image: nexcom/core-banking:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: KAFKA_BROKERS
+        - name: PORT
+          value: "8080"
+        - name: ENVIRONMENT
+          value: "production"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 5"]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: core-banking-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: core-banking
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: core-banking-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: core-banking
+
+---
+# =============================================================================
+# CREDIT SCORING SERVICE (Rust)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: credit-scoring
+  namespace: nexcom-production
+  labels:
+    app: credit-scoring
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: credit-scoring
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: credit-scoring
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: [credit-scoring]
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: credit-scoring
+        image: nexcom/credit-scoring:latest
+        ports:
+        - containerPort: 8095
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: PORT
+          value: "8095"
+        - name: RUST_LOG
+          value: "info"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8095
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8095
+          initialDelaySeconds: 3
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: credit-scoring-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: credit-scoring
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: credit-scoring-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: credit-scoring
+
+---
+# =============================================================================
+# KYC SERVICE (Go)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kyc-service
+  namespace: nexcom-production
+  labels:
+    app: kyc-service
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kyc-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: kyc-service
+    spec:
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: [kyc-service]
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: kyc-service
+        image: nexcom/kyc-service:latest
+        ports:
+        - containerPort: 8083
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: PORT
+          value: "8083"
+        resources:
+          requests:
+            cpu: "150m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8083
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8083
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: kyc-service-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kyc-service
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kyc-service-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: kyc-service
+
+---
+# =============================================================================
+# ANALYTICS SERVICE (Python/FastAPI)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics
+  namespace: nexcom-production
+  labels:
+    app: analytics
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: analytics
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: analytics
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: analytics
+        image: nexcom/analytics:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: KAFKA_BROKERS
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: analytics-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: analytics
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: analytics-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: analytics
+
+---
+# =============================================================================
+# AI/ML SERVICE (Python/FastAPI)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-ml
+  namespace: nexcom-production
+  labels:
+    app: ai-ml
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-ml
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ai-ml
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: ai-ml
+        image: nexcom/ai-ml:latest
+        ports:
+        - containerPort: 8001
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 20
+          periodSeconds: 10
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-ml-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-ml
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ai-ml-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ai-ml
+
+---
+# =============================================================================
+# NOTIFICATION SERVICE (TypeScript/Node)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification
+  namespace: nexcom-production
+  labels:
+    app: notification
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: notification
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: notification
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: notification
+        image: nexcom/notification:latest
+        ports:
+        - containerPort: 8085
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: KAFKA_BROKERS
+        - name: VAPID_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: VAPID_PUBLIC_KEY
+        - name: VAPID_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: VAPID_PRIVATE_KEY
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8085
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8085
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: notification-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: notification
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: notification-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: notification
+
+---
+# =============================================================================
+# USER MANAGEMENT SERVICE (TypeScript/Node)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-management
+  namespace: nexcom-production
+  labels:
+    app: user-management
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: user-management
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: user-management
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: user-management
+        image: nexcom/user-management:latest
+        ports:
+        - containerPort: 8086
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: JWT_SECRET
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8086
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8086
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-management-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-management
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: user-management-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: user-management
+
+---
+# =============================================================================
+# OPENSEARCH SYNC SERVICE (TypeScript/Node)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensearch-sync
+  namespace: nexcom-production
+  labels:
+    app: opensearch-sync
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: opensearch-sync
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: opensearch-sync
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: opensearch-sync
+        image: nexcom/opensearch-sync:latest
+        ports:
+        - containerPort: 8087
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: OPENSEARCH_URL
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: OPENSEARCH_URL
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: KAFKA_BROKERS
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8087
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8087
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: opensearch-sync-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: opensearch-sync
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: opensearch-sync-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: opensearch-sync
+
+---
+# =============================================================================
+# MARKET DATA SERVICE (Go)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: market-data
+  namespace: nexcom-production
+  labels:
+    app: market-data
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: market-data
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: market-data
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: market-data
+        image: nexcom/market-data:latest
+        ports:
+        - containerPort: 8088
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: KAFKA_BROKERS
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8088
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8088
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: market-data-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: market-data
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: market-data-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: market-data
+
+---
+# =============================================================================
+# AML ALERT SUBSCRIBER (Python)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aml-alert-subscriber
+  namespace: nexcom-production
+  labels:
+    app: aml-alert-subscriber
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aml-alert-subscriber
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: aml-alert-subscriber
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: aml-alert-subscriber
+        image: nexcom/aml-alert-subscriber:latest
+        ports:
+        - containerPort: 8089
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: KAFKA_BROKERS
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8089
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8089
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: aml-alert-subscriber-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: aml-alert-subscriber
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: aml-alert-subscriber-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: aml-alert-subscriber
+
+---
+# =============================================================================
+# MIDDLEWARE HUB (TypeScript/Node)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: middleware-hub
+  namespace: nexcom-production
+  labels:
+    app: middleware-hub
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: middleware-hub
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: middleware-hub
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: middleware-hub
+        image: nexcom/middleware-hub:latest
+        ports:
+        - containerPort: 8090
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: KAFKA_BROKERS
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: middleware-hub-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: middleware-hub
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: middleware-hub-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: middleware-hub
+
+---
+# =============================================================================
+# USSD ENGINE (TypeScript/Node)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ussd-engine
+  namespace: nexcom-production
+  labels:
+    app: ussd-engine
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ussd-engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ussd-engine
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: ussd-engine
+        image: nexcom/ussd-engine:latest
+        ports:
+        - containerPort: 8091
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8091
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8091
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ussd-engine-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ussd-engine
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ussd-engine-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ussd-engine
+
+---
+# =============================================================================
+# BOT LOGIC SERVICE (TypeScript/Node)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-logic
+  namespace: nexcom-production
+  labels:
+    app: bot-logic
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bot-logic
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: bot-logic
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: bot-logic
+        image: nexcom/bot-logic:latest
+        ports:
+        - containerPort: 8092
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8092
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8092
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bot-logic-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bot-logic
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: bot-logic-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: bot-logic
+
+---
+# =============================================================================
+# INDICES SERVICE (Python/FastAPI)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: indices
+  namespace: nexcom-production
+  labels:
+    app: indices
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: indices
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: indices
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: indices
+        image: nexcom/indices:latest
+        ports:
+        - containerPort: 8093
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        resources:
+          requests:
+            cpu: "150m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8093
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8093
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: indices-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: indices
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: indices-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: indices
+
+---
+# =============================================================================
+# INGESTION ENGINE (Python)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestion-engine
+  namespace: nexcom-production
+  labels:
+    app: ingestion-engine
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ingestion-engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ingestion-engine
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: ingestion-engine
+        image: nexcom/ingestion-engine:latest
+        ports:
+        - containerPort: 8094
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: KAFKA_BROKERS
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8094
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8094
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ingestion-engine-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ingestion-engine
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ingestion-engine-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ingestion-engine
+
+---
+# =============================================================================
+# ANALYTICS ENGINE (Python)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-engine
+  namespace: nexcom-production
+  labels:
+    app: analytics-engine
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: analytics-engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: analytics-engine
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: analytics-engine
+        image: nexcom/analytics-engine:latest
+        ports:
+        - containerPort: 8096
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: KAFKA_BROKERS
+        resources:
+          requests:
+            cpu: "300m"
+            memory: "512Mi"
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8096
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8096
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: analytics-engine-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: analytics-engine
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: analytics-engine-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: analytics-engine
+
+---
+# =============================================================================
+# MOJALOOP ADAPTER (Go)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mojaloop-adapter
+  namespace: nexcom-production
+  labels:
+    app: mojaloop-adapter
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mojaloop-adapter
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: mojaloop-adapter
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: mojaloop-adapter
+        image: nexcom/mojaloop-adapter:latest
+        ports:
+        - containerPort: 8082
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: MOJALOOP_HUB_URL
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: MOJALOOP_HUB_URL
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mojaloop-adapter-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mojaloop-adapter
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mojaloop-adapter-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: mojaloop-adapter
+
+---
+# =============================================================================
+# BLOCKCHAIN SERVICE (TypeScript/Node)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blockchain
+  namespace: nexcom-production
+  labels:
+    app: blockchain
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: blockchain
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: blockchain
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: blockchain
+        image: nexcom/blockchain:latest
+        ports:
+        - containerPort: 8097
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexcom-secrets
+              key: DATABASE_URL
+        - name: BLOCKCHAIN_RPC_URL
+          valueFrom:
+            configMapKeyRef:
+              name: nexcom-config
+              key: BLOCKCHAIN_RPC_URL
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8097
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8097
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: blockchain-hpa
+  namespace: nexcom-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: blockchain
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: blockchain-pdb
+  namespace: nexcom-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: blockchain
+
+---
+# =============================================================================
+# SHARED CONFIG MAP
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexcom-config
+  namespace: nexcom-production
+data:
+  KAFKA_BROKERS: "kafka-0.kafka-headless.nexcom-production.svc.cluster.local:9092,kafka-1.kafka-headless.nexcom-production.svc.cluster.local:9092,kafka-2.kafka-headless.nexcom-production.svc.cluster.local:9092"
+  OPENSEARCH_URL: "http://opensearch.nexcom-production.svc.cluster.local:9200"
+  MOJALOOP_HUB_URL: "http://mojaloop-hub.nexcom-production.svc.cluster.local:3001"
+  BLOCKCHAIN_RPC_URL: "http://ethereum-node.nexcom-production.svc.cluster.local:8545"
+  REDIS_URL: "redis://redis-master.nexcom-production.svc.cluster.local:6379"
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "info"
+
+---
+# =============================================================================
+# NETWORK POLICIES (Zero-trust: services only talk to what they need)
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: nexcom-production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: nexcom-production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: nexcom-production
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: nexcom-production
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow external HTTPS (for payment gateways, OAuth, etc.)
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443

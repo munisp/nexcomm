@@ -5,6 +5,7 @@ import net from "net";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
+import compression from "compression";
 import { randomUUID } from "crypto";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
@@ -63,6 +64,19 @@ async function startServer() {
   // ── Trust proxy (required for rate-limiting behind reverse proxies / Manus gateway)
   // '1' means trust the first hop (the Manus edge proxy).
   app.set('trust proxy', 1);
+
+  // ── Response compression (gzip/brotli) ──────────────────────────────────────
+  // Applied before all other middleware to compress all responses > 1KB.
+  // Excludes SSE streams and WebSocket upgrades.
+  app.use(compression({
+    level: 6, // balanced speed vs compression ratio
+    threshold: 1024, // only compress responses > 1KB
+    filter: (req, res) => {
+      // Don't compress SSE streams or WebSocket upgrades
+      if (req.headers.accept === 'text/event-stream') return false;
+      return compression.filter(req, res);
+    },
+  }));
 
   // ── Security headers (Helmet) ───────────────────────────────────────────────
   // Applied before all other middleware so every response gets security headers.

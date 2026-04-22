@@ -477,7 +477,7 @@ export const webauthnRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const uid = ctx.user.id;
 
-    const code = String(Math.floor(100_000 + Math.random() * 900_000));
+    const code = String(crypto.randomInt(100_000, 1_000_000));
     const codeHash = sha256(code);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
