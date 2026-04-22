@@ -229,9 +229,6 @@ importers:
       multer:
         specifier: ^2.1.1
         version: 2.1.1
-      mysql2:
-        specifier: ^3.15.1
-        version: 3.15.1
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
@@ -10769,7 +10766,8 @@ snapshots:
 
   aws-sign2@0.7.0: {}
 
-  aws-ssl-profiles@1.1.2: {}
+  aws-ssl-profiles@1.1.2:
+    optional: true
 
   aws4@1.13.2: {}
 
@@ -11919,6 +11917,7 @@ snapshots:
   generate-function@2.3.1:
     dependencies:
       is-property: 1.0.2
+    optional: true
 
   generator-function@2.0.1: {}
 
@@ -12189,6 +12188,7 @@ snapshots:
   iconv-lite@0.7.0:
     dependencies:
       safer-buffer: 2.1.2
+    optional: true
 
   idb@7.1.1: {}
 
@@ -12311,7 +12311,8 @@ snapshots:
 
   is-potential-custom-element-name@1.0.1: {}
 
-  is-property@1.0.2: {}
+  is-property@1.0.2:
+    optional: true
 
   is-regex@1.2.1:
     dependencies:
@@ -12600,9 +12601,11 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lru-cache@7.18.3: {}
+  lru-cache@7.18.3:
+    optional: true
 
-  lru.min@1.1.2: {}
+  lru.min@1.1.2:
+    optional: true
 
   lucide-react@0.453.0(react@19.2.1):
     dependencies:
@@ -13116,10 +13119,12 @@ snapshots:
       named-placeholders: 1.1.3
       seq-queue: 0.0.5
       sqlstring: 2.3.3
+    optional: true
 
   named-placeholders@1.1.3:
     dependencies:
       lru-cache: 7.18.3
+    optional: true
 
   nanoid@3.3.11: {}
 
@@ -13833,7 +13838,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  seq-queue@0.0.5: {}
+  seq-queue@0.0.5:
+    optional: true
 
   serialize-javascript@6.0.2:
     dependencies:
@@ -13947,7 +13953,8 @@ snapshots:
 
   space-separated-tokens@2.0.2: {}
 
-  sqlstring@2.3.3: {}
+  sqlstring@2.3.3:
+    optional: true
 
   sshpk@1.18.0:
     dependencies:
