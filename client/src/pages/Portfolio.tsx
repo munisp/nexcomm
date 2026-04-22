@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateMockTick, COMMODITIES, CATEGORY_ICONS } from "../../../shared/commodities";
 import { trpc } from "@/lib/trpc";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
@@ -78,6 +79,8 @@ export default function Portfolio() {
     { days: historyDays },
     { enabled: isAuthenticated }
   );
+
+  if (isAuthenticated && (summaryLoading || historyLoading || authLoading)) return <PageSkeleton cards={4} tableRows={8} tableCols={5} showChart />;
 
   return (
     <div className="page-container space-y-5">

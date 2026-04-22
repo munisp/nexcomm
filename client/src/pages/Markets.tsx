@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { COMMODITIES, CATEGORY_ICONS, generateMockTick } from "../../../shared/commodities";
 import { trpc } from "@/lib/trpc";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // Maps live_prices DB symbols → NEXCOM commodity symbols for price seeding
 const LIVE_PRICE_MAP: Record<string, string[]> = {
@@ -62,7 +63,7 @@ function TableHeader({ col3 = "24h Change", col4 = "Volume" }: { col3?: string; 
 function CommodityPanel({ query }: { query: string }) {
   type CTick = { price: number; changePct: number; volume: number; direction: string; isLive?: boolean };
   // Fetch live prices from DB (Yahoo Finance, updated every 5 min by priceFeedJob)
-  const { data: liveData } = trpc.livePrices.getAll.useQuery(undefined, {
+  const { data: liveData, isLoading: liveLoading } = trpc.livePrices.getAll.useQuery(undefined, {
     refetchInterval: 5 * 60 * 1000,
     staleTime: 4 * 60 * 1000,
   });
@@ -471,6 +472,10 @@ function MarketOverviewBar() {
 export default function Markets() {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState("commodities");
+  // Note: liveLoading is from CommodityPanel's inner query; we use a simple flag here
+  const { isLoading: mktLoading } = trpc.livePrices.getAll.useQuery(undefined, { staleTime: 4 * 60 * 1000 });
+
+  if (mktLoading) return <PageSkeleton cards={4} tableRows={12} tableCols={5} />;
 
   return (
     <div className="space-y-4 p-4 md:p-6 max-w-7xl mx-auto">

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
@@ -661,6 +662,8 @@ export default function Orders() {
     if (ac === "FOREX") return p.toFixed(4);
     return `$${p.toLocaleString()}`;
   };
+
+  if (isAuthenticated && isLoading) return <PageSkeleton cards={3} tableRows={10} tableCols={6} />;
 
   return (
     <div className="page-container space-y-5">

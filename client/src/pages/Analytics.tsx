@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { BarChart2, TrendingUp, TrendingDown, Activity, Users, DollarSign, Globe, Zap, MapPin, RefreshCw } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -178,6 +179,8 @@ export default function Analytics() {
     const id = setInterval(() => setTick(t => t + 1), 5000);
     return () => clearInterval(id);
   }, []);
+
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} showChart />;
 
   return (
     <div className="page-container space-y-5">

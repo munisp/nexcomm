@@ -10,6 +10,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createChart, ColorType, CrosshairMode, CandlestickSeries } from "lightweight-charts";
 import type { IChartApi, ISeriesApi, CandlestickData, Time, CandlestickSeriesOptions } from "lightweight-charts";
 import { trpc } from "@/lib/trpc";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
 import { useWebSocketFeed } from "@/hooks/useWebSocketFeed";
@@ -506,6 +507,8 @@ export default function Trade() {
   }, [pendingOrderDetails, createOrder]);
 
   const connected = wsConnected || feedConnected;
+  const { isLoading: symbolsLoading } = trpc.marketData.symbols.useQuery(undefined, { staleTime: 60_000 });
+  if (isAuthenticated && symbolsLoading) return <PageSkeleton cards={3} tableRows={8} tableCols={5} showChart />;
 
   return (
     <>

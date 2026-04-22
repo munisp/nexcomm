@@ -21,6 +21,7 @@ import {
   type PriceTick
 } from "../../../shared/commodities";
 import PortfolioPnLChart from "@/components/PortfolioPnLChart";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import PortfolioAllocationChart from "@/components/PortfolioAllocationChart";
 import FarmerProgressTracker from "@/components/FarmerProgressTracker";
 
@@ -209,8 +210,8 @@ export default function Dashboard() {
   const { data: user } = trpc.auth.me.useQuery();
   const { isAuthenticated } = useAuth();
   const { formatCurrency, t } = usePreferences();
-  const { data: orderStats } = trpc.orders.stats.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: portfolioSummary } = trpc.portfolio.summary.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: orderStats, isLoading: statsLoading } = trpc.orders.stats.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: portfolioSummary, isLoading: portfolioLoading } = trpc.portfolio.summary.useQuery(undefined, { enabled: isAuthenticated });
   const { data: recentOrders = [] } = trpc.orders.list.useQuery({ limit: 5 }, { enabled: isAuthenticated });
   const { data: receiptsData } = trpc.receipts.list.useQuery({ limit: 100 }, { enabled: isAuthenticated });
 
@@ -229,6 +230,8 @@ export default function Dashboard() {
     if (h < 17) return "Good afternoon";
     return "Good evening";
   };
+
+  if (isAuthenticated && (statsLoading || portfolioLoading)) return <PageSkeleton cards={4} tableRows={5} tableCols={5} showChart />;
 
   return (
     <div className="page-container space-y-6">
