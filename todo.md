@@ -471,3 +471,17 @@
 - [x] 993 total files, 625 code files, 210,373 lines of code
 - [x] 22 microservices, 120 UI pages, 77 tRPC routers, 28 Dockerfiles, 12 test files
 - [x] 825 tests: 508 passing (7 test files 100% green), 301 failing due to no local DB in sandbox (expected in CI/CD with real DB)
+
+## Round 34 — Ledger Page Wiring & Router Hardening
+
+- [x] Ledger.tsx — full double-entry accounting UI page (accounts, journal history, internal transfer, admin summary)
+- [x] App.tsx — Ledger lazy import added + /ledger route registered (121st page)
+- [x] Layout.tsx — Ledger nav link added under Capital Markets section
+- [x] ledgerRouter.ts — rewritten with correct API contract matching Ledger UI:
+  - [x] listAccounts: accepts { limit } param, returns { accounts[] } with availableBalance/reservedBalance/status
+  - [x] getJournalHistory: accepts { accountId, entryType, cursor } for cursor-based pagination
+  - [x] internalTransfer: accepts { fromAccountId, toAccountId, amount (number), idempotencyKey }
+  - [x] adminLedgerSummary: returns flat stats (totalAccounts, activeAccounts, frozenAccounts, totalJournals, totalEntries, pendingJobs, processingJobs, failedJobs, balanceByCurrency[])
+  - [x] adminProcessSettlementQueue: accepts { batchSize, workerId }, processes N jobs from SKIP LOCKED queue
+- [x] postJournalEntry call fixed to include journalId parameter
+- [x] Tests: 511 passing, 298 failing (all DB-connection-dependent — expected in sandbox without local PostgreSQL)

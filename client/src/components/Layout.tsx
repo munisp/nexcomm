@@ -81,6 +81,7 @@ const NAV_GROUPS: { key: string; label: string; items: { href: string; icon: Rea
     items: [
       { href: "/fixed-income",    icon: Landmark, label: "Fixed Income" },
       { href: "/abcp-markets",    icon: Layers,   label: "ABCP Markets" },
+      { href: "/ledger",          icon: BookOpen, label: "Ledger" },
     ],
   },
   {
