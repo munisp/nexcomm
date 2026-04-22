@@ -28,7 +28,7 @@ const kycInputSchema = z.object({
   beneficialOwners:          z.string().min(5),
   complianceOfficerName:     z.string().min(2).max(256),
   complianceOfficerEmail:    z.string().email().max(256),
-  documentsProvided:         z.array(z.string()).default([]),
+  documentsProvided:         z.array(z.string().trim()).default([]),
   acknowledgedAmlPolicy:     z.boolean(),
   acknowledgedDataProcessing: z.boolean(),
 });
@@ -131,7 +131,7 @@ export const dfspKycRouter = router({
 
   // ── Get Single KYC Record (admin) ─────────────────────────────────────────
   getKycRecord: protectedProcedure
-    .input(z.object({ fspId: z.string() }))
+    .input(z.object({ fspId: z.string().trim() }))
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
@@ -150,7 +150,7 @@ export const dfspKycRouter = router({
   // ── Review KYC (admin: approve / reject / EDD) ────────────────────────────
   reviewKyc: protectedProcedure
     .input(z.object({
-      fspId:       z.string(),
+      fspId:       z.string().trim(),
       status:      z.enum(["APPROVED", "REJECTED", "EDD_REQUIRED"]),
       reviewNotes: z.string().max(2000).optional(),
     }))

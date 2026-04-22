@@ -217,15 +217,15 @@ export const webauthnRouter = router({
   verifyRegistration: protectedProcedure
     .input(
       z.object({
-        credentialId: z.string(),
-        clientDataJSON: z.string(),   // base64url
-        attestationObject: z.string(), // base64url (unused for "none" attestation)
-        publicKey: z.string(),         // base64url SPKI or raw EC point
+        credentialId: z.string().trim(),
+        clientDataJSON: z.string().trim(),   // base64url
+        attestationObject: z.string().trim(), // base64url (unused for "none" attestation)
+        publicKey: z.string().trim(),         // base64url SPKI or raw EC point
         deviceName: z.string().min(1).max(128).default("Passkey"),
         aaguid: z.string().optional(),
         uvCapable: z.boolean().default(false),
         residentKey: z.boolean().default(false),
-        transports: z.array(z.string()).optional(),
+        transports: z.array(z.string().trim()).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -345,10 +345,10 @@ export const webauthnRouter = router({
   verifyAuthentication: protectedProcedure
     .input(
       z.object({
-        credentialId: z.string(),
-        authenticatorData: z.string(), // base64url
-        clientDataJSON: z.string(),    // base64url
-        signature: z.string(),         // base64url
+        credentialId: z.string().trim(),
+        authenticatorData: z.string().trim(), // base64url
+        clientDataJSON: z.string().trim(),    // base64url
+        signature: z.string().trim(),         // base64url
         userHandle: z.string().optional(),
       })
     )
@@ -437,7 +437,7 @@ export const webauthnRouter = router({
 
   /** Rename a registered passkey. */
   renameCredential: protectedProcedure
-    .input(z.object({ credentialId: z.string(), name: z.string().min(1).max(128) }))
+    .input(z.object({ credentialId: z.string().trim(), name: z.string().min(1).max(128) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -454,7 +454,7 @@ export const webauthnRouter = router({
     }),
   /** Remove a registered passkey. */
   removeCredential: protectedProcedure
-    .input(z.object({ credentialId: z.string() }))
+    .input(z.object({ credentialId: z.string().trim() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -542,7 +542,7 @@ export const webauthnRouter = router({
 
   /** Verify a 6-digit email OTP. */
   verifyEmailOtp: protectedProcedure
-    .input(z.object({ code: z.string().length(6) }))
+    .input(z.object({ code: z.string().trim().length(6) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -646,12 +646,12 @@ export const webauthnRouter = router({
    */
   passkeyLoginVerify: publicProcedure
     .input(z.object({
-      credentialId: z.string(),
-      authenticatorData: z.string(),
-      clientDataJSON: z.string(),
-      signature: z.string(),
+      credentialId: z.string().trim(),
+      authenticatorData: z.string().trim(),
+      clientDataJSON: z.string().trim(),
+      signature: z.string().trim(),
       userHandle: z.string().optional(),
-      challenge: z.string(), // echo back the challenge from step 1
+      challenge: z.string().trim(), // echo back the challenge from step 1
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();

@@ -144,6 +144,12 @@ services:
       - "8080:8080"
     depends_on:
       kafka: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   settlement-engine:
@@ -163,6 +169,12 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8005/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   gateway:
@@ -203,6 +215,12 @@ services:
       - "8004:8004"
     depends_on:
       postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8004/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   kyc-service:
@@ -218,6 +236,12 @@ services:
       - "8003:8003"
     depends_on:
       postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   notification:
@@ -236,6 +260,12 @@ services:
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
     ports:
       - "8008:8008"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8008/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   # ─── Data Platform (Lakehouse + AI/ML) ────────────────────────────────────
@@ -261,6 +291,12 @@ services:
     depends_on:
       kafka: { condition: service_healthy }
       postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8009/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   analytics:
@@ -283,6 +319,12 @@ services:
       postgres: { condition: service_healthy }
       ingestion-engine:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8006/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   ai-ml:
@@ -303,6 +345,12 @@ services:
     depends_on:
       ingestion-engine:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8007/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   blockchain:
@@ -315,6 +363,12 @@ services:
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
     ports:
       - "8010:8010"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8010/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   trading-engine:
@@ -327,6 +381,12 @@ services:
       MATCHING_ENGINE_URL: http://matching-engine:8080
     ports:
       - "8001:8001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   analytics-engine:
@@ -342,6 +402,12 @@ services:
       - "8011:8011"
     depends_on:
       postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8011/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   user-management:
@@ -356,6 +422,12 @@ services:
       - "8012:8012"
     depends_on:
       postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8012/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks: [nexcom]
 
   # ─── Mojaloop DFSP Adapter (Go) ───────────────────────────────────────────

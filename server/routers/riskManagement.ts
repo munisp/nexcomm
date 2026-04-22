@@ -108,10 +108,10 @@ export const riskManagementRouter = router({
   /** Pre-trade risk check — called before order submission */
   checkOrder: protectedProcedure
     .input(z.object({
-      symbol: z.string(),
+      symbol: z.string().trim(),
       side: z.enum(["BUY", "SELL"]),
-      quantity: z.string(),
-      price: z.string(),
+      quantity: z.string().trim(),
+      price: z.string().trim(),
     }))
     .mutation(async ({ ctx, input }) => {
       let result: { approved: boolean; reason: string | null; marginRequired: number | null; source: string };
@@ -181,7 +181,7 @@ export const riskManagementRouter = router({
 
   /** Get margin requirements for a symbol */
   getMarginRequirements: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         const data = await rmFetch(`/api/v1/risk/margin/${input.symbol}`);

@@ -146,7 +146,7 @@ export const mojaloopRouter = router({
 
   // ── Get single transfer ──────────────────────────────────────────────────────
   getTransfer: protectedProcedure
-    .input(z.object({ transferId: z.string() }))
+    .input(z.object({ transferId: z.string().trim() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
@@ -167,7 +167,7 @@ export const mojaloopRouter = router({
         payeeIdentifier: z.string().min(1),
         payerIdentifier: z.string().min(1),
         amount: z.string().regex(/^\d+(\.\d{1,6})?$/),
-        currency: z.string().length(3),
+        currency: z.string().trim().length(3),
         note: z.string().max(256).optional(),
       })
     )
@@ -296,7 +296,7 @@ export const mojaloopRouter = router({
       z.object({
         fspId: z.string().min(1).max(64),
         name: z.string().min(1).max(128),
-        currency: z.string().length(3),
+        currency: z.string().trim().length(3),
         country: z.string().max(4).optional(),
         endpointUrl: z.string().url().optional(),
       })

@@ -92,7 +92,7 @@ export const indicesRouter = router({
         calculationMethod: z.enum(["PRICE_WEIGHTED", "MARKET_CAP_WEIGHTED", "EQUAL_WEIGHTED"]).default("PRICE_WEIGHTED"),
         rebalanceFrequency: z.enum(["DAILY", "WEEKLY", "MONTHLY", "QUARTERLY"]).default("MONTHLY"),
         components: z.array(z.object({
-          symbol: z.string(),
+          symbol: z.string().trim(),
           weight: z.number().min(0).max(1),
           lastPrice: z.number().optional(),
         })).optional(),
@@ -126,7 +126,7 @@ export const indicesRouter = router({
         currentValue: z.number().positive().optional(),
         changePercent: z.number().optional(),
         components: z.array(z.object({
-          symbol: z.string(),
+          symbol: z.string().trim(),
           weight: z.number().min(0).max(1),
           lastPrice: z.number().optional(),
         })).optional(),

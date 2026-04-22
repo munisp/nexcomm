@@ -154,7 +154,7 @@ export const optionsRouter = router({
       underlyingContractId: z.number().int().positive().optional(),
       optionType: z.enum(["CALL", "PUT"]),
       strikePrice: z.number().positive(),
-      expiryDate: z.string(), // ISO date string
+      expiryDate: z.string().trim(), // ISO date string
       contractSize: z.number().positive().default(1),
       riskFreeRate: z.number().min(0).max(1).default(0.05),
       impliedVolatility: z.number().min(0.01).max(5).default(0.20),

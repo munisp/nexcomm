@@ -37,6 +37,7 @@ import { disconnectKafkaProducer } from "../kafka/kafkaProducer";
 import { startMojaloopHubHealthJob } from "../jobs/mojaloopHubHealthJob";
 import { spatialProxyRouter } from "../routes/spatialProxy";
 import { haStatusRouter } from "../routes/haStatusRoute";
+import { suspiciousPatternDetector, ipBlocklistMiddleware, securityHeaders } from "../security";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -122,6 +123,11 @@ async function startServer() {
     exposedHeaders: ["X-Request-ID"],
     maxAge: 86400,
   }));
+
+  // ── Additional security middleware ─────────────────────────────────────────
+  app.use(ipBlocklistMiddleware);          // Block known abusive IPs
+  app.use(suspiciousPatternDetector);      // Detect path traversal / SQLi probes
+  app.use(securityHeaders);               // Extra security headers beyond Helmet
 
   // ── Request ID correlation ────────────────────────────────────────────────
   // Assigns a UUID to every request for distributed tracing and log correlation.

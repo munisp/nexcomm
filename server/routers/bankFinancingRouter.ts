@@ -84,9 +84,9 @@ export const bankFinancingRouter = router({
         collateralEwrId: z.number().int().positive().optional(),
         collateralValueNgn: z.number().positive().optional(),
         documents: z.array(z.object({
-          name: z.string(),
+          name: z.string().trim(),
           url: z.string().url(),
-          type: z.string(),
+          type: z.string().trim(),
         })).max(20).default([]),
       })
     )

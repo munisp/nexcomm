@@ -105,7 +105,7 @@ export const totpRouter = router({
 
   // Confirm TOTP setup by verifying the first code
   confirmSetup: protectedProcedure
-    .input(z.object({ code: z.string().length(6) }))
+    .input(z.object({ code: z.string().trim().length(6) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
@@ -202,7 +202,7 @@ export const totpRouter = router({
 
   // Disable TOTP (requires current code for confirmation)
   disable: protectedProcedure
-    .input(z.object({ code: z.string().length(6) }))
+    .input(z.object({ code: z.string().trim().length(6) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
@@ -238,7 +238,7 @@ export const totpRouter = router({
 
   // Regenerate backup codes (requires current TOTP code)
   regenerateBackupCodes: protectedProcedure
-    .input(z.object({ code: z.string().length(6) }))
+    .input(z.object({ code: z.string().trim().length(6) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });

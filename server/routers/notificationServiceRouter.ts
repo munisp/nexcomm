@@ -41,12 +41,12 @@ export const notificationServiceRouter = router({
   /** Send a notification to a user */
   send: protectedProcedure
     .input(z.object({
-      userId: z.string(),
+      userId: z.string().trim(),
       type: notificationTypeEnum,
       channels: z.array(channelEnum).min(1),
       title: z.string().min(1),
       body: z.string().min(1),
-      metadata: z.record(z.string(), z.string()).optional(),
+      metadata: z.record(z.string().trim(), z.string().trim()).optional(),
     }))
     .mutation(async ({ input }) => {
       try {
@@ -94,7 +94,7 @@ export const notificationServiceRouter = router({
 
   /** Mark a notification as read */
   markRead: protectedProcedure
-    .input(z.object({ notificationId: z.string() }))
+    .input(z.object({ notificationId: z.string().trim() }))
     .mutation(async ({ input }) => {
       try {
         const data = await nsFetch(`/api/v1/notifications/${input.notificationId}/read`, {
@@ -146,7 +146,7 @@ export const notificationServiceRouter = router({
         websocket: z.boolean().optional(),
         ussd: z.boolean().optional(),
       }).optional(),
-      types: z.record(z.string(), z.boolean()).optional(),
+      types: z.record(z.string().trim(), z.boolean()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       try {

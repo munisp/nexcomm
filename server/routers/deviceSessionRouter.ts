@@ -153,7 +153,7 @@ export const deviceSessionRouter = router({
 
   // Revoke all other sessions (keep only the current fingerprint)
   revokeAllOtherSessions: protectedProcedure
-    .input(z.object({ currentFingerprint: z.string() }))
+    .input(z.object({ currentFingerprint: z.string().trim() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });

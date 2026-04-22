@@ -30,10 +30,10 @@ export const abcpRouter = router({
   create: protectedProcedure
     .input(z.object({
       programName: z.string().min(5),
-      sponsorName: z.string(),
+      sponsorName: z.string().trim(),
       arrangerName: z.string().optional(),
-      programSizeNgn: z.string(),
-      collateralType: z.string(),
+      programSizeNgn: z.string().trim(),
+      collateralType: z.string().trim(),
       collateralValueNgn: z.string().optional(),
       yieldPct: z.string().optional(),
       tenorDays: z.number(),

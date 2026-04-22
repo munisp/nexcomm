@@ -84,7 +84,7 @@ export const lakehouseRouter = router({
 
   /** Get data lineage for a specific table */
   getLineage: adminProcedure
-    .input(z.object({ table: z.string() }))
+    .input(z.object({ table: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await ingestionFetch(`/api/v1/lakehouse/lineage/${encodeURIComponent(input.table)}`);
@@ -104,7 +104,7 @@ export const lakehouseRouter = router({
 
   /** Get status of a specific feed */
   getFeedStatus: adminProcedure
-    .input(z.object({ feedId: z.string() }))
+    .input(z.object({ feedId: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await ingestionFetch(`/api/v1/feeds/${encodeURIComponent(input.feedId)}/status`);
@@ -115,7 +115,7 @@ export const lakehouseRouter = router({
 
   /** Start a data feed */
   startFeed: adminProcedure
-    .input(z.object({ feedId: z.string() }))
+    .input(z.object({ feedId: z.string().trim() }))
     .mutation(async ({ input }) => {
       try {
         return await ingestionFetch(`/api/v1/feeds/${encodeURIComponent(input.feedId)}/start`, {
@@ -128,7 +128,7 @@ export const lakehouseRouter = router({
 
   /** Stop a data feed */
   stopFeed: adminProcedure
-    .input(z.object({ feedId: z.string() }))
+    .input(z.object({ feedId: z.string().trim() }))
     .mutation(async ({ input }) => {
       try {
         return await ingestionFetch(`/api/v1/feeds/${encodeURIComponent(input.feedId)}/stop`, {
@@ -191,7 +191,7 @@ export const lakehouseRouter = router({
 
   /** Get full transformation details for a Silver table (schema diff, dedup rule, quality rules, Spark job) */
   getSilverTransformation: adminProcedure
-    .input(z.object({ tableName: z.string() }))
+    .input(z.object({ tableName: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await ingestionFetch(`/api/v1/lakehouse/silver/${encodeURIComponent(input.tableName)}`);
@@ -221,7 +221,7 @@ export const lakehouseRouter = router({
   /** Trigger a historical backfill for a date range */
   triggerBackfill: adminProcedure
     .input(z.object({
-      table: z.string(),
+      table: z.string().trim(),
       fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     }))

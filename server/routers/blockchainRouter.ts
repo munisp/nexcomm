@@ -45,13 +45,13 @@ export const blockchainRouter = router({
   /** Tokenize a commodity (create an on-chain token) */
   tokenizeCommodity: protectedProcedure
     .input(z.object({
-      commodityId: z.string(),
-      commodityType: z.string(),
+      commodityId: z.string().trim(),
+      commodityType: z.string().trim(),
       quantity: z.number().positive(),
-      unit: z.string(),
+      unit: z.string().trim(),
       warehouseReceiptId: z.string().optional(),
       gradeId: z.string().optional(),
-      metadata: z.record(z.string(), z.string()).optional(),
+      metadata: z.record(z.string().trim(), z.string().trim()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -89,7 +89,7 @@ export const blockchainRouter = router({
 
   /** Get a specific token */
   getToken: publicProcedure
-    .input(z.object({ tokenId: z.string() }))
+    .input(z.object({ tokenId: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await bcFetch(`/api/v1/blockchain/tokens/${input.tokenId}`);
@@ -101,8 +101,8 @@ export const blockchainRouter = router({
   /** Transfer a token to another account */
   transferToken: protectedProcedure
     .input(z.object({
-      tokenId: z.string(),
-      toAccountId: z.string(),
+      tokenId: z.string().trim(),
+      toAccountId: z.string().trim(),
       quantity: z.number().positive().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -123,7 +123,7 @@ export const blockchainRouter = router({
   /** Fractionalize a token for fractional ownership */
   fractionalizeToken: protectedProcedure
     .input(z.object({
-      tokenId: z.string(),
+      tokenId: z.string().trim(),
       totalFractions: z.number().int().positive(),
       pricePerFraction: z.number().positive(),
     }))
@@ -145,10 +145,10 @@ export const blockchainRouter = router({
   /** Trigger on-chain settlement for a trade */
   onChainSettle: adminProcedure
     .input(z.object({
-      tradeId: z.string(),
-      buyerId: z.string(),
-      sellerId: z.string(),
-      tokenId: z.string(),
+      tradeId: z.string().trim(),
+      buyerId: z.string().trim(),
+      sellerId: z.string().trim(),
+      tokenId: z.string().trim(),
       quantity: z.number().positive(),
       price: z.number().positive(),
     }))
@@ -165,7 +165,7 @@ export const blockchainRouter = router({
 
   /** Get a transaction by hash */
   getTransaction: publicProcedure
-    .input(z.object({ txHash: z.string() }))
+    .input(z.object({ txHash: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await bcFetch(`/api/v1/blockchain/tx/${input.txHash}`);
@@ -190,7 +190,7 @@ export const blockchainRouter = router({
 
   /** Get a fractional asset */
   getFractionalAsset: publicProcedure
-    .input(z.object({ assetId: z.string() }))
+    .input(z.object({ assetId: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await bcFetch(`/api/v1/blockchain/fractions/assets/${input.assetId}`);
@@ -202,7 +202,7 @@ export const blockchainRouter = router({
   /** Submit a fractional order */
   submitFractionalOrder: protectedProcedure
     .input(z.object({
-      assetId: z.string(),
+      assetId: z.string().trim(),
       side: z.enum(["BUY", "SELL"]),
       fractions: z.number().int().positive(),
       pricePerFraction: z.number().positive(),
@@ -226,7 +226,7 @@ export const blockchainRouter = router({
 
   /** Get fractional order book for an asset */
   getFractionalOrderBook: publicProcedure
-    .input(z.object({ assetId: z.string() }))
+    .input(z.object({ assetId: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await bcFetch(`/api/v1/blockchain/fractions/orderbook/${input.assetId}`);
@@ -247,7 +247,7 @@ export const blockchainRouter = router({
   /** Pin metadata to IPFS */
   ipfsPin: protectedProcedure
     .input(z.object({
-      content: z.string(),
+      content: z.string().trim(),
       contentType: z.string().default("application/json"),
     }))
     .mutation(async ({ input }) => {
@@ -263,7 +263,7 @@ export const blockchainRouter = router({
 
   /** Get content from IPFS by CID */
   ipfsGet: publicProcedure
-    .input(z.object({ cid: z.string() }))
+    .input(z.object({ cid: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await bcFetch(`/api/v1/blockchain/ipfs/get/${input.cid}`);
@@ -284,9 +284,9 @@ export const blockchainRouter = router({
   /** Initiate a cross-chain bridge transfer */
   initiateBridge: protectedProcedure
     .input(z.object({
-      tokenId: z.string(),
-      targetChain: z.string(),
-      targetAddress: z.string(),
+      tokenId: z.string().trim(),
+      targetChain: z.string().trim(),
+      targetAddress: z.string().trim(),
       quantity: z.number().positive(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -326,7 +326,7 @@ export const blockchainRouter = router({
 
   /** Get full on-chain provenance history for a token (Hyperledger GetHistory / EVM event log) */
   getTokenHistory: publicProcedure
-    .input(z.object({ tokenId: z.string() }))
+    .input(z.object({ tokenId: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await bcFetch(`/api/v1/blockchain/tokens/${encodeURIComponent(input.tokenId)}/history`);
@@ -337,7 +337,7 @@ export const blockchainRouter = router({
 
   /** Query all tokens owned by a specific account */
   getTokensByOwner: publicProcedure
-    .input(z.object({ ownerId: z.string() }))
+    .input(z.object({ ownerId: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await bcFetch(`/api/v1/blockchain/tokens/owner/${encodeURIComponent(input.ownerId)}`);

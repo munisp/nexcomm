@@ -59,8 +59,8 @@ export const workbenchRouter = router({
   createCropPlan: protectedProcedure
     .input(z.object({
       farmId: z.number(),
-      cropSymbol: z.string(),
-      cropName: z.string(),
+      cropSymbol: z.string().trim(),
+      cropName: z.string().trim(),
       season: z.enum(["WET_SEASON", "DRY_SEASON", "YEAR_ROUND"]),
       plantingDate: z.string().optional(),
       expectedHarvestDate: z.string().optional(),

@@ -561,7 +561,7 @@ export const cooperativeRouter = router({
       variety: z.string().max(100).optional(),
       quantityKgPerMember: z.number().positive(),
       askingPricePerKg: z.number().positive(),
-      expectedHarvestDate: z.string(),
+      expectedHarvestDate: z.string().trim(),
       description: z.string().max(1000).optional(),
     }))
     .mutation(async ({ ctx, input }) => {

@@ -29,7 +29,7 @@ const engineStatusSchema = z.enum([
 ]);
 
 const engineSnapshotSchema = z.object({
-  name: z.string(),
+  name: z.string().trim(),
   status: engineStatusSchema,
   pid: z.number().nullable(),
   port: z.number(),

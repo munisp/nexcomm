@@ -249,9 +249,9 @@ export const mojaloopTiersRouter = router({
       z.object({
         tierName: z.enum(TIER_NAMES),
         currency: z.string().min(1).max(8).toUpperCase(),
-        flatFee: z.string(),
-        percentageFee: z.string(),
-        minFee: z.string(),
+        flatFee: z.string().trim(),
+        percentageFee: z.string().trim(),
+        minFee: z.string().trim(),
         maxFee: z.string().nullable(),
         isActive: z.boolean().default(true),
       })

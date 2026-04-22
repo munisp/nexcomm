@@ -42,7 +42,7 @@ export const fixedIncomeRouter = router({
   buy: protectedProcedure
     .input(z.object({
       instrumentId: z.number(),
-      faceValueNgn: z.string(),
+      faceValueNgn: z.string().trim(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();

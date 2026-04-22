@@ -122,7 +122,7 @@ export const marketDataRouter = router({
   }),
 
   futuresContract: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getFuturesContract(input.symbol);
@@ -150,7 +150,7 @@ export const marketDataRouter = router({
   }),
 
   optionChain: publicProcedure
-    .input(z.object({ underlying: z.string() }))
+    .input(z.object({ underlying: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getOptionChain(input.underlying);
@@ -227,7 +227,7 @@ export const marketDataRouter = router({
   }),
 
   positionLimit: protectedProcedure
-    .input(z.object({ symbol: z.string(), accountId: z.string().optional() }))
+    .input(z.object({ symbol: z.string().trim(), accountId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const accountId = input.accountId ?? `USER-${ctx.user.id}`;
       try {
@@ -257,7 +257,7 @@ export const marketDataRouter = router({
   }),
 
   warehousesByCommodity: publicProcedure
-    .input(z.object({ commodity: z.string() }))
+    .input(z.object({ commodity: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getWarehousesForCommodity(input.commodity);
@@ -279,10 +279,10 @@ export const marketDataRouter = router({
 
   issueReceipt: protectedProcedure
     .input(z.object({
-      commodity: z.string(),
+      commodity: z.string().trim(),
       quantity: z.number().positive(),
-      grade: z.string(),
-      warehouseId: z.string(),
+      grade: z.string().trim(),
+      warehouseId: z.string().trim(),
       accountId: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -309,7 +309,7 @@ export const marketDataRouter = router({
   }),
 
   commodityGrades: publicProcedure
-    .input(z.object({ commodity: z.string() }))
+    .input(z.object({ commodity: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getCommodityGrades(input.commodity);
@@ -351,7 +351,7 @@ export const marketDataRouter = router({
   }),
 
   marketMaker: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getMarketMaker(input.id);
@@ -361,7 +361,7 @@ export const marketDataRouter = router({
     }),
 
   marketMakerPerformance: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getMarketMakerPerformance(input.id);
@@ -372,8 +372,8 @@ export const marketDataRouter = router({
 
   submitQuote: protectedProcedure
     .input(z.object({
-      marketMakerId: z.string(),
-      symbol: z.string(),
+      marketMakerId: z.string().trim(),
+      symbol: z.string().trim(),
       bidPrice: z.number().positive(),
       askPrice: z.number().positive(),
       bidSize: z.number().positive(),
@@ -413,7 +413,7 @@ export const marketDataRouter = router({
   }),
 
   index: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getIndex(input.id);
@@ -423,7 +423,7 @@ export const marketDataRouter = router({
     }),
 
   indexValue: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getIndexValue(input.id);
@@ -443,7 +443,7 @@ export const marketDataRouter = router({
   }),
 
   corporateAction: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getCorporateAction(input.id);
@@ -463,7 +463,7 @@ export const marketDataRouter = router({
   }),
 
   broker: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getBroker(input.id);
@@ -477,7 +477,7 @@ export const marketDataRouter = router({
   calculateFees: publicProcedure
     .input(z.object({
       tradeValue: z.number().positive(),
-      assetClass: z.string(),
+      assetClass: z.string().trim(),
       isMaker: z.boolean().default(true),
     }))
     .query(async ({ input }) => {
@@ -505,9 +505,9 @@ export const marketDataRouter = router({
 
   sendFixMessage: protectedProcedure
     .input(z.object({
-      sessionId: z.string(),
-      messageType: z.string(),
-      fields: z.record(z.string(), z.string()),
+      sessionId: z.string().trim(),
+      messageType: z.string().trim(),
+      fields: z.record(z.string().trim(), z.string().trim()),
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -536,7 +536,7 @@ export const marketDataRouter = router({
 
   startAuction: protectedProcedure
     .input(z.object({
-      symbol: z.string(),
+      symbol: z.string().trim(),
       auctionType: z.enum(["OPENING", "CLOSING", "INTRADAY"]),
       durationSecs: z.number().int().positive().default(300),
     }))
@@ -557,14 +557,14 @@ export const marketDataRouter = router({
 
   initiateSettlement: protectedProcedure
     .input(z.object({
-      tradeId: z.string(),
-      buyerId: z.string(),
-      sellerId: z.string(),
-      amount: z.string(),
+      tradeId: z.string().trim(),
+      buyerId: z.string().trim(),
+      sellerId: z.string().trim(),
+      amount: z.string().trim(),
       currency: z.string().default("NGN"),
-      assetType: z.string(),
-      quantity: z.string(),
-      price: z.string(),
+      assetType: z.string().trim(),
+      quantity: z.string().trim(),
+      price: z.string().trim(),
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -585,7 +585,7 @@ export const marketDataRouter = router({
     }),
 
   settlementStatus: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await getSettlementStatus(input.id);
@@ -595,7 +595,7 @@ export const marketDataRouter = router({
     }),
 
   finalizeSettlement: protectedProcedure
-    .input(z.object({ settlementId: z.string() }))
+    .input(z.object({ settlementId: z.string().trim() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       try {
@@ -650,11 +650,11 @@ export const marketDataRouter = router({
 
   createLedgerTransfer: protectedProcedure
     .input(z.object({
-      debitAccountId: z.string(),
-      creditAccountId: z.string(),
+      debitAccountId: z.string().trim(),
+      creditAccountId: z.string().trim(),
       amount: z.number().positive(),
       currency: z.string().default("NGN"),
-      reference: z.string(),
+      reference: z.string().trim(),
     }))
     .mutation(async ({ ctx: _ctx, input }) => {
       try {

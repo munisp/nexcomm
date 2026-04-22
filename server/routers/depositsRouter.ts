@@ -63,7 +63,7 @@ export const depositsRouter = router({
     .input(z.object({
       commodity: z.string().max(64),
       grade: z.string().max(32).optional(),
-      quantity: z.string(),
+      quantity: z.string().trim(),
       unit: z.string().max(16),
       warehouseId: z.string().max(64).optional(),
       warehouseName: z.string().max(256).optional(),

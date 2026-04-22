@@ -73,7 +73,7 @@ export const ussdWhatsappReceiptRouter = router({
       userId: z.number(),
       amountPaid: z.number().positive(),
       currency: z.string().default("NGN"),
-      referenceNumber: z.string(),
+      referenceNumber: z.string().trim(),
       channel: z.enum(["USSD", "WHATSAPP", "WEB", "MOBILE"]).default("USSD"),
       internalKey: z.string().optional(),
     }))

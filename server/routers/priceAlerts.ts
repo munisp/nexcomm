@@ -209,7 +209,7 @@ export const priceAlertsRouter = router({
 
   /** Count active (untriggered) alerts grouped by symbol — used for Watchlist bell badge */
   countBySymbols: protectedProcedure
-    .input(z.object({ symbols: z.array(z.string()) }))
+    .input(z.object({ symbols: z.array(z.string().trim()) }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return {} as Record<string, number>;
@@ -283,7 +283,7 @@ export const priceAlertsRouter = router({
 
   /** Get current price for a symbol from livePrices table (for the create form preview) */
   currentPrice: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       const price = await getCurrentPrice(input.symbol);
       return { symbol: input.symbol, price };

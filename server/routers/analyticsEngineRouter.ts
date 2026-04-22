@@ -35,7 +35,7 @@ export const analyticsEngineRouter = router({
 
   /** Get market microstructure data for a symbol */
   getMarketMicrostructure: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await aeFetch(`/api/v1/analytics/microstructure/${input.symbol}`);
@@ -47,7 +47,7 @@ export const analyticsEngineRouter = router({
   /** Get volume analysis for a symbol */
   getVolumeAnalysis: publicProcedure
     .input(z.object({
-      symbol: z.string(),
+      symbol: z.string().trim(),
       period: z.enum(["1h", "4h", "1d", "1w", "1m"]).default("1d"),
     }))
     .query(async ({ input }) => {
@@ -60,7 +60,7 @@ export const analyticsEngineRouter = router({
 
   /** Get price discovery data */
   getPriceDiscovery: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await aeFetch(`/api/v1/analytics/price-discovery/${input.symbol}`);
@@ -106,7 +106,7 @@ export const analyticsEngineRouter = router({
   /** Get OHLCV candles for a symbol */
   getOhlcv: publicProcedure
     .input(z.object({
-      symbol: z.string(),
+      symbol: z.string().trim(),
       interval: z.enum(["1m", "5m", "15m", "1h", "4h", "1d", "1w"]).default("1d"),
       from: z.number().int().optional(),
       to: z.number().int().optional(),
@@ -129,7 +129,7 @@ export const analyticsEngineRouter = router({
   /** Get trade history for a symbol */
   getTradeHistory: publicProcedure
     .input(z.object({
-      symbol: z.string(),
+      symbol: z.string().trim(),
       limit: z.number().int().min(1).max(500).default(50),
     }))
     .query(async ({ input }) => {
@@ -155,7 +155,7 @@ export const analyticsEngineRouter = router({
 
   /** Get liquidity metrics for a symbol */
   getLiquidityMetrics: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await aeFetch(`/api/v1/analytics/liquidity/${input.symbol}`);
@@ -167,7 +167,7 @@ export const analyticsEngineRouter = router({
   /** Get market impact analysis */
   getMarketImpact: protectedProcedure
     .input(z.object({
-      symbol: z.string(),
+      symbol: z.string().trim(),
       side: z.enum(["BUY", "SELL"]),
       quantity: z.number().positive(),
     }))

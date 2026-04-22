@@ -448,7 +448,7 @@ export const ordersRouter = router({
     .input(z.object({
       assetClass: z.enum(assetClasses).optional(),
       status: z.enum(orderStatuses).optional(),
-      columns: z.array(z.string()).optional(), // subset of column keys matching visibleCols
+      columns: z.array(z.string().trim()).optional(), // subset of column keys matching visibleCols
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();

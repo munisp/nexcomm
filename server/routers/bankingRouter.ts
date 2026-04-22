@@ -206,7 +206,7 @@ export const bankingRouter = router({
   getTransactions: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
+        accountId: z.string().trim(),
         from: z.string().optional(), // ISO date string
         to: z.string().optional(),
         limit: z.number().int().min(1).max(200).default(50),
@@ -498,7 +498,7 @@ export const bankingRouter = router({
     .input(
       z.object({
         farmerId: z.number().int().positive(),
-        currency: z.string().length(3).default("NGN"),
+        currency: z.string().trim().length(3).default("NGN"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -611,7 +611,7 @@ export const bankingRouter = router({
         lossType: z.enum(["DROUGHT", "FLOOD", "PEST", "DISEASE", "FIRE", "THEFT", "OTHER"]),
         affectedAreaHectares: z.number().positive(),
         estimatedLossNgn: z.number().positive(),
-        incidentDate: z.string(),
+        incidentDate: z.string().trim(),
         description: z.string().min(20).max(2000),
         evidenceUrls: z.array(z.string().url()).max(10).default([]),
       })

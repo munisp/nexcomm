@@ -37,12 +37,12 @@ const businessInfoSchema = z.object({
 const stakeholderSpecificSchema = z.object({
   // Farmer fields
   farmSize: z.string().optional(),
-  primaryCrops: z.array(z.string()).optional(),
+  primaryCrops: z.array(z.string().trim()).optional(),
   farmLocation: z.string().optional(),
   farmingType: z.enum(["SUBSISTENCE", "COMMERCIAL", "COOPERATIVE"]).optional(),
   // Trader fields
   tradingExperience: z.string().optional(),
-  preferredMarkets: z.array(z.string()).optional(),
+  preferredMarkets: z.array(z.string().trim()).optional(),
   capitalRange: z.string().optional(),
   // Broker fields
   licenseNumber: z.string().optional(),
@@ -52,11 +52,11 @@ const stakeholderSpecificSchema = z.object({
   warehouseName: z.string().optional(),
   warehouseLocation: z.string().optional(),
   storageCapacity: z.string().optional(),
-  commoditiesHandled: z.array(z.string()).optional(),
-  certifications: z.array(z.string()).optional(),
+  commoditiesHandled: z.array(z.string().trim()).optional(),
+  certifications: z.array(z.string().trim()).optional(),
   // Market Maker fields
   tradingDesk: z.string().optional(),
-  liquidityProvided: z.array(z.string()).optional(),
+  liquidityProvided: z.array(z.string().trim()).optional(),
   minSpread: z.string().optional(),
   // Admin fields
   adminCode: z.string().optional(),
@@ -69,9 +69,9 @@ const onboardingSubmitSchema = z.object({
   businessInfo: businessInfoSchema,
   stakeholderSpecific: stakeholderSpecificSchema,
   documentsUploaded: z.array(z.object({
-    type: z.string(),
-    url: z.string(),
-    name: z.string(),
+    type: z.string().trim(),
+    url: z.string().trim(),
+    name: z.string().trim(),
   })).optional(),
   agreedToTerms: z.boolean(),
   agreedToKyc: z.boolean(),

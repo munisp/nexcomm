@@ -108,9 +108,9 @@ export const notificationsRouter = router({
     .input(z.object({
       userId: z.number(),
       title: z.string().max(256),
-      message: z.string(),
+      message: z.string().trim(),
       type: z.enum(["TRADE", "SETTLEMENT", "KYC", "ALERT", "SYSTEM"]).default("SYSTEM"),
-      metadata: z.record(z.string(), z.unknown()).optional(),
+      metadata: z.record(z.string().trim(), z.unknown()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -163,7 +163,7 @@ export const notificationsRouter = router({
 
   /** Unregister a push token on logout (marks inactive in DB). */
   unregisterPushToken: protectedProcedure
-    .input(z.object({ token: z.string() }))
+    .input(z.object({ token: z.string().trim() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { success: false };
@@ -223,8 +223,8 @@ export const notificationsRouter = router({
   /** Internal: evaluate active alerts against current prices and send push notifications. */
   evaluateAlerts: publicProcedure
     .input(z.object({
-      prices: z.record(z.string(), z.number()),
-      secret: z.string(),
+      prices: z.record(z.string().trim(), z.number()),
+      secret: z.string().trim(),
     }))
     .mutation(async ({ input }) => {
       const expectedSecret = process.env.INTERNAL_JOB_SECRET;

@@ -79,7 +79,7 @@ export const settlementsRouter = router({
   createFromOrder: protectedProcedure
     .input(z.object({
       orderId: z.number(),
-      currency: z.string().length(3).default("NGN"),
+      currency: z.string().trim().length(3).default("NGN"),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();

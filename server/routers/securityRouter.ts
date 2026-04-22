@@ -400,4 +400,12 @@ export const securityRouter = router({
       .limit(1);
     return { enabled: pref?.biometricEnabled ?? false };
   }),
+
+  /** Admin: get in-memory middleware security audit log (path traversal, SQLi probes, blocked IPs) */
+  getMiddlewareSecurityLog: adminProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(500).default(100) }))
+    .query(async ({ input }) => {
+      const { getRecentSecurityEvents } = await import("../security");
+      return { events: getRecentSecurityEvents(input.limit) };
+    }),
 });

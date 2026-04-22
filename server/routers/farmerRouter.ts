@@ -514,7 +514,7 @@ export const farmerRouter = router({
       quantityKg: z.number().positive(),
       askingPricePerKg: z.number().positive(),
       currency: z.string().default("NGN"),
-      expectedHarvestDate: z.string(), // ISO date string
+      expectedHarvestDate: z.string().trim(), // ISO date string
       description: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1046,7 +1046,7 @@ export const farmerRouter = router({
       variety: z.string().optional(),
       totalQuantityKg: z.number().positive(),
       askingPricePerKg: z.number().positive(),
-      expectedHarvestDate: z.string(),
+      expectedHarvestDate: z.string().trim(),
       description: z.string().optional(),
       memberFarmIds: z.array(z.number().int().positive()).min(1),
     }))
@@ -1100,7 +1100,7 @@ export const farmerRouter = router({
   saveDraft: protectedProcedure
     .input(z.object({
       step: z.number().int().min(1).max(5),
-      payload: z.record(z.string(), z.unknown()),
+      payload: z.record(z.string().trim(), z.unknown()),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();

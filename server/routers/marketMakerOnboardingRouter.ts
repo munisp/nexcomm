@@ -22,7 +22,7 @@ export const marketMakerOnboardingRouter = router({
       contactEmail: z.string().email().optional(),
       yearsOfOperation: z.number().int().min(0).optional(),
       regulatoryRegistrations: z.string().optional(),
-      instrumentObligations: z.array(z.string()).optional(),
+      instrumentObligations: z.array(z.string().trim()).optional(),
       minQuoteSizeLots: z.number().positive().optional(),
       maxSpreadBps: z.number().positive().optional(),
       capitalCommitmentNgn: z.number().positive().optional(),
@@ -277,7 +277,7 @@ export const marketMakerOnboardingRouter = router({
       contactEmail: z.string().email().optional(),
       yearsOfOperation: z.number().int().min(0).optional(),
       regulatoryRegistrations: z.string().optional(),
-      instrumentObligations: z.array(z.string()).optional(),
+      instrumentObligations: z.array(z.string().trim()).optional(),
       minQuoteSizeLots: z.number().min(0).optional(),
       maxSpreadBps: z.number().min(0).optional(),
       capitalCommitmentNgn: z.number().min(0).optional(),
@@ -320,9 +320,9 @@ export const marketMakerOnboardingRouter = router({
   uploadKycDocument: protectedProcedure
     .input(z.object({
       docId: z.enum(["firmRegistrationUrl", "tradingLicenseUrl", "capitalAdequacyUrl"]),
-      fileName: z.string(),
-      mimeType: z.string(),
-      base64Data: z.string(),
+      fileName: z.string().trim(),
+      mimeType: z.string().trim(),
+      base64Data: z.string().trim(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();

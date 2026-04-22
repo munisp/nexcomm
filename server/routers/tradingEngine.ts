@@ -37,10 +37,10 @@ export const tradingEngineRouter = router({
   /** Submit an order via the Go trading engine (FIX protocol routing) */
   submitOrder: protectedProcedure
     .input(z.object({
-      symbol: z.string(),
+      symbol: z.string().trim(),
       side: z.enum(["BUY", "SELL"]),
       orderType: z.enum(["LIMIT", "MARKET", "STOP_LIMIT"]),
-      quantity: z.string(),
+      quantity: z.string().trim(),
       price: z.string().optional(),
       stopPrice: z.string().optional(),
       timeInForce: z.enum(["GTC", "IOC", "FOK", "DAY"]).default("GTC"),
@@ -92,7 +92,7 @@ export const tradingEngineRouter = router({
 
   /** Cancel an order via the Go trading engine */
   cancelOrder: protectedProcedure
-    .input(z.object({ orderId: z.string(), symbol: z.string() }))
+    .input(z.object({ orderId: z.string().trim(), symbol: z.string().trim() }))
     .mutation(async ({ input }) => {
       try {
         await teFetch(`/api/v1/orders/${input.orderId}`, { method: "DELETE" });
@@ -106,7 +106,7 @@ export const tradingEngineRouter = router({
 
   /** Get order book depth from the Go trading engine */
   getOrderBook: publicProcedure
-    .input(z.object({ symbol: z.string(), depth: z.number().int().min(1).max(50).default(10) }))
+    .input(z.object({ symbol: z.string().trim(), depth: z.number().int().min(1).max(50).default(10) }))
     .query(async ({ input }) => {
       try {
         const data = await teFetch(`/api/v1/orderbook/${input.symbol}?depth=${input.depth}`);
@@ -120,7 +120,7 @@ export const tradingEngineRouter = router({
 
   /** Get a specific order by ID */
   getOrder: protectedProcedure
-    .input(z.object({ orderId: z.string() }))
+    .input(z.object({ orderId: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         const data = await teFetch(`/api/v1/orders/${input.orderId}`);

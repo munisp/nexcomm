@@ -31,7 +31,7 @@ export const traderRouter = router({
       state: z.string().optional(),
       lga: z.string().optional(),
       tradingExperience: z.enum(["BEGINNER", "INTERMEDIATE", "EXPERIENCED", "PROFESSIONAL"]).default("BEGINNER"),
-      preferredMarkets: z.array(z.string()).optional(),
+      preferredMarkets: z.array(z.string().trim()).optional(),
       capitalRange: z.string().optional(),
       riskProfile: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE"]).default("MODERATE"),
     }))
@@ -502,7 +502,7 @@ export const traderRouter = router({
       state: z.string().max(100).optional(),
       lga: z.string().max(100).optional(),
       tradingExperience: z.enum(["BEGINNER", "INTERMEDIATE", "EXPERIENCED", "PROFESSIONAL"]).optional(),
-      preferredMarkets: z.array(z.string()).optional(),
+      preferredMarkets: z.array(z.string().trim()).optional(),
       capitalRange: z.string().max(50).optional(),
       riskProfile: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE"]).optional(),
       bankName: z.string().max(200).optional(),

@@ -235,7 +235,7 @@ export const investorRelationsRouter = router({
       ]),
       title: z.string().min(1).max(256),
       description: z.string().optional(),
-      eventDate: z.string(), // ISO datetime string
+      eventDate: z.string().trim(), // ISO datetime string
       isAllDay: z.boolean().default(true),
       venue: z.string().max(256).optional(),
       webcastUrl: z.string().url().optional(),
@@ -452,8 +452,8 @@ export const investorRelationsRouter = router({
       userId: z.number().int().positive(),
       shareholderName: z.string().min(1).max(128),
       shareholderType: z.enum(["INDIVIDUAL", "INSTITUTIONAL", "INSIDER", "GOVERNMENT"]).default("INDIVIDUAL"),
-      sharesHeld: z.string(), // numeric string
-      totalShares: z.string(), // numeric string
+      sharesHeld: z.string().trim(), // numeric string
+      totalShares: z.string().trim(), // numeric string
       acquisitionDate: z.string().optional(),
     }))
     .mutation(async ({ input }) => {

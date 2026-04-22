@@ -23,10 +23,10 @@ export const warehouseOpRouter = router({
       gpsLat: z.number().min(-90).max(90).optional(),
       gpsLng: z.number().min(-180).max(180).optional(),
       storageCapacityMt: z.number().positive().optional(),
-      commoditiesHandled: z.array(z.string()).optional(),
+      commoditiesHandled: z.array(z.string().trim()).optional(),
       gradingStaffCount: z.number().int().min(0).optional(),
       operatingHours: z.string().optional(),
-      acceptedGrades: z.array(z.string()).optional(),
+      acceptedGrades: z.array(z.string().trim()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -335,10 +335,10 @@ export const warehouseOpRouter = router({
       state: z.string().max(100).optional(),
       lga: z.string().max(100).optional(),
       storageCapacityMt: z.number().min(0).optional(),
-      commoditiesHandled: z.array(z.string()).optional(),
+      commoditiesHandled: z.array(z.string().trim()).optional(),
       gradingStaffCount: z.number().int().min(0).optional(),
       operatingHours: z.string().max(100).optional(),
-      acceptedGrades: z.array(z.string()).optional(),
+      acceptedGrades: z.array(z.string().trim()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();

@@ -26,7 +26,7 @@ export const inputFinancingRouter = router({
     .input(z.object({
       inputType: z.enum(["SEEDS", "FERTILIZER", "PESTICIDE", "HERBICIDE", "EQUIPMENT", "IRRIGATION", "STORAGE", "CASH"]),
       inputDescription: z.string().min(10),
-      requestedValueNgn: z.string(),
+      requestedValueNgn: z.string().trim(),
       cropPlanId: z.number().optional(),
       tenorMonths: z.number().min(1).max(24).default(6),
       notes: z.string().optional(),
@@ -50,8 +50,8 @@ export const inputFinancingRouter = router({
   repay: protectedProcedure
     .input(z.object({
       loanId: z.number(),
-      amountNgn: z.string(),
-      method: z.string(),
+      amountNgn: z.string().trim(),
+      method: z.string().trim(),
       reference: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -93,8 +93,8 @@ export const fieldAgentRouter = router({
   register: protectedProcedure
     .input(z.object({
       fullName: z.string().min(3),
-      phone: z.string(),
-      stateOfOperation: z.string(),
+      phone: z.string().trim(),
+      stateOfOperation: z.string().trim(),
       lgaOfOperation: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -133,7 +133,7 @@ export const fieldAgentRouter = router({
       farmerId: z.number(),
       farmId: z.number().optional(),
       visitType: z.enum(["ONBOARDING", "CROP_INSPECTION", "LOAN_ASSESSMENT", "HARVEST_VERIFICATION", "REPAYMENT_COLLECTION", "FOLLOW_UP"]),
-      scheduledAt: z.string(),
+      scheduledAt: z.string().trim(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();

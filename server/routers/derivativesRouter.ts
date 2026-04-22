@@ -54,9 +54,9 @@ export const derivativesRouter = router({
       assetClass: z.string().default("COMMODITY"),
       contractSize: z.number().positive(),
       tickSize: z.number().positive(),
-      currency: z.string().length(3).default("NGN"),
-      expiryDate: z.string().datetime(),
-      settlementDate: z.string().datetime(),
+      currency: z.string().trim().length(3).default("NGN"),
+      expiryDate: z.string().trim().datetime(),
+      settlementDate: z.string().trim().datetime(),
       initialMarginPct: z.number().min(0.01).max(1).default(0.10),
       maintenanceMarginPct: z.number().min(0.01).max(1).default(0.07),
     }))

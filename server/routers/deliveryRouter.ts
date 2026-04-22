@@ -63,9 +63,9 @@ export const deliveryRouter = router({
     .input(z.object({
       receiptId: z.number().optional(),
       commodity: z.string().max(64),
-      quantity: z.string(),
+      quantity: z.string().trim(),
       unit: z.string().max(16),
-      deliveryAddress: z.string(),
+      deliveryAddress: z.string().trim(),
       scheduledDate: z.date().optional(),
       notes: z.string().optional(),
     }))

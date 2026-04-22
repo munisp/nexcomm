@@ -56,7 +56,7 @@ export const userManagementRouter = router({
       firstName: z.string().min(1).optional(),
       lastName: z.string().min(1).optional(),
       phone: z.string().optional(),
-      country: z.string().length(2).optional(),
+      country: z.string().trim().length(2).optional(),
       language: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -196,7 +196,7 @@ export const userManagementRouter = router({
   /** Admin: review a KYC submission (approve/reject) */
   adminReviewKyc: protectedProcedure
     .input(z.object({
-      submissionId: z.string(),
+      submissionId: z.string().trim(),
       decision: z.enum(["approved", "rejected"]),
       reviewerNotes: z.string().optional(),
     }))

@@ -39,7 +39,7 @@ export const aiMlRouter = router({
       accountId: z.string().optional(),
       symbol: z.string().optional(),
       orderValue: z.number().optional(),
-      features: z.record(z.string(), z.number()).optional(),
+      features: z.record(z.string().trim(), z.number()).optional(),
     }))
     .query(async ({ ctx, input }) => {
       try {
@@ -60,7 +60,7 @@ export const aiMlRouter = router({
   /** Get price forecast for a symbol */
   getForecast: publicProcedure
     .input(z.object({
-      symbol: z.string(),
+      symbol: z.string().trim(),
       horizon: z.number().int().min(1).max(90).default(7),
       model: z.enum(["ARIMA", "LSTM", "PROPHET", "ENSEMBLE"]).default("ENSEMBLE"),
     }))
@@ -90,7 +90,7 @@ export const aiMlRouter = router({
 
   /** Get market sentiment for a symbol */
   getSentiment: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await aimlFetch(`/api/v1/sentiment/${input.symbol}`);
@@ -110,7 +110,7 @@ export const aiMlRouter = router({
 
   /** Get news sentiment for a symbol */
   getNewsSentiment: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await aimlFetch(`/api/v1/sentiment/news/${input.symbol}`);
@@ -130,7 +130,7 @@ export const aiMlRouter = router({
 
   /** Get anomalies for a specific symbol */
   getAnomaliesForSymbol: adminProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await aimlFetch(`/api/v1/anomalies/symbol/${input.symbol}`);
@@ -249,8 +249,8 @@ export const aiMlRouter = router({
   batchRiskScore: adminProcedure
     .input(z.object({
       accounts: z.array(z.object({
-        account_id: z.string(),
-        features: z.record(z.string(), z.number()).optional(),
+        account_id: z.string().trim(),
+        features: z.record(z.string().trim(), z.number()).optional(),
       })),
     }))
     .mutation(async ({ input }) => {

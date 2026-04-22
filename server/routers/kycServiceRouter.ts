@@ -45,7 +45,7 @@ export const kycServiceRouter = router({
 
   /** Get onboarding requirements for a stakeholder type */
   getOnboardingRequirements: publicProcedure
-    .input(z.object({ stakeholderType: z.string() }))
+    .input(z.object({ stakeholderType: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await kycFetch(`/api/v1/onboarding/requirements/${input.stakeholderType}`);
@@ -85,7 +85,7 @@ export const kycServiceRouter = router({
 
   /** Get a specific KYC application */
   getApplication: protectedProcedure
-    .input(z.object({ applicationId: z.string() }))
+    .input(z.object({ applicationId: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         return await kycFetch(`/api/v1/kyc/applications/${input.applicationId}`);
@@ -97,14 +97,14 @@ export const kycServiceRouter = router({
   /** Submit a new KYC application */
   submitApplication: protectedProcedure
     .input(z.object({
-      stakeholderType: z.string(),
-      fullName: z.string(),
-      dateOfBirth: z.string(),
-      nationality: z.string(),
-      idType: z.string(),
-      idNumber: z.string(),
-      address: z.string(),
-      phone: z.string(),
+      stakeholderType: z.string().trim(),
+      fullName: z.string().trim(),
+      dateOfBirth: z.string().trim(),
+      nationality: z.string().trim(),
+      idType: z.string().trim(),
+      idNumber: z.string().trim(),
+      address: z.string().trim(),
+      phone: z.string().trim(),
       email: z.string().email(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -121,10 +121,10 @@ export const kycServiceRouter = router({
   /** Upload a KYC document */
   uploadDocument: protectedProcedure
     .input(z.object({
-      applicationId: z.string(),
-      documentType: z.string(),
+      applicationId: z.string().trim(),
+      documentType: z.string().trim(),
       documentUrl: z.string().url(),
-      mimeType: z.string(),
+      mimeType: z.string().trim(),
     }))
     .mutation(async ({ input }) => {
       try {
@@ -143,7 +143,7 @@ export const kycServiceRouter = router({
 
   /** Start a liveness check session */
   startLiveness: protectedProcedure
-    .input(z.object({ applicationId: z.string() }))
+    .input(z.object({ applicationId: z.string().trim() }))
     .mutation(async ({ input }) => {
       try {
         return await kycFetch(`/api/v1/kyc/applications/${input.applicationId}/liveness/start`, {
@@ -156,7 +156,7 @@ export const kycServiceRouter = router({
 
   /** Verify a liveness session */
   verifyLiveness: protectedProcedure
-    .input(z.object({ sessionId: z.string(), imageUrl: z.string().url() }))
+    .input(z.object({ sessionId: z.string().trim(), imageUrl: z.string().url() }))
     .mutation(async ({ input }) => {
       try {
         return await kycFetch(`/api/v1/kyc/liveness/${input.sessionId}/verify`, {
@@ -172,7 +172,7 @@ export const kycServiceRouter = router({
   extractDocument: protectedProcedure
     .input(z.object({
       documentUrl: z.string().url(),
-      documentType: z.string(),
+      documentType: z.string().trim(),
     }))
     .mutation(async ({ input }) => {
       try {
@@ -190,7 +190,7 @@ export const kycServiceRouter = router({
 
   /** Verify a document (authenticity check) */
   verifyDocument: protectedProcedure
-    .input(z.object({ documentUrl: z.string().url(), documentType: z.string() }))
+    .input(z.object({ documentUrl: z.string().url(), documentType: z.string().trim() }))
     .mutation(async ({ input }) => {
       try {
         return await kycFetch("/api/v1/documents/verify", {
@@ -208,7 +208,7 @@ export const kycServiceRouter = router({
   /** Review a KYC application (admin) */
   reviewApplication: adminProcedure
     .input(z.object({
-      applicationId: z.string(),
+      applicationId: z.string().trim(),
       decision: z.enum(["APPROVED", "REJECTED", "PENDING_INFO"]),
       notes: z.string().optional(),
     }))
@@ -226,12 +226,12 @@ export const kycServiceRouter = router({
   /** Submit a KYB application (corporate) */
   submitKybApplication: protectedProcedure
     .input(z.object({
-      companyName: z.string(),
-      registrationNumber: z.string(),
-      jurisdiction: z.string(),
-      businessType: z.string(),
-      address: z.string(),
-      directors: z.array(z.object({ name: z.string(), role: z.string() })),
+      companyName: z.string().trim(),
+      registrationNumber: z.string().trim(),
+      jurisdiction: z.string().trim(),
+      businessType: z.string().trim(),
+      address: z.string().trim(),
+      directors: z.array(z.object({ name: z.string().trim(), role: z.string().trim() })),
     }))
     .mutation(async ({ ctx, input }) => {
       try {

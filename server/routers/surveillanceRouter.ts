@@ -519,8 +519,8 @@ export const surveillanceRouter = router({
   runCircuitBreakerScan: protectedProcedure
     .input(z.object({
       priceData: z.array(z.object({
-        instrument: z.string(),
-        assetClass: z.string(),
+        instrument: z.string().trim(),
+        assetClass: z.string().trim(),
         currentPrice: z.number().positive(),
         referencePrice: z.number().positive(),
       })),

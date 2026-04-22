@@ -36,7 +36,7 @@ export const livePricesRouter = router({
    * Get the live price for a single symbol.
    */
   getBySymbol: publicProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         const db = await getDb();
@@ -52,7 +52,7 @@ export const livePricesRouter = router({
    * Get live prices for multiple symbols at once.
    */
   getBySymbols: publicProcedure
-    .input(z.object({ symbols: z.array(z.string()) }))
+    .input(z.object({ symbols: z.array(z.string().trim()) }))
     .query(async ({ input }) => {
       try {
         const db = await getDb();
@@ -69,7 +69,7 @@ export const livePricesRouter = router({
    * Get live prices grouped by asset class.
    */
   getByAssetClass: publicProcedure
-    .input(z.object({ assetClass: z.string() }))
+    .input(z.object({ assetClass: z.string().trim() }))
     .query(async ({ input }) => {
       try {
         const db = await getDb();

@@ -149,7 +149,7 @@ export const ussdRouter = router({
 
   // ─── Admin: Session Detail ────────────────────────────────────────────────────
   getSessionDetail: protectedProcedure
-    .input(z.object({ sessionId: z.string() }))
+    .input(z.object({ sessionId: z.string().trim() }))
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") {
         throw new TRPCError({ code: "FORBIDDEN" });

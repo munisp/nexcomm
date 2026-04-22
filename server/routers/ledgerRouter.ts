@@ -128,7 +128,7 @@ export const ledgerRouter = router({
   getJournalHistory: protectedProcedure
     .input(
       z.object({
-        accountId:   z.string(),
+        accountId:   z.string().trim(),
         entryType:   z.enum(["debit", "credit"]).optional(),
         referenceType: z.string().optional(),
         limit:       z.number().min(1).max(200).default(20),
@@ -198,8 +198,8 @@ export const ledgerRouter = router({
   internalTransfer: protectedProcedure
     .input(
       z.object({
-        fromAccountId:  z.string(),
-        toAccountId:    z.string(),
+        fromAccountId:  z.string().trim(),
+        toAccountId:    z.string().trim(),
         amount:         z.number().positive(),
         description:    z.string().max(255).optional(),
         idempotencyKey: z.string().max(128).optional(),
@@ -355,7 +355,7 @@ export const ledgerRouter = router({
   adminEnqueueSettlement: adminProcedure
     .input(
       z.object({
-        tradeId:        z.string(),
+        tradeId:        z.string().trim(),
         priority:       z.number().min(0).max(10).default(5),
         idempotencyKey: z.string().optional(),
       })

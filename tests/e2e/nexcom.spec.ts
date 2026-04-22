@@ -301,3 +301,87 @@ test.describe("Accessibility", () => {
     expect(title.length).toBeGreaterThan(0);
   });
 });
+
+// ── 12. Security Headers ──────────────────────────────────────────────────────
+test.describe("Security Headers", () => {
+  test("response includes security headers", async ({ page }) => {
+    const response = await page.goto("/");
+    expect(response).toBeTruthy();
+    const headers = response!.headers();
+    // At least one of these security headers should be present
+    const hasSecurityHeader =
+      headers["x-content-type-options"] ||
+      headers["x-frame-options"] ||
+      headers["strict-transport-security"] ||
+      headers["content-security-policy"];
+    expect(hasSecurityHeader).toBeTruthy();
+  });
+
+  test("path traversal attempt is blocked", async ({ page }) => {
+    const response = await page.request.get("/api/trpc/../../../etc/passwd");
+    expect([400, 403, 404]).toContain(response.status());
+  });
+
+  test("XSS probe in URL is blocked or sanitized", async ({ page }) => {
+    const response = await page.request.get("/api/trpc/<script>alert(1)</script>");
+    expect([400, 403, 404]).toContain(response.status());
+  });
+});
+
+// ── 13. API Health Checks ─────────────────────────────────────────────────────
+test.describe("API Health Checks", () => {
+  test("tRPC health.ping responds with 200", async ({ page }) => {
+    const response = await page.request.get("/api/trpc/health.ping");
+    expect(response.ok()).toBeTruthy();
+  });
+
+  test("Stripe webhook endpoint exists", async ({ page }) => {
+    const response = await page.request.post("/api/stripe/webhook", {
+      headers: { "content-type": "application/json" },
+      data: JSON.stringify({ id: "evt_test_123", type: "test" }),
+    });
+    // Should not 404 (endpoint exists)
+    expect(response.status()).not.toBe(404);
+  });
+
+  test("HA status endpoint responds", async ({ page }) => {
+    const response = await page.request.get("/api/ha-status");
+    expect([200, 401, 403]).toContain(response.status());
+  });
+});
+
+// ── 14. Performance ───────────────────────────────────────────────────────────
+test.describe("Performance", () => {
+  const PERF_ROUTES = ["/", "/markets", "/trade", "/portfolio", "/orders"];
+
+  for (const route of PERF_ROUTES) {
+    test(`${route} loads within 10 seconds`, async ({ page }) => {
+      const start = Date.now();
+      await page.goto(route);
+      await waitForApp(page);
+      const elapsed = Date.now() - start;
+      expect(elapsed).toBeLessThan(10_000);
+    });
+  }
+});
+
+// ── 15. All Key Routes Smoke Test ─────────────────────────────────────────────
+test.describe("All Key Routes Smoke Test", () => {
+  const KEY_ROUTES = [
+    "/indices", "/forex", "/equities", "/fixed-income", "/derivatives",
+    "/futures", "/options", "/margin", "/commodities",
+    "/deposits", "/receipts", "/cooperative",
+    "/disputes", "/ledger", "/settlements", "/search",
+    "/banking", "/blockchain", "/risk",
+  ];
+
+  for (const route of KEY_ROUTES) {
+    test(`${route} renders without 500 error`, async ({ page }) => {
+      const response = await page.goto(route);
+      expect(response?.status()).not.toBe(500);
+      await waitForApp(page);
+      const bodyText = await page.locator("body").textContent();
+      expect(bodyText?.length).toBeGreaterThan(0);
+    });
+  }
+});

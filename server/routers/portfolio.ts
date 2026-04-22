@@ -16,7 +16,7 @@ export const portfolioRouter = router({
 
   // GET single position for a symbol
   getPosition: protectedProcedure
-    .input(z.object({ symbol: z.string() }))
+    .input(z.object({ symbol: z.string().trim() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return null;
@@ -124,9 +124,9 @@ export const portfolioRouter = router({
   // UPDATE position (admin can manually adjust, e.g. after settlement)
   updatePosition: protectedProcedure
     .input(z.object({
-      symbol: z.string(),
-      quantity: z.string(),
-      avgCost: z.string(),
+      symbol: z.string().trim(),
+      quantity: z.string().trim(),
+      avgCost: z.string().trim(),
       realizedPnl: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
