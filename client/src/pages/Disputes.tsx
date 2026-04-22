@@ -36,6 +36,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle2, Clock, XCircle, Plus, ChevronLeft, ChevronRight, Paperclip, Upload, FileText, ExternalLink } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -196,6 +197,7 @@ export default function Disputes() {
   const totalPages = Math.ceil(total / 10);
   const isLoading = isAdmin ? adminLoading : myLoading;
 
+  if (myLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">

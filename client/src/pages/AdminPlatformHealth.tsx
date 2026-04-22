@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function StatusBadge({ online }: { online: boolean }) {
   return online ? (
@@ -347,6 +348,7 @@ export default function AdminPlatformHealth() {
     services?.matchingEngine.status === "online" &&
     services?.gateway.status === "online";
 
+  if (haLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       {/* Header */}

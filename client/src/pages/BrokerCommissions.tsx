@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Users,
   DollarSign,
   TrendingUp,
@@ -120,6 +121,7 @@ export default function BrokerCommissions() {
     { id: "trades", label: "Trade History", icon: <TrendingUp className="w-4 h-4" /> },
   ];
 
+  if (clientsQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-[#0a0f1e] text-white">
       {/* Header */}

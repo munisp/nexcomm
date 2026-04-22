@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { WAREHOUSES, COMMODITIES, GRADE_SPECS } from "../../../shared/commodities";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const STATUS_CONFIG = {
   ACTIVE:    { label: "Active",    icon: CheckCircle2, className: "badge-active" },
@@ -226,6 +227,7 @@ export default function WarehouseReceipts() {
             const warehouse = WAREHOUSES.find(w => w.id === selectedReceipt.warehouseId);
             const grade = GRADE_SPECS.find(g => g.code === selectedReceipt.grade);
             const value = selectedReceipt.valueUsd ? parseFloat(selectedReceipt.valueUsd) : null;
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
             return (
               <div className="space-y-3 text-sm">
                 {[

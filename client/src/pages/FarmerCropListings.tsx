@@ -24,6 +24,7 @@ import {
   User,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const CROP_TYPES = [
   "MAIZE", "SORGHUM", "MILLET", "RICE", "WHEAT", "COWPEA", "SOYBEAN",
@@ -88,6 +89,7 @@ export default function FarmerCropListings() {
     });
   }
 
+  if (farmsQ.isLoading) return <PageSkeleton cards={2} tableRows={10} tableCols={5} />;
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto">
       {/* Header */}

@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const KYC_STATUS_CONFIG = {
   PENDING:      { label: "Pending",      className: "badge-pending",   icon: Clock },
@@ -338,6 +339,7 @@ export default function Admin() {
               const details = entry.details as Record<string, unknown> | null;
               const severity = (details?.severity as string) ?? "INFO";
               const cfg = SEVERITY_CONFIG[severity as keyof typeof SEVERITY_CONFIG] ?? SEVERITY_CONFIG.INFO;
+  if (kycLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
               return (
                 <div key={entry.id} className={"flex items-start gap-3 p-3 rounded-xl border border-border " + cfg.bg}>
                   <div className={"w-2 h-2 rounded-full mt-1.5 flex-shrink-0 " + (

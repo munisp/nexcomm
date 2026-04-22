@@ -48,6 +48,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const PAGE_SIZE = 50;
 
@@ -116,6 +117,7 @@ export default function TraderOpenOrders() {
   const partialCount = orders.filter(o => o.status === "PARTIALLY_FILLED").length;
   const totalNotional = orders.reduce((s, o) => s + (o.price ?? 0) * o.quantity, 0);
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 text-white">
       {/* Header */}

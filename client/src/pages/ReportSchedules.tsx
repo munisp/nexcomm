@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Calendar,
   Plus,
   Play,
@@ -71,7 +72,7 @@ export default function ReportSchedules() {
   const [timeUtc, setTimeUtc] = useState("15:00");
   const [runningId, setRunningId] = useState<number | null>(null);
 
-  const { data: schedules = [], refetch } = trpc.regulatoryReporting.adminListSchedules.useQuery();
+  const { data: schedules = [], refetch, isLoading: schedulesLoading } = trpc.regulatoryReporting.adminListSchedules.useQuery();
 
   const createMutation = trpc.regulatoryReporting.adminCreateSchedule.useMutation({
     onSuccess: () => {
@@ -119,6 +120,7 @@ export default function ReportSchedules() {
     runMutation.mutate({ scheduleId });
   };
 
+  if (schedulesLoading) return <PageSkeleton cards={2} tableRows={10} tableCols={5} />;
   return (
     <div className="p-6 space-y-6 max-w-6xl">
       <div className="flex items-center justify-between">

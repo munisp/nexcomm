@@ -10,6 +10,7 @@ import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Sprout,
   TrendingUp,
   Building2,
@@ -230,6 +231,7 @@ export default function OnboardingHub() {
             const isRegistered = !!profile;
             const isApproved = kycStatus === "APPROVED";
 
+  if (statusLoading) return <PageSkeleton cards={2} tableRows={4} tableCols={3} />;
             return (
               <button
                 key={card.key}

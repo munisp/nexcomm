@@ -23,6 +23,7 @@ import {
   ChevronLeft, ChevronRight, Search, Warehouse, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type MsgStatus = "ALL" | "SENT" | "READ" | "REPLIED" | "CLOSED";
 
@@ -186,6 +187,7 @@ export default function AdminWarehouseMessages() {
           {filtered.map(msg => {
             const cfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.SENT;
             const isUnread = msg.status === "SENT";
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
             return (
               <div
                 key={msg.id}

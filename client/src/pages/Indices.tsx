@@ -7,6 +7,7 @@ import { BarChart2, TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 interface IndexData {
   id: string;
@@ -130,6 +131,7 @@ export default function Indices() {
   const best = [...filtered].sort((a, b) => b.changePct - a.changePct)[0];
   const worst = [...filtered].sort((a, b) => a.changePct - b.changePct)[0];
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="page-container space-y-5">
       <div className="flex items-center justify-between">

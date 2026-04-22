@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   CreditCard,
   DollarSign,
   CheckCircle2,
@@ -288,6 +289,7 @@ export default function Payments() {
                     const cfg = statusConfig[p.status] ?? statusConfig.PENDING;
                     const usd = (p.amountCents / 100).toFixed(2);
                     const ngn = (p.amountCents * 16).toLocaleString(); // cents * 16 = kobo / 100 * 1600
+  if (paymentsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
                     return (
                       <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <td className="py-3 pr-4 text-muted-foreground">

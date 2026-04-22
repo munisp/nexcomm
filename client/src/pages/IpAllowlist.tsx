@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Shield, Plus, Trash2, RefreshCw, Search, CheckCircle, XCircle, Lock } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type Scope = "GLOBAL_ADMIN" | "BULK_OPERATIONS" | "LIQUIDATION_OVERRIDE" | "WITHDRAWAL_APPROVAL";
 
@@ -111,6 +112,7 @@ export default function IpAllowlist() {
     );
   }
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="p-6 space-y-6">
       {/* Header */}

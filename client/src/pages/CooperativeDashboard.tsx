@@ -60,6 +60,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── KYC status badge ─────────────────────────────────────────────────────────
 function KycBadge({ status }: { status: string }) {
@@ -1371,6 +1372,7 @@ export default function CooperativeDashboard() {
     );
   }
 
+  if (statsLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="space-y-6 p-4 lg:p-6 max-w-6xl mx-auto">
       {/* ── Header ── */}

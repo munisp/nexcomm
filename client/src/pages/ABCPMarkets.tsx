@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Building2, TrendingUp, Shield, DollarSign, FileText, Plus, ChevronRight, Layers } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const ISSUANCE_TREND = [
   { month: "Oct", volume: 8.2 }, { month: "Nov", volume: 12.4 }, { month: "Dec", volume: 9.8 },
@@ -116,6 +117,7 @@ export default function ABCPMarkets() {
               const subscribed = parseFloat(prog.subscribedNgn ?? "0");
               const total = parseFloat(prog.totalIssuanceNgn ?? "1");
               const pct = Math.min(100, (subscribed / total) * 100);
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
               return (
                 <Card key={prog.id} className="bg-[#111827] border-gray-700/50 hover:border-amber-500/30 transition-colors">
                   <CardContent className="p-5">

@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useState } from "react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const KYC_BADGE: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   PENDING: { label: "Pending", color: "bg-gray-700 text-gray-200", icon: Clock },
@@ -111,6 +112,7 @@ export default function MarketMakerOnboardingDashboard() {
   const formatNgn = (val: string | null | undefined) =>
     val ? `₦${parseFloat(val).toLocaleString()}` : "—";
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="min-h-screen bg-gradient-to-b from-cyan-950 to-cyan-900 text-white pb-24">
       {/* Header */}

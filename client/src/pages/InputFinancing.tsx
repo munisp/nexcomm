@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Tractor, Banknote, Package, CheckCircle2, Clock, AlertCircle, Plus } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const INPUT_TYPES = [
   { value: "SEEDS" as const, label: "Seeds", icon: "🌱" },
@@ -51,7 +52,7 @@ export default function InputFinancing() {
     notes: "",
   });
 
-  const { data: loans = [], refetch } = trpc.inputFinancing.myLoans.useQuery();
+  const { data: loans = [], refetch, isLoading: loansLoading } = trpc.inputFinancing.myLoans.useQuery();
   const { data: stats } = trpc.inputFinancing.stats.useQuery();
 
   const applyMutation = trpc.inputFinancing.applyForLoan.useMutation({
@@ -59,6 +60,7 @@ export default function InputFinancing() {
     onError: (e) => toast.error(e.message),
   });
 
+  if (loansLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white p-6">
       {/* Header */}

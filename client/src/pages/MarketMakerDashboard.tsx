@@ -28,6 +28,7 @@ import {
 import PushNotificationSettings from "@/pages/PushNotificationSettings";
 import { LivePriceTicker } from "@/components/LivePriceTicker";
 import { useLocation } from "wouter";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const STATUS_COLORS: Record<string, string> = {
@@ -289,6 +290,7 @@ export default function MarketMakerDashboard() {
 
   const stats = statsQuery.data;
 
+  if (statsQuery.isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Live Price Ticker — real-time WebSocket feed */}

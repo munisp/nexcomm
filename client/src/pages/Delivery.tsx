@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { WAREHOUSES, COMMODITIES, CATEGORY_ICONS } from "../../../shared/commodities";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const STATUS_CONFIG = {
   PENDING:    { label: "Pending",    icon: Clock,        className: "badge-pending" },
@@ -143,6 +144,7 @@ export default function Delivery() {
             const statusCfg = STATUS_CONFIG[dlv.status as DeliveryStatus] ?? STATUS_CONFIG.PENDING;
             const StatusIcon = statusCfg.icon;
             const catIcon = commodity ? CATEGORY_ICONS[commodity.category as keyof typeof CATEGORY_ICONS] : "🚚";
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
             return (
               <div key={dlv.id} className="rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-colors">
                 <div className="flex flex-col sm:flex-row sm:items-start gap-4">

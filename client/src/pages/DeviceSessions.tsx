@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Monitor, Smartphone, Globe, Clock, ShieldAlert, Trash2, RefreshCw } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function DeviceIcon({ userAgent }: { userAgent: string }) {
   const ua = userAgent.toLowerCase();
@@ -66,6 +67,7 @@ export default function DeviceSessions() {
     });
   };
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto space-y-6 p-6">

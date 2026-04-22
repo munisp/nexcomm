@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,7 @@ export default function AdminUserList() {
                       const StatusIcon = statusCfg.icon;
                       const isSelf = u.id === me?.id;
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
                       return (
                         <tr key={u.id}
                           className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">

@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   ArrowLeft,
   RefreshCw,
   Send,
@@ -103,6 +104,7 @@ export default function AdminFIXGateway() {
     sendMutation.mutate({ sessionId: selectedSession, messageType: msgType, fields: fieldMap });
   };
 
+  if (sessionsQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="min-h-screen bg-[#0a0f1e] text-white">
       {/* Header */}

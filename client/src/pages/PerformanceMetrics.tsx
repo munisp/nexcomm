@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -169,6 +170,7 @@ export default function PerformanceMetrics() {
     return "text-red-400";
   }
 
+  if (metricsQuery.isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}

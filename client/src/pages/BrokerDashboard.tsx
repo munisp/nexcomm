@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { useState, useRef } from "react";
 import PushNotificationSettings from "@/pages/PushNotificationSettings";
 import { WatchlistTickerFilter } from "@/components/WatchlistTickerFilter";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const KYC_BADGE: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   PENDING: { label: "Pending", color: "bg-gray-700 text-gray-200", icon: Clock },
@@ -115,6 +116,7 @@ export default function BrokerDashboard() {
   const kycInfo = KYC_BADGE[profile.kycStatus] ?? KYC_BADGE.PENDING;
   const KycIcon = kycInfo.icon;
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-950 to-purple-900 text-white pb-24">
       {/* Header */}

@@ -39,6 +39,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -158,6 +159,7 @@ export default function AdminUserDetail() {
 
   const { user, profile, recentOrders, kycHistory, recentNotifications } = data;
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-6 p-4 md:p-6">

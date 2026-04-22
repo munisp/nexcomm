@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Layers,
   Plus,
   RefreshCw,
@@ -179,6 +180,7 @@ export default function SettlementEngine() {
   const openFails = stats?.failStats.filter((s) => s.status === "OPEN").reduce((a, b) => a + Number(b.cnt), 0) ?? 0;
   const totalGross = stats?.cycleStats.reduce((a, b) => a + parseFloat(b.totalGross ?? "0"), 0) ?? 0;
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6 max-w-7xl mx-auto">

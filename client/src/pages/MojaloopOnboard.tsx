@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { MojaloopHubBanner } from "@/components/MojaloopHubBanner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 const STEPS = [
@@ -902,7 +903,7 @@ export default function MojaloopOnboard() {
   const updateEndpointValue = (type: EndpointType, value: string) => {
     setEndpointValues((prev) => ({ ...prev, [type]: value }));
   };
-  const { data: tiersData = [] } = trpc.mojaloopTiers.listTiers.useQuery();
+  const { data: tiersData = [], isLoading: tiersLoading } = trpc.mojaloopTiers.listTiers.useQuery();
   const assignTier = trpc.mojaloopTiers.assignTier.useMutation();
   const register = trpc.mojaloop.registerDfsp.useMutation();
   const registerEndpoints = trpc.mojaloop.registerDfspEndpoints.useMutation();
@@ -1031,6 +1032,7 @@ export default function MojaloopOnboard() {
     );
   }
 
+  if (tiersLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="flex flex-col">
       <MojaloopHubBanner />

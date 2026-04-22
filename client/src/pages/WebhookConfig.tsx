@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Webhook, Plus, Trash2, TestTube2, RefreshCw, Eye, EyeOff, Shield, CheckCircle, XCircle } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type EventFilter = "ALL" | "HIGH_AND_CRITICAL" | "CRITICAL_ONLY";
 
@@ -114,6 +115,7 @@ export default function WebhookConfig() {
     );
   }
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="p-6 space-y-6">
       {/* Header */}

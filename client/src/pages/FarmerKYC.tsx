@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { KycAnalysisPanel } from "@/components/KycAnalysisPanel";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const KYC_DOCS = [
   {
@@ -175,6 +176,7 @@ export default function FarmerKYC() {
     );
   }
 
+  if (profileQ.isLoading) return <PageSkeleton cards={2} tableRows={4} tableCols={3} />;
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto">
       {/* Header */}

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
 import { COMMODITIES, type CommodityCategory } from "../../../shared/commodities";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // Map farmer crop type strings to commodity symbols
 const CROP_TO_SYMBOL: Record<string, string> = {
@@ -88,6 +89,7 @@ export default function FarmerMarketPrices() {
     [],
   );
 
+  if (myPricesQ.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto">
       {/* Header */}

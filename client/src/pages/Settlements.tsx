@@ -70,6 +70,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw, Filter, Shield, Zap, TrendingUp, BarChart2 } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING:   "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -356,6 +357,7 @@ export default function Settlements() {
                   const t0H = Math.round((day.t0 / total) * 40);
                   const t1H = Math.round((day.t1 / total) * 40);
                   const t2H = Math.round((day.t2plus / total) * 40);
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
                   return (
                     <div key={day.date} className="flex-1 flex flex-col items-center gap-0.5" title={`${day.date}: ${day.t0} T+0, ${day.t1} T+1, ${day.t2plus} T+2+`}>
                       <div className="w-full flex flex-col-reverse rounded-sm overflow-hidden" style={{ height: 40 }}>

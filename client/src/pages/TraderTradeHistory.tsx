@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   ArrowLeft,
   TrendingUp,
   TrendingDown,
@@ -110,6 +111,7 @@ export default function TraderTradeHistory() {
     URL.revokeObjectURL(url);
   }
 
+  if (isLoading) return <PageSkeleton cards={2} tableRows={10} tableCols={5} />;
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 text-white">
       {/* Header */}

@@ -22,6 +22,7 @@ import {
   LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { Plus, TrendingUp, TrendingDown, Activity, DollarSign, RefreshCw, FlaskConical } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ── Black-Scholes helpers (client-side, for visualiser only) ──────────────────
 function normalCDF(x: number): number {
@@ -222,6 +223,7 @@ export default function OptionsAdmin() {
   const total = contractsQuery.data?.total ?? 0;
   const allActiveContracts = allActiveQuery.data?.contracts ?? [];
 
+  if (statsQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">

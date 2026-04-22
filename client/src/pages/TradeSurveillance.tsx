@@ -31,6 +31,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   ShieldAlert,
   Zap,
   AlertTriangle,
@@ -320,6 +321,7 @@ export default function TradeSurveillance() {
     );
   }
 
+  if (statsQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="space-y-6 p-6">
       {/* Header */}

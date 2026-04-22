@@ -48,6 +48,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const SOIL_TYPES = ["LOAMY", "CLAY", "SANDY", "SILT", "PEAT", "CHALK", "OTHER"] as const;
 type SoilType = typeof SOIL_TYPES[number];
@@ -222,6 +223,7 @@ export default function FarmerFarms() {
     });
   }
 
+  if (farmsQ.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto">
       {/* Header */}

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type MMStatus = "ACTIVE" | "SUSPENDED" | "PROBATION" | "PENDING";
 
@@ -63,7 +64,7 @@ export default function MarketMakers() {
   const [apps, setApps] = useState(PENDING_APPS);
 
   // Real market maker data
-  const { data: mmProfiles } = trpc.marketMaker.adminListProfiles.useQuery(
+  const { data: mmProfiles, isLoading: mmProfilesLoading } = trpc.marketMaker.adminListProfiles.useQuery(
     { status: "ALL" },
     { retry: false }
   );
@@ -102,6 +103,7 @@ export default function MarketMakers() {
     toast.error("Application rejected");
   };
 
+  if (mmProfilesLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="page-container space-y-5">
       <div>

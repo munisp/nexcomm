@@ -27,6 +27,7 @@ import {
   Info,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -166,6 +167,7 @@ export default function PushNotificationSettings({ compact = false }: PushNotifi
     );
   }
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="space-y-4">
       {/* Header card */}

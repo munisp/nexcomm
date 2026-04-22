@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { FileWarning, Plus, RefreshCw } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type SARStatus = "DRAFT" | "SUBMITTED" | "ACKNOWLEDGED" | "CLOSED" | "ALL";
 
@@ -124,6 +125,7 @@ export default function SARFiling() {
   const sars = sarsData?.sars ?? [];
   const total = sarsData?.total ?? 0;
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6 max-w-7xl mx-auto">

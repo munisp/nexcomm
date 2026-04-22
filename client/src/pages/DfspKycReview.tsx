@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   ShieldCheck,
   ShieldAlert,
   ShieldX,
@@ -453,6 +454,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  if (statsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="flex gap-2">
       <span className="text-muted-foreground w-40 shrink-0">{label}:</span>

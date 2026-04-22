@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Shield,
   AlertTriangle,
   TrendingDown,
@@ -299,6 +300,7 @@ export default function MarginHealth() {
     : 10;
   const ratioPct = health ? parseFloat(health.equityRatioPct) : 0;
 
+  if (healthQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
       {/* Header */}

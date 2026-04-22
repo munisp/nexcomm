@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type AlertSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 type AlertStatus = "OPEN" | "INVESTIGATING" | "CLOSED" | "ESCALATED";
@@ -232,7 +233,7 @@ export default function Surveillance() {
   });
 
   // Real circuit breaker events from surveillance router
-  const { data: cbEventsData } = trpc.surveillance.adminListCircuitBreakerEvents.useQuery(
+  const { data: cbEventsData, isLoading: cbEventsLoading } = trpc.surveillance.adminListCircuitBreakerEvents.useQuery(
     { limit: 50 },
     { retry: false }
   );
@@ -273,6 +274,7 @@ export default function Surveillance() {
   const criticalAlerts = mergedAlerts.filter(a => a.severity === "CRITICAL").length;
   const breaches = POSITION_LIMITS.filter(p => p.utilizationPct >= 90).length;
 
+  if (cbEventsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="page-container space-y-5">
       <div className="flex items-center justify-between">

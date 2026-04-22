@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileText, TrendingUp, TrendingDown, Minus, BarChart3, Calendar, Download, MapPin, Wheat, Globe } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const CROP_OPTIONS = ["ALL", "MAIZE", "SOYBEAN", "SORGHUM", "GINGER", "COCOA", "SESAME", "GROUNDNUT", "CASSAVA"];
 
@@ -125,6 +126,7 @@ export default function CropReports() {
             ) : (reports as CropReport[]).map(report => {
               const priceChange = parseFloat(report.priceChangePercent ?? "0");
               const PriceIcon = priceChange >= 0 ? TrendingUp : TrendingDown;
+  if (isLoading) return <PageSkeleton cards={2} tableRows={10} tableCols={5} />;
               return (
                 <Card key={report.id} className="bg-[#111827] border-gray-700/50 hover:border-orange-500/30 transition-colors">
                   <CardContent className="p-5">

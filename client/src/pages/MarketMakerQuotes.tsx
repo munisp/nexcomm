@@ -15,6 +15,7 @@ import {
   ArrowLeft, RefreshCw, BarChart3, Clock, Activity, DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type Obligation = {
   id: number;
@@ -191,6 +192,7 @@ export default function MarketMakerQuotes() {
     );
   }
 
+  if (profileLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-slate-950 text-white pb-10">
       {/* Header */}

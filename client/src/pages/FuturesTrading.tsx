@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, X } from "lucide-react";
 import OptionsChain from "@/components/OptionsChain";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function fmt(n: number | string | null | undefined, decimals = 2) {
   if (n == null) return "—";
@@ -77,6 +78,7 @@ export default function FuturesTrading() {
     ? parseFloat(entryPrice) * parseFloat(quantity) * parseFloat(selectedContract.contractSize) * parseFloat(selectedContract.initialMarginPct)
     : null;
 
+  if (contractsQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">

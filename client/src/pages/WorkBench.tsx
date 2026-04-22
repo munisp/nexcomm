@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { MapPin, Sprout, FlaskConical, TrendingUp, Plus, Leaf, BarChart3, Calendar, Wheat } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const CROP_OPTIONS = [
   { symbol: "MAIZE", name: "Maize" }, { symbol: "SOYBEAN", name: "Soybean" },
@@ -40,7 +41,7 @@ export default function WorkBench() {
   const [farmForm, setFarmForm] = useState({ farmName: "", locationState: "", locationLga: "", totalHectares: "", soilType: "", notes: "" });
   const [planForm, setPlanForm] = useState({ farmId: "", cropSymbol: "", season: "WET_SEASON" as const, plannedHectares: "", expectedYieldMt: "", inputCostNgn: "" });
 
-  const { data: summary } = trpc.workbench.summary.useQuery();
+  const { data: summary, isLoading: summaryLoading } = trpc.workbench.summary.useQuery();
   const { data: farms = [], refetch: refetchFarms } = trpc.workbench.listFarms.useQuery();
   const { data: plans = [], refetch: refetchPlans } = trpc.workbench.listCropPlans.useQuery({});
 
@@ -53,6 +54,7 @@ export default function WorkBench() {
     onError: (e) => toast.error(e.message),
   });
 
+  if (summaryLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white p-6">
       {/* Header */}

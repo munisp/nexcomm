@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { AlertTriangle, TrendingUp, TrendingDown, Zap, BarChart3, RefreshCw } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function fmt(n: number | string | null | undefined, decimals = 2) {
   if (n == null) return "—";
@@ -96,6 +97,7 @@ export default function DerivativesRiskDashboard() {
     return dist < 0.05;
   });
 
+  if (positionsQuery.isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">

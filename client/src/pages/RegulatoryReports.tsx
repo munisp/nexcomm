@@ -29,6 +29,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   FileText,
   Download,
   Plus,
@@ -155,6 +156,7 @@ export default function RegulatoryReports() {
     }
   };
 
+  if (downloadQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="p-6 space-y-6 max-w-7xl">
       {/* Header */}

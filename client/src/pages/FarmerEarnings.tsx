@@ -16,6 +16,7 @@ import {
   User,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const PERIOD_OPTIONS = [
   { label: "Last 30 days", days: 30 },
@@ -80,6 +81,7 @@ export default function FarmerEarnings() {
     }
   };
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-green-900 text-white pb-24">
       {/* Header */}

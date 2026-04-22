@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 export default function PriceFeedAdmin() {
   const utils = trpc.useUtils();
@@ -65,6 +66,7 @@ export default function PriceFeedAdmin() {
     return <Minus className="w-3 h-3" />;
   }
 
+  if (pricesQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       {/* Header */}

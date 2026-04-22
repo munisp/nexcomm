@@ -11,6 +11,7 @@ import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
 import { COMMODITIES } from "@shared/commodities";
 import { FX_PAIRS, EQUITIES, CRYPTO_ASSETS } from "@shared/instruments";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ============================================================
 // Types
@@ -476,6 +477,7 @@ export default function PriceAlerts() {
     }
   };
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}

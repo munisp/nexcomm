@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Coins,
   History,
   Search,
@@ -298,6 +299,7 @@ export default function TokenExplorer() {
     setPage(1);
   }
 
+  if (searchLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">

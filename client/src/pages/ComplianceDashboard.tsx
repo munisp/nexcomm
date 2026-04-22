@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ── Stat card ──────────────────────────────────────────────────────────────
 
@@ -104,6 +105,7 @@ export default function ComplianceDashboard() {
     amlFlagsQuery.refetch();
   };
 
+  if (kycQueueQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6 bg-slate-950 min-h-screen">

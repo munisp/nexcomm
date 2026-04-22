@@ -32,6 +32,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { GitMerge, RefreshCw, ArrowUpCircle, CheckCircle } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type FailStatus = "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "ESCALATED" | "WRITTEN_OFF" | "ALL";
 
@@ -114,6 +115,7 @@ export default function SettlementFails() {
   const fails = failsData?.fails ?? [];
   const total = failsData?.total ?? 0;
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6 max-w-7xl mx-auto">

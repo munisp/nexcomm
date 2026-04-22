@@ -35,6 +35,7 @@ import {
   Minus,
 } from "lucide-react";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   BarChart,
   Bar,
   XAxis,
@@ -162,6 +163,7 @@ export default function TraderPnL() {
     trades: d.tradeCount,
   }));
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-950 text-white">
       {/* Header */}

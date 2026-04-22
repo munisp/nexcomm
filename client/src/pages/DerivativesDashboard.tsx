@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { TrendingUp, TrendingDown, BarChart3, Clock, Plus, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function StatusBadge({ status }: { status: string }) {
   const variants: Record<string, string> = {
@@ -99,6 +100,7 @@ export default function DerivativesDashboard() {
 
   const selectedContract = contracts.find(c => c.id === selectedContractId);
 
+  if (statsQuery.isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">

@@ -18,6 +18,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type NotifType = "TRADE" | "SETTLEMENT" | "KYC" | "ALERT" | "SYSTEM" | "MARGIN_CALL" | "LIQUIDATED" | "SECURITY_ALERT" | "PRICE_ALERT" | "WAREHOUSE" | "ANNOUNCEMENT" | "EWR" | "DEPOSIT" | "DELIVERY";
 
@@ -306,6 +307,7 @@ export default function Notifications() {
                 {filtered.map(n => {
                   const tc = TYPE_CONFIG[n.type] ?? TYPE_CONFIG.SYSTEM;
                   const Icon = tc.icon;
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
                   return (
                     <div
                       key={n.id}

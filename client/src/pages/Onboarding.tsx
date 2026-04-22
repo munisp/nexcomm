@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Wheat, BarChart2, Briefcase, Warehouse, Activity, Shield,
   CheckCircle2, ChevronRight, ChevronLeft, User, Building2,
   FileText, Upload, Eye, RefreshCw, AlertCircle, Clock,
@@ -613,6 +614,7 @@ export default function Onboarding() {
                 ] as Array<{ id: string; label: string; required: boolean }>).map((doc) => {
                   const uploaded = uploadedDocs[doc.id];
                   const isUploading = uploadingDocId === doc.id;
+  if (statusLoading) return <PageSkeleton cards={2} tableRows={4} tableCols={3} />;
                   return (
                     <div key={doc.id} className={`flex items-center gap-3 p-3 border rounded-lg transition-colors ${uploaded ? "bg-emerald-900/20 border-emerald-500/30" : "bg-white/5 border-white/10 hover:bg-white/10"}`}>
                       {uploaded

@@ -331,13 +331,16 @@ function PWAManager() {
 
 export default function App() {
   return (
-    <ErrorBoundary>
+    <ErrorBoundary pageName="NEXCOM Exchange">
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster richColors position="top-right" />
           <PWAManager />
           <Layout>
-            <Router />
+            {/* Per-page boundary: isolates route-level crashes from the nav shell */}
+            <ErrorBoundary pageName="Page">
+              <Router />
+            </ErrorBoundary>
           </Layout>
         </TooltipProvider>
       </ThemeProvider>

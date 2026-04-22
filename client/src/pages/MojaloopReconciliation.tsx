@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { MojaloopHubBanner } from "@/components/MojaloopHubBanner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtAmount(v: string | number | null | undefined, currency = "") {
@@ -123,6 +124,7 @@ export default function MojaloopReconciliation() {
   const unmatchedTransfers: any[] = report?.unmatchedTransfers ?? [];
   const volumeByCurrency: any[] = report?.byCurrency ?? [];
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="flex flex-col">
       <MojaloopHubBanner />

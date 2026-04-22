@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "wouter";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Stakeholder type badge ───────────────────────────────────────────────────
 function StakeholderBadge({ type }: { type: string }) {
@@ -240,6 +241,7 @@ export default function AdminReKycFlags() {
   const notifiedCount = flags.filter(f => f.notifiedAt && !f.resolvedAt).length;
   const resolvedCount = flags.filter(f => f.resolvedAt).length;
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="space-y-6 p-4 lg:p-6 max-w-6xl mx-auto">
       {/* ── Header ── */}

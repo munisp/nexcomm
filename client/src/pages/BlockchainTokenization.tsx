@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Link2, Coins, RefreshCw, Activity, Shield, Globe, Database, Layers } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -60,7 +61,7 @@ export default function BlockchainTokenization() {
   const [fractions, setFractions] = useState("100");
   const [fractionPrice, setFractionPrice] = useState("1000");
 
-  const { data: health } = trpc.blockchain.health.useQuery(undefined, { refetchInterval: 15000 });
+  const { data: health, isLoading: healthLoading } = trpc.blockchain.health.useQuery(undefined, { refetchInterval: 15000 });
   const { data: chainStatus, refetch: refetchChains } = trpc.blockchain.getChainStatus.useQuery(undefined, { refetchInterval: 30000 });
   const { data: tokens, refetch: refetchTokens } = trpc.blockchain.listTokens.useQuery({ page: tokenizePage, limit: 20 }, { refetchInterval: 60000 });
   const { data: myPortfolio } = trpc.blockchain.getMyFractionPortfolio.useQuery(undefined, { enabled: !!user, refetchInterval: 60000 });
@@ -109,6 +110,7 @@ export default function BlockchainTokenization() {
   const ipfsData = ipfsStatus as { online?: boolean; peer_count?: number; error?: string } | undefined;
   const blockNum = blockNumber as { block_number?: number; chain?: string; error?: string } | undefined;
 
+  if (healthLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

@@ -43,6 +43,7 @@ import {
   RefreshCw, ChevronDown, ChevronRight, Eye, Shield,
 } from "lucide-react";
 import { getLoginUrl } from "@/const";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type UploadStatus = "PROCESSING" | "COMPLETED" | "PARTIAL" | "FAILED";
@@ -421,6 +422,7 @@ export default function BulkKycAdmin() {
                   const count = memberData.members.filter(m => m.status === s).length;
                   if (count === 0) return null;
                   const cfg = MEMBER_STATUS_CONFIG[s];
+  if (uploadsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
                   return (
                     <Badge key={s} variant="outline" className={`text-xs ${cfg.color}`}>
                       {count} {cfg.label}

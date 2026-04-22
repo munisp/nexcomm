@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { WAREHOUSES, COMMODITIES, GRADE_SPECS, CATEGORY_ICONS } from "../../../shared/commodities";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const STATUS_CONFIG = {
   PENDING:  { label: "Pending",  icon: Clock,        className: "badge-pending" },
@@ -287,6 +288,7 @@ export default function Deposits() {
             const warehouse = WAREHOUSES.find(w => w.id === detailDep.warehouseId);
             const statusCfg = STATUS_CONFIG[detailDep.status as DepositStatus] ?? STATUS_CONFIG.PENDING;
             const StatusIcon = statusCfg.icon;
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
             return (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">

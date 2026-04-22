@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   AlertTriangle,
   Shield,
   TrendingUp,
@@ -129,6 +130,7 @@ export default function MarginAccount() {
   const ledgerTotal = ledgerData?.total ?? 0;
   const totalLedgerPages = Math.ceil(ledgerTotal / 10);
 
+  if (summaryLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">

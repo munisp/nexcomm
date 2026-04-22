@@ -58,6 +58,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Status badge helper ──────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
@@ -350,6 +351,7 @@ export default function WarehouseInventory() {
       {/* ── Warehouse groups ── */}
       {warehouses.map(warehouse => {
         const isOpen = openWarehouses.has(warehouse.warehouseId);
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
         return (
           <Card key={warehouse.warehouseId} className="overflow-hidden">
             <Collapsible open={isOpen} onOpenChange={() => toggleWarehouse(warehouse.warehouseId)}>

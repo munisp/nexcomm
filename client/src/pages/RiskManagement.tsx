@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { ShieldAlert, TrendingDown, AlertTriangle, Activity, Zap, BarChart2, RefreshCw, CheckCircle, XCircle } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -36,7 +37,7 @@ export default function RiskManagement() {
   const [checkResult, setCheckResult] = useState<null | { approved: boolean; reason: string | null; marginRequired: number | null; source: string }>(null);
   const [marginSymbol, setMarginSymbol] = useState("MAIZE");
 
-  const { data: positions, refetch: refetchPositions } = trpc.riskManagement.getPositions.useQuery(undefined, { enabled: !!user, refetchInterval: 30000 });
+  const { data: positions, refetch: refetchPositions, isLoading: positionsLoading } = trpc.riskManagement.getPositions.useQuery(undefined, { enabled: !!user, refetchInterval: 30000 });
   const { data: riskSummary } = trpc.riskManagement.getRiskSummary.useQuery(undefined, { enabled: !!user, refetchInterval: 30000 });
   const { data: circuitBreakers, refetch: refetchCB } = trpc.riskManagement.getCircuitBreakers.useQuery(undefined, { refetchInterval: 30000 });
   const { data: marginReqs } = trpc.riskManagement.getMarginRequirements.useQuery({ symbol: marginSymbol }, { refetchInterval: 60000 });
@@ -56,6 +57,7 @@ export default function RiskManagement() {
   const summary = riskSummary as Record<string, unknown> | undefined;
   const marginData = marginReqs as Record<string, unknown> | undefined;
 
+  if (positionsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

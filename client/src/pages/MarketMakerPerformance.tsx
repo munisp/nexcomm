@@ -6,6 +6,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   TrendingUp, CheckCircle2, AlertTriangle, BarChart3, Loader2, ShieldCheck,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ export default function MarketMakerPerformance() {
     ? reports.reduce((sum, r) => sum + parseFloat(r.uptimePct), 0) / reports.length
     : 0;
 
+  if (profileQuery.isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       {/* Header */}

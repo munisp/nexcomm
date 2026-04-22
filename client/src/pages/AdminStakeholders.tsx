@@ -37,6 +37,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type KycStatus = "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED";
@@ -907,6 +908,7 @@ export default function AdminStakeholders() {
 
   const ActiveTabComponent = TAB_COMPONENTS[activeTab];
 
+  if (!user) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}

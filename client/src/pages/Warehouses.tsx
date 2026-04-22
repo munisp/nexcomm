@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { WAREHOUSES, COMMODITIES, CATEGORY_ICONS } from "../../../shared/commodities";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const COUNTRY_FLAGS: Record<string, string> = {
   "Nigeria": "🇳🇬",
@@ -79,7 +80,7 @@ export default function Warehouses() {
   // Fetch all messages sent by this user across all warehouses (global inbox) — paginated
   const PAGE_SIZE = 5;
   const [msgPage, setMsgPage] = useState(0); // 0-based page index
-  const { data: allMyMessagesData, refetch: refetchAllMessages } = trpc.warehouseMessages.listAllMessages.useQuery(
+  const { data: allMyMessagesData, refetch: refetchAllMessages, isLoading: allMyMessagesLoading } = trpc.warehouseMessages.listAllMessages.useQuery(
     { limit: PAGE_SIZE * (msgPage + 1), offset: 0 },
   );
   const allMyMessages = allMyMessagesData?.messages ?? [];
@@ -142,6 +143,7 @@ export default function Warehouses() {
     navigate(`/deposits?warehouseId=${encodeURIComponent(wh.id)}`);
   }
 
+  if (allMyMessagesLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="page-container space-y-5">
       <div>

@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Brain, TrendingUp, AlertTriangle, Activity, RefreshCw, Eye, BarChart2 } from "lucide-react";
 import CommodityCorrelationGraph from "@/components/CommodityCorrelationGraph";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -41,7 +42,7 @@ export default function AiMlDashboard() {
   const [anomalySymbol, setAnomalySymbol] = useState("MAIZE");
   const [sentimentSymbol, setSentimentSymbol] = useState("MAIZE");
 
-  const { data: health } = trpc.aiMl.health.useQuery(undefined, { refetchInterval: 15000 });
+  const { data: health, isLoading: healthLoading } = trpc.aiMl.health.useQuery(undefined, { refetchInterval: 15000 });
   const { data: forecast, refetch: refetchForecast } = trpc.aiMl.getForecast.useQuery(
     { symbol: forecastSymbol, horizon: forecastHorizon, model: forecastModel },
     { refetchInterval: 300000 }
@@ -72,6 +73,7 @@ export default function AiMlDashboard() {
   const riskData = riskScore as { risk_score?: number; risk_level?: string; error?: string } | undefined;
   const modelsArr = Array.isArray(forecastModels) ? forecastModels : ["ARIMA", "LSTM", "PROPHET", "ENSEMBLE"];
 
+  if (healthLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

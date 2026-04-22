@@ -24,6 +24,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   MessageSquare,
   Phone,
   Send,
@@ -599,6 +600,7 @@ export default function ChannelDashboard() {
     );
   }
 
+  if (channelLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="p-6 space-y-6 bg-slate-900 min-h-screen">
       {/* Header */}

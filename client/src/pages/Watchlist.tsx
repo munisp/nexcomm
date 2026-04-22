@@ -54,6 +54,7 @@ import { cn } from "@/lib/utils";
 import type { LivePrice } from "../../../drizzle/schema";
 import OrderBookDepthPanel from "@/components/OrderBookDepthPanel";
 import CandleChart from "@/components/CandleChart";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Inline Trade Modal ───────────────────────────────────────────────────────
 // Fee rates (basis points)
@@ -1082,6 +1083,7 @@ export default function WatchlistPage() {
           { label: "Alerts",    path: "/alerts",           Icon: Bell },
         ] as const).map(item => {
           const isActive = currentPath === item.path || currentPath.startsWith(item.path + "/");
+  if (wlLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
           return (
             <button
               key={item.path}

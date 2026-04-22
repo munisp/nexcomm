@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import { useState, useRef } from "react";
 import PushNotificationSettings from "@/pages/PushNotificationSettings";
 import { WatchlistTickerFilter } from "@/components/WatchlistTickerFilter";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Margin Health Indicator ─────────────────────────────────────────────────
 function MarginHealthIndicator({ onNavigate }: { onNavigate: (path: string) => void }) {
@@ -310,6 +311,7 @@ export default function TraderDashboard() {
   const KycIcon = kycInfo.icon;
   const allDocsUploaded = DOC_FIELDS.every((f) => !f.required || uploadedUrls[f.id]);
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-950 to-blue-900 text-white pb-24">
       {/* Header */}

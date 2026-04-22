@@ -18,6 +18,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 
 
@@ -225,6 +226,7 @@ export default function Account() {
     { label: "Accredited Investor",      status: "not_started", desc: "Optional — unlocks higher limits" },
   ];
 
+  if (profileLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="page-container space-y-5">
       <div className="flex items-center justify-between">

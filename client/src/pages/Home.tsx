@@ -10,6 +10,7 @@ import { getLoginUrl } from "@/const";
 import { PasskeyLoginButton } from "@/components/PasskeyLoginButton";
 import { Link } from "wouter";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   TrendingUp, Wheat, Warehouse, BarChart3, ArrowRight,
   ShieldCheck, Zap, Globe, Users, ChevronRight, Loader2,
   Package, FileText, Bell, Settings
@@ -203,13 +204,7 @@ function UnauthenticatedHome() {
 export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (loading) return <PageSkeleton cards={4} tableRows={4} tableCols={3} />;
 
   if (!isAuthenticated || !user) {
     return <UnauthenticatedHome />;

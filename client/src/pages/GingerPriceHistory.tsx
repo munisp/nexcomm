@@ -23,6 +23,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   createChart,
   createSeriesMarkers,
   CandlestickSeries,
@@ -556,6 +557,7 @@ export default function GingerPriceHistory() {
             <div className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {(gingerInfo?.warehouses ?? []).map(w => {
                 const pctUsed = Math.round(((w.capacity - w.available) / w.capacity) * 100);
+  if (isLoading) return <PageSkeleton cards={2} tableRows={10} tableCols={5} />;
                 return (
                   <div key={w.id} className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/50">
                     <div className="flex items-start justify-between mb-2">

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type BrokerStatus = "ACTIVE" | "SUSPENDED" | "PROBATION";
 
@@ -75,7 +76,7 @@ export default function Brokers() {
   const notifyOwner = trpc.system.notifyOwner.useMutation();
 
   // Real broker data from the broker router
-  const { data: brokerData } = trpc.broker.adminListBrokerProfiles.useQuery(
+  const { data: brokerData, isLoading: brokerLoading } = trpc.broker.adminListBrokerProfiles.useQuery(
     { limit: 100, offset: 0 },
     { retry: false }
   );
@@ -116,6 +117,7 @@ export default function Brokers() {
   const totalClients = liveBrokers.reduce((s, b) => s + b.clients, 0);
   const avgRating = liveBrokers.length > 0 ? liveBrokers.reduce((s, b) => s + b.rating, 0) / liveBrokers.length : 0;
 
+  if (brokerLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="page-container space-y-5">
       <div className="flex items-center justify-between">

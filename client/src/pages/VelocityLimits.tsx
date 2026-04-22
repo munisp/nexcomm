@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 export default function VelocityLimits() {
   const { user } = useAuth();
@@ -28,7 +29,7 @@ export default function VelocityLimits() {
   const [formHours, setFormHours] = useState("24");
   const [formUserId, setFormUserId] = useState("");
 
-  const { data: allLimits, refetch: refetchAll } = trpc.velocityLimit.adminListLimits.useQuery(undefined, { enabled: isAdmin });
+  const { data: allLimits, refetch: refetchAll, isLoading: allLimitsLoading } = trpc.velocityLimit.adminListLimits.useQuery(undefined, { enabled: isAdmin });
   const { data: myUsage } = trpc.velocityLimit.myUsage.useQuery({ currency: "NGN" });
 
   const setLimitMutation = trpc.velocityLimit.adminSetLimit.useMutation({
@@ -69,6 +70,7 @@ export default function VelocityLimits() {
     setShowCreateDialog(true);
   };
 
+  if (allLimitsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6 p-6">

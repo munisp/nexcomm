@@ -65,6 +65,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Relative time helper ─────────────────────────────────────────────────────
 function formatRelativeTime(date: Date): string {
@@ -1221,7 +1222,7 @@ function WithdrawalThresholdTab() {
 export default function SecuritySettings() {
   const { user, loading } = useAuth();
 
-  if (loading) return null;
+  if (loading) return <PageSkeleton cards={4} tableRows={6} tableCols={3} />;
   if (!user || user.role !== "admin") {
     return (
       <DashboardLayout>

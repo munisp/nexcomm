@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { TrendingUp, Shield, DollarSign, Calendar, Building2, Award, ChevronRight, BarChart3, Landmark } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const YIELD_CURVE_DATA = [
   { tenor: "91D", yield: 22.5 }, { tenor: "182D", yield: 21.8 }, { tenor: "364D", yield: 20.2 },
@@ -61,6 +62,7 @@ export default function FixedIncome() {
     ? instruments.reduce((s, i) => s + parseFloat(i.yieldPct ?? "0"), 0) / instruments.length
     : 0;
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white p-6">
       {/* Header */}

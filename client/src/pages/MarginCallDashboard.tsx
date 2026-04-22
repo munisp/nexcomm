@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle, TrendingDown, Shield, Zap, Plus, RefreshCw } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type MarginCallStatus = "OPEN" | "PARTIALLY_MET" | "MET" | "DEFAULTED" | "CANCELLED";
 
@@ -117,6 +118,7 @@ export default function MarginCallDashboard() {
 
   const stats = statsQuery.data;
 
+  if (statsQuery.isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

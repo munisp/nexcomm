@@ -52,6 +52,7 @@ import {
   Users,
 } from "lucide-react";
 import { MojaloopHubBanner } from "@/components/MojaloopHubBanner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const TIER_NAMES = ["STANDARD", "PREMIUM", "INSTITUTIONAL", "CORRESPONDENT"] as const;
 type TierName = (typeof TIER_NAMES)[number];
@@ -499,6 +500,7 @@ export default function MojaloopTiers() {
           const tier = tiers?.find((t) => t.name === tierName);
           const tierDfsps = dfsps?.filter((d) => (d.tier ?? "STANDARD") === tierName) ?? [];
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
           return (
             <TabsContent key={tierName} value={tierName} className="space-y-4 mt-4">
               {isLoading ? (

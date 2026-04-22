@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const ACTION_TYPES = ["DIVIDEND", "STOCK_SPLIT", "RIGHTS_ISSUE", "BONUS_ISSUE", "MERGER", "DELISTING", "IPO"] as const;
 type ActionType = typeof ACTION_TYPES[number];
@@ -291,6 +292,7 @@ export default function CorporateActions() {
     { id: "rejected",         label: "Rejected", icon: <XCircle className="w-3.5 h-3.5" /> },
   ];
 
+  if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between gap-4">

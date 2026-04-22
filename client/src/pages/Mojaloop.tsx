@@ -54,6 +54,7 @@ import {
   Zap,
 } from "lucide-react";
 import { MojaloopHubBanner } from "@/components/MojaloopHubBanner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Status badge helper ──────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
@@ -406,6 +407,7 @@ export default function Mojaloop() {
 
   const totalVolume = volumeByCurrency?.reduce((acc, v) => acc + Number(v.totalAmount ?? 0), 0) ?? 0;
 
+  if (statsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="flex flex-col">
       <MojaloopHubBanner />

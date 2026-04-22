@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Wallet,
   AlertCircle,
   ArrowUpRight,
@@ -748,6 +749,7 @@ export default function BankingDashboard() {
     ? dashboard?.accounts.find((a) => a.id === selectedAccountId)
     : dashboard?.accounts[0];
 
+  if (dashLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="container py-6 space-y-6">
       {/* Header */}

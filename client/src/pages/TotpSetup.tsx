@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ShieldCheck, ShieldOff, Smartphone, Copy, CheckCircle, AlertTriangle, KeyRound } from "lucide-react";
 import QRCode from "qrcode";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 export default function TotpSetup() {
   const [step, setStep] = useState<"status" | "setup" | "verify" | "backup">("status");
@@ -17,7 +18,7 @@ export default function TotpSetup() {
   const [disableCode, setDisableCode] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const { data: totpStatus, refetch: refetchStatus } = trpc.totp.getStatus.useQuery();
+  const { data: totpStatus, refetch: refetchStatus, isLoading: totpStatusLoading } = trpc.totp.getStatus.useQuery();
 
   const setupMutation = trpc.totp.generateSecret.useMutation({
     onSuccess: async (data: { secret: string; otpauthUrl: string }) => {
@@ -56,6 +57,7 @@ export default function TotpSetup() {
     navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard"));
   };
 
+  if (totpStatusLoading) return <PageSkeleton cards={2} tableRows={4} tableCols={3} />;
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto space-y-6 p-6">

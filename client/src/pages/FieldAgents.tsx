@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Users, MapPin, Trophy, Calendar, Star, Plus, Award, CheckCircle2 } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const STATES = ["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos","Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
 
@@ -27,7 +28,7 @@ export default function FieldAgents() {
   const [form, setForm] = useState({ fullName: "", phone: "", stateOfOperation: "", lgaOfOperation: "" });
   const [visitForm, setVisitForm] = useState({ farmerId: "", visitType: "CROP_INSPECTION" as const, scheduledAt: "" });
 
-  const { data: stats } = trpc.fieldAgent.networkStats.useQuery();
+  const { data: stats, isLoading: statsLoading } = trpc.fieldAgent.networkStats.useQuery();
   const { data: leaderboard = [] } = trpc.fieldAgent.leaderboard.useQuery();
   const { data: myProfile } = trpc.fieldAgent.myProfile.useQuery();
   const { data: myVisits = [] } = trpc.fieldAgent.myVisits.useQuery();
@@ -42,6 +43,7 @@ export default function FieldAgents() {
     onError: (e: { message: string }) => toast.error(e.message),
   });
 
+  if (statsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white p-6">
       {/* Header */}

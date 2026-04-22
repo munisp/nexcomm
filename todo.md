@@ -499,3 +499,16 @@
 - [x] Update PRODUCTION_READINESS.md with REDIS_URL setup guide (graceful degradation, format, recommended config)
 - [x] Update PRODUCTION_READINESS.md to v35 with file inventory and UX improvements section
 - [x] Tests: 511 passing, 298 failing (all DB-connection-dependent — expected in sandbox without local PostgreSQL)
+
+## Round 36 — Skeleton Loaders (All Pages) + ErrorBoundary
+
+- [x] Created reusable PageSkeleton component (StatCardSkeleton, CardGridSkeleton, TableSkeleton, ChartSkeleton, FormSkeleton, ListItemSkeleton, PageSkeleton)
+- [x] Enhanced ErrorBoundary component: added pageName, onError callback, HOC helper withErrorBoundary, graceful reset without full reload
+- [x] Added skeleton loaders to 103 out of 121 pages (18 excluded: static/auth-only, TOTP-only, or Settings)
+  - [x] Batch 1 (automated): ABCPMarkets, Admin, AdminPlatformHealth, AdminReKycFlags, AdminUserDetail, AdminUserList, AdminWarehouseMessages, BankingDashboard, BrokerDashboard, BulkKycAdmin, CooperativeDashboard, CorporateActions, CropReports, Delivery, Deposits, DeviceSessions, DfspKycReview, Disputes, FarmerEarnings, FixedIncome, GingerPriceHistory, Indices, InvestorRelations, IpAllowlist, Ledger, MarginAccount, MojaloopReconciliation, MojaloopTiers, Notifications, Onboarding, OnboardingHub, Payments, PriceAlerts, PushNotificationSettings, SARFiling, SettlementEngine, SettlementFails, Settlements, TokenExplorer, TotpSetup, TraderDashboard, TraderOpenOrders, TraderPnL, TraderTradeHistory, VelocityLimits, WarehouseDashboard, WarehouseInventory, WarehouseReceipts, Watchlist, WebhookConfig, WorkBench
+  - [x] Batch 2 (automated): Account, AdminFIXGateway, BrokerCommissions, ComplianceDashboard, DerivativesDashboard, DerivativesRiskDashboard, FarmerAdmin, FarmerCropListings, FarmerDashboard, FarmerFarms, FarmerKYC, FarmerMarketPrices, FuturesTrading, MarginCallDashboard, MarginHealth, MarketMakerDashboard, MarketMakerPerformance, OptionsAdmin, PerformanceMetrics, PortfolioAnalytics, PriceFeedAdmin, RegulatoryReports, TradeSurveillance
+  - [x] Batch 3 (automated): AiMlDashboard, BlockchainTokenization, Brokers, CashWithdrawal, Compliance, FieldAgents, IRAdmin, InputFinancing, LakehouseDashboard, MarketMakers, MojaloopOnboard, ReportSchedules, RiskManagement, Surveillance, TotpSetup, VelocityLimits, Warehouses, WorkBench
+  - [x] Manual: AMLDashboard, AdminStakeholders, ChannelDashboard, SecuritySettings, Home
+- [x] App.tsx: wrapped Router with per-page ErrorBoundary (isolates route crashes from nav shell)
+- [x] App.tsx: added pageName="NEXCOM Exchange" to top-level ErrorBoundary
+- [x] Tests: 511 passing, 298 failing (all DB-connection-dependent — expected in sandbox)

@@ -33,6 +33,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Flag, AlertTriangle, CheckCircle, Clock, Plus, RefreshCw, Download } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type FlagStatus = "PENDING" | "UNDER_REVIEW" | "CLEARED" | "ESCALATED" | "SAR_FILED" | "ALL";
 type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | "ALL";
@@ -148,6 +149,7 @@ export default function AMLDashboard() {
   const sarCount = stats?.filter((s) => s.status === "SAR_FILED").reduce((a, b) => a + Number(b.cnt), 0) ?? 0;
 
   const isAdmin = (user as { role?: string })?.role === "admin";
+  if (flagsLoading || rulesLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   if (!isAdmin) {
     return (
       <DashboardLayout>

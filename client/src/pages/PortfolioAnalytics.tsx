@@ -31,6 +31,7 @@ import {
   Target,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function fmt(v: number, decimals = 2): string {
   return new Intl.NumberFormat("en-NG", {
@@ -99,6 +100,7 @@ export default function PortfolioAnalytics() {
     "Cash Balance": s.cashBalance,
   }));
 
+  if (summaryQ.isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">

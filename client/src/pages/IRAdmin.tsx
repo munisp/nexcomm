@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Calendar,
   FileText,
   Users,
@@ -76,7 +77,7 @@ export default function IRAdmin() {
 
   const utils = trpc.useUtils();
 
-  const { data: stats } = trpc.investorRelations.adminGetStats.useQuery();
+  const { data: stats, isLoading: statsLoading } = trpc.investorRelations.adminGetStats.useQuery();
   const { data: allEventsData } = trpc.investorRelations.adminListAllEvents.useQuery();
   const allEvents = allEventsData?.events ?? [];
   const { data: allDocuments = [] } = trpc.investorRelations.adminListAllDocuments.useQuery();
@@ -208,6 +209,7 @@ export default function IRAdmin() {
     });
   };
 
+  if (statsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="container py-8 max-w-7xl">
       <div className="mb-8">

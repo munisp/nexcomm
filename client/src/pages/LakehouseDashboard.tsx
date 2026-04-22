@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Layers, Database, Activity, Zap, BarChart3, RefreshCw, CheckCircle,
   XCircle, AlertTriangle, Play, Clock, GitBranch, Table2, Search,
   TrendingUp, Cpu, HardDrive, Network,
@@ -48,7 +49,7 @@ export default function LakehouseDashboard() {
   );
   const [queryResult, setQueryResult] = useState<null | { rows: number; executionTime: string; result: Record<string, unknown>[] }>(null);
 
-  const { data: health, refetch: refetchHealth } = trpc.lakehouse.health.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: health, refetch: refetchHealth, isLoading: healthLoading } = trpc.lakehouse.health.useQuery(undefined, { refetchInterval: 30000 });
   const { data: status, refetch: refetchStatus } = trpc.lakehouse.getStatus.useQuery(undefined, { refetchInterval: 30000 });
   const { data: catalog, refetch: refetchCatalog } = trpc.lakehouse.getCatalog.useQuery(undefined, { refetchInterval: 60000 });
   const { data: pipeline, refetch: refetchPipeline } = trpc.lakehouse.getPipelineStatus.useQuery(undefined, { refetchInterval: 15000 });
@@ -87,6 +88,7 @@ export default function LakehouseDashboard() {
     refetchHealth(); refetchStatus(); refetchCatalog(); refetchPipeline();
   };
 
+  if (healthLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
   return (
     <div className="p-6 space-y-6">
       {/* Header */}

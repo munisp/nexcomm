@@ -28,6 +28,7 @@ import {
   Landmark, CreditCard, Banknote, Activity
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type LedgerEntry = {
@@ -655,6 +656,7 @@ export default function Ledger() {
 
   const isAdmin = user?.role === "admin";
 
+  if (accountsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <div className="container py-6 space-y-6 max-w-7xl">
       {/* Header */}

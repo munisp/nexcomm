@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
+import { PageSkeleton } from "@/components/PageSkeleton";
   Calendar,
   FileText,
   Users,
@@ -224,6 +225,7 @@ export default function InvestorRelations() {
               {events.map((event) => {
                 const epsVariance = getEpsVariance(event.epsActual, event.epsEstimate);
                 const subscribed = isSubscribed(event.companySymbol);
+  if (eventsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
                 return (
                   <Card key={event.id} className="hover:shadow-md transition-shadow">
                     <CardContent className="pt-4">

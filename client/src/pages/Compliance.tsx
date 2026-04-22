@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 type KYCStatus = "APPROVED" | "PENDING" | "REJECTED" | "EXPIRED" | "UNDER_REVIEW";
 type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -119,7 +120,7 @@ export default function Compliance() {
   // ── tRPC queries ──────────────────────────────────────────────────────────
   const utils = trpc.useUtils();
 
-  const { data: amlFlagsData, refetch: refetchAml } = trpc.aml.adminListFlags.useQuery(
+  const { data: amlFlagsData, refetch: refetchAml, isLoading: amlFlagsLoading } = trpc.aml.adminListFlags.useQuery(
     { limit: 50, offset: 0 }, { retry: false }
   );
   const { data: analyticsSummary } = trpc.analytics.summary.useQuery();
@@ -226,6 +227,7 @@ export default function Compliance() {
   const overdueReports = liveReports.filter(r => r.status === "OVERDUE").length;
   const approvedKYC = kycQueueData?.records?.filter(k => k.status === "APPROVED").length ?? 0;
 
+  if (amlFlagsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <div className="page-container space-y-5">
       <div>

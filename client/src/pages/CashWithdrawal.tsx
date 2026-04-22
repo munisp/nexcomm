@@ -35,6 +35,7 @@ import {
   Building2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Step definitions ────────────────────────────────────────────────────────
 type Step = "form" | "velocity" | "totp" | "challenge" | "confirm" | "done";
@@ -235,7 +236,7 @@ export default function CashWithdrawal() {
   }, [amountStr]);
 
   // Live data
-  const { data: profile } = trpc.profile.get.useQuery(undefined, {
+  const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, {
     enabled: isAuthenticated,
   });
   const { data: totpStatus } = trpc.totp.getStatus.useQuery(undefined, {
@@ -323,6 +324,7 @@ export default function CashWithdrawal() {
   }
 
   // ─── Render ─────────────────────────────────────────────────────────────────
+  if (profileLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
     <DashboardLayout>
       <div className="page-container max-w-2xl mx-auto space-y-6">
