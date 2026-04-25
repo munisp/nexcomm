@@ -217,7 +217,7 @@ export default function FarmerAdmin() {
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <Input
-                  placeholder="Search by name or phone..."
+                  placeholder="Search by name or phone..." value={search} onChange={(e) => setSearch(e.target.value)}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="bg-slate-800 border-slate-700 text-white pl-9 h-9 text-sm w-64"

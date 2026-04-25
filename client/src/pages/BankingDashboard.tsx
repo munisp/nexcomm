@@ -87,6 +87,7 @@ function CropInsuranceForm({ onSuccess }: { onSuccess: () => void }) {
     previousClaimsCount: 0,
     additionalNotes: "",
   });
+  const [searchQuery, setSearchQuery] = useState("");
 
   const apply = trpc.banking.applyForInsurance.useMutation({
     onSuccess: (data) => {
@@ -1389,7 +1390,7 @@ export default function BankingDashboard() {
                       <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
                       <Input
                         className="pl-8 h-8 w-40 text-sm"
-                        placeholder="Search..."
+                        placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                         value={adminLoanSearch}
                         onChange={e => setAdminLoanSearch(e.target.value)}
                       />

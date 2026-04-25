@@ -178,6 +178,7 @@ function BalanceCard({ account }: { account: LedgerAccount }) {
 // ─── Transfer Dialog ──────────────────────────────────────────────────────────
 function InternalTransferDialog({ accounts }: { accounts: LedgerAccount[] }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [fromAccountId, setFromAccountId] = useState("");
   const [toAccountId, setToAccountId]     = useState("");
   const [amount, setAmount]               = useState("");
@@ -387,7 +388,7 @@ function JournalHistoryTable({ accountId }: { accountId: string }) {
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by description, reference, journal ID…"
+            placeholder="Search by description, reference, journal ID…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-9"

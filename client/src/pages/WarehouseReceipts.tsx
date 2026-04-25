@@ -34,6 +34,7 @@ type ReceiptStatus = keyof typeof STATUS_CONFIG;
 export default function WarehouseReceipts() {
   const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | ReceiptStatus>("ALL");
   const [selected, setSelected] = useState<number | null>(null);
   const utils = trpc.useUtils();
@@ -43,6 +44,7 @@ export default function WarehouseReceipts() {
     status: statusFilter !== "ALL" ? statusFilter : undefined,
   });
   const receipts = data?.receipts ?? [];
+  const filteredReceipts = receipts.filter(r => !searchQuery || r.ewrNumber?.toLowerCase().includes(searchQuery.toLowerCase()) || r.commodity?.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const redeemMutation = trpc.receipts.redeem.useMutation({
     onSuccess: () => {
@@ -110,7 +112,7 @@ export default function WarehouseReceipts() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by EWR number or commodity..."
+            placeholder="Search by EWR number or commodity..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="pl-9"

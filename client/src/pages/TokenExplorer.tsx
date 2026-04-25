@@ -330,7 +330,7 @@ export default function TokenExplorer() {
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
-              placeholder="Search by token ID, commodity, owner, tx hash…"
+              placeholder="Search by token ID, commodity, owner, tx hash…" value={search} onChange={(e) => setSearch(e.target.value)}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-9 bg-slate-900 border-slate-600 text-slate-100 placeholder:text-slate-500"

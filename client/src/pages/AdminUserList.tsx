@@ -209,7 +209,7 @@ export default function AdminUserList() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
-                  placeholder="Search by name or email…"
+                  placeholder="Search by name or email…" value={search} onChange={(e) => setSearch(e.target.value)}
                   value={search}
                   onChange={e => handleSearch(e.target.value)}
                   className="pl-9 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"

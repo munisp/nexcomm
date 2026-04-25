@@ -73,6 +73,7 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
 
   // ── Step: "entry" | "confirm" ────────────────────────────────────────────────
   const [step, setStep] = useState<"entry" | "confirm">("entry");
+  const [instrumentSearch, setInstrumentSearch] = useState("");
 
   // ── Order fields ─────────────────────────────────────────────────────────────
   const [side, setSide] = useState<"BUY" | "SELL">("BUY");
@@ -493,7 +494,6 @@ function assetClassBadge(cls: string) {
 export default function WatchlistPage() {
   const [currentPath, navigate] = useLocation();
   const utils = trpc.useUtils();
-  const [searchQuery, setSearchQuery] = useState("");
   const [showAddPanel, setShowAddPanel] = useState(false);
 
   // ── Display options (column customisation) persisted to localStorage ──────────
@@ -713,7 +713,7 @@ export default function WatchlistPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 className="pl-9 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 h-9 text-sm"
-                placeholder="Search instruments to add…"
+                placeholder="Search instruments to add…" value={instrumentSearch} onChange={(e) => setInstrumentSearch(e.target.value)}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 autoFocus

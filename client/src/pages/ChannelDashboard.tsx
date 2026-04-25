@@ -67,6 +67,8 @@ function StatCard({
 // ─── USSD Tab ─────────────────────────────────────────────────────────────────
 function UssdTab() {
   const [page, setPage] = useState(1);
+  const [usernameSearch, setUsernameSearch] = useState("");
+  const [phoneSearch, setPhoneSearch] = useState("");
   const [phoneFilter, setPhoneFilter] = useState("");
 
   const { data: statsData } = trpc.ussd.getSessionStats.useQuery({});
@@ -254,7 +256,7 @@ function WhatsAppTab() {
               </CardTitle>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Search phone..."
+                  placeholder="Search phone..." value={phoneSearch} onChange={(e) => setPhoneSearch(e.target.value)}
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   className="h-7 w-32 bg-slate-700 border-slate-600 text-white text-xs"
@@ -449,7 +451,7 @@ function TelegramTab() {
               </CardTitle>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Search username..."
+                  placeholder="Search username..." value={usernameSearch} onChange={(e) => setUsernameSearch(e.target.value)}
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   className="h-7 w-32 bg-slate-700 border-slate-600 text-white text-xs"
