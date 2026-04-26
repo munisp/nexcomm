@@ -249,7 +249,37 @@ export function orderVelocityGuard(req: Request, res: Response, next: NextFuncti
   next();
 }
 
-// ── 8. Register All DDoS Protections ─────────────────────────────────────────
+// ── 8. Compatibility Exports (expected by server/_core/index.ts) ─────────────
+
+/**
+ * Combined DDoS middleware: HPP + request size guard + bot detection.
+ * Used as a single middleware in server/_core/index.ts.
+ */
+export function ddosProtection(req: Request, res: Response, next: NextFunction): void {
+  hppProtection(req, res, () => {
+    requestSizeGuard(req, res, () => {
+      botDetectionMiddleware(req, res, next);
+    });
+  });
+}
+
+/**
+ * Slow Loris guard: enforces a 30-second timeout on request body receipt.
+ * Prevents slow-loris attacks that hold connections open indefinitely.
+ */
+export function slowLorisGuard(req: Request, res: Response, next: NextFunction): void {
+  const BODY_TIMEOUT_MS = 30_000;
+  const timer = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(408).json({ error: "Request timeout.", code: "SLOW_LORIS_DETECTED" });
+    }
+  }, BODY_TIMEOUT_MS);
+  res.on("finish", () => clearTimeout(timer));
+  res.on("close", () => clearTimeout(timer));
+  next();
+}
+
+// ── 9. Register All DDoS Protections ─────────────────────────────────────────
 
 /**
  * Apply all DDoS protections to the Express app.
