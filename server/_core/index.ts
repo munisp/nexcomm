@@ -38,6 +38,7 @@ import { startMojaloopHubHealthJob } from "../jobs/mojaloopHubHealthJob";
 import { spatialProxyRouter } from "../routes/spatialProxy";
 import { haStatusRouter } from "../routes/haStatusRoute";
 import { suspiciousPatternDetector, ipBlocklistMiddleware, securityHeaders } from "../security";
+import { ddosProtection, slowLorisGuard } from "../ddos-protection";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -125,6 +126,8 @@ async function startServer() {
   }));
 
   // ── Additional security middleware ─────────────────────────────────────────
+  app.use(ddosProtection);               // DDoS: per-IP rate limiting + connection flood guard
+  app.use(slowLorisGuard);               // Slow Loris: request body timeout enforcement
   app.use(ipBlocklistMiddleware);          // Block known abusive IPs
   app.use(suspiciousPatternDetector);      // Detect path traversal / SQLi probes
   app.use(securityHeaders);               // Extra security headers beyond Helmet

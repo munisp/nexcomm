@@ -12,7 +12,7 @@ import {
   Shield, Activity, Zap, User,
   DollarSign, Cpu, BarChart2, Users, Eye,
   ClipboardList, BarChart, Star, Calendar, Globe, BellRing,
-  Layers, Tractor, UserCheck, Sprout, BookOpen, Landmark, CreditCard
+  Layers, Tractor, UserCheck, Sprout, BookOpen, Landmark, CreditCard, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,8 +71,9 @@ const NAV_GROUPS: { key: string; label: string; items: { href: string; icon: Rea
     key: "compliance",
     label: "Compliance",
     items: [
-      { href: "/compliance",   icon: Shield, label: "Compliance" },
-      { href: "/surveillance", icon: Eye,    label: "Surveillance" },
+      { href: "/compliance",        icon: Shield,       label: "Compliance" },
+      { href: "/surveillance",       icon: Eye,          label: "Surveillance" },
+      { href: "/policy-management",  icon: ShieldCheck,  label: "Policy Management" },
     ],
   },
   {

@@ -1066,3 +1066,76 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ─── Crypto Guard (Rust — Replay Prevention, HMAC, Idempotency) ──────────
+  crypto-guard:
+    build:
+      context: services/crypto-guard
+      dockerfile: Dockerfile
+    container_name: nexcom-crypto-guard
+    environment:
+      CRYPTO_GUARD_PORT: "7070"
+      HMAC_SECRET: ${HMAC_SECRET:-nexcom-hmac-secret-change-in-production}
+      NONCE_TTL_SECONDS: "300"
+      IDEMPOTENCY_TTL_SECONDS: "86400"
+      MAX_TIMESTAMP_DRIFT_SECONDS: "30"
+    ports:
+      - "7070:7070"
+    networks: [nexcom]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7070/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ─── Fraud Engine (Python/ML — Wash Trade, AML, Behavioral Anomaly) ──────
+  fraud-engine:
+    build:
+      context: services/fraud-engine
+      dockerfile: Dockerfile
+    container_name: nexcom-fraud-engine
+    environment:
+      FRAUD_ENGINE_PORT: "7071"
+      RISK_THRESHOLD_HIGH: "0.7"
+      RISK_THRESHOLD_MEDIUM: "0.4"
+      VELOCITY_WINDOW_SECONDS: "300"
+      ALERT_WEBHOOK_URL: http://middleware-hub:8093/api/fraud-alerts
+    ports:
+      - "7071:7071"
+    networks: [nexcom]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7071/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ─── DDoS Guard (Go — Rate Limiting, IP Reputation, Circuit Breaker) ─────
+  ddos-guard:
+    build:
+      context: services/ddos-guard
+      dockerfile: Dockerfile
+    container_name: nexcom-ddos-guard
+    environment:
+      DDOS_GUARD_PORT: "7072"
+      RATE_LIMIT_REQUESTS_PER_SECOND: "100"
+      RATE_LIMIT_BURST: "200"
+      BLOCK_DURATION_SECONDS: "300"
+      MAX_CONNECTIONS_PER_IP: "50"
+      SLOW_LORIS_TIMEOUT_SECONDS: "10"
+      CIRCUIT_BREAKER_THRESHOLD: "50"
+      CIRCUIT_BREAKER_WINDOW_SECONDS: "60"
+      UPSTREAM_URL: http://nexcom-app:3000
+    ports:
+      - "7072:7072"
+    networks: [nexcom]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7072/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

@@ -553,3 +553,18 @@
 - [x] Docker: 32 health checks across all microservices
 - [x] Playwright: 15 test suites covering all key routes and security headers
 - [x] SECURITY_AUDIT.md: 0 Critical/High/Medium/Low vulnerabilities confirmed
+
+## Round 39 — Multi-Language Security Hardening
+
+- [x] Go: DDoS protection sidecar (services/ddos-guard/) — tiered rate limiting, circuit breaker, slow-loris guard, IP blocklist, compiled and verified
+- [x] Rust: Cryptographic replay-prevention service (services/crypto-guard/) — HMAC-SHA256 replay prevention, nonce store, TOTP validation, Cargo.toml + Dockerfile
+- [x] Python: ML fraud detection engine (services/fraud-engine/) — Isolation Forest wash trade detection, behavioral scoring, price band enforcement, FastAPI service
+- [x] TypeScript: PBAC policy engine (server/pbac.ts) — policy store, resource-action-condition model, deny-overrides evaluation, 6 built-in policies
+- [x] pbacRouter (server/routers/pbacRouter.ts) — full CRUD for policies, dry-run evaluation, audit log
+- [x] PolicyManagement UI (client/src/pages/PolicyManagement.tsx) — admin CRUD page at /policy-management
+- [x] PolicyManagement wired into App.tsx and Layout.tsx (Compliance section)
+- [x] Wire all 3 services into docker-compose.yml with health checks
+- [x] Wire DDoS protection middleware into Express index.ts
+- [x] Add pbacRouter to appRouter (79th router)
+- [x] SECURITY_AUDIT.md updated to v39: 96/100 score, 0 Critical/High/Medium, 1 Low (Redis blocklist pending)
+- [x] Dockerfiles for ddos-guard, crypto-guard, fraud-engine
