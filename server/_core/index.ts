@@ -39,6 +39,7 @@ import { spatialProxyRouter } from "../routes/spatialProxy";
 import { haStatusRouter } from "../routes/haStatusRoute";
 import { suspiciousPatternDetector, ipBlocklistMiddleware, securityHeaders } from "../security";
 import { ddosProtection, slowLorisGuard } from "../ddos-protection";
+import { ddosCircuitBreaker, bruteForceProtection, inputSanitization, additionalSecurityHeaders, sessionFixationPrevention } from "../security-middleware";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -131,6 +132,11 @@ async function startServer() {
   app.use(ipBlocklistMiddleware);          // Block known abusive IPs
   app.use(suspiciousPatternDetector);      // Detect path traversal / SQLi probes
   app.use(securityHeaders);               // Extra security headers beyond Helmet
+  app.use(ddosCircuitBreaker);             // Circuit breaker: 100 req/min per IP, 5-min block
+  app.use(bruteForceProtection);           // Brute force: lockout after 10 failed auth attempts
+  app.use(inputSanitization);              // Input sanitization: strip null bytes, XSS, path traversal
+  app.use(additionalSecurityHeaders);      // Additional security headers: referrer policy, permissions
+  app.use(sessionFixationPrevention);      // Session fixation: regenerate session on privilege escalation
 
   // ── Request ID correlation ────────────────────────────────────────────────
   // Assigns a UUID to every request for distributed tracing and log correlation.
