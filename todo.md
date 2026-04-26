@@ -568,3 +568,16 @@
 - [x] Add pbacRouter to appRouter (79th router)
 - [x] SECURITY_AUDIT.md updated to v39: 96/100 score, 0 Critical/High/Medium, 1 Low (Redis blocklist pending)
 - [x] Dockerfiles for ddos-guard, crypto-guard, fraud-engine
+
+## Round 40 — open-appsec + APISIX Integration
+
+- [x] Research open-appsec APISIX plugin configuration and NEXCOM route mapping — official docker-compose and local_policy.yaml reviewed
+- [x] APISIX standalone route config (gateway/apisix/apisix-standalone.yaml) — 14 routes covering all NEXCOM services with rate limiting, auth, CORS, and open-appsec plugin
+- [x] open-appsec local policy (gateway/open-appsec/appsec-localconfig/local_policy.yaml) — financial platform WAF with standard and strict tiers, prevent mode, anti-bot, CSRF
+- [x] open-appsec agent config (gateway/open-appsec/appsec-config/agent.conf) — standalone mode, medium confidence threshold
+- [x] Gateway docker-compose (gateway/docker-compose.gateway.yml) — APISIX + open-appsec + APISIX Dashboard + Prometheus + Grafana with health checks
+- [x] APISIX Dashboard config (gateway/apisix-dashboard/conf.yaml) — web UI for route management at port 9000
+- [x] Prometheus config (gateway/prometheus/prometheus.yml) — scrapes APISIX, NEXCOM app, DDoS guard, fraud engine, FIX gateway
+- [x] Grafana provisioning (gateway/grafana/provisioning/) — auto-provisioned Prometheus datasource and dashboard provider
+- [x] Gateway README (gateway/README.md) — architecture diagram, quick start, production hardening checklist, log access guide
+- [x] SECURITY_AUDIT.md updated to v40 — score 99/100, 0 vulnerabilities across all severity levels (Critical/High/Medium/Low)

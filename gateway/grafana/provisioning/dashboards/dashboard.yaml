@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: NEXCOM Exchange
+    orgId: 1
+    folder: "NEXCOM Exchange"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

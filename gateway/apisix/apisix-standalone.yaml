@@ -1,0 +1,383 @@
+# NEXCOM Exchange — APISIX Standalone Configuration
+# This file defines all routes, upstreams, and plugins for the NEXCOM Exchange platform.
+# Used with open-appsec WAF in standalone (declarative) mode.
+# Reference: https://apisix.apache.org/docs/apisix/deployment-modes/#standalone
+
+routes:
+  # ─────────────────────────────────────────────
+  # 1. PWA / Frontend — React SPA
+  # ─────────────────────────────────────────────
+  - id: "nexcom-frontend"
+    uri: "/*"
+    host: "nexcom.example.com"
+    methods: ["GET", "HEAD", "OPTIONS"]
+    upstream_id: "nexcom-app"
+    plugins:
+      response-rewrite:
+        headers:
+          set:
+            X-Frame-Options: "SAMEORIGIN"
+            X-Content-Type-Options: "nosniff"
+            Referrer-Policy: "strict-origin-when-cross-origin"
+      limit-req:
+        rate: 100
+        burst: 200
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+
+  # ─────────────────────────────────────────────
+  # 2. tRPC API — All procedures
+  # ─────────────────────────────────────────────
+  - id: "nexcom-trpc-api"
+    uri: "/api/trpc/*"
+    host: "nexcom.example.com"
+    methods: ["GET", "POST", "OPTIONS"]
+    upstream_id: "nexcom-app"
+    plugins:
+      limit-req:
+        rate: 200
+        burst: 400
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+      cors:
+        allow_origins: "https://nexcom.example.com"
+        allow_methods: "GET,POST,OPTIONS"
+        allow_headers: "Content-Type,Authorization,X-Requested-With"
+        expose_headers: "X-Request-Id"
+        max_age: 3600
+        allow_credential: true
+      request-id:
+        header_name: "X-Request-Id"
+        include_in_response: true
+
+  # ─────────────────────────────────────────────
+  # 3. OAuth Callback — Auth flow
+  # ─────────────────────────────────────────────
+  - id: "nexcom-oauth"
+    uri: "/api/oauth/*"
+    host: "nexcom.example.com"
+    methods: ["GET", "POST", "OPTIONS"]
+    upstream_id: "nexcom-app"
+    plugins:
+      limit-req:
+        rate: 20
+        burst: 30
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+        rejected_msg: "Too many authentication attempts. Please wait before trying again."
+
+  # ─────────────────────────────────────────────
+  # 4. Stripe Webhooks — Payment events
+  # ─────────────────────────────────────────────
+  - id: "nexcom-stripe-webhook"
+    uri: "/api/stripe/webhook"
+    host: "nexcom.example.com"
+    methods: ["POST"]
+    upstream_id: "nexcom-app"
+    plugins:
+      limit-req:
+        rate: 50
+        burst: 100
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+      # Stripe sends raw body — do not buffer/modify
+      proxy-rewrite:
+        headers:
+          set:
+            X-Forwarded-Proto: "https"
+
+  # ─────────────────────────────────────────────
+  # 5. WebSocket — Order book, loan notifications
+  # ─────────────────────────────────────────────
+  - id: "nexcom-websocket"
+    uri: "/ws"
+    host: "nexcom.example.com"
+    upstream_id: "nexcom-app"
+    plugins:
+      limit-conn:
+        conn: 1000
+        burst: 200
+        default_conn_delay: 0.1
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 503
+
+  # ─────────────────────────────────────────────
+  # 6. FIX Gateway — Order routing (TCP/HTTP bridge)
+  # ─────────────────────────────────────────────
+  - id: "nexcom-fix-gateway"
+    uri: "/fix/*"
+    host: "nexcom.example.com"
+    methods: ["POST", "GET"]
+    upstream_id: "fix-gateway"
+    plugins:
+      limit-req:
+        rate: 500
+        burst: 1000
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+      jwt-auth: {}
+
+  # ─────────────────────────────────────────────
+  # 7. Commodity Indices Service — gRPC/HTTP
+  # ─────────────────────────────────────────────
+  - id: "nexcom-indices"
+    uri: "/indices/*"
+    host: "nexcom.example.com"
+    methods: ["GET", "POST"]
+    upstream_id: "indices-service"
+    plugins:
+      limit-req:
+        rate: 300
+        burst: 600
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+      proxy-cache:
+        cache_strategy: "disk"
+        cache_zone: "disk_cache_one"
+        cache_ttl: 5
+
+  # ─────────────────────────────────────────────
+  # 8. Analytics Service — Python ML analytics
+  # ─────────────────────────────────────────────
+  - id: "nexcom-analytics"
+    uri: "/analytics/*"
+    host: "nexcom.example.com"
+    methods: ["GET", "POST"]
+    upstream_id: "analytics-service"
+    plugins:
+      limit-req:
+        rate: 100
+        burst: 200
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+      jwt-auth: {}
+
+  # ─────────────────────────────────────────────
+  # 9. Core Banking Service — CBS adapter
+  # ─────────────────────────────────────────────
+  - id: "nexcom-core-banking"
+    uri: "/banking/*"
+    host: "nexcom.example.com"
+    methods: ["GET", "POST", "PUT", "DELETE"]
+    upstream_id: "core-banking"
+    plugins:
+      limit-req:
+        rate: 100
+        burst: 150
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+      jwt-auth: {}
+      # Financial APIs require strict rate limiting per user
+      limit-count:
+        count: 1000
+        time_window: 3600
+        key_type: "var"
+        key: "consumer_name"
+        rejected_code: 429
+        rejected_msg: "Hourly banking API limit reached."
+
+  # ─────────────────────────────────────────────
+  # 10. DDoS Guard — Go sidecar health/metrics
+  # ─────────────────────────────────────────────
+  - id: "nexcom-ddos-guard-metrics"
+    uri: "/ddos/metrics"
+    host: "nexcom.example.com"
+    methods: ["GET"]
+    upstream_id: "ddos-guard"
+    plugins:
+      ip-restriction:
+        whitelist:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+        message: "Metrics endpoint is internal only."
+
+  # ─────────────────────────────────────────────
+  # 11. Fraud Engine — Python ML fraud detection
+  # ─────────────────────────────────────────────
+  - id: "nexcom-fraud-engine"
+    uri: "/fraud/*"
+    host: "nexcom.example.com"
+    methods: ["POST"]
+    upstream_id: "fraud-engine"
+    plugins:
+      ip-restriction:
+        whitelist:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+        message: "Fraud engine is internal only."
+      jwt-auth: {}
+
+  # ─────────────────────────────────────────────
+  # 12. Crypto Guard — Rust replay prevention
+  # ─────────────────────────────────────────────
+  - id: "nexcom-crypto-guard"
+    uri: "/crypto/*"
+    host: "nexcom.example.com"
+    methods: ["POST", "GET"]
+    upstream_id: "crypto-guard"
+    plugins:
+      ip-restriction:
+        whitelist:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+        message: "Crypto guard is internal only."
+
+  # ─────────────────────────────────────────────
+  # 13. Health Check — Public liveness probe
+  # ─────────────────────────────────────────────
+  - id: "nexcom-health"
+    uri: "/health"
+    host: "nexcom.example.com"
+    methods: ["GET"]
+    upstream_id: "nexcom-app"
+    plugins:
+      limit-req:
+        rate: 10
+        burst: 20
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+
+  # ─────────────────────────────────────────────
+  # 14. Admin API — Protected admin endpoints
+  # ─────────────────────────────────────────────
+  - id: "nexcom-admin-api"
+    uri: "/api/trpc/admin*"
+    host: "nexcom.example.com"
+    methods: ["GET", "POST"]
+    upstream_id: "nexcom-app"
+    plugins:
+      limit-req:
+        rate: 50
+        burst: 100
+        key_type: "var"
+        key: "remote_addr"
+        rejected_code: 429
+      # Admin endpoints get extra IP restriction in production
+      # ip-restriction:
+      #   whitelist:
+      #     - "YOUR_ADMIN_IP/32"
+
+# ─────────────────────────────────────────────
+# Upstreams — Backend service definitions
+# ─────────────────────────────────────────────
+upstreams:
+  - id: "nexcom-app"
+    name: "NEXCOM Exchange Main App"
+    type: "roundrobin"
+    scheme: "http"
+    nodes:
+      "nexcom-app:3000": 1
+    checks:
+      active:
+        type: "http"
+        http_path: "/health"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+
+  - id: "fix-gateway"
+    name: "FIX Protocol Gateway"
+    type: "roundrobin"
+    scheme: "http"
+    nodes:
+      "fix-gateway:8080": 1
+    checks:
+      active:
+        type: "http"
+        http_path: "/health"
+        healthy:
+          interval: 15
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+
+  - id: "indices-service"
+    name: "Commodity Indices Service"
+    type: "roundrobin"
+    scheme: "http"
+    nodes:
+      "indices-service:8081": 1
+    checks:
+      active:
+        type: "http"
+        http_path: "/health"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+
+  - id: "analytics-service"
+    name: "Analytics Python Service"
+    type: "roundrobin"
+    scheme: "http"
+    nodes:
+      "analytics-service:8082": 1
+    checks:
+      active:
+        type: "http"
+        http_path: "/health"
+        healthy:
+          interval: 15
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+
+  - id: "core-banking"
+    name: "Core Banking Service"
+    type: "roundrobin"
+    scheme: "http"
+    nodes:
+      "core-banking:8090": 1
+    checks:
+      active:
+        type: "http"
+        http_path: "/health"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+
+  - id: "ddos-guard"
+    name: "Go DDoS Guard Sidecar"
+    type: "roundrobin"
+    scheme: "http"
+    nodes:
+      "ddos-guard:8888": 1
+
+  - id: "fraud-engine"
+    name: "Python ML Fraud Engine"
+    type: "roundrobin"
+    scheme: "http"
+    nodes:
+      "fraud-engine:8000": 1
+
+  - id: "crypto-guard"
+    name: "Rust Crypto Guard"
+    type: "roundrobin"
+    scheme: "http"
+    nodes:
+      "crypto-guard:8765": 1
+
+#END

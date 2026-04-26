@@ -1,0 +1,75 @@
+# NEXCOM Exchange — APISIX Dashboard Configuration
+conf:
+  listen:
+    host: 0.0.0.0
+    port: 9000
+  allow_list:
+    - 0.0.0.0/0  # Restrict to admin IPs in production
+  etcd:
+    endpoints:
+      - "apisix:2379"  # Uses APISIX's embedded etcd in standalone mode
+    mtls:
+      key_file: ""
+      cert_file: ""
+      ca_file: ""
+    prefix: /apisix
+    timeout: 30
+  log:
+    error_log:
+      level: warn
+      file_path: logs/error.log
+    access_log:
+      file_path: logs/access.log
+  security:
+    content_security_policy: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"
+    x_frame_options: "SAMEORIGIN"
+    x_content_type_options: nosniff
+
+authentication:
+  secret: nexcom-dashboard-secret-change-in-production
+  expire_time: 3600
+  users:
+    - username: admin
+      password: nexcom-admin-change-in-production
+    - username: viewer
+      password: nexcom-viewer-change-in-production
+
+plugins:
+  - api-breaker
+  - authz-keycloak
+  - basic-auth
+  - batch-requests
+  - consumer-restriction
+  - cors
+  - echo
+  - fault-injection
+  - grpc-transcode
+  - hmac-auth
+  - http-logger
+  - ip-restriction
+  - jwt-auth
+  - kafka-logger
+  - key-auth
+  - limit-conn
+  - limit-count
+  - limit-req
+  - node-status
+  - openid-connect
+  - prometheus
+  - proxy-cache
+  - proxy-mirror
+  - proxy-rewrite
+  - redirect
+  - referer-restriction
+  - request-id
+  - request-validation
+  - response-rewrite
+  - serverless-post-function
+  - serverless-pre-function
+  - syslog
+  - tcp-logger
+  - traffic-split
+  - udp-logger
+  - uri-blocker
+  - wolf-rbac
+  - zipkin

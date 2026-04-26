@@ -1,0 +1,71 @@
+# NEXCOM Exchange — Prometheus Configuration
+# Scrapes metrics from APISIX, open-appsec, and all NEXCOM microservices.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: "nexcom-exchange"
+    environment: "production"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # APISIX Prometheus plugin metrics
+  - job_name: "apisix"
+    static_configs:
+      - targets: ["apisix:9091"]
+    metrics_path: "/apisix/prometheus/metrics"
+    scrape_interval: 10s
+
+  # NEXCOM main app metrics
+  - job_name: "nexcom-app"
+    static_configs:
+      - targets: ["nexcom-app:3000"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  # Go DDoS guard metrics
+  - job_name: "ddos-guard"
+    static_configs:
+      - targets: ["ddos-guard:8888"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  # Python fraud engine metrics
+  - job_name: "fraud-engine"
+    static_configs:
+      - targets: ["fraud-engine:8000"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # FIX gateway metrics
+  - job_name: "fix-gateway"
+    static_configs:
+      - targets: ["fix-gateway:8080"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  # Indices service metrics
+  - job_name: "indices-service"
+    static_configs:
+      - targets: ["indices-service:8081"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  # Core banking metrics
+  - job_name: "core-banking"
+    static_configs:
+      - targets: ["core-banking:8090"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

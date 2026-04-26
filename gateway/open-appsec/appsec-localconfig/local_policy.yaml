@@ -1,0 +1,146 @@
+# NEXCOM Exchange — open-appsec Local Policy
+# ML-based WAF policy for a financial exchange platform.
+# Mode: prevent (blocks detected attacks immediately)
+# Reference: https://docs.openappsec.io/getting-started/start-with-local-policy
+
+policies:
+  default:
+    mode: prevent
+    triggers:
+      - appsec-default-log-trigger
+    practices:
+      - nexcom-financial-practice
+    custom-response: appsec-block-response
+
+  # Stricter policy for admin and banking endpoints
+  specific-rules:
+    - host: "nexcom.example.com"
+      uri: "/api/trpc/admin*"
+      mode: prevent
+      triggers:
+        - appsec-default-log-trigger
+      practices:
+        - nexcom-strict-practice
+      custom-response: appsec-block-response
+
+    - host: "nexcom.example.com"
+      uri: "/banking/*"
+      mode: prevent
+      triggers:
+        - appsec-default-log-trigger
+      practices:
+        - nexcom-strict-practice
+      custom-response: appsec-block-response
+
+    - host: "nexcom.example.com"
+      uri: "/api/stripe/webhook"
+      mode: detect
+      triggers:
+        - appsec-default-log-trigger
+      practices:
+        - nexcom-financial-practice
+      # Stripe webhooks: detect only (don't block — Stripe IPs are trusted)
+
+practices:
+  # Standard financial platform protection
+  - name: nexcom-financial-practice
+    openapi-schema-validation:
+      configmap: []
+      override-mode: prevent
+    snort-signatures:
+      configmap: []
+      override-mode: prevent
+    web-attacks:
+      max-body-size-kb: 2048
+      max-header-size-bytes: 102400
+      max-object-depth: 40
+      max-url-size-bytes: 32768
+      minimum-confidence: medium
+      override-mode: prevent
+      protections:
+        csrf-protection: active
+        error-disclosure: active
+        non-valid-http-methods: active
+        open-redirect: active
+    anti-bot:
+      injected-URIs: []
+      validated-URIs:
+        - "/api/trpc/auth.login"
+        - "/api/trpc/auth.register"
+        - "/api/oauth/callback"
+      override-mode: prevent
+
+  # Strict protection for admin and banking routes
+  - name: nexcom-strict-practice
+    openapi-schema-validation:
+      configmap: []
+      override-mode: prevent
+    snort-signatures:
+      configmap: []
+      override-mode: prevent
+    web-attacks:
+      max-body-size-kb: 512
+      max-header-size-bytes: 16384
+      max-object-depth: 20
+      max-url-size-bytes: 4096
+      minimum-confidence: low
+      override-mode: prevent
+      protections:
+        csrf-protection: active
+        error-disclosure: active
+        non-valid-http-methods: active
+        open-redirect: active
+    anti-bot:
+      injected-URIs: []
+      validated-URIs:
+        - "/api/trpc/admin*"
+        - "/banking/*"
+      override-mode: prevent
+
+log-triggers:
+  - name: appsec-default-log-trigger
+    access-control-logging:
+      allow-events: false
+      drop-events: true
+    additional-suspicious-events-logging:
+      enabled: true
+      minimum-severity: high
+      response-body: false
+    appsec-logging:
+      all-web-requests: false
+      detect-events: true
+      prevent-events: true
+    extended-logging:
+      http-headers: true
+      request-body: false
+      url-path: true
+      url-query: true
+    log-destination:
+      cloud: false
+      stdout:
+        format: json
+      # Uncomment to send to syslog:
+      # syslog:
+      #   address: "syslog-server:514"
+      #   proto: "udp"
+
+custom-responses:
+  - name: appsec-block-response
+    mode: response-code-only
+    http-response-code: 403
+    # Custom block page for NEXCOM Exchange
+    # Uncomment to use a custom HTML response:
+    # mode: response-body
+    # http-response-code: 403
+    # message-title: "Access Denied"
+    # message-body: "Your request was blocked by NEXCOM Exchange security policy. If you believe this is an error, please contact support@nexcom.exchange"
+
+exceptions: []
+
+# Trusted Sources — bypass WAF for internal services
+trusted-sources:
+  - name: "nexcom-internal-services"
+    sources-identifiers:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
+      - "192.168.0.0/16"

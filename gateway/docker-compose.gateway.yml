@@ -1,0 +1,168 @@
+# NEXCOM Exchange — API Gateway Stack
+# Deploys APISIX (API gateway) + open-appsec (ML WAF) as the security perimeter.
+# Run alongside the main docker-compose.yml:
+#   docker compose -f docker-compose.yml -f gateway/docker-compose.gateway.yml up -d
+#
+# Architecture:
+#   Internet → APISIX (port 9080/9443) → open-appsec WAF (IPC) → NEXCOM App (port 3000)
+#
+# References:
+#   APISIX:      https://apisix.apache.org/docs/apisix/deployment-modes/#standalone
+#   open-appsec: https://docs.openappsec.io/getting-started/start-with-local-policy
+
+version: "3.9"
+
+services:
+  # ─────────────────────────────────────────────
+  # APISIX — API Gateway with open-appsec plugin
+  # Uses the open-appsec-bundled APISIX image which
+  # includes the open-appsec attachment plugin pre-installed.
+  # ─────────────────────────────────────────────
+  apisix:
+    container_name: nexcom-apisix
+    image: "ghcr.io/openappsec/apisix-attachment:latest"
+    ipc: host  # Required for open-appsec IPC communication
+    restart: always
+    depends_on:
+      appsec-agent:
+        condition: service_started
+    volumes:
+      - ./apisix/apisix-standalone.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+    environment:
+      - APISIX_STAND_ALONE=true
+    ports:
+      - "9080:9080/tcp"   # HTTP traffic
+      - "9443:9443/tcp"   # HTTPS traffic
+      - "9180:9180/tcp"   # Admin API (restrict in production)
+      - "9091:9091/tcp"   # Prometheus metrics
+    networks:
+      - nexcom-gateway
+      - nexcom-backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    labels:
+      - "com.nexcom.service=api-gateway"
+      - "com.nexcom.tier=perimeter"
+
+  # ─────────────────────────────────────────────
+  # open-appsec Agent — ML-based WAF
+  # Communicates with APISIX via shared IPC (ipc: host).
+  # Policy is loaded from local_policy.yaml (no cloud required).
+  # ─────────────────────────────────────────────
+  appsec-agent:
+    container_name: nexcom-appsec-agent
+    image: "ghcr.io/openappsec/agent:latest"
+    ipc: host  # Required for APISIX plugin communication
+    restart: unless-stopped
+    environment:
+      # Set your email for open-appsec cloud reporting (optional — works offline too)
+      - user_email=${APPSEC_USER_EMAIL:-security@nexcom.exchange}
+      - registered_server=APISIX
+      # AGENT_TOKEN: required only for cloud-connected mode
+      # Leave empty for fully local/offline mode with local_policy.yaml
+      - AGENT_TOKEN=${APPSEC_AGENT_TOKEN:-}
+    volumes:
+      - ./open-appsec/appsec-config:/etc/cp/conf
+      - ./open-appsec/appsec-data:/etc/cp/data
+      - ./open-appsec/appsec-logs:/var/log/nano_agent
+      - ./open-appsec/appsec-localconfig:/ext/appsec
+    command: /cp-nano-agent --standalone
+    networks:
+      - nexcom-gateway
+    healthcheck:
+      test: ["CMD", "test", "-f", "/var/log/nano_agent/nano_agent.log"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "com.nexcom.service=waf-agent"
+      - "com.nexcom.tier=perimeter"
+
+  # ─────────────────────────────────────────────
+  # APISIX Dashboard — Web UI for route management
+  # Access at http://localhost:9000 (admin/admin — change in production!)
+  # ─────────────────────────────────────────────
+  apisix-dashboard:
+    container_name: nexcom-apisix-dashboard
+    image: "apache/apisix-dashboard:3.0.1-alpine"
+    restart: unless-stopped
+    depends_on:
+      - apisix
+    volumes:
+      - ./apisix-dashboard/conf.yaml:/usr/local/apisix-dashboard/conf/conf.yaml:ro
+    ports:
+      - "9000:9000/tcp"
+    networks:
+      - nexcom-gateway
+    labels:
+      - "com.nexcom.service=gateway-dashboard"
+      - "com.nexcom.tier=management"
+
+  # ─────────────────────────────────────────────
+  # Prometheus — Metrics scraping for APISIX
+  # ─────────────────────────────────────────────
+  prometheus:
+    container_name: nexcom-prometheus
+    image: "prom/prometheus:v2.51.0"
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090/tcp"
+    networks:
+      - nexcom-gateway
+      - nexcom-backend
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--storage.tsdb.retention.time=30d"
+    labels:
+      - "com.nexcom.service=prometheus"
+      - "com.nexcom.tier=observability"
+
+  # ─────────────────────────────────────────────
+  # Grafana — Dashboards for APISIX + open-appsec metrics
+  # Access at http://localhost:3001 (admin/admin — change in production!)
+  # ─────────────────────────────────────────────
+  grafana:
+    container_name: nexcom-grafana
+    image: "grafana/grafana:10.4.0"
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-nexcom-grafana-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3001:3000/tcp"
+    networks:
+      - nexcom-gateway
+    labels:
+      - "com.nexcom.service=grafana"
+      - "com.nexcom.tier=observability"
+
+volumes:
+  prometheus-data:
+    name: nexcom-prometheus-data
+  grafana-data:
+    name: nexcom-grafana-data
+
+networks:
+  nexcom-gateway:
+    name: nexcom-gateway
+    driver: bridge
+  nexcom-backend:
+    name: nexcom-backend
+    external: true  # Shared with main docker-compose.yml
