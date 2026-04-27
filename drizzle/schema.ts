@@ -2,7 +2,9 @@ import {
   bigint,
   bigserial,
   boolean,
+  check,
   customType,
+  foreignKey,
   index,
   integer,
   json,
@@ -89,7 +91,7 @@ export const profiles = pgTable("profiles", {
   // Stakeholder type
   stakeholderType: stakeholderTypeEnum("stakeholder_type"),
   // Extra metadata (JSON blob for stakeholder-specific fields)
-  metadata: json("metadata"),
+  metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -207,7 +209,7 @@ export const notifications = pgTable("notifications", {
   message: text("message").notNull(),
   type: notificationTypeEnum("type").default("SYSTEM").notNull(),
   read: boolean("read").default(false).notNull(),
-  metadata: json("metadata"),
+  metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 export type Notification = typeof notifications.$inferSelect;
@@ -222,7 +224,7 @@ export const kycQueue = pgTable("kyc_queue", {
   reviewedBy: integer("reviewed_by"),
   reviewNotes: text("review_notes"),
   // Stores the full onboarding payload as JSON
-  documents: json("documents"),
+  documents: jsonb("documents"),
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
   reviewedAt: timestamp("reviewed_at"),
 });
@@ -237,7 +239,7 @@ export const auditLog = pgTable("audit_log", {
   action: varchar("action", { length: 128 }).notNull(),
   resource: varchar("resource", { length: 128 }),
   resourceId: varchar("resource_id", { length: 64 }),
-  details: json("details"),
+  details: jsonb("details"),
   ipAddress: varchar("ip_address", { length: 45 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -412,8 +414,8 @@ export const cooperativeBulkUploads = pgTable("cooperative_bulk_uploads", {
   processedRows: integer("processed_rows").notNull().default(0),
   successRows: integer("success_rows").notNull().default(0),
   failedRows: integer("failed_rows").notNull().default(0),
-  errors: json("errors"),
-  createdApplicationIds: json("created_application_ids"),
+  errors: jsonb("errors"),
+  createdApplicationIds: jsonb("created_application_ids"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
 });
@@ -569,7 +571,7 @@ export const securityEvents = pgTable("security_events", {
   status: securityEventStatusEnum("status").default("OPEN").notNull(),
   title: varchar("title", { length: 256 }).notNull(),
   description: text("description").notNull(),
-  metadata: json("metadata"),
+  metadata: jsonb("metadata"),
   ipAddress: varchar("ip_address", { length: 45 }),
   resolvedBy: integer("resolved_by"),
   resolvedAt: timestamp("resolved_at"),
@@ -1613,16 +1615,16 @@ export const kycAnalysisResults = pgTable("kyc_analysis_results", {
   selfieUrl: text("selfie_url"),
   isPdf: boolean("is_pdf").default(false),
   ocrExtractedFields: text("ocr_extracted_fields"),
-  ocrAvgConfidence: real("ocr_avg_confidence"),
+  ocrAvgConfidence: numeric("ocr_avg_confidence", { precision: 8, scale: 4 }),
   ocrLineCount: integer("ocr_line_count"),
-  documentAuthenticityScore: real("document_authenticity_score"),
+  documentAuthenticityScore: numeric("document_authenticity_score", { precision: 8, scale: 4 }),
   documentType: text("document_type"),
   documentRiskFlags: text("document_risk_flags"),
-  selfieOverallScore: real("selfie_overall_score"),
+  selfieOverallScore: numeric("selfie_overall_score", { precision: 8, scale: 4 }),
   selfielivenessAssessment: text("selfie_liveness_assessment"),
-  passiveLivenessScore: real("passive_liveness_score"),
+  passiveLivenessScore: numeric("passive_liveness_score", { precision: 8, scale: 4 }),
   passiveLivenessFlags: text("passive_liveness_flags"),
-  overallScore: real("overall_score"),
+  overallScore: numeric("overall_score", { precision: 8, scale: 4 }),
   overallRiskLevel: kycRiskLevelEnum("overall_risk_level").default("UNKNOWN"),
   allRiskFlags: text("all_risk_flags"),
   recommendation: text("recommendation"),
@@ -1839,7 +1841,7 @@ export const mojaloopParties = pgTable("mojaloop_parties", {
   dateOfBirth:       varchar("date_of_birth", { length: 16 }),
   merchantClassCode: varchar("merchant_class_code", { length: 16 }),
   currency:          varchar("currency", { length: 8 }).notNull().default("USD"),
-  supportedCurrencies: json("supported_currencies").$type<string[]>().default([]),
+  supportedCurrencies: jsonb("supported_currencies").$type<string[]>().default([]),
   isActive:          boolean("is_active").notNull().default(true),
   createdAt:         timestamp("created_at").defaultNow().notNull(),
   updatedAt:         timestamp("updated_at").defaultNow().notNull(),
@@ -2740,7 +2742,7 @@ export const stripePayments = pgTable("stripe_payments", {
   currency: varchar("currency", { length: 10 }).notNull().default("usd"),
   status: stripePaymentStatusEnum("status").notNull().default("PENDING"),
   bankTransactionId: bigint("bank_transaction_id", { mode: "number" }),
-  metadata: json("metadata"),
+  metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -2867,3 +2869,71 @@ export const loanLifecycleEvents = pgTable("loan_lifecycle_events", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 export type LoanLifecycleEvent = typeof loanLifecycleEvents.$inferSelect;
+
+// ─── Instruments Master Table ─────────────────────────────────────────────────
+// Canonical registry for all tradeable instruments on the exchange.
+// Every table that stores a `symbol` column should reference this table.
+export const instrumentStatusEnum = pgEnum("instrument_status", [
+  "ACTIVE", "SUSPENDED", "DELISTED", "PENDING"
+]);
+export const instrumentAssetClassEnum = pgEnum("instrument_asset_class", [
+  "COMMODITY", "FOREX", "EQUITY", "DIGITAL_ASSET", "INDEX", "FIXED_INCOME", "DERIVATIVE"
+]);
+export const instruments = pgTable("instruments", {
+  id: serial("id").primaryKey(),
+  symbol: varchar("symbol", { length: 32 }).notNull().unique(),
+  name: varchar("name", { length: 200 }).notNull(),
+  assetClass: instrumentAssetClassEnum("asset_class").notNull(),
+  baseCurrency: varchar("base_currency", { length: 8 }).notNull().default("NGN"),
+  quoteCurrency: varchar("quote_currency", { length: 8 }).notNull().default("NGN"),
+  lotSize: numeric("lot_size", { precision: 18, scale: 6 }).notNull().default("1"),
+  minLotSize: numeric("min_lot_size", { precision: 18, scale: 6 }).notNull().default("1"),
+  tickSize: numeric("tick_size", { precision: 18, scale: 6 }).notNull().default("0.01"),
+  priceBandPct: numeric("price_band_pct", { precision: 8, scale: 4 }).default("10"),
+  settlementDays: integer("settlement_days").notNull().default(2),
+  tradingHoursStart: varchar("trading_hours_start", { length: 8 }).default("09:30"),
+  tradingHoursEnd: varchar("trading_hours_end", { length: 8 }).default("16:00"),
+  exchange: varchar("exchange", { length: 64 }).default("NEXCOM"),
+  isin: varchar("isin", { length: 20 }),
+  description: text("description"),
+  status: instrumentStatusEnum("status").notNull().default("ACTIVE"),
+  listedAt: timestamp("listed_at").defaultNow(),
+  delistedAt: timestamp("delisted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type Instrument = typeof instruments.$inferSelect;
+export type InsertInstrument = typeof instruments.$inferInsert;
+
+// ─── Warehouses Master Table ──────────────────────────────────────────────────
+// Canonical registry for all accredited warehouses.
+// warehouse_receipts.warehouse_id references this table.
+export const warehouseAccreditationStatusEnum = pgEnum("warehouse_accreditation_status", [
+  "PENDING", "ACCREDITED", "SUSPENDED", "REVOKED"
+]);
+export const warehouses = pgTable("warehouses", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  code: varchar("code", { length: 32 }).notNull().unique(),
+  operatorId: integer("operator_id"),
+  address: text("address"),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 100 }),
+  country: varchar("country", { length: 64 }).default("Nigeria"),
+  gpsLat: numeric("gps_lat", { precision: 10, scale: 7 }),
+  gpsLng: numeric("gps_lng", { precision: 10, scale: 7 }),
+  capacityMt: numeric("capacity_mt", { precision: 14, scale: 2 }),
+  availableCapacityMt: numeric("available_capacity_mt", { precision: 14, scale: 2 }),
+  accreditationStatus: warehouseAccreditationStatusEnum("accreditation_status").notNull().default("PENDING"),
+  accreditationRef: varchar("accreditation_ref", { length: 100 }),
+  accreditationExpiry: timestamp("accreditation_expiry"),
+  phone: varchar("phone", { length: 32 }),
+  email: varchar("email", { length: 128 }),
+  supportedCommodities: jsonb("supported_commodities"),
+  insurancePolicyRef: varchar("insurance_policy_ref", { length: 100 }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type Warehouse = typeof warehouses.$inferSelect;
+export type InsertWarehouse = typeof warehouses.$inferInsert;

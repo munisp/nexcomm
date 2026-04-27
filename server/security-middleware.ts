@@ -323,7 +323,7 @@ export function sessionFixationPrevention(req: Request, res: Response, next: Nex
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. Health Deep Check — aggregates all service health
 // ─────────────────────────────────────────────────────────────────────────────
-import { ENV } from "./env";
+import { ENV } from "./_core/env";
 
 export async function deepHealthCheck(): Promise<Record<string, { status: "ok" | "degraded" | "down"; latencyMs?: number; error?: string }>> {
   const services: Array<{ name: string; url: string }> = [

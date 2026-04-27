@@ -665,3 +665,23 @@
 - [ ] Generate nexcom-platform-v40-final.zip
 - [ ] Compare size with v39 (18MB baseline)
 - [ ] Update slides with v40 verified stats
+
+## Round v44 — Schema Fixes & Production Readiness
+
+- [ ] Add FK constraints for all 168 implicit relationships
+- [ ] Add composite unique constraints (positions, watchlist, order_book_levels)
+- [ ] Add check constraints (quantity > 0, price > 0, etc.)
+- [ ] Migrate json columns to jsonb (notifications, audit_log, kyc_queue, mojaloop)
+- [ ] Migrate real columns to numeric
+- [ ] Migrate timestamp columns to timestamptz
+- [ ] Add instruments master table
+- [ ] Add warehouses master table
+- [ ] Rewrite seed.ts for PostgreSQL (replace MySQL adapter)
+- [ ] Wire schema-indexes.ts into migration pipeline
+- [ ] Add indexes to all high-traffic tables
+- [ ] Implement offline/low-bandwidth resilience (service worker, background sync, IndexedDB)
+- [ ] Implement adaptive polling fallback for unreliable connections
+- [ ] Security hardening: ransomware, DDoS, PBAC completeness
+- [ ] Complete all remaining CRUD gaps
+- [ ] Ensure PWA/RN/Flutter parity
+- [ ] Generate v44 archive with manifest of actual changes

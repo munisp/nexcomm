@@ -17,17 +17,17 @@
  * - Settlement instructions
  */
 
-import { drizzle } from "drizzle-orm/mysql2";
-import mysql from "mysql2/promise";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import * as schema from "./schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
-const DB_URL = process.env.DATABASE_URL ?? "mysql://root:password@localhost:3306/nexcom";
+const DB_URL = process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/nexcom";
 
 async function main() {
-  const connection = await mysql.createConnection(DB_URL);
-  const db = drizzle(connection, { schema, mode: "default" });
+  const pool = new Pool({ connectionString: DB_URL });
+  const db = drizzle(pool, { schema });
 
   console.log("🌱 Starting NEXCOM seed...");
 
@@ -57,7 +57,7 @@ async function main() {
         role: user.role,
         createdAt: new Date(),
         updatedAt: new Date(),
-      }).onDuplicateKeyUpdate({ set: { name: user.name } });
+      }).onConflictDoNothing();
     } catch (e) {
       // User may already exist
     }

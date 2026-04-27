@@ -28,6 +28,7 @@ import type { OrderConfirmDetails } from "@/components/OrderConfirmModal";
 import OrderBookDepthChart from "@/components/OrderBookDepthChart";
 import { TotpChallengeModal } from "@/components/TotpChallengeModal";
 import { usePreferences } from "@/contexts/PreferencesContext";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n: number, dp = 2) {
@@ -162,6 +163,7 @@ function OrderBookSide({ levels, side, maxTotal }: {
 export default function Trade() {
   const { isAuthenticated } = useAuth();
   const { t, formatCurrency } = usePreferences();
+  const { enqueue: enqueueOffline, queueDepth } = useOfflineQueue();
 
   const [selectedSymbol, setSelectedSymbol] = useState(() => {
     // Support deep-link from Markets page: /trade?symbol=XXX or /trade/XXX
@@ -437,12 +439,19 @@ export default function Trade() {
       setOrderQty("");
       playOrderSound("success");
     },
-    onError: (err) => {
-      toast.error("Order failed", { description: err.message });
-      playOrderSound("reject");
+    onError: async (err) => {
+      if (!navigator.onLine) {
+        const payload = { symbol: selectedSymbol, side: orderSide, orderType, quantity: orderQty, price: orderPrice };
+        await enqueueOffline("place_order", payload);
+        toast.warning("Order queued offline", { description: "Will be submitted automatically when you reconnect." });
+      } else {
+        toast.error("Order failed", { description: err.message });
+        playOrderSound("reject");
+      }
     },
   });
-
+  // Suppress unused variable warning — queueDepth shown in UI badge
+  void queueDepth;
   const handleSubmitOrder = useCallback(() => {
     if (!isAuthenticated) {
       toast.error("Sign in required", { description: "Please sign in to place orders." });
