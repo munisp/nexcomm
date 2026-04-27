@@ -6,7 +6,7 @@
  *
  * Usage:
  *   import { writeAuditLog } from "../audit";
- *   await writeAuditLog(db, {
+ *   await writeAuditLog({
  *     userId: ctx.user.id,
  *     action: "order.create",
  *     resource: "orders",
@@ -16,7 +16,7 @@
  *   });
  */
 
-import { db } from "./db";
+import { getDb } from "./db";
 import { auditLog } from "../drizzle/schema";
 
 export interface AuditEntry {
@@ -34,6 +34,8 @@ export interface AuditEntry {
  */
 export async function writeAuditLog(entry: AuditEntry): Promise<void> {
   try {
+    const db = await getDb();
+    if (!db) return; // Gracefully skip if DB unavailable (e.g., test environment)
     await db.insert(auditLog).values({
       userId: entry.userId ?? null,
       action: entry.action,

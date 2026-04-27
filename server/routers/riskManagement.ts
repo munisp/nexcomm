@@ -17,6 +17,7 @@ import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { orders, positions, preTradRiskChecks } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 const RM_URL = process.env.RISK_SERVICE_URL ?? "http://localhost:8005";
 const TIMEOUT_MS = 3000;

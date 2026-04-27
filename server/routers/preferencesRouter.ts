@@ -8,6 +8,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { userPreferences } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 const SUPPORTED_CURRENCIES = ["NGN", "USD", "EUR", "GBP", "GHS", "KES", "ZAR", "XOF"] as const;
 const SUPPORTED_LANGUAGES = ["en", "yo", "ig", "ha", "pcm"] as const; // en, Yoruba, Igbo, Hausa, Pidgin

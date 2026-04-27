@@ -9,8 +9,8 @@ import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { PasskeyLoginButton } from "@/components/PasskeyLoginButton";
 import { Link } from "wouter";
-import {
 import { PageSkeleton } from "@/components/PageSkeleton";
+import {
   TrendingUp, Wheat, Warehouse, BarChart3, ArrowRight,
   ShieldCheck, Zap, Globe, Users, ChevronRight, Loader2,
   Package, FileText, Bell, Settings

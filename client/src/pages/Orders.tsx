@@ -30,6 +30,7 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 
 type AssetClass = "COMMODITY" | "FOREX" | "EQUITY" | "DIGITAL_ASSET";
 type OrderStatus = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "REJECTED" | "EXPIRED";
@@ -134,6 +135,7 @@ function AmendmentTimeline({ orderId }: { orderId: number }) {
     { orderId },
     { staleTime: 10_000 }
   );
+  const { enqueue, queueDepth } = useOfflineQueue();
   const [reasonSearch, setReasonSearch] = useState("");
 
   if (isLoading) {

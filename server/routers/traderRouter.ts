@@ -10,6 +10,7 @@ import { getDb } from "../db";
 import { notifyOwner } from "../_core/notification";
 import { storagePut } from "../storage";
 import {
+import { writeAuditLog } from "../audit";
   traderProfiles,
   kycAuditLog,
   orders,

@@ -9,6 +9,7 @@ import { getDb } from "../db";
 import { settlements, orders } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { writeAuditLog } from "../audit";
 
 const FEE_RATE = 0.001; // 0.1% exchange fee
 

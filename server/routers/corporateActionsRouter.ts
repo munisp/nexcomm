@@ -9,6 +9,7 @@ import { getDb } from "../db";
 import { corporateActions, users } from "../../drizzle/schema";
 import { eq, desc, and, or, ilike } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
+import { writeAuditLog } from "../audit";
 
 const ACTION_TYPE_VALUES = ["DIVIDEND", "STOCK_SPLIT", "RIGHTS_ISSUE", "BONUS_ISSUE", "MERGER", "DELISTING", "IPO"] as const;
 const STATUS_VALUES = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED"] as const;

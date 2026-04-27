@@ -11,6 +11,7 @@ import { getDb } from "../db";
 import { kycQueue, profiles, users, auditLog, cooperativeBulkUploads, notifications, depositRequests, orders } from "../../drizzle/schema";
 import { notifyOwner } from "../_core/notification";
 import { storagePut } from "../storage";
+import { writeAuditLog } from "../audit";
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 const personalInfoSchema = z.object({

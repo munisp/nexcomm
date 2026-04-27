@@ -20,6 +20,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb, getReadDb } from "../db";
 import {
+import { writeAuditLog } from "../audit";
   ulid,
   postJournalEntry,
   enqueueJob,

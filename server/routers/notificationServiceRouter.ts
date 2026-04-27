@@ -16,6 +16,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { notifyOwner } from "../_core/notification";
+import { writeAuditLog } from "../audit";
 
 const NS_URL = process.env.NOTIFICATION_SERVICE_URL ?? "http://localhost:8008";
 const TIMEOUT_MS = 5000;

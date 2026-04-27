@@ -26,9 +26,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
 import { PageSkeleton } from "@/components/PageSkeleton";
-  ArrowLeft,
+import {  ArrowLeft,
   TrendingUp,
   TrendingDown,
   Download,

@@ -9,6 +9,7 @@ import { z } from "zod";
 import { getDb } from "../db";
 import { depositRequests, warehouseReceipts } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
+import { writeAuditLog } from "../audit";
 
 // ─── Certified warehouse reference data ──────────────────────────────────────
 export const CERTIFIED_WAREHOUSES: Record<string, {

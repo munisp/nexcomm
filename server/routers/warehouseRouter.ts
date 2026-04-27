@@ -7,6 +7,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, createNotification } from "../db";
 import { warehouseMessages } from "../../drizzle/schema";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 export const warehouseRouter = router({
   /**

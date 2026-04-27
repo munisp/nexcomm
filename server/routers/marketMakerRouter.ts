@@ -15,6 +15,7 @@ import {
   marketMakerPerformanceReports,
 } from "../../drizzle/schema";
 import { notifyOwner } from "../_core/notification";
+import { writeAuditLog } from "../audit";
 
 // ─── Admin guard ─────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {

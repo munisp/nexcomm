@@ -19,6 +19,7 @@ import {
   users,
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, like, count, desc, sql } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 export const ussdRouter = router({
   // ─── Admin: Session Statistics ──────────────────────────────────────────────

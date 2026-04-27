@@ -20,6 +20,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { users } from "../../drizzle/schema";
 import { eq, desc, like, or, sql } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 const UM_URL = process.env.USER_MANAGEMENT_URL ?? "http://localhost:8012";
 const TIMEOUT_MS = 5000;

@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { deviceSessions, notifications } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
+import { writeAuditLog } from "../audit";
 
 export const deviceSessionRouter = router({
   // Record/update a device session fingerprint on login

@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { submitOrder, cancelOrder, getMarketDepth } from "../matchingEngineClient";
+import { writeAuditLog } from "../audit";
 
 const TE_URL = process.env.TRADING_ENGINE_URL ?? "http://localhost:8001";
 const TIMEOUT_MS = 3000;

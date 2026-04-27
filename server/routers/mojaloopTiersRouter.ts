@@ -21,6 +21,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { writeAuditLog } from "../audit";
 
 const TIER_NAMES = ["STANDARD", "PREMIUM", "INSTITUTIONAL", "CORRESPONDENT"] as const;
 type TierName = (typeof TIER_NAMES)[number];

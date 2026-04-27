@@ -16,6 +16,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { bankFinancingApplications, notifications } from "../../drizzle/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 const BANK_FINANCING_STATUSES = [
   "DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED",

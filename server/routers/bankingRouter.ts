@@ -19,6 +19,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import { ENV } from "../_core/env";
+import { writeAuditLog } from "../audit";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

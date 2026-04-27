@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ipAllowlist, securityEvents } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { adminProcedure, router } from "../_core/trpc";
+import { writeAuditLog } from "../audit";
 
 // ─── CIDR Matching Utility ────────────────────────────────────────────────────
 

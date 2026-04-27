@@ -205,6 +205,7 @@ export const stripeRouter = router({
 // ── Webhook handler (registered in server/_core/index.ts) ────────────────────
 import type { Express, Request, Response } from "express";
 import express from "express";
+import { writeAuditLog } from "../audit";
 
 export function registerStripeWebhook(app: Express) {
   // MUST be registered BEFORE express.json() middleware

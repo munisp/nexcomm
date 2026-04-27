@@ -28,6 +28,7 @@ import {
 import { notifyOwner } from "../_core/notification";
 import { emitOrderFilled, emitOrderCancelled } from "../kafka/kafkaProducer";
 import { pushToUser } from "./pushNotificationsRouter";
+import { writeAuditLog } from "../audit";
 const assetClasses = ["COMMODITY", "FOREX", "EQUITY", "DIGITAL_ASSET", "INDEX"] as const;
 
 /**

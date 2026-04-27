@@ -22,6 +22,7 @@ import {
   orderBookLevels,
 } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte, asc } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 export const indicesRouter = router({
   // ─── List all indexes ──────────────────────────────────────────────────────

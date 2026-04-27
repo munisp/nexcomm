@@ -13,6 +13,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, desc, count, sum, sql, gte, lte, inArray } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
+import { writeAuditLog } from "../audit";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

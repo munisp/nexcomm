@@ -10,6 +10,7 @@ import { getDb } from "../db";
 import { notifyOwner } from "../_core/notification";
 import { brokerProfiles, kycAuditLog, brokerClients, brokerCommissions, tradeFills } from "../../drizzle/schema";
 import { storagePut } from "../storage";
+import { writeAuditLog } from "../audit";
 
 export const brokerRouter = router({
   // ── registerBroker ──────────────────────────────────────────────────────────

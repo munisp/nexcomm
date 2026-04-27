@@ -11,6 +11,7 @@ import { getDb } from "../db";
 import { notifyOwner } from "../_core/notification";
 import { warehouseOperatorProfiles, kycAuditLog, warehouseReceipts } from "../../drizzle/schema";
 import { storagePut } from "../storage";
+import { writeAuditLog } from "../audit";
 
 export const warehouseOpRouter = router({
   // ── registerWarehouseOp ─────────────────────────────────────────────────────

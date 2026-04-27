@@ -12,6 +12,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, desc, gte, lte, and, isNull } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
+import { writeAuditLog } from "../audit";
 
 // ─── Report type definitions ────────────────────────────────────────────────
 

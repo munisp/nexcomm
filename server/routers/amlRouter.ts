@@ -16,6 +16,7 @@ import {
 import { eq, and, gte, lte, desc, count, sum, sql, inArray } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { storagePut } from "../storage";
+import { writeAuditLog } from "../audit";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

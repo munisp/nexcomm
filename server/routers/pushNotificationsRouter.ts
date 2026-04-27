@@ -25,6 +25,7 @@ import { getDb } from "../db";
 import { pushSubscriptions } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { writeAuditLog } from "../audit";
 
 // ── VAPID config ──────────────────────────────────────────────────────────────
 

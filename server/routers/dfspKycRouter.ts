@@ -14,6 +14,7 @@ import { getDb } from "../db";
 import { dfspKycRecords } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
+import { writeAuditLog } from "../audit";
 
 const kycInputSchema = z.object({
   fspId:                     z.string().min(2).max(64),

@@ -6,6 +6,7 @@ import {
   fixedIncomeTrades,
 } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 export const fixedIncomeRouter = router({
   // List all instruments

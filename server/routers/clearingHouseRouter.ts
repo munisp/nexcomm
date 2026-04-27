@@ -11,6 +11,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, desc, and, lt, gte, sql, inArray } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
+import { writeAuditLog } from "../audit";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

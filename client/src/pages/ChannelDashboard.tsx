@@ -23,8 +23,8 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import {
 import { PageSkeleton } from "@/components/PageSkeleton";
+import {
   MessageSquare,
   Phone,
   Send,

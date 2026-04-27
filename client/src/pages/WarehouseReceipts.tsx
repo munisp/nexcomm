@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { WAREHOUSES, COMMODITIES, GRADE_SPECS } from "../../../shared/commodities";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 
 const STATUS_CONFIG = {
   ACTIVE:    { label: "Active",    icon: CheckCircle2, className: "badge-active" },
@@ -43,6 +44,7 @@ export default function WarehouseReceipts() {
     limit: 100,
     status: statusFilter !== "ALL" ? statusFilter : undefined,
   });
+  const { enqueue, queueDepth } = useOfflineQueue();
   const receipts = data?.receipts ?? [];
   const filteredReceipts = receipts.filter(r => !searchQuery || r.ewrNumber?.toLowerCase().includes(searchQuery.toLowerCase()) || r.commodity?.toLowerCase().includes(searchQuery.toLowerCase()));
 

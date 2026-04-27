@@ -8,6 +8,7 @@ import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { participantPerformanceMetrics } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 const PARTICIPANT_TYPE_VALUES = ["BROKER", "MARKET_MAKER"] as const;
 

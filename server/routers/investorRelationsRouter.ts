@@ -10,6 +10,7 @@ import {
   irSubscriptions,
 } from "../../drizzle/schema";
 import { notifyOwner } from "../_core/notification";
+import { writeAuditLog } from "../audit";
 
 export const investorRelationsRouter = router({
   // ─── Public: Event Calendar ──────────────────────────────────────────────────

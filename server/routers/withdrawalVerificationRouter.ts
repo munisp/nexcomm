@@ -7,6 +7,7 @@ import {
 } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
+import { writeAuditLog } from "../audit";
 
 // Default threshold: withdrawals above this amount require typed verification
 const DEFAULT_THRESHOLD = 500_000; // ₦500,000

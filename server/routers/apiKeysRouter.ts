@@ -9,6 +9,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { apiKeys } from "../../drizzle/schema";
 import crypto from "crypto";
+import { writeAuditLog } from "../audit";
 
 function hashKey(rawKey: string): string {
   return crypto.createHash("sha256").update(rawKey).digest("hex");

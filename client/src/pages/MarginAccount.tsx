@@ -28,8 +28,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import {
 import { PageSkeleton } from "@/components/PageSkeleton";
+import {
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
   AlertTriangle,
   Shield,
   TrendingUp,
@@ -69,6 +70,7 @@ export default function MarginAccount() {
 
   // Queries
   const { data: summary, isLoading: summaryLoading } = trpc.margin.getSummary.useQuery(undefined, { enabled: !!user });
+  const { enqueue, queueDepth } = useOfflineQueue();
   const { data: alertStatus } = trpc.margin.getAlertStatus.useQuery(undefined, { enabled: !!user, refetchInterval: 30_000 });
   const { data: collateralData, isLoading: collateralLoading } = trpc.margin.getCollateral.useQuery(
     { status: "ACTIVE" },

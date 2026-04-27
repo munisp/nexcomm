@@ -11,6 +11,7 @@ import { kycAnalysisResults, reKycFlags, notifications, users, platformSettings,
 import { eq, desc, and, or } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { createLedgerAccount } from "../matchingEngineClient";
+import { writeAuditLog } from "../audit";
 
 const KYC_SERVICE_URL = process.env.KYC_SERVICE_URL ?? "http://localhost:3002";
 

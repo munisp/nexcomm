@@ -5,6 +5,7 @@ import { z } from "zod";
 import { webhookConfigs, type SecurityEvent } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { adminProcedure, router } from "../_core/trpc";
+import { writeAuditLog } from "../audit";
 
 // ─── Webhook Dispatch ─────────────────────────────────────────────────────────
 

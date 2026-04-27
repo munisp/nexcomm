@@ -12,8 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
 import { PageSkeleton } from "@/components/PageSkeleton";
+import {
   Wallet,
   AlertCircle,
   ArrowUpRight,

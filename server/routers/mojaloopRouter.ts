@@ -19,6 +19,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, desc, and, sql, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { writeAuditLog } from "../audit";
 
 const MOJALOOP_ADAPTER_URL =
   process.env.MOJALOOP_ADAPTER_URL ?? "http://localhost:4001";

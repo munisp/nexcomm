@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { notifications, priceAlerts, pushTokens } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { writeAuditLog } from "../audit";
 
 // ─── Expo Push Notification Helper ───────────────────────────
 interface ExpoPushMessage {

@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { watchlist } from "../../drizzle/schema";
+import { writeAuditLog } from "../audit";
 
 export const watchlistRouter = router({
   /** List all symbols on the current user's watchlist */

@@ -8,6 +8,7 @@ import {
   fieldVisits,
 } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 export const inputFinancingRouter = router({
   // ── Loans ──────────────────────────────────────────────────────────────────

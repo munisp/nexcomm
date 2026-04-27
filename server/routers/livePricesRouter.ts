@@ -10,6 +10,7 @@ import { getDb } from "../db";
 import { livePrices } from "../../drizzle/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getOrSet, cacheDel, CacheKeys, TTL } from "../cache";
+import { writeAuditLog } from "../audit";
 
 export const livePricesRouter = router({
   /**

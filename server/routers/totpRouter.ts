@@ -7,6 +7,7 @@ import { getDb } from "../db";
 import { totpSecrets, notifications } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
+import { writeAuditLog } from "../audit";
 
 const APP_NAME = "NEXCOM Exchange";
 const totp = new TOTP({

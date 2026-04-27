@@ -19,6 +19,7 @@ import {
   bankFinancingApplications, users, notifications, farmerProfiles,
 } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 async function sendWhatsAppMessage(to: string, message: string): Promise<boolean> {

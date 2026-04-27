@@ -22,6 +22,7 @@ import {
   warehouseReceipts,
 } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

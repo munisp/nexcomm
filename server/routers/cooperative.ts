@@ -22,6 +22,7 @@ import {
   users,
 } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
+import { writeAuditLog } from "../audit";
 
 // ─── Guard: platform admin only ───────────────────────────────────────────────
 function assertAdmin(role: string) {

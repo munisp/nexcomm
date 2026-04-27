@@ -33,6 +33,7 @@ import {
   userPreferences,
 } from "../../drizzle/schema";
 import { and, desc, eq, gte, sql, count } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 // ─── Rate limit thresholds ────────────────────────────────────────────────────
 const RATE_LIMITS: Record<string, { windowMinutes: number; maxCount: number }> = {

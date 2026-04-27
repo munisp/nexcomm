@@ -16,6 +16,7 @@ import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { haManager, type EngineHealthSnapshot, type EngineStatus } from "../engineHAManager";
 import { ENV } from "../_core/env";
 import { TRPCError } from "@trpc/server";
+import { writeAuditLog } from "../audit";
 
 // ── Zod schemas for serialisation ────────────────────────────────────────────
 

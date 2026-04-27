@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb } from "../db";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import {
+import { writeAuditLog } from "../audit";
   optionsContracts,
   optionsPositions,
   clearingAccounts,

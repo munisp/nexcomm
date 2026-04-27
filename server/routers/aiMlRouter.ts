@@ -8,6 +8,7 @@
 
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
+import { writeAuditLog } from "../audit";
 
 const AIML_URL = process.env.AIML_SERVICE_URL ?? "http://localhost:8007";
 const TIMEOUT_MS = 15000; // ML inference can take time

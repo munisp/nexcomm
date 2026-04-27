@@ -13,6 +13,7 @@ import { createNotification } from "../db";
 import { pushToUser } from "./pushNotificationsRouter";
 import { FX_PAIRS, EQUITIES, CRYPTO_ASSETS, type FxPair, type Equity, type CryptoAsset } from "../../shared/instruments";
 import { COMMODITIES } from "../../shared/commodities";
+import { writeAuditLog } from "../audit";
 
 // ============================================================
 // Helpers

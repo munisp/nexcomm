@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { velocityLimitConfig, velocityLedger, notifications, securityEvents } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
+import { writeAuditLog } from "../audit";
 
 const DEFAULT_LIMIT_NGN = 5_000_000; // ₦5M per 24h by default
 const DEFAULT_WINDOW_HOURS = 24;

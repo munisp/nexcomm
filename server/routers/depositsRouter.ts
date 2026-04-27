@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { depositRequests, auditLog } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { writeAuditLog } from "../audit";
 
 export const depositsRouter = router({
   // LIST deposit requests for current user

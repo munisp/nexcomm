@@ -3,6 +3,7 @@ import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { abcpPrograms } from "../../drizzle/schema";
 import { eq, desc, count, sum, avg } from "drizzle-orm";
+import { writeAuditLog } from "../audit";
 
 export const abcpRouter = router({
   list: publicProcedure.query(async () => {

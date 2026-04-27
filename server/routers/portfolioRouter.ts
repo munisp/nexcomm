@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import {
+import { writeAuditLog } from "../audit";
   positions,
   orders,
   futuresPositions,

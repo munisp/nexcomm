@@ -8,6 +8,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { policyStore, evaluate, createPolicy } from "../pbac";
 import type { PolicyCondition } from "../pbac";
+import { writeAuditLog } from "../audit";
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== "admin" && ctx.user.role !== "owner") {
