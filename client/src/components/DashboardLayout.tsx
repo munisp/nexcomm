@@ -84,6 +84,8 @@ import {
   BookMarked,
   MessageSquare,
   Phone,
+  Server,
+  BadgeCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -161,6 +163,7 @@ const menuSections: MenuSection[] = [
       { icon: Award,               label: "Performance Metrics",   path: "/admin/performance-metrics", adminOnly: true },
       { icon: Activity,            label: "Price Feed Admin",       path: "/admin/price-feed",    adminOnly: true },
       { icon: Network,              label: "Platform Health",        path: "/admin/platform-health", adminOnly: true },
+      { icon: Server,                label: "Microservices Health",   path: "/admin/microservices",   adminOnly: true },
       { icon: MessageSquare,        label: "Warehouse Messages",     path: "/admin/warehouse-messages", adminOnly: true },
       { icon: Phone,                 label: "Channel Dashboard",      path: "/channel-dashboard",       adminOnly: true },
     ],
@@ -254,6 +257,7 @@ const menuSections: MenuSection[] = [
       { icon: KeyRound,        label: "2FA Setup",         path: "/totp-setup" },
       { icon: Smartphone,      label: "Device Sessions",   path: "/device-sessions" },
       { icon: Gauge,           label: "Velocity Limits",   path: "/velocity-limits" },
+      { icon: BadgeCheck,      label: "Credit Score",      path: "/credit-score" },
       { icon: Banknote,        label: "Cash Withdrawal",   path: "/cash-withdrawal" },
       { icon: Sliders,         label: "Settings",          path: "/settings" },
       { icon: Settings,        label: "Admin Panel",        path: "/admin", adminOnly: true },

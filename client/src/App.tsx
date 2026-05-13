@@ -148,6 +148,8 @@ const CropReports                = lazy(() => import("./pages/CropReports"));
 const ChannelDashboard           = lazy(() => import("./pages/ChannelDashboard"));
 const Ledger                     = lazy(() => import("./pages/Ledger"));
 const PolicyManagement           = lazy(() => import("./pages/PolicyManagement"));
+const CreditScore                = lazy(() => import("./pages/CreditScore"));
+const MicroservicesHealth        = lazy(() => import("./pages/MicroservicesHealth"));
 
 function PageLoader() {
   return (
@@ -299,6 +301,8 @@ function Router() {
         <Route path="/channel-dashboard"                           component={ChannelDashboard} />
         <Route path="/ledger"                                       component={Ledger} />
         <Route path="/policy-management"                             component={PolicyManagement} />
+        <Route path="/credit-score"                                   component={CreditScore} />
+        <Route path="/admin/microservices"                            component={MicroservicesHealth} />
         {/* 404 */}
         <Route                           component={NotFound} />
       </Switch>
