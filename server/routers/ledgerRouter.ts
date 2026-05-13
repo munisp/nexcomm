@@ -398,7 +398,7 @@ export const ledgerRouter = router({
         } catch (error) {
           await completeJob(
             job.id,
-            job.attempts >= job.maxAttempts ? "dead" : "failed",
+            "failed",
             error instanceof Error ? error.message : "Unknown error"
           );
           failed++;
