@@ -59,7 +59,7 @@ const creditScoringRouter = router({
       userId: z.number().int().positive(),
       farmerId: z.number().int().positive().optional(),
       model: z.enum(["NEXCOM_AGRI_V1", "NEXCOM_TRADER_V1", "BUREAU_EXTERNAL"]).default("NEXCOM_AGRI_V1"),
-      features: z.record(z.unknown()).optional(),
+      features: z.record(z.string(), z.unknown()).optional(),
     }))
     .mutation(async ({ input }) => {
       const result = await callService<{
@@ -117,7 +117,7 @@ const fraudEngineRouter = router({
       amount: z.number().positive(),
       currency: z.string().max(8).default("NGN"),
       transactionType: z.enum(["ORDER", "DEPOSIT", "WITHDRAWAL", "TRANSFER", "LOAN_DISBURSEMENT"]),
-      metadata: z.record(z.unknown()).optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
     }))
     .mutation(async ({ input }) => {
       const result = await callService<{

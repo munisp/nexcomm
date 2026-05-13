@@ -76,7 +76,7 @@ export const creditRouter = router({
       band: z.enum(["EXCELLENT", "GOOD", "FAIR", "POOR", "VERY_POOR"]),
       maxLoanNgn: z.number().positive().optional(),
       interestRatePct: z.number().positive().optional(),
-      factors: z.record(z.unknown()).optional(),
+      factors: z.record(z.string(), z.unknown()).optional(),
       bureauRef: z.string().max(100).optional(),
       validUntil: z.string().datetime().optional(),
     }))
@@ -508,7 +508,7 @@ export const creditRouter = router({
       loanId: z.number().int().positive(),
       eventType: z.enum(["APPLIED", "CREDIT_CHECKED", "APPROVED", "REJECTED", "DISBURSED", "REPAYMENT_RECEIVED", "OVERDUE_NOTICE", "DEFAULT_NOTICE", "WRITTEN_OFF", "RESTRUCTURED", "CLOSED"]),
       notes: z.string().max(2000).optional(),
-      metadata: z.record(z.unknown()).optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();

@@ -127,15 +127,15 @@ export const pbacRouter = router({
       principal: z.object({
         id: z.string().trim().min(1),
         role: z.string().trim().min(1),
-        attributes: z.record(z.unknown()).optional(),
+        attributes: z.record(z.string(), z.unknown()).optional(),
       }),
       resource: z.object({
         type: z.string().trim().min(1),
         id: z.string().trim().optional(),
-        attributes: z.record(z.unknown()).optional(),
+        attributes: z.record(z.string(), z.unknown()).optional(),
       }),
       action: z.string().trim().min(1),
-      environment: z.record(z.unknown()).optional(),
+      environment: z.record(z.string(), z.unknown()).optional(),
     }))
     .mutation(({ input }) => {
       const decision = evaluate(input);

@@ -373,7 +373,7 @@ export const portfolioRouter = router({
         .where(and(eq(portfolioEquitySnapshots.id, input.snapshotId), eq(portfolioEquitySnapshots.userId, ctx.user.id)));
       if (!snap) throw new TRPCError({ code: "NOT_FOUND", message: "Snapshot not found" });
       await db.delete(portfolioEquitySnapshots).where(eq(portfolioEquitySnapshots.id, input.snapshotId));
-      await writeAuditLog({ userId: ctx.user.id, action: "DELETE_EQUITY_SNAPSHOT", resourceType: "portfolio_equity_snapshot", resourceId: String(input.snapshotId), details: {} });
+      await writeAuditLog({ userId: ctx.user.id, action: "DELETE_EQUITY_SNAPSHOT", resource: "portfolio_equity_snapshot", resourceId: String(input.snapshotId), details: {} });
       return { success: true };
     }),
 
@@ -393,7 +393,7 @@ export const portfolioRouter = router({
       const filtered = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
       await db.update(clearingAccounts).set({ ...filtered, updatedAt: new Date() })
         .where(eq(clearingAccounts.userId, userId));
-      await writeAuditLog({ userId: ctx.user.id, action: "ADMIN_UPDATE_CLEARING_ACCOUNT", resourceType: "clearing_account", resourceId: String(userId), details: filtered });
+      await writeAuditLog({ userId: ctx.user.id, action: "ADMIN_UPDATE_CLEARING_ACCOUNT", resource: "clearing_account", resourceId: String(userId), details: filtered });
       return { success: true };
     }),
 });

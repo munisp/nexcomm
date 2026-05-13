@@ -228,7 +228,7 @@ export const kycServiceRouter = router({
   updateApplication: protectedProcedure
     .input(z.object({
       applicationId: z.string().trim(),
-      updates: z.record(z.unknown()),
+      updates: z.record(z.string(), z.unknown()),
     }))
     .mutation(async ({ input }) => {
       try {
