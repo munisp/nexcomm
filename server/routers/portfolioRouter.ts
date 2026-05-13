@@ -362,4 +362,38 @@ export const portfolioRouter = router({
       worstDay: worstDay ?? { date: null, pnl: 0 },
     };
   }),
+
+  // ── deleteEquitySnapshot ──────────────────────────────────────────────────
+  deleteEquitySnapshot: protectedProcedure
+    .input(z.object({ snapshotId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: true };
+      const [snap] = await db.select().from(portfolioEquitySnapshots)
+        .where(and(eq(portfolioEquitySnapshots.id, input.snapshotId), eq(portfolioEquitySnapshots.userId, ctx.user.id)));
+      if (!snap) throw new TRPCError({ code: "NOT_FOUND", message: "Snapshot not found" });
+      await db.delete(portfolioEquitySnapshots).where(eq(portfolioEquitySnapshots.id, input.snapshotId));
+      await writeAuditLog({ userId: ctx.user.id, action: "DELETE_EQUITY_SNAPSHOT", resourceType: "portfolio_equity_snapshot", resourceId: String(input.snapshotId), details: {} });
+      return { success: true };
+    }),
+
+  // ── adminUpdateClearingAccount ────────────────────────────────────────────
+  adminUpdateClearingAccount: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      cashBalance: z.string().optional(),
+      marginUsed: z.string().optional(),
+      marginAvailable: z.string().optional(),
+      portfolioValue: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: true };
+      const { userId, ...updates } = input;
+      const filtered = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+      await db.update(clearingAccounts).set({ ...filtered, updatedAt: new Date() })
+        .where(eq(clearingAccounts.userId, userId));
+      await writeAuditLog({ userId: ctx.user.id, action: "ADMIN_UPDATE_CLEARING_ACCOUNT", resourceType: "clearing_account", resourceId: String(userId), details: filtered });
+      return { success: true };
+    }),
 });

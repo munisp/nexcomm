@@ -83,3 +83,22 @@ export const TYPOGRAPHY = {
 // Convenience URL exports used by screen components
 export const API_BASE_URL = CONFIG.BASE_URL;
 export const WS_BASE_URL = CONFIG.BASE_URL.replace(/^https?/, (p) => (p === 'https' ? 'wss' : 'ws'));
+
+// Font helpers used by screen components
+export const FONTS = {
+  heading: { fontFamily: TYPOGRAPHY.fontFamily.bold, fontWeight: '700' as const },
+  subheading: { fontFamily: TYPOGRAPHY.fontFamily.medium, fontWeight: '600' as const },
+  body: { fontFamily: TYPOGRAPHY.fontFamily.regular, fontWeight: '400' as const },
+  mono: { fontFamily: TYPOGRAPHY.fontFamily.mono, fontWeight: '400' as const },
+};
+
+// Spacing scale used by screen components
+export const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  '2xl': 32,
+  '3xl': 48,
+};

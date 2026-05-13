@@ -399,6 +399,22 @@ class NexcomApiService {
     'evidenceUrls': evidenceUrls,
   });
 
+  // ─── Preferences ──────────────────────────────────────────────────────────────────────────
+
+  /// Get the user's display/notification preferences.
+  Future<Map<String, dynamic>> getPreferences() => _query('preferences.get');
+
+  /// Update display/language/currency preferences.
+  Future<Map<String, dynamic>> updatePreferences(Map<String, dynamic> data) =>
+      _mutate('preferences.update', data);
+
+  /// Get notification preferences (priceAlerts, orderUpdates, etc.).
+  Future<Map<String, dynamic>> getNotifPreferences() => _query('preferences.getNotifPrefs');
+
+  /// Update notification preferences.
+  Future<Map<String, dynamic>> updateNotifPreferences(Map<String, dynamic> data) =>
+      _mutate('preferences.updateNotifPrefs', data);
+
   // ─── Biometric Preference ──────────────────────────────────────────────────────────────────
 
   /// Persist biometric login preference to the user's security settings.

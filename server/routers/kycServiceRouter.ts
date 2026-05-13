@@ -224,6 +224,37 @@ export const kycServiceRouter = router({
       }
     }),
 
+  /** Update an existing KYC application (add info / correct fields) */
+  updateApplication: protectedProcedure
+    .input(z.object({
+      applicationId: z.string().trim(),
+      updates: z.record(z.unknown()),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        return await kycFetch(`/api/v1/kyc/applications/${input.applicationId}`, {
+          method: "PATCH",
+          body: JSON.stringify(input.updates),
+        });
+      } catch {
+        return { error: "KYC service offline" };
+      }
+    }),
+
+  /** Withdraw / cancel own KYC application */
+  withdrawApplication: protectedProcedure
+    .input(z.object({ applicationId: z.string().trim(), reason: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await kycFetch(`/api/v1/kyc/applications/${input.applicationId}/withdraw`, {
+          method: "POST",
+          body: JSON.stringify({ userId: ctx.user.id, reason: input.reason }),
+        });
+      } catch {
+        return { error: "KYC service offline" };
+      }
+    }),
+
   /** Submit a KYB application (corporate) */
   submitKybApplication: protectedProcedure
     .input(z.object({

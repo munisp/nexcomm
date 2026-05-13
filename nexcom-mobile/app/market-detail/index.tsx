@@ -1,56 +1,106 @@
-import React, { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
-import { COLORS, FONTS, SPACING } from "../../constants/config";
-
 /**
  * NEXCOM Mobile — Market Detail Screen
- * Mirrors the PWA Market Detail page with full API connectivity.
+ * Price history chart data + order book for a given symbol.
  */
+import React, { useState } from "react";
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { COLORS, FONTS, SPACING } from "../../constants/config";
+import { trpc } from "../../lib/trpc";
+
+const INTERVALS = ["1D", "1W", "1M", "3M"];
+
 export default function MarketDetailScreen() {
-  const [loading, setLoading] = useState(false);
+  const { symbol } = useLocalSearchParams<{ symbol: string }>();
+  const router = useRouter();
+  const [interval, setInterval] = useState("1D");
+  const sym = symbol ?? "MAIZE";
+
+  const historyQ = trpc.commodities.priceHistory.useQuery({ symbol: sym, interval });
+  const livePricesQ = trpc.livePrices.getAll.useQuery();
+
+  const prices: any[] = (livePricesQ.data as any) ?? [];
+  const lp = prices.find((p: any) => p.symbol === sym);
+  const history: any = historyQ.data;
+  const candles: any[] = history?.candles ?? [];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Market Detail</Text>
-        <Text style={styles.subtitle}>NEXCOM Exchange</Text>
-      </View>
+    <SafeAreaView style={s.container}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        <View style={s.header}>
+          <Text style={s.title}>{sym}</Text>
+          {lp && (
+            <View style={s.priceRow}>
+              <Text style={s.bigPrice}>₦{Number(lp.price).toLocaleString()}</Text>
+              <Text style={[s.change, Number(lp.changePct) >= 0 ? s.pos : s.neg]}>
+                {Number(lp.changePct) >= 0 ? "+" : ""}{Number(lp.changePct).toFixed(2)}%
+              </Text>
+            </View>
+          )}
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Overview</Text>
-        <Text style={styles.cardBody}>
-          Detailed view of a specific market instrument with OHLCV chart, order book, and recent trades.
-        </Text>
-      </View>
+        {/* Interval selector */}
+        <View style={s.intervals}>
+          {INTERVALS.map(iv => (
+            <TouchableOpacity key={iv} style={[s.ivBtn, interval === iv && s.ivBtnActive]} onPress={() => setInterval(iv)}>
+              <Text style={[s.ivText, interval === iv && s.ivTextActive]}>{iv}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={() => {
-          setLoading(true);
-          setTimeout(() => setLoading(false), 1500);
-        }}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color={COLORS.background} />
-        ) : (
-          <Text style={styles.buttonText}>Refresh</Text>
-        )}
-      </TouchableOpacity>
-    </ScrollView>
+        {/* OHLCV table */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Price History ({candles.length} bars)</Text>
+          {historyQ.isLoading ? <ActivityIndicator color={COLORS.primary} /> : (
+            <>
+              <View style={s.tableHeader}>
+                {["Date", "Open", "High", "Low", "Close"].map(h => (
+                  <Text key={h} style={[s.th, { flex: 1, textAlign: h === "Date" ? "left" : "right" }]}>{h}</Text>
+                ))}
+              </View>
+              {candles.slice(-10).reverse().map((c: any, i: number) => (
+                <View key={i} style={s.tableRow}>
+                  <Text style={[s.td, { flex: 1 }]}>{new Date(c.time ?? c.timestamp ?? 0).toLocaleDateString()}</Text>
+                  <Text style={[s.td, { flex: 1, textAlign: "right" }]}>{Number(c.open).toLocaleString()}</Text>
+                  <Text style={[s.td, { flex: 1, textAlign: "right" }]}>{Number(c.high).toLocaleString()}</Text>
+                  <Text style={[s.td, { flex: 1, textAlign: "right" }]}>{Number(c.low).toLocaleString()}</Text>
+                  <Text style={[s.td, { flex: 1, textAlign: "right" }]}>{Number(c.close).toLocaleString()}</Text>
+                </View>
+              ))}
+            </>
+          )}
+        </View>
+
+        {/* Trade button */}
+        <TouchableOpacity style={s.tradeBtn} onPress={() => router.push({ pathname: "/trading/[symbol]", params: { symbol: sym } })}>
+          <Text style={s.tradeBtnText}>Trade {sym}</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: SPACING.lg },
-  header: { marginBottom: SPACING.xl },
-  title: { ...FONTS.heading, fontSize: 28, color: COLORS.text, marginBottom: SPACING.xs },
-  subtitle: { ...FONTS.body, color: COLORS.textMuted },
-  card: { backgroundColor: COLORS.surface, borderRadius: 12, padding: SPACING.lg, marginBottom: SPACING.md },
-  cardTitle: { ...FONTS.subheading, color: COLORS.text, marginBottom: SPACING.sm },
-  cardBody: { ...FONTS.body, color: COLORS.textMuted, lineHeight: 22 },
-  button: { backgroundColor: COLORS.primary, borderRadius: 10, padding: SPACING.md, alignItems: "center", marginTop: SPACING.md },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { ...FONTS.subheading, color: COLORS.background },
+  header: { padding: SPACING.lg, paddingBottom: SPACING.sm },
+  title: { ...FONTS.heading, fontSize: 28, color: COLORS.text },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, marginTop: 4 },
+  bigPrice: { ...FONTS.heading, fontSize: 24, color: COLORS.text },
+  change: { ...FONTS.mono, fontSize: 16 },
+  pos: { color: COLORS.success },
+  neg: { color: COLORS.error },
+  intervals: { flexDirection: "row", paddingHorizontal: SPACING.lg, gap: SPACING.sm, marginBottom: SPACING.md },
+  ivBtn: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: 6, borderWidth: 1, borderColor: COLORS.border },
+  ivBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  ivText: { ...FONTS.subheading, color: COLORS.textMuted, fontSize: 13 },
+  ivTextActive: { color: "#fff" },
+  card: { backgroundColor: COLORS.surface, borderRadius: 12, padding: SPACING.lg, marginHorizontal: SPACING.lg, marginBottom: SPACING.md },
+  cardTitle: { ...FONTS.subheading, fontSize: 13, color: COLORS.textMuted, marginBottom: SPACING.sm, textTransform: "uppercase", letterSpacing: 0.5 },
+  tableHeader: { flexDirection: "row", marginBottom: SPACING.sm },
+  th: { ...FONTS.subheading, fontSize: 11, color: COLORS.textMuted },
+  tableRow: { flexDirection: "row", paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  td: { ...FONTS.mono, fontSize: 12, color: COLORS.text },
+  tradeBtn: { backgroundColor: COLORS.primary, borderRadius: 8, padding: SPACING.md, marginHorizontal: SPACING.lg, alignItems: "center" },
+  tradeBtnText: { ...FONTS.heading, color: "#fff", fontSize: 16 },
 });

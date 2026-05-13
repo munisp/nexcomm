@@ -163,6 +163,19 @@ export default function Analytics() {
     { label: "Compliance Alerts",     value: "7",   change: "+3",  up: false, icon: Activity },
   ], [summary]);
 
+  // Build live sector breakdown from volumeByAsset, falling back to SECTORS when DB unavailable
+  const liveSectors = useMemo<SectorData[]>(() => {
+    if (!volumeByAsset || volumeByAsset.length === 0) return SECTORS;
+    const totalVolume = volumeByAsset.reduce((sum, v) => sum + Number(v.totalVolume), 0) || 1;
+    return volumeByAsset.map(v => ({
+      sector: (v.assetClass ?? "Unknown").replace(/_/g, " "),
+      volume: Number(v.totalVolume),
+      trades: Number(v.tradeCount),
+      pct: Math.round((Number(v.totalVolume) / totalVolume) * 1000) / 10,
+      change: 0,
+    }));
+  }, [volumeByAsset]);
+
   // Build volume by asset class bars from real data
   const assetVolumeBars = useMemo<VolumeBar[]>(() => {
     if (!volumeByAsset || volumeByAsset.length === 0) return VOLUME_BARS_DAILY;
@@ -246,7 +259,7 @@ export default function Analytics() {
             <div className="stat-card">
               <h3 className="font-semibold text-foreground mb-4">Volume by Sector</h3>
               <div className="space-y-2">
-                {SECTORS.slice(0, 6).map((s, i) => (
+                {liveSectors.slice(0, 6).map((s, i) => (
                   <div key={s.sector} className="flex items-center gap-3">
                     <div className={`w-3 h-3 rounded-sm flex-shrink-0 ${SECTOR_COLORS[i]}`} />
                     <div className="flex-1 min-w-0">
@@ -392,7 +405,7 @@ export default function Analytics() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {SECTORS.map((s, i) => (
+                {liveSectors.map((s, i) => (
                   <tr key={s.sector} className="hover:bg-secondary/30 transition-colors">
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">

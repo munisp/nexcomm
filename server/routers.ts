@@ -93,6 +93,8 @@ import { indicesRouter } from "./routers/indicesRouter";
 import { ussdWhatsappReceiptRouter } from "./routers/ussdWhatsappReceiptRouter";
 import { ledgerRouter } from "./routers/ledgerRouter";
 import { pbacRouter } from "./routers/pbacRouter";
+import { creditRouter } from "./routers/creditRouter";
+import { microservicesRouter } from "./routers/microservicesRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -186,6 +188,8 @@ export const appRouter = router({
   ussdWhatsappReceipt: ussdWhatsappReceiptRouter,
   ledger: ledgerRouter,
   pbac: pbacRouter,
+  credit: creditRouter,
+  microservices: microservicesRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure

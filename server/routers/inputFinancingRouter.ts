@@ -67,6 +67,46 @@ export const inputFinancingRouter = router({
       return { success: true };
     }),
 
+  getLoan: protectedProcedure
+    .input(z.object({ loanId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return DEMO_LOANS.find(l => l.id === input.loanId) ?? null;
+      try {
+        const [loan] = await db.select().from(inputFinancingLoans)
+          .where(and(eq(inputFinancingLoans.id, input.loanId), eq(inputFinancingLoans.farmerId, ctx.user.id)));
+        return loan ?? null;
+      } catch { return null; }
+    }),
+
+  cancelLoan: protectedProcedure
+    .input(z.object({ loanId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: true };
+      const [loan] = await db.select().from(inputFinancingLoans)
+        .where(and(eq(inputFinancingLoans.id, input.loanId), eq(inputFinancingLoans.farmerId, ctx.user.id)));
+      if (!loan) throw new Error("Loan not found");
+      if (loan.status !== "APPLIED") throw new Error("Only APPLIED loans can be cancelled");
+      await db.update(inputFinancingLoans).set({ status: "CANCELLED", updatedAt: new Date() })
+        .where(eq(inputFinancingLoans.id, input.loanId));
+      await writeAuditLog({ userId: ctx.user.id, action: "CANCEL_LOAN", resourceType: "input_financing_loan", resourceId: String(input.loanId), details: {} });
+      return { success: true };
+    }),
+
+  adminListLoans: protectedProcedure
+    .input(z.object({ status: z.string().optional(), limit: z.number().default(50), offset: z.number().default(0) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return DEMO_LOANS;
+      try {
+        const rows = await db.select().from(inputFinancingLoans)
+          .orderBy(desc(inputFinancingLoans.createdAt))
+          .limit(input.limit).offset(input.offset);
+        return rows;
+      } catch { return DEMO_LOANS; }
+    }),
+
   stats: publicProcedure.query(async () => {
     return {
       totalDisbursedNgn: 2840000000,
