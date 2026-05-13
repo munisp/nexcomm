@@ -40,6 +40,7 @@ import { haStatusRouter } from "../routes/haStatusRoute";
 import { suspiciousPatternDetector, ipBlocklistMiddleware, securityHeaders } from "../security";
 import { ddosProtection, slowLorisGuard } from "../ddos-protection";
 import { ddosCircuitBreaker, bruteForceProtection, inputSanitization, additionalSecurityHeaders, sessionFixationPrevention } from "../security-middleware";
+import { policyStore } from "../pbac";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -299,6 +300,8 @@ async function startServer() {
   // (port 8200, wraps TigerBeetle ledger + Kafka + Redis + Temporal).
   // Both fall back gracefully if their binaries are not present.
   await startAllEngines();
+  // Load PBAC policies persisted in the database (merges with in-memory defaults)
+  void policyStore.loadFromDb();
 
   // Graceful shutdown: stop all native engines when Node process exits
   process.on("SIGTERM", async () => { stopAllEngines(); stopMojaloopHealthJob(); await stopKafkaConsumer(); await disconnectKafkaProducer(); process.exit(0); });

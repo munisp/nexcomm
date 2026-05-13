@@ -61,13 +61,27 @@ const STATUS_CONFIG: Record<MMStatus, { label: string; className: string }> = {
 export default function MarketMakers() {
   const [tab, setTab] = useState("all");
   const [detail, setDetail] = useState<MarketMaker | null>(null);
-  const [apps, setApps] = useState(PENDING_APPS);
+  const utils = trpc.useUtils();
 
   // Real market maker data
   const { data: mmProfiles, isLoading: mmProfilesLoading } = trpc.marketMaker.adminListProfiles.useQuery(
     { status: "ALL" },
     { retry: false }
   );
+
+  // Pending onboarding applications (KYC status = PENDING)
+  const { data: pendingData } = trpc.marketMakerOnboarding.adminListMarketMakerProfiles.useQuery(
+    { kycStatus: "PENDING", limit: 50, offset: 0 },
+    { retry: false }
+  );
+  const pendingApps = pendingData?.profiles ?? [];
+
+  // Approve / reject mutations
+  const reviewMutation = trpc.marketMakerOnboarding.adminReviewMarketMakerKYC.useMutation({
+    onSuccess: () => {
+      void utils.marketMakerOnboarding.adminListMarketMakerProfiles.invalidate();
+    },
+  });
 
   const liveMarketMakers = useMemo<MarketMaker[]>(() => {
     if (!mmProfiles || mmProfiles.length === 0) return MARKET_MAKERS;
@@ -94,13 +108,19 @@ export default function MarketMakers() {
 
   const sorted = [...liveMarketMakers].sort((a, b) => b.performanceScore - a.performanceScore);
 
-  const handleApprove = (id: string) => {
-    setApps(prev => prev.filter(a => a.id !== id));
-    toast.success("Application approved — market maker onboarded");
+  const handleApprove = (id: number) => {
+    reviewMutation.mutate(
+      { marketMakerId: id, decision: "APPROVED" },
+      { onSuccess: () => toast.success("Application approved — market maker onboarded"),
+        onError: (e) => toast.error(e.message ?? "Approval failed") }
+    );
   };
-  const handleReject = (id: string) => {
-    setApps(prev => prev.filter(a => a.id !== id));
-    toast.error("Application rejected");
+  const handleReject = (id: number) => {
+    reviewMutation.mutate(
+      { marketMakerId: id, decision: "REJECTED" },
+      { onSuccess: () => toast.error("Application rejected"),
+        onError: (e) => toast.error(e.message ?? "Rejection failed") }
+    );
   };
 
   if (mmProfilesLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
@@ -136,7 +156,7 @@ export default function MarketMakers() {
           <TabsTrigger value="all">All Market Makers</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="obligations">Obligations</TabsTrigger>
-          <TabsTrigger value="applications">Applications ({apps.length})</TabsTrigger>
+          <TabsTrigger value="applications">Applications ({pendingApps.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-4">
@@ -284,28 +304,28 @@ export default function MarketMakers() {
         </TabsContent>
 
         <TabsContent value="applications" className="mt-4">
-          {apps.length === 0 ? (
+          {pendingApps.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">No pending applications</div>
           ) : (
             <div className="space-y-3">
-              {apps.map(app => (
+              {pendingApps.map(app => (
                 <div key={app.id} className="stat-card flex items-center justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
-                      <span className="font-semibold text-foreground">{app.name}</span>
+                      <span className="font-semibold text-foreground">{app.firmName}</span>
                       <Badge className="badge-active text-[10px]">Pending Review</Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">{app.firm} · {app.country}</div>
+                    <div className="text-xs text-muted-foreground">{app.tradingDesk ?? ""} · {app.contactEmail ?? ""}</div>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {app.instruments.map(i => (
+                      {(app.instrumentObligations ?? []).map(i => (
                         <span key={i} className="text-[10px] bg-secondary px-1.5 py-0.5 rounded text-muted-foreground">{i}</span>
                       ))}
                     </div>
                   </div>
-                  <div className="text-xs text-muted-foreground mr-4">Applied: {app.applied}</div>
+                  <div className="text-xs text-muted-foreground mr-4">Applied: {new Date(app.createdAt).toLocaleDateString()}</div>
                   <div className="flex gap-2">
-                    <Button size="sm" className="h-8 bg-positive hover:bg-positive/90 text-white" onClick={() => handleApprove(app.id)}>Approve</Button>
-                    <Button size="sm" variant="outline" className="h-8 text-negative border-negative/30 hover:bg-negative/10" onClick={() => handleReject(app.id)}>Reject</Button>
+                    <Button size="sm" className="h-8 bg-positive hover:bg-positive/90 text-white" disabled={reviewMutation.isPending} onClick={() => handleApprove(app.id)}>Approve</Button>
+                    <Button size="sm" variant="outline" className="h-8 text-negative border-negative/30 hover:bg-negative/10" disabled={reviewMutation.isPending} onClick={() => handleReject(app.id)}>Reject</Button>
                   </div>
                 </div>
               ))}

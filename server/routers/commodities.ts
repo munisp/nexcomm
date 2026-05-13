@@ -1,11 +1,14 @@
 /**
  * Commodities router — price history and instrument data.
- * Generates deterministic 90-day OHLCV candles from the shared
- * seeded-random model so the chart looks realistic without a DB.
+ * Tries the live_prices table first for current spot price data;
+ * falls back to deterministic 90-day OHLCV candles when DB is unavailable.
  */
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { publicProcedure, router } from "../_core/trpc";
 import { COMMODITY_MAP, COMMODITIES, GRADE_SPECS, WAREHOUSES } from "@shared/commodities";
+import { getReadDb } from "../db";
+import { livePrices } from "../../drizzle/schema";
 
 // ── Seeded random (mirrors shared/commodities.ts) ────────────────────────────
 function seededRandom(seed: number): number {
@@ -98,18 +101,54 @@ export const commoditiesRouter = router({
     }));
   }),
 
-  /** Get OHLCV price history for a commodity symbol */
+  /**
+   * Get OHLCV price history for a commodity symbol.
+   * Tries live_prices table first for the current spot price;
+   * falls back to seeded-random OHLCV when DB is unavailable.
+   */
   priceHistory: publicProcedure
     .input(z.object({
       symbol: z.string().min(1),
       days:   z.number().int().min(7).max(365).default(90),
     }))
-    .query(({ input }) => {
+    .query(async ({ input }) => {
       const commodity = COMMODITY_MAP.get(input.symbol);
       if (!commodity) {
-        return { symbol: input.symbol, bars: [], instrument: null };
+        return { symbol: input.symbol, bars: [], instrument: null, livePrice: null };
       }
+
+      // Try to fetch live spot price from the DB
+      let livePrice: { price: number; changePct: number; updatedAt: Date } | null = null;
+      try {
+        const db = await getReadDb();
+        if (db) {
+          const [row] = await db
+            .select()
+            .from(livePrices)
+            .where(eq(livePrices.symbol, input.symbol))
+            .limit(1);
+          if (row) {
+            livePrice = {
+              price:     parseFloat(row.price),
+              changePct: row.changePct ? parseFloat(row.changePct) : 0,
+              updatedAt: row.updatedAt,
+            };
+          }
+        }
+      } catch {
+        // Non-fatal: fall through to seeded-random
+      }
+
       const bars = generateDailyOHLCV(input.symbol, input.days);
+
+      // If we have a live price, patch the last bar's close to reflect it
+      if (livePrice && bars.length > 0) {
+        const last = bars[bars.length - 1];
+        last.close = livePrice.price;
+        last.high  = Math.max(last.high, livePrice.price);
+        last.low   = Math.min(last.low,  livePrice.price);
+      }
+
       return {
         symbol:     input.symbol,
         instrument: {
@@ -121,6 +160,7 @@ export const commoditiesRouter = router({
           description: commodity.description,
           country:     commodity.country ?? null,
         },
+        livePrice,
         bars,
       };
     }),

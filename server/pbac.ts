@@ -32,6 +32,9 @@
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure } from "./_core/trpc";
 import type { Context } from "./_core/context";
+import { getDb } from "./db";
+import { pbacPolicies } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 // ── Policy Types ──────────────────────────────────────────────────────────────
 
@@ -293,18 +296,95 @@ class PolicyStore {
   private maxAuditEntries = 10000;
 
   constructor() {
-    // Load default policies
+    // Load default policies into memory; DB policies are loaded async via loadFromDb()
     for (const policy of DEFAULT_POLICIES) {
       this.policies.set(policy.id, policy);
     }
   }
 
+  /** Load persisted policies from the database, merging with defaults. */
+  async loadFromDb(): Promise<void> {
+    try {
+      const db = await getDb();
+      if (!db) return;
+      const rows = await db.select().from(pbacPolicies);
+      for (const row of rows) {
+        const policy: Policy = {
+          id: row.id,
+          name: row.name,
+          description: row.description ?? undefined,
+          effect: row.effect as "allow" | "deny",
+          principals: (row.principals as string[]) ?? [],
+          resources: (row.resources as string[]) ?? [],
+          actions: (row.actions as string[]) ?? [],
+          conditions: (row.conditions as PolicyCondition[] | undefined) ?? undefined,
+          priority: row.priority,
+          enabled: row.enabled,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        };
+        this.policies.set(policy.id, policy);
+      }
+    } catch {
+      // Non-fatal: in-memory defaults remain active
+    }
+  }
+
+  /** Persist a policy to the database. */
+  private async persistPolicy(policy: Policy): Promise<void> {
+    try {
+      const db = await getDb();
+      if (!db) return;
+      await db.insert(pbacPolicies).values({
+        id: policy.id,
+        name: policy.name,
+        description: policy.description ?? null,
+        effect: policy.effect,
+        principals: policy.principals,
+        resources: policy.resources,
+        actions: policy.actions,
+        conditions: policy.conditions ?? null,
+        priority: policy.priority,
+        enabled: policy.enabled,
+        createdAt: policy.createdAt,
+        updatedAt: policy.updatedAt,
+      }).onConflictDoUpdate({
+        target: pbacPolicies.id,
+        set: {
+          name: policy.name,
+          description: policy.description ?? null,
+          effect: policy.effect,
+          principals: policy.principals,
+          resources: policy.resources,
+          actions: policy.actions,
+          conditions: policy.conditions ?? null,
+          priority: policy.priority,
+          enabled: policy.enabled,
+          updatedAt: new Date(),
+        },
+      });
+    } catch {
+      // Non-fatal: in-memory store is the source of truth
+    }
+  }
+
   addPolicy(policy: Policy): void {
-    this.policies.set(policy.id, { ...policy, updatedAt: new Date() });
+    const p = { ...policy, updatedAt: new Date() };
+    this.policies.set(policy.id, p);
+    void this.persistPolicy(p);
   }
 
   removePolicy(id: string): boolean {
-    return this.policies.delete(id);
+    const deleted = this.policies.delete(id);
+    if (deleted) {
+      void (async () => {
+        try {
+          const db = await getDb();
+          if (db) await db.delete(pbacPolicies).where(eq(pbacPolicies.id, id));
+        } catch { /* non-fatal */ }
+      })();
+    }
+    return deleted;
   }
 
   updatePolicy(id: string, updates: Partial<Policy>): Policy | null {
@@ -312,6 +392,7 @@ class PolicyStore {
     if (!existing) return null;
     const updated = { ...existing, ...updates, id, updatedAt: new Date() };
     this.policies.set(id, updated);
+    void this.persistPolicy(updated);
     return updated;
   }
 

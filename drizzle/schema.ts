@@ -2937,3 +2937,23 @@ export const warehouses = pgTable("warehouses", {
 });
 export type Warehouse = typeof warehouses.$inferSelect;
 export type InsertWarehouse = typeof warehouses.$inferInsert;
+
+// ─── PBAC Policies Persistence ────────────────────────────────────────────────
+// Persists policy-based access control policies across server restarts.
+// The in-memory policyStore is seeded from this table on startup.
+export const pbacPolicies = pgTable("pbac_policies", {
+  id:          varchar("id", { length: 128 }).primaryKey(),
+  name:        varchar("name", { length: 200 }).notNull(),
+  description: text("description"),
+  effect:      varchar("effect", { length: 8 }).notNull().$type<"allow" | "deny">(),
+  principals:  jsonb("principals").notNull().$type<string[]>().default([]),
+  resources:   jsonb("resources").notNull().$type<string[]>().default([]),
+  actions:     jsonb("actions").notNull().$type<string[]>().default([]),
+  conditions:  jsonb("conditions").$type<unknown[]>(),
+  priority:    integer("priority").notNull().default(500),
+  enabled:     boolean("enabled").notNull().default(true),
+  createdAt:   timestamp("created_at").defaultNow().notNull(),
+  updatedAt:   timestamp("updated_at").defaultNow().notNull(),
+});
+export type PbacPolicy = typeof pbacPolicies.$inferSelect;
+export type InsertPbacPolicy = typeof pbacPolicies.$inferInsert;
