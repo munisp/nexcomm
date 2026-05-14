@@ -705,3 +705,11 @@
 - [x] workbenchRouter.ts: removed 3 sets of duplicate procedures, fixed farms.userId reference
 - [x] Tests: 621/935 passing (298 DB-dependent pre-existing failures, 0 regressions)
 - [x] Audit summary: Routers missing CRUD: 0 | Unrouted pages: 0 | All Flutter screens wired
+
+## Round v51 — Final TS Error Fixes
+- [x] workbenchRouter.ts: added missing TRPCError import from @trpc/server
+- [x] watchlist.ts: added missing TRPCError import + fixed alertPrice column (not in watchlist table)
+- [x] whatsapp.ts: removed duplicate deleteContact procedure
+- [x] TS errors: 0 (confirmed via devserver log grep)
+- [x] Tests: 621/935 passing (298 DB-dependent pre-existing failures, 0 regressions)
+- [x] Final audit: 81 routers registered, 136 DB tables covered, 124 pages routed, 0 gaps

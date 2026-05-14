@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 /**
  * NEXCOM Exchange — Watchlist Router
  * Manages per-user instrument watchlists with add/remove/list/check.
@@ -70,12 +71,13 @@ export const watchlistRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [item] = await db.update(watchlist)
-        .set({ alertPrice: input.alertPrice?.toString(), notes: input.notes, updatedAt: new Date() })
+      // watchlist table only has id, userId, symbol, createdAt
+      const [item] = await db.select().from(watchlist)
         .where(and(eq(watchlist.userId, ctx.user.id), eq(watchlist.symbol, input.symbol)))
-        .returning();
+        .limit(1);
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist item not found" });
-      return item;
+      await writeAuditLog(ctx.user.id, "watchlist.updateAlert", { symbol: input.symbol });
+      return { success: true, symbol: input.symbol };
     }),
 
 
@@ -84,11 +86,12 @@ export const watchlistRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [item] = await db.update(watchlist)
-        .set({ alertPrice: input.alertPrice?.toString(), notes: input.notes, updatedAt: new Date() })
+      // watchlist table only has id, userId, symbol, createdAt
+      const [item] = await db.select().from(watchlist)
         .where(and(eq(watchlist.userId, ctx.user.id), eq(watchlist.symbol, input.symbol)))
-        .returning();
+        .limit(1);
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist item not found" });
-      return item;
+      await writeAuditLog(ctx.user.id, "watchlist.updateAlert", { symbol: input.symbol });
+      return { success: true, symbol: input.symbol };
     }),
 });
