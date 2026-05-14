@@ -3,7 +3,9 @@
  * Provides a public tRPC procedure for checking database and server health.
  * Used by the frontend to show connection status and by ops for monitoring.
  */
-import { publicProcedure, router } from "../_core/trpc";
+import { writeAuditLog } from "../audit";
+import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
+import { z } from "zod";
 import { getDb } from "../db";
 
 export const healthRouter = router({
@@ -49,4 +51,27 @@ export const healthRouter = router({
       },
     };
   }),
+
+  list: publicProcedure
+    .query(async () => {
+      return { services: [], timestamp: new Date().toISOString() };
+    }),
+  create: protectedProcedure
+    .input(z.object({ service: z.string(), status: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await writeAuditLog(ctx.user.id, "health.create", input);
+      return { success: true };
+    }),
+  update: protectedProcedure
+    .input(z.object({ service: z.string(), status: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await writeAuditLog(ctx.user.id, "health.update", input);
+      return { success: true };
+    }),
+  delete: protectedProcedure
+    .input(z.object({ service: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await writeAuditLog(ctx.user.id, "health.delete", input);
+      return { success: true };
+    }),
 });

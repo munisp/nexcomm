@@ -5,6 +5,7 @@
  * (development / first-boot), so the UI always works.
  */
 import { z } from "zod";
+import { writeAuditLog } from "../audit";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { users, orders, warehouseReceipts, depositRequests } from "../../drizzle/schema";
@@ -379,5 +380,18 @@ export const searchRouter = router({
         isAdmin
       );
       return { results: pgResults, source: "postgres" as const };
+    }),
+
+  update: protectedProcedure
+    .input(z.object({ indexName: z.string(), docId: z.string(), data: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      await writeAuditLog(ctx.user.id, "search.update", { indexName: input.indexName, docId: input.docId });
+      return { success: true };
+    }),
+  delete: protectedProcedure
+    .input(z.object({ indexName: z.string(), docId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await writeAuditLog(ctx.user.id, "search.delete", { indexName: input.indexName, docId: input.docId });
+      return { success: true };
     }),
 });

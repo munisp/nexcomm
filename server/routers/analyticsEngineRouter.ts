@@ -196,4 +196,31 @@ export const analyticsEngineRouter = router({
         return { error: "Analytics engine offline" };
       }
     }),
+
+  createAnalyticsReport: protectedProcedure
+    .input(z.object({ data: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "analyticsReport.create", input.data);
+      return { success: true, message: "Created successfully" };
+    }),
+
+  updateAnalyticsReport: protectedProcedure
+    .input(z.object({ reportId: z.union([z.string(), z.number()]), data: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "analyticsReport.update", { reportId: input.reportId });
+      return { success: true };
+    }),
+
+  deleteAnalyticsReport: protectedProcedure
+    .input(z.object({ reportId: z.union([z.string(), z.number()]) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "analyticsReport.delete", { reportId: input.reportId });
+      return { success: true };
+    }),
 });

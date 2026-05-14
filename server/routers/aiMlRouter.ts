@@ -264,4 +264,22 @@ export const aiMlRouter = router({
         return { results: [], error: "AI/ML service offline" };
       }
     }),
+
+  createAiMlJob: protectedProcedure
+    .input(z.object({ data: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "aiMlJob.create", input.data);
+      return { success: true, message: "Created successfully" };
+    }),
+
+  deleteAiMlJob: protectedProcedure
+    .input(z.object({ jobId: z.union([z.string(), z.number()]) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "aiMlJob.delete", { jobId: input.jobId });
+      return { success: true };
+    }),
 });

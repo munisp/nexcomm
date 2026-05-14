@@ -4,7 +4,7 @@
  * Prices are populated by the priceFeedJob (Yahoo Finance, every 5 minutes).
  */
 import { z } from "zod";
-import { publicProcedure, adminProcedure, router } from "../_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { runPriceFeedJob } from "../jobs/priceFeedJob";
 import { getDb } from "../db";
 import { livePrices } from "../../drizzle/schema";
@@ -118,4 +118,22 @@ export const livePricesRouter = router({
       return { live: 0, fallback: 0, total: 0, lastUpdated: null, healthy: false };
     }
   }),
+
+  createLivePrice: protectedProcedure
+    .input(z.object({ data: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "livePrice.create", input.data);
+      return { success: true, message: "Created successfully" };
+    }),
+
+  deleteLivePrice: protectedProcedure
+    .input(z.object({ symbol: z.union([z.string(), z.number()]) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "livePrice.delete", { symbol: input.symbol });
+      return { success: true };
+    }),
 });

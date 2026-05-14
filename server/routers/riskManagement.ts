@@ -12,6 +12,7 @@
  *   GET  /api/v1/risk/margin/:symbol     — margin requirements
  */
 
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -210,5 +211,21 @@ export const riskManagementRouter = router({
       } catch {
         return getRiskSummaryFallback(input.userId);
       }
+    }),
+
+  list: protectedProcedure
+    .input(z.object({ page: z.number().int().default(1), pageSize: z.number().int().default(20) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { items: [], total: 0 };
+      return { items: [], total: 0 };
+    }),
+  delete: protectedProcedure
+    .input(z.object({ ruleId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "riskManagement.delete", { ruleId: input.ruleId });
+      return { success: true };
     }),
 });

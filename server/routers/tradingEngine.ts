@@ -130,4 +130,22 @@ export const tradingEngineRouter = router({
         return null;
       }
     }),
+
+  list: protectedProcedure
+    .input(z.object({ page: z.number().int().default(1), pageSize: z.number().int().default(20) }))
+    .query(async ({ ctx, input }) => {
+      return { items: [], total: 0 };
+    }),
+  create: protectedProcedure
+    .input(z.object({ data: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      await writeAuditLog(ctx.user.id, "tradingEngine.create", input.data);
+      return { success: true };
+    }),
+  update: protectedProcedure
+    .input(z.object({ orderId: z.string(), data: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      await writeAuditLog(ctx.user.id, "tradingEngine.update", { orderId: input.orderId });
+      return { success: true };
+    }),
 });

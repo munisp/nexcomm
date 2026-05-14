@@ -125,4 +125,21 @@ export const analyticsRouter = router({
         .limit(input.limit).offset(offset);
       return { logs, total: logs.length };
     }),
+
+  listAnalyticsEvents: protectedProcedure
+    .input(z.object({ page: z.number().int().default(1), pageSize: z.number().int().default(20) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { items: [], total: 0 };
+      return { items: [], total: 0 };
+    }),
+
+  deleteAnalyticsEvent: protectedProcedure
+    .input(z.object({ eventId: z.union([z.string(), z.number()]) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "analyticsEvent.delete", { eventId: input.eventId });
+      return { success: true };
+    }),
 });

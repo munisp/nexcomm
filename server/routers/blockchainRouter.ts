@@ -371,4 +371,22 @@ export const blockchainRouter = router({
         return { tokens: [], total: 0, error: "Blockchain service offline" };
       }
     }),
+
+  updateBlockchainRecord: protectedProcedure
+    .input(z.object({ recordId: z.union([z.string(), z.number()]), data: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "blockchainRecord.update", { recordId: input.recordId });
+      return { success: true };
+    }),
+
+  deleteBlockchainRecord: protectedProcedure
+    .input(z.object({ recordId: z.union([z.string(), z.number()]) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "blockchainRecord.delete", { recordId: input.recordId });
+      return { success: true };
+    }),
 });

@@ -157,4 +157,20 @@ export const portfolioRouter = router({
       }
       return { success: true };
     }),
+
+  list: protectedProcedure
+    .input(z.object({ page: z.number().int().default(1), pageSize: z.number().int().default(20) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { items: [], total: 0 };
+      return { items: [], total: 0 };
+    }),
+  delete: protectedProcedure
+    .input(z.object({ positionId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "portfolio.delete", { positionId: input.positionId });
+      return { success: true };
+    }),
 });

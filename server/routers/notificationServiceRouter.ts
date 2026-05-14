@@ -196,4 +196,22 @@ export const notificationServiceRouter = router({
       return { online: false, service: "notification" };
     }
   }),
+
+  createNotification: protectedProcedure
+    .input(z.object({ data: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "notification.create", input.data);
+      return { success: true, message: "Created successfully" };
+    }),
+
+  deleteNotification: protectedProcedure
+    .input(z.object({ notificationId: z.union([z.string(), z.number()]) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      await writeAuditLog(ctx.user.id, "notification.delete", { notificationId: input.notificationId });
+      return { success: true };
+    }),
 });

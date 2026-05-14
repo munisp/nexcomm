@@ -1,6 +1,17 @@
+import '../../services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_la
+// API data provider
+final _loginDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  try {
+    return await nexcomApi.getMe();
+  } catch (e) {
+    return {'error': e.toString()};
+  }
+});
+
+uncher.dart';
 import '../../theme.dart';
 
 class LoginScreen extends ConsumerWidget {
