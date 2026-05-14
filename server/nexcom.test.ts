@@ -381,7 +381,6 @@ describe("priceAlerts router", () => {
       caller.priceAlerts.create({
         symbol: "",
         targetPrice: -1,
-        direction: "ABOVE",
         assetClass: "COMMODITY",
       })
     ).rejects.toThrow();

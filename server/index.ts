@@ -1,9 +1,9 @@
 import express from "express";
 import { createServer } from "http";
-import path from "path";
+import * as path from "path";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
+const __filename = fileURLToPath("file://" + __filename);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {

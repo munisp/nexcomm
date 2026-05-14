@@ -11,11 +11,11 @@
  */
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
-import path from "path";
+import * as path from "path";
 import { fileURLToPath } from "url";
 import { promisify } from "util";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath("file://" + __filename));
 const PROTO_PATH = path.resolve(__dirname, "../../proto/nexcom.proto");
 const GRPC_PORT = process.env.GRPC_PORT || "50051";
 const GRPC_HOST = `localhost:${GRPC_PORT}`;

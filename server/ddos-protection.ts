@@ -14,6 +14,7 @@
 import type { Request, Response, NextFunction, Application } from "express";
 import rateLimit from "express-rate-limit";
 import slowDown from "express-slow-down";
+// @ts-ignore
 import hpp from "hpp";
 import { randomUUID } from "crypto";
 
@@ -183,7 +184,7 @@ export function botDetectionMiddleware(req: Request, res: Response, next: NextFu
   // Clean up old entries periodically
   if (Math.random() < 0.001) {
     const now = Date.now();
-    for (const [key, val] of suspiciousIpTracker.entries()) {
+    for (const [key, val] of Array.from(suspiciousIpTracker.entries())) {
       if (now - val.firstSeen > TRACKER_TTL_MS && !val.blocked) {
         suspiciousIpTracker.delete(key);
       }

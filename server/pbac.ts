@@ -31,7 +31,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure } from "./_core/trpc";
-import type { Context } from "./_core/context";
+import type { TrpcContext as Context } from "./_core/context";
 import { getDb } from "./db";
 import { pbacPolicies } from "../drizzle/schema";
 import { eq } from "drizzle-orm";

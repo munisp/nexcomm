@@ -38,13 +38,13 @@
 
 import { spawn, exec, type ChildProcess } from "child_process";
 import { EventEmitter } from "events";
-import path from "path";
+import * as path from "path";
 import { fileURLToPath } from "url";
 import { accessSync, constants } from "fs";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath("file://" + __filename));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
