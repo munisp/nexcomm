@@ -147,4 +147,32 @@ export const depositsRouter = router({
 
       return { success: true };
     }),
+
+
+  cancelDeposit: protectedProcedure
+    .input(z.object({ depositId: z.number().int(), reason: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [deposit] = await db.update(depositRequests)
+        .set({ status: "CANCELLED", updatedAt: new Date() })
+        .where(and(eq(depositRequests.id, input.depositId), eq(depositRequests.userId, ctx.user.id), eq(depositRequests.status, "PENDING")))
+        .returning();
+      if (!deposit) throw new TRPCError({ code: "NOT_FOUND", message: "Deposit not found or cannot be cancelled" });
+      return { success: true };
+    }),
+
+
+  cancelDeposit: protectedProcedure
+    .input(z.object({ depositId: z.number().int(), reason: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [deposit] = await db.update(depositRequests)
+        .set({ status: "CANCELLED", updatedAt: new Date() })
+        .where(and(eq(depositRequests.id, input.depositId), eq(depositRequests.userId, ctx.user.id), eq(depositRequests.status, "PENDING")))
+        .returning();
+      if (!deposit) throw new TRPCError({ code: "NOT_FOUND", message: "Deposit not found or cannot be cancelled" });
+      return { success: true };
+    }),
 });

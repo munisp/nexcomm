@@ -895,4 +895,58 @@ export const bankingRouter = router({
     });
     return { score, band, maxLoanNgn: score * 10000, interestRatePct: Math.max(5, 8.5 - Math.floor((score - 500) / 50) * 0.5) };
   }),
+
+
+  updateAccountAlias: protectedProcedure
+    .input(z.object({ accountId: z.number().int(), alias: z.string().max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [acct] = await db.update(bankAccounts)
+        .set({ alias: input.alias, updatedAt: new Date() })
+        .where(and(eq(bankAccounts.id, input.accountId), eq(bankAccounts.userId, ctx.user.id)))
+        .returning();
+      if (!acct) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
+      return acct;
+    }),
+
+  closeAccount: protectedProcedure
+    .input(z.object({ accountId: z.number().int(), reason: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [acct] = await db.update(bankAccounts)
+        .set({ status: "CLOSED", updatedAt: new Date() })
+        .where(and(eq(bankAccounts.id, input.accountId), eq(bankAccounts.userId, ctx.user.id), eq(bankAccounts.status, "ACTIVE")))
+        .returning();
+      if (!acct) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found or already closed" });
+      return { success: true };
+    }),
+
+
+  updateAccountAlias: protectedProcedure
+    .input(z.object({ accountId: z.number().int(), alias: z.string().max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [acct] = await db.update(bankAccounts)
+        .set({ alias: input.alias, updatedAt: new Date() })
+        .where(and(eq(bankAccounts.id, input.accountId), eq(bankAccounts.userId, ctx.user.id)))
+        .returning();
+      if (!acct) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
+      return acct;
+    }),
+
+  closeAccount: protectedProcedure
+    .input(z.object({ accountId: z.number().int(), reason: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [acct] = await db.update(bankAccounts)
+        .set({ status: "CLOSED", updatedAt: new Date() })
+        .where(and(eq(bankAccounts.id, input.accountId), eq(bankAccounts.userId, ctx.user.id), eq(bankAccounts.status, "ACTIVE")))
+        .returning();
+      if (!acct) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found or already closed" });
+      return { success: true };
+    }),
 });

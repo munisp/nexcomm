@@ -547,4 +547,32 @@ export const creditRouter = router({
       ]);
       return { events: rows, total: countRow?.count ?? 0 };
     }),
+
+
+  deleteCollateral: protectedProcedure
+    .input(z.object({ collateralId: z.number().int(), reason: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [item] = await db.update(collateralRegistry)
+        .set({ status: "RELEASED", updatedAt: new Date() })
+        .where(and(eq(collateralRegistry.id, input.collateralId), eq(collateralRegistry.userId, ctx.user.id)))
+        .returning();
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Collateral not found" });
+      return { success: true };
+    }),
+
+
+  deleteCollateral: protectedProcedure
+    .input(z.object({ collateralId: z.number().int(), reason: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [item] = await db.update(collateralRegistry)
+        .set({ status: "RELEASED", updatedAt: new Date() })
+        .where(and(eq(collateralRegistry.id, input.collateralId), eq(collateralRegistry.userId, ctx.user.id)))
+        .returning();
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Collateral not found" });
+      return { success: true };
+    }),
 });

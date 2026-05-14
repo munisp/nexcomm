@@ -319,4 +319,28 @@ export const corporateActionsRouter = router({
 
       return { success: true };
     }),
+
+
+  deleteAction: protectedProcedure
+    .input(z.object({ actionId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [action] = await db.delete(corporateActions).where(eq(corporateActions.id, input.actionId)).returning();
+      if (!action) throw new TRPCError({ code: "NOT_FOUND", message: "Corporate action not found" });
+      return { success: true };
+    }),
+
+
+  deleteAction: protectedProcedure
+    .input(z.object({ actionId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [action] = await db.delete(corporateActions).where(eq(corporateActions.id, input.actionId)).returning();
+      if (!action) throw new TRPCError({ code: "NOT_FOUND", message: "Corporate action not found" });
+      return { success: true };
+    }),
 });

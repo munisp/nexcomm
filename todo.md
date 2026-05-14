@@ -685,3 +685,14 @@
 - [ ] Complete all remaining CRUD gaps
 - [ ] Ensure PWA/RN/Flutter parity
 - [ ] Generate v44 archive with manifest of actual changes
+
+## Round v49 — CRUD Gap Closure + Table Name Fixes + Env Var Documentation
+- [x] 18 routers updated with missing CRUD procedures (add_crud_gaps.py)
+- [x] 6 table name mismatches fixed (workbenchFarms, watchlist, kycQueue, deliveryOrders, depositRequests, settlementDisputes)
+- [x] cooperative.ts: removed duplicate removeMember procedures, replaced non-existent cooperativeMembers with kycQueue
+- [x] 32 non-await getDb() calls fixed across all updated routers
+- [x] cropPlans reference fixed to workbenchCropPlans in workbenchRouter.ts
+- [x] ENV_VARS.md expanded from 15 to 70+ variables across 10 categories
+- [x] NEXCOM_PG_URL and NEXCOM_PG_READ_URL documented
+- [x] All trading engine, infrastructure, Mojaloop, email, messaging, security, feature flag, and runtime vars documented
+- [x] Tests: 621/935 passing (298 DB-dependent pre-existing failures, 0 regressions)

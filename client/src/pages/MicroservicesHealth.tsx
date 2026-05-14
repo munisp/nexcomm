@@ -11,10 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
 import {
   Activity, Shield, Brain, Lock, Zap, Bell, Search,
   Network, Bot, RefreshCw, CheckCircle2, XCircle, AlertCircle,
-  Clock, Server, TrendingUp
+  Clock, Server, TrendingUp, ToggleLeft, ToggleRight, Ban, Unlock
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -329,6 +331,145 @@ function AmlMetrics() {
   );
 }
 
+// ── Circuit Breaker Controls ─────────────────────────────────────────────────
+function CircuitBreakerControls() {
+  const utils = trpc.useUtils();
+  const { data: circuitBreakers } = trpc.microservices.middlewareHub.getCircuitBreakers.useQuery();
+  const { data: blockedIPs } = trpc.microservices.ddosGuard.getBlockedIPs.useQuery({ limit: 20 });
+  const { data: ddosRules } = trpc.microservices.ddosGuard.getRules.useQuery();
+  const [newIp, setNewIp] = useState("");
+  const [blockReason, setBlockReason] = useState("");
+
+  const resetCBMut = trpc.microservices.middlewareHub.resetCircuitBreaker.useMutation({
+    onSuccess: () => { utils.microservices.middlewareHub.getCircuitBreakers.invalidate(); toast.success("Circuit breaker reset"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const blockIPMut = trpc.microservices.ddosGuard.blockIP.useMutation({
+    onSuccess: () => { utils.microservices.ddosGuard.getBlockedIPs.invalidate(); toast.success("IP blocked"); setNewIp(""); setBlockReason(""); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const unblockIPMut = trpc.microservices.ddosGuard.unblockIP.useMutation({
+    onSuccess: () => { utils.microservices.ddosGuard.getBlockedIPs.invalidate(); toast.success("IP unblocked"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const cbs = circuitBreakers as { breakers?: Array<{ service: string; state: string; failureCount: number; lastFailure?: string }> } | undefined;
+  const ips = blockedIPs as { ips?: Array<{ ip: string; reason?: string; blockedAt?: string }> } | undefined;
+  const rules = ddosRules as { rules?: Array<{ name: string; enabled: boolean; threshold: number; windowSeconds: number }> } | undefined;
+
+  return (
+    <div className="space-y-6">
+      {/* Circuit Breakers */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Network className="h-4 w-4 text-cyan-400" /> Middleware Hub — Circuit Breakers
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!cbs?.breakers?.length ? (
+            <p className="text-xs text-muted-foreground">No circuit breaker data available (service may be offline)</p>
+          ) : (
+            <div className="space-y-2">
+              {cbs.breakers.map(cb => (
+                <div key={cb.service} className="flex items-center justify-between bg-muted/20 rounded-lg px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{cb.service}</p>
+                    <p className="text-xs text-muted-foreground">Failures: {cb.failureCount}{cb.lastFailure ? ` · Last: ${new Date(cb.lastFailure).toLocaleTimeString()}` : ""}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className={cb.state === "closed" ? "bg-emerald-500/20 text-emerald-300" : cb.state === "open" ? "bg-red-500/20 text-red-300" : "bg-yellow-500/20 text-yellow-300"}>
+                      {cb.state}
+                    </Badge>
+                    {cb.state !== "closed" && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => resetCBMut.mutate({ service: cb.service })} disabled={resetCBMut.isPending}>
+                        <RefreshCw className="h-3 w-3 mr-1" /> Reset
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* DDoS Rules */}
+      {rules?.rules && rules.rules.length > 0 && (
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Zap className="h-4 w-4 text-yellow-400" /> DDoS Guard — Rate Limit Rules
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {rules.rules.map(rule => (
+                <div key={rule.name} className="flex items-center justify-between bg-muted/20 rounded-lg px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{rule.name}</p>
+                    <p className="text-xs text-muted-foreground">{rule.threshold} req / {rule.windowSeconds}s window</p>
+                  </div>
+                  <Badge className={rule.enabled ? "bg-emerald-500/20 text-emerald-300" : "bg-gray-500/20 text-gray-300"}>
+                    {rule.enabled ? "Active" : "Disabled"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Blocked IPs */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Ban className="h-4 w-4 text-red-400" /> DDoS Guard — IP Block List
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              placeholder="IP address (e.g. 1.2.3.4)"
+              value={newIp}
+              onChange={e => setNewIp(e.target.value)}
+              className="h-8 text-sm flex-1"
+            />
+            <Input
+              placeholder="Reason (optional)"
+              value={blockReason}
+              onChange={e => setBlockReason(e.target.value)}
+              className="h-8 text-sm flex-1"
+            />
+            <Button size="sm" className="h-8" onClick={() => blockIPMut.mutate({ ip: newIp, reason: blockReason || undefined })} disabled={!newIp || blockIPMut.isPending}>
+              <Ban className="h-3 w-3 mr-1" /> Block
+            </Button>
+          </div>
+          {!ips?.ips?.length ? (
+            <p className="text-xs text-muted-foreground">No blocked IPs (service may be offline)</p>
+          ) : (
+            <div className="space-y-1">
+              {ips.ips.map(entry => (
+                <div key={entry.ip} className="flex items-center justify-between bg-muted/20 rounded px-3 py-1.5">
+                  <div>
+                    <span className="text-sm font-mono text-foreground">{entry.ip}</span>
+                    {entry.reason && <span className="text-xs text-muted-foreground ml-2">{entry.reason}</span>}
+                  </div>
+                  <Button size="sm" variant="ghost" className="h-6 text-xs text-red-400 hover:text-red-300" onClick={() => unblockIPMut.mutate({ ip: entry.ip })} disabled={unblockIPMut.isPending}>
+                    <Unlock className="h-3 w-3 mr-1" /> Unblock
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MicroservicesHealth() {
   const [latencies, setLatencies] = useState<Record<string, number | null>>({});
@@ -454,11 +595,12 @@ export default function MicroservicesHealth() {
 
         {/* Detailed Metrics Tabs */}
         <Tabs defaultValue="fraud">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="fraud">Fraud Engine</TabsTrigger>
             <TabsTrigger value="ddos">DDoS Guard</TabsTrigger>
             <TabsTrigger value="credit">Credit Scoring</TabsTrigger>
             <TabsTrigger value="middleware">Middleware Hub</TabsTrigger>
+            <TabsTrigger value="controls">Circuit Breakers</TabsTrigger>
           </TabsList>
 
           <TabsContent value="fraud" className="mt-4">
@@ -511,6 +653,10 @@ export default function MicroservicesHealth() {
                 <MiddlewareHubMetrics />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="controls" className="mt-4">
+            <CircuitBreakerControls />
           </TabsContent>
         </Tabs>
 

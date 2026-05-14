@@ -277,4 +277,34 @@ export const whatsappRouter = router({
 
     return { success: true };
   }),
+
+
+  deleteContact: protectedProcedure
+    .input(z.object({ contactId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [contact] = await db.update(whatsappContacts)
+        .set({ status: "BLOCKED", updatedAt: new Date() })
+        .where(eq(whatsappContacts.id, input.contactId))
+        .returning();
+      if (!contact) throw new TRPCError({ code: "NOT_FOUND", message: "Contact not found" });
+      return { success: true };
+    }),
+
+
+  deleteContact: protectedProcedure
+    .input(z.object({ contactId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [contact] = await db.update(whatsappContacts)
+        .set({ status: "BLOCKED", updatedAt: new Date() })
+        .where(eq(whatsappContacts.id, input.contactId))
+        .returning();
+      if (!contact) throw new TRPCError({ code: "NOT_FOUND", message: "Contact not found" });
+      return { success: true };
+    }),
 });

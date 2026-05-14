@@ -1086,4 +1086,21 @@ export const cooperativeRouter = router({
         totalPages: Math.ceil(total / input.pageSize),
       };
     }),
+
+
+  removeMember: protectedProcedure
+    .input(z.object({ memberId: z.number().int(), reason: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      assertAdmin(ctx.user.role);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      // Mark the KYC application as rejected (removing from cooperative)
+      const [member] = await db.update(kycQueue)
+        .set({ status: "REJECTED", updatedAt: new Date() })
+        .where(eq(kycQueue.id, input.memberId))
+        .returning();
+      if (!member) throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
+      await writeAuditLog(ctx.user.id, "cooperative.removeMember", { memberId: input.memberId, reason: input.reason });
+      return { success: true };
+    }),
 });

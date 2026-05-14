@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Shield, Plus, Trash2, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, Activity } from "lucide-react";
+import { Shield, Plus, Trash2, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, Activity, RefreshCw, Database } from "lucide-react";
 import { PageSkeleton } from "@/components/PageSkeleton";
 
 export default function PolicyManagement() {
@@ -79,6 +79,17 @@ export default function PolicyManagement() {
     onError: (e) => toast.error(e.message),
   });
 
+  const reloadMutation = trpc.pbac.reloadFromDb.useMutation({
+    onSuccess: (data) => {
+      utils.pbac.listPolicies.invalidate();
+      utils.pbac.getStats.invalidate();
+      toast.success(`Reloaded ${data.loadedCount} policies from database`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const { data: dbPolicies } = trpc.pbac.listDbPolicies.useQuery();
+
   if (isLoading) return <PageSkeleton title="Policy Management" subtitle="PBAC Policy Engine" />;
 
   const policies = policiesData?.policies ?? [];
@@ -129,6 +140,15 @@ export default function PolicyManagement() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => reloadMutation.mutate()}
+            disabled={reloadMutation.isPending}
+            title={`${dbPolicies?.dbAvailable ? dbPolicies.policies.length + ' policies in DB' : 'DB unavailable'}`}
+          >
+            {reloadMutation.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Database className="h-4 w-4 mr-2" />}
+            Reload from DB
+          </Button>
           <Button variant="outline" onClick={() => setShowEvalDialog(true)}>
             <Activity className="h-4 w-4 mr-2" /> Evaluate Access
           </Button>

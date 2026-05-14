@@ -200,6 +200,31 @@ async function startServer() {
   // HA status REST endpoint — /api/ha/status, /api/ha/status/metrics, /api/ha/status/engines
   app.use(haStatusRouter);
 
+  // Deep health check endpoint — pings all 19 downstream microservices
+  app.get("/api/health/deep", async (_req, res) => {
+    try {
+      const { deepHealthCheck } = await import("../security-middleware");
+      const results = await deepHealthCheck();
+      const statuses = Object.values(results);
+      const allOk = statuses.every((s) => s.status === "ok");
+      const anyDown = statuses.some((s) => s.status === "down");
+      const httpStatus = allOk ? 200 : anyDown ? 503 : 207;
+      res.status(httpStatus).json({
+        status: allOk ? "ok" : anyDown ? "degraded" : "partial",
+        services: results,
+        summary: {
+          total: statuses.length,
+          ok: statuses.filter((s) => s.status === "ok").length,
+          degraded: statuses.filter((s) => s.status === "degraded").length,
+          down: statuses.filter((s) => s.status === "down").length,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      res.status(500).json({ status: "error", error: String(err) });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

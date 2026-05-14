@@ -369,4 +369,32 @@ export const warehouseOpRouter = router({
       }
       return { ...updated, kycResetDueToChange: kycSensitiveChanged && existing.kycStatus === "APPROVED" };
     }),
+
+
+  deactivateProfile: protectedProcedure
+    .input(z.object({ reason: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [profile] = await db.update(warehouseOperatorProfiles)
+        .set({ status: "DEACTIVATED", updatedAt: new Date() })
+        .where(eq(warehouseOperatorProfiles.userId, ctx.user.id))
+        .returning();
+      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Warehouse operator profile not found" });
+      return { success: true };
+    }),
+
+
+  deactivateProfile: protectedProcedure
+    .input(z.object({ reason: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [profile] = await db.update(warehouseOperatorProfiles)
+        .set({ status: "DEACTIVATED", updatedAt: new Date() })
+        .where(eq(warehouseOperatorProfiles.userId, ctx.user.id))
+        .returning();
+      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Warehouse operator profile not found" });
+      return { success: true };
+    }),
 });

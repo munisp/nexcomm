@@ -63,4 +63,32 @@ export const watchlistRouter = router({
         .limit(1);
       return { watching: rows.length > 0 };
     }),
+
+
+  updateAlert: protectedProcedure
+    .input(z.object({ symbol: z.string(), alertPrice: z.number().optional(), notes: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [item] = await db.update(watchlist)
+        .set({ alertPrice: input.alertPrice?.toString(), notes: input.notes, updatedAt: new Date() })
+        .where(and(eq(watchlist.userId, ctx.user.id), eq(watchlist.symbol, input.symbol)))
+        .returning();
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist item not found" });
+      return item;
+    }),
+
+
+  updateAlert: protectedProcedure
+    .input(z.object({ symbol: z.string(), alertPrice: z.number().optional(), notes: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [item] = await db.update(watchlist)
+        .set({ alertPrice: input.alertPrice?.toString(), notes: input.notes, updatedAt: new Date() })
+        .where(and(eq(watchlist.userId, ctx.user.id), eq(watchlist.symbol, input.symbol)))
+        .returning();
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist item not found" });
+      return item;
+    }),
 });

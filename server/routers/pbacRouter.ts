@@ -9,6 +9,7 @@ import { TRPCError } from "@trpc/server";
 import { policyStore, evaluate, createPolicy } from "../pbac";
 import type { PolicyCondition } from "../pbac";
 import { writeAuditLog } from "../audit";
+import { getDb } from "../db";
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== "admin") {
@@ -178,6 +179,24 @@ export const pbacRouter = router({
           allowRate: auditLog.length > 0 ? Math.round((allowedCount / auditLog.length) * 100) : 0,
         },
       };
+    }),
+
+  // ── Reload policies from DB into in-memory store ──────────────────────────
+  reloadFromDb: adminProcedure
+    .mutation(async () => {
+      await policyStore.loadFromDb();
+      const policies = policyStore.getAllPolicies();
+      return { success: true, loadedCount: policies.length };
+    }),
+
+  // ── List policies persisted in DB (not just in-memory) ───────────────────
+  listDbPolicies: adminProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) return { policies: [], dbAvailable: false };
+      const { pbacPolicies: pbacPoliciesTable } = await import("../../drizzle/schema");
+      const rows = await db.select().from(pbacPoliciesTable);
+      return { policies: rows, dbAvailable: true };
     }),
 
   // ── Check own access (any authenticated user) ────────────────────────────

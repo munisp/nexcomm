@@ -17,9 +17,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Shield, Package, Calendar, AlertCircle, CheckCircle2, Clock,
-  Leaf, DollarSign, TrendingUp, FileText, Plus, RefreshCw
+  Leaf, DollarSign, TrendingUp, FileText, Plus, RefreshCw, ChevronRight, ChevronLeft, Banknote
 } from "lucide-react";
 
 // ── Score colour helpers ──────────────────────────────────────────────────────
@@ -142,6 +143,171 @@ function RegisterCollateralDialog({ onSuccess }: { onSuccess: () => void }) {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Loan Application Wizard ──────────────────────────────────────────────────
+const LOAN_PURPOSES = [
+  "CROP_INPUTS", "EQUIPMENT_PURCHASE", "IRRIGATION", "STORAGE_FACILITY",
+  "LIVESTOCK", "PROCESSING", "WORKING_CAPITAL", "OTHER"
+];
+
+function LoanApplicationWizard({ onSuccess }: { onSuccess: () => void }) {
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({
+    amountNgn: "",
+    purpose: "CROP_INPUTS",
+    tenorMonths: "12",
+    collateralRef: "",
+    businessDesc: "",
+    expectedRevenue: "",
+    repaymentSource: "",
+  });
+
+  const applyMut = trpc.inputFinancing.applyForLoan.useMutation({
+    onSuccess: () => {
+      toast.success("Loan application submitted successfully! We will review it within 2 business days.");
+      onSuccess();
+      setStep(1);
+      setForm({ amountNgn: "", purpose: "CROP_INPUTS", tenorMonths: "12", collateralRef: "", businessDesc: "", expectedRevenue: "", repaymentSource: "" });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const steps = [
+    { title: "Loan Details", icon: DollarSign },
+    { title: "Business Info", icon: FileText },
+    { title: "Review & Submit", icon: CheckCircle2 },
+  ];
+
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Banknote className="h-5 w-5 text-primary" /> Apply for Input Financing
+        </CardTitle>
+        <CardDescription>Multi-step loan application — funds disbursed within 5 business days upon approval</CardDescription>
+        {/* Step indicator */}
+        <div className="flex items-center gap-2 pt-2">
+          {steps.map((s, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-colors ${
+                step > i + 1 ? "bg-emerald-500 text-white" : step === i + 1 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              }`}>{step > i + 1 ? <CheckCircle2 className="h-4 w-4" /> : i + 1}</div>
+              <span className={`text-xs ${step === i + 1 ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s.title}</span>
+              {i < steps.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+            </div>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {step === 1 && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>Loan Amount (NGN) *</Label>
+                <Input type="number" placeholder="e.g. 500000" value={form.amountNgn}
+                  onChange={e => setForm(f => ({ ...f, amountNgn: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Tenor (months) *</Label>
+                <Select value={form.tenorMonths} onValueChange={v => setForm(f => ({ ...f, tenorMonths: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[3, 6, 9, 12, 18, 24, 36].map(m => (
+                      <SelectItem key={m} value={String(m)}>{m} months</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Loan Purpose *</Label>
+              <Select value={form.purpose} onValueChange={v => setForm(f => ({ ...f, purpose: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {LOAN_PURPOSES.map(p => (
+                    <SelectItem key={p} value={p}>{p.replace(/_/g, " ")}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Collateral Reference (optional)</Label>
+              <Input placeholder="e.g. REG-2026-001234" value={form.collateralRef}
+                onChange={e => setForm(f => ({ ...f, collateralRef: e.target.value }))} />
+              <p className="text-xs text-muted-foreground">Link a registered collateral asset to strengthen your application</p>
+            </div>
+            <Button className="w-full" onClick={() => setStep(2)} disabled={!form.amountNgn || !form.purpose}>
+              Continue <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Business Description *</Label>
+              <Textarea placeholder="Describe your farming/trading business, crops grown, market access, etc." value={form.businessDesc}
+                onChange={e => setForm(f => ({ ...f, businessDesc: e.target.value }))} rows={3} />
+            </div>
+            <div className="space-y-1">
+              <Label>Expected Revenue (NGN)</Label>
+              <Input type="number" placeholder="Projected income for the loan period" value={form.expectedRevenue}
+                onChange={e => setForm(f => ({ ...f, expectedRevenue: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Repayment Source *</Label>
+              <Input placeholder="e.g. Maize harvest proceeds, warehouse receipt sale" value={form.repaymentSource}
+                onChange={e => setForm(f => ({ ...f, repaymentSource: e.target.value }))} />
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+              <Button className="flex-1" onClick={() => setStep(3)} disabled={!form.businessDesc || !form.repaymentSource}>
+                Review <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-4">
+            <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">Application Summary</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div><span className="text-muted-foreground">Amount:</span> <span className="font-medium">NGN {Number(form.amountNgn).toLocaleString()}</span></div>
+                <div><span className="text-muted-foreground">Tenor:</span> <span className="font-medium">{form.tenorMonths} months</span></div>
+                <div><span className="text-muted-foreground">Purpose:</span> <span className="font-medium">{form.purpose.replace(/_/g, " ")}</span></div>
+                {form.collateralRef && <div><span className="text-muted-foreground">Collateral:</span> <span className="font-medium">{form.collateralRef}</span></div>}
+                <div className="col-span-2"><span className="text-muted-foreground">Repayment:</span> <span className="font-medium">{form.repaymentSource}</span></div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              By submitting, you confirm that all information is accurate. False declarations may result in application rejection and account suspension.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setStep(2)}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+              <Button className="flex-1" disabled={applyMut.isPending}
+                onClick={() => applyMut.mutate({
+                  amountNgn: Number(form.amountNgn),
+                  purpose: form.purpose,
+                  tenorMonths: Number(form.tenorMonths),
+                  collateralRef: form.collateralRef || undefined,
+                  businessDesc: form.businessDesc,
+                  expectedRevenue: form.expectedRevenue ? Number(form.expectedRevenue) : undefined,
+                  repaymentSource: form.repaymentSource,
+                })}>
+                {applyMut.isPending ? "Submitting…" : "Submit Application"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -307,12 +473,13 @@ export default function CreditScore() {
           </Card>
         )}
 
-        {/* Tabs: Collateral | Repayment | Insurance */}
+        {/* Tabs: Collateral | Repayment | Insurance | Apply */}
         <Tabs defaultValue="collateral">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="collateral">Collateral Registry</TabsTrigger>
             <TabsTrigger value="repayment">Repayment Schedule</TabsTrigger>
             <TabsTrigger value="insurance">Crop Insurance</TabsTrigger>
+            <TabsTrigger value="apply">Apply for Loan</TabsTrigger>
           </TabsList>
 
           {/* ── Collateral Tab ── */}
@@ -380,6 +547,14 @@ export default function CreditScore() {
           {/* ── Repayment Tab ── */}
           <TabsContent value="repayment" className="mt-4">
             <RepaymentTab markPaidMut={markPaidMut} />
+          </TabsContent>
+
+          {/* ── Loan Application Tab ── */}
+          <TabsContent value="apply" className="mt-4">
+            <LoanApplicationWizard onSuccess={() => {
+              utils.credit.getMyScore.invalidate();
+              utils.inputFinancing.myLoans.invalidate();
+            }} />
           </TabsContent>
 
           {/* ── Insurance Tab ── */}

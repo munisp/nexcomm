@@ -123,6 +123,92 @@ export const workbenchRouter = router({
       };
     } catch { return DEMO_SUMMARY; }
   }),
+
+
+  updateFarm: protectedProcedure
+    .input(z.object({ farmId: z.number().int(), name: z.string().optional(), sizeHectares: z.number().optional(), location: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const { farmId, ...updates } = input;
+      const [farm] = await db.update(workbenchFarms).set({ ...updates, updatedAt: new Date() }).where(and(eq(workbenchFarms.id, farmId), eq(workbenchFarms.userId, ctx.user.id))).returning();
+      if (!farm) throw new TRPCError({ code: "NOT_FOUND", message: "Farm not found" });
+      return farm;
+    }),
+
+  deleteFarm: protectedProcedure
+    .input(z.object({ farmId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [farm] = await db.delete(workbenchFarms).where(and(eq(workbenchFarms.id, input.farmId), eq(workbenchFarms.userId, ctx.user.id))).returning();
+      if (!farm) throw new TRPCError({ code: "NOT_FOUND", message: "Farm not found" });
+      return { success: true };
+    }),
+
+  updateCropPlan: protectedProcedure
+    .input(z.object({ planId: z.number().int(), status: z.string().optional(), notes: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const { planId, ...updates } = input;
+      const [plan] = await db.update(workbenchCropPlans).set({ ...updates, updatedAt: new Date() }).where(and(eq(workbenchCropPlans.id, planId), eq(workbenchCropPlans.userId, ctx.user.id))).returning();
+      if (!plan) throw new TRPCError({ code: "NOT_FOUND", message: "Crop plan not found" });
+      return plan;
+    }),
+
+  deleteCropPlan: protectedProcedure
+    .input(z.object({ planId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [plan] = await db.delete(workbenchCropPlans).where(and(eq(workbenchCropPlans.id, input.planId), eq(workbenchCropPlans.userId, ctx.user.id))).returning();
+      if (!plan) throw new TRPCError({ code: "NOT_FOUND", message: "Crop plan not found" });
+      return { success: true };
+    }),
+
+
+  updateFarm: protectedProcedure
+    .input(z.object({ farmId: z.number().int(), name: z.string().optional(), sizeHectares: z.number().optional(), location: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const { farmId, ...updates } = input;
+      const [farm] = await db.update(workbenchFarms).set({ ...updates, updatedAt: new Date() }).where(and(eq(workbenchFarms.id, farmId), eq(workbenchFarms.userId, ctx.user.id))).returning();
+      if (!farm) throw new TRPCError({ code: "NOT_FOUND", message: "Farm not found" });
+      return farm;
+    }),
+
+  deleteFarm: protectedProcedure
+    .input(z.object({ farmId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [farm] = await db.delete(workbenchFarms).where(and(eq(workbenchFarms.id, input.farmId), eq(farms.userId, ctx.user.id))).returning();
+      if (!farm) throw new TRPCError({ code: "NOT_FOUND", message: "Farm not found" });
+      return { success: true };
+    }),
+
+  updateCropPlan: protectedProcedure
+    .input(z.object({ planId: z.number().int(), status: z.string().optional(), notes: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const { planId, ...updates } = input;
+      const [plan] = await db.update(workbenchCropPlans).set({ ...updates, updatedAt: new Date() }).where(and(eq(workbenchCropPlans.id, planId), eq(workbenchCropPlans.userId, ctx.user.id))).returning();
+      if (!plan) throw new TRPCError({ code: "NOT_FOUND", message: "Crop plan not found" });
+      return plan;
+    }),
+
+  deleteCropPlan: protectedProcedure
+    .input(z.object({ planId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const [plan] = await db.delete(workbenchCropPlans).where(and(eq(workbenchCropPlans.id, input.planId), eq(workbenchCropPlans.userId, ctx.user.id))).returning();
+      if (!plan) throw new TRPCError({ code: "NOT_FOUND", message: "Crop plan not found" });
+      return { success: true };
+    }),
 });
 
 // ─── Demo data ────────────────────────────────────────────────────────────────
