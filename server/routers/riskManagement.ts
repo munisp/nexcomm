@@ -225,7 +225,7 @@ export const riskManagementRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "riskManagement.delete", { ruleId: input.ruleId });
+      await writeAuditLog({ userId: ctx.user.id, action: "riskManagement.delete", details: { ruleId: input.ruleId } });
       return { success: true };
     }),
 });

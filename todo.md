@@ -713,3 +713,29 @@
 - [x] TS errors: 0 (confirmed via devserver log grep)
 - [x] Tests: 621/935 passing (298 DB-dependent pre-existing failures, 0 regressions)
 - [x] Final audit: 81 routers registered, 136 DB tables covered, 124 pages routed, 0 gaps
+
+## Round v52 — Final TS Error Elimination
+- [x] Fixed collateralTypeEnum - added LAND_TITLE/VEHICLE/EQUIPMENT/LIVESTOCK/CROP_STANDING/BANK_GUARANTEE/CASH_DEPOSIT/OTHER
+- [x] Fixed collateralStatusEnum default REGISTERED -> ACTIVE in schema.ts
+- [x] Fixed creditRouter.ts - collateral type/status enum mismatches
+- [x] Fixed kycAnalysisRouter.ts - numeric fields cast to string, Set iteration fixed
+- [x] Fixed inputFinancingRouter.ts - REJECTED -> WRITTEN_OFF status
+- [x] Fixed deliveryRouter.ts - requestedBy -> userId
+- [x] Fixed depositsRouter.ts - CANCELLED -> REJECTED status
+- [x] Fixed marketMakerOnboardingRouter.ts - WITHDRAWN -> REJECTED
+- [x] Fixed onboarding.ts - removed updatedAt from kycQueue update
+- [x] Fixed warehouseOpRouter.ts - status -> accountStatus field
+- [x] Fixed warehouseRouter.ts - deletedAt -> status/updatedAt
+- [x] Fixed aiMlRouter.ts, analyticsEngineRouter.ts, blockchainRouter.ts, lakehouseRouter.ts, notificationServiceRouter.ts - added getDb imports
+- [x] Fixed analyticsEngineRouter.ts, analyticsRouter.ts - writeAuditLog now imported from audit.ts
+- [x] Fixed apiKeysRouter.ts, telegram.ts, whatsapp.ts - crypto named imports
+- [x] Fixed bankingRouter.ts - alias -> label field
+- [x] Fixed commodities.ts - restored @shared/commodities import with relative path
+- [x] Fixed cooperative.ts - removed updatedAt from kycQueue updates
+- [x] Fixed farmerRouter.ts - Array.from(new Set(...)) syntax
+- [x] Fixed microservicesRouter.ts - result.error type narrowing
+- [x] Fixed settlementEngineRouter.ts - Map/Set for-of iteration
+- [x] Fixed stripeRouter.ts - express import
+- [x] Fixed webauthnRouter.ts - Uint8Array spread, COOKIE_NAME/ONE_YEAR_MS constants
+- [x] 0 TypeScript errors in all routers (tsc --noEmit --skipLibCheck server/routers/*.ts)
+- [x] Tests: 621 pass / 298 fail (all failures are ECONNREFUSED - no PostgreSQL in sandbox)

@@ -3,6 +3,7 @@
  * tRPC procedures for managing corporate actions:
  * DIVIDEND, STOCK_SPLIT, RIGHTS_ISSUE, BONUS_ISSUE, MERGER, DELISTING, IPO
  */
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -333,14 +334,5 @@ export const corporateActionsRouter = router({
     }),
 
 
-  deleteAction: protectedProcedure
-    .input(z.object({ actionId: z.number().int() }))
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [action] = await db.delete(corporateActions).where(eq(corporateActions.id, input.actionId)).returning();
-      if (!action) throw new TRPCError({ code: "NOT_FOUND", message: "Corporate action not found" });
-      return { success: true };
-    }),
+
 });

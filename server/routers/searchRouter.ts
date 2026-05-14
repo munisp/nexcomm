@@ -385,13 +385,13 @@ export const searchRouter = router({
   update: protectedProcedure
     .input(z.object({ indexName: z.string(), docId: z.string(), data: z.record(z.string(), z.unknown()) }))
     .mutation(async ({ ctx, input }) => {
-      await writeAuditLog(ctx.user.id, "search.update", { indexName: input.indexName, docId: input.docId });
+      await writeAuditLog({ userId: ctx.user.id, action: "search.update", details: { indexName: input.indexName, docId: input.docId } });
       return { success: true };
     }),
   delete: protectedProcedure
     .input(z.object({ indexName: z.string(), docId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await writeAuditLog(ctx.user.id, "search.delete", { indexName: input.indexName, docId: input.docId });
+      await writeAuditLog({ userId: ctx.user.id, action: "search.delete", details: { indexName: input.indexName, docId: input.docId } });
       return { success: true };
     }),
 });

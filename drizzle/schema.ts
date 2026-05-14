@@ -429,6 +429,8 @@ export const marginAccountStatusEnum = pgEnum("margin_account_status", [
 ]);
 export const collateralTypeEnum = pgEnum("collateral_type", [
   "WAREHOUSE_RECEIPT", "CASH", "BOND", "EQUITY",
+  "LAND_TITLE", "VEHICLE", "EQUIPMENT", "LIVESTOCK",
+  "CROP_STANDING", "BANK_GUARANTEE", "CASH_DEPOSIT", "OTHER",
 ]);
 export const collateralStatusEnum = pgEnum("collateral_status", [
   "ACTIVE", "RELEASED", "LIQUIDATED",
@@ -2776,7 +2778,7 @@ export const collateralRegistry = pgTable("collateral_registry", {
   loanId: bigint("loan_id", { mode: "number" }),
   ownerId: integer("owner_id").notNull(),
   type: collateralTypeEnum("type").notNull(),
-  status: collateralStatusEnum("status").notNull().default("REGISTERED"),
+  status: collateralStatusEnum("status").notNull().default("ACTIVE"),
   description: text("description").notNull(),
   valuationNgn: numeric("valuation_ngn", { precision: 18, scale: 2 }).notNull(),
   ltvPct: numeric("ltv_pct", { precision: 6, scale: 3 }).default("70"),

@@ -8,15 +8,15 @@ import { eq, and } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { apiKeys } from "../../drizzle/schema";
-import crypto from "crypto";
+import { randomBytes, createHash } from "crypto";
 import { writeAuditLog } from "../audit";
 
 function hashKey(rawKey: string): string {
-  return crypto.createHash("sha256").update(rawKey).digest("hex");
+  return createHash("sha256").update(rawKey).digest("hex");
 }
 
 function generateRawKey(): { raw: string; prefix: string } {
-  const bytes = crypto.randomBytes(32).toString("hex");
+  const bytes = randomBytes(32).toString("hex");
   const prefix = "ncx_live_" + bytes.slice(0, 8);
   const raw = "ncx_live_" + bytes;
   return { raw, prefix };

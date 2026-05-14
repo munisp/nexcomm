@@ -21,7 +21,7 @@ import {
   whatsappMessages,
 } from "../../drizzle/schema";
 import { eq, and, desc, count, gte, like } from "drizzle-orm";
-import crypto from "crypto";
+import * as crypto from "crypto";
 import { writeAuditLog } from "../audit";
 
 export const whatsappRouter = router({

@@ -7,6 +7,7 @@
  * Falls back to DB-only operations when the service is offline.
  */
 
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
@@ -277,30 +278,8 @@ export const kycServiceRouter = router({
     }),
 
 
-  withdrawApplication: protectedProcedure
-    .input(z.object({ applicationId: z.number().int() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [app] = await db.update(kycApplications)
-        .set({ status: "WITHDRAWN", updatedAt: new Date() })
-        .where(and(eq(kycApplications.id, input.applicationId), eq(kycApplications.userId, ctx.user.id), eq(kycApplications.status, "PENDING")))
-        .returning();
-      if (!app) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found or cannot be withdrawn" });
-      return { success: true };
-    }),
 
 
-  withdrawApplication: protectedProcedure
-    .input(z.object({ applicationId: z.number().int() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [app] = await db.update(kycApplications)
-        .set({ status: "WITHDRAWN", updatedAt: new Date() })
-        .where(and(eq(kycApplications.id, input.applicationId), eq(kycApplications.userId, ctx.user.id), eq(kycApplications.status, "PENDING")))
-        .returning();
-      if (!app) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found or cannot be withdrawn" });
-      return { success: true };
-    }),
+
+
 });

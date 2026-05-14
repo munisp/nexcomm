@@ -161,23 +161,12 @@ export const deliveryRouter = router({
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [delivery] = await db.update(deliveryOrders)
         .set({ status: "CANCELLED", notes: input.reason, updatedAt: new Date() })
-        .where(and(eq(deliveryOrders.id, input.deliveryId), eq(deliveryOrders.requestedBy, ctx.user.id)))
+        .where(and(eq(deliveryOrders.id, input.deliveryId), eq(deliveryOrders.userId, ctx.user.id)))
         .returning();
       if (!delivery) throw new TRPCError({ code: "NOT_FOUND", message: "Delivery not found" });
       return { success: true };
     }),
 
 
-  cancelDelivery: protectedProcedure
-    .input(z.object({ deliveryId: z.number().int(), reason: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [delivery] = await db.update(deliveryOrders)
-        .set({ status: "CANCELLED", notes: input.reason, updatedAt: new Date() })
-        .where(and(eq(deliveryOrders.id, input.deliveryId), eq(deliveryOrders.requestedBy, ctx.user.id)))
-        .returning();
-      if (!delivery) throw new TRPCError({ code: "NOT_FOUND", message: "Delivery not found" });
-      return { success: true };
-    }),
+
 });

@@ -352,7 +352,7 @@ export const marketMakerOnboardingRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [profile] = await db.update(marketMakerOnboardingProfiles)
-        .set({ kycStatus: "WITHDRAWN", updatedAt: new Date() })
+        .set({ kycStatus: "REJECTED", updatedAt: new Date() })
         .where(and(eq(marketMakerOnboardingProfiles.userId, ctx.user.id), eq(marketMakerOnboardingProfiles.kycStatus, "PENDING")))
         .returning();
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found or not in PENDING status" });
@@ -360,16 +360,5 @@ export const marketMakerOnboardingRouter = router({
     }),
 
 
-  withdrawApplication: protectedProcedure
-    .input(z.object({ reason: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [profile] = await db.update(marketMakerOnboardingProfiles)
-        .set({ kycStatus: "WITHDRAWN", updatedAt: new Date() })
-        .where(and(eq(marketMakerOnboardingProfiles.userId, ctx.user.id), eq(marketMakerOnboardingProfiles.kycStatus, "PENDING")))
-        .returning();
-      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found or not in PENDING status" });
-      return { success: true };
-    }),
+
 });

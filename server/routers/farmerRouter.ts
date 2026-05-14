@@ -747,7 +747,7 @@ export const farmerRouter = router({
         eq(cropListings.status, "ACTIVE"),
       ));
 
-    const myCropTypes = [...new Set(myListings.map(l => l.cropType))];
+    const myCropTypes = Array.from(new Set(myListings.map(l => l.cropType)));
 
     return { myCropTypes };
   }),

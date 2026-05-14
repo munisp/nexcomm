@@ -170,7 +170,7 @@ export const creditRouter = router({
         ownerId: ctx.user.id,
         loanId: input.loanId,
         type: input.type,
-        status: "REGISTERED",
+        status: "ACTIVE",
         description: input.description,
         valuationNgn: String(input.valuationNgn),
         ltvPct: String(input.ltvPct),
@@ -189,7 +189,7 @@ export const creditRouter = router({
     .input(z.object({
       id: z.number().int().positive(),
       valuationNgn: z.number().positive().optional(),
-      status: z.enum(["REGISTERED", "PLEDGED", "RELEASED", "LIQUIDATED", "EXPIRED"]).optional(),
+      status: z.enum(["ACTIVE", "RELEASED", "LIQUIDATED"]).optional(),
       notes: z.string().max(2000).optional(),
       documentUrls: z.array(z.string().url()).optional(),
     }))
@@ -215,7 +215,7 @@ export const creditRouter = router({
 
   adminListCollateral: adminProcedure
     .input(z.object({
-      status: z.enum(["REGISTERED", "PLEDGED", "RELEASED", "LIQUIDATED", "EXPIRED"]).optional(),
+      status: z.enum(["ACTIVE", "RELEASED", "LIQUIDATED"]).optional(),
       limit: z.number().int().min(1).max(200).default(50),
       offset: z.number().int().min(0).default(0),
     }).optional())
@@ -556,23 +556,12 @@ export const creditRouter = router({
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [item] = await db.update(collateralRegistry)
         .set({ status: "RELEASED", updatedAt: new Date() })
-        .where(and(eq(collateralRegistry.id, input.collateralId), eq(collateralRegistry.userId, ctx.user.id)))
+        .where(and(eq(collateralRegistry.id, input.collateralId), eq(collateralRegistry.ownerId, ctx.user.id)))
         .returning();
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Collateral not found" });
       return { success: true };
     }),
 
 
-  deleteCollateral: protectedProcedure
-    .input(z.object({ collateralId: z.number().int(), reason: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [item] = await db.update(collateralRegistry)
-        .set({ status: "RELEASED", updatedAt: new Date() })
-        .where(and(eq(collateralRegistry.id, input.collateralId), eq(collateralRegistry.userId, ctx.user.id)))
-        .returning();
-      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Collateral not found" });
-      return { success: true };
-    }),
+
 });

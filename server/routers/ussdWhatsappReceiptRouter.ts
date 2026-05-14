@@ -329,7 +329,7 @@ export const ussdWhatsappReceiptRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "ussdSession.delete", { sessionId: input.sessionId });
+      await writeAuditLog({ userId: ctx.user.id, action: "ussdSession.delete", details: { sessionId: input.sessionId } });
       return { success: true };
     }),
 });

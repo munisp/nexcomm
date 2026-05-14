@@ -6,9 +6,11 @@
  * and anomaly detection for the NEXCOM platform.
  */
 
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
+import { getDb } from "../db";
 
 const AIML_URL = process.env.AIML_SERVICE_URL ?? "http://localhost:8007";
 const TIMEOUT_MS = 15000; // ML inference can take time
@@ -270,7 +272,7 @@ export const aiMlRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "aiMlJob.create", input.data);
+      await writeAuditLog({ userId: ctx.user.id, action: "aiMlJob.create", details: input.data });
       return { success: true, message: "Created successfully" };
     }),
 
@@ -279,7 +281,7 @@ export const aiMlRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "aiMlJob.delete", { jobId: input.jobId });
+      await writeAuditLog({ userId: ctx.user.id, action: "aiMlJob.delete", details: { jobId: input.jobId } });
       return { success: true };
     }),
 });

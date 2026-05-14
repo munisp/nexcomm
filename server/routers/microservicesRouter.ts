@@ -51,7 +51,7 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 const creditScoringRouter = router({
   health: publicProcedure.query(async () => {
     const result = await callService<{ status: string }>(ENV.creditScoringUrl, "/health");
-    return result.ok ? result.data : { status: "unavailable", error: result.error };
+    return result.ok ? result.data : { status: "unavailable", error: (result as any).error };
   }),
 
   scoreUser: adminProcedure
@@ -68,7 +68,7 @@ const creditScoringRouter = router({
         method: "POST",
         body: JSON.stringify(input),
       });
-      if (!result.ok) return { available: false, error: result.error };
+      if (!result.ok) return { available: false, error: (result as any).error };
       return { available: true, ...result.data };
     }),
 
@@ -98,37 +98,14 @@ const creditScoringRouter = router({
         method: "POST",
         body: JSON.stringify(input),
       });
-      if (!result.ok) return { available: false, results: [], error: result.error };
+      if (!result.ok) return { available: false, results: [], error: (result as any).error };
       return { available: true, ...result.data };
     }),
 });
 
 // ─── Fraud Engine Microservice ─────────────────────────────────────────────────
 const fraudEngineRouter = router({
-  health: publicProcedure.query(async () => {
-    const result = await callService<{ status: string }>(ENV.fraudEngineUrl, "/health");
-    return result.ok ? result.data : { status: "unavailable", error: result.error };
-  }),
 
-  checkTransaction: protectedProcedure
-    .input(z.object({
-      transactionRef: z.string().min(1),
-      userId: z.number().int().positive(),
-      amount: z.number().positive(),
-      currency: z.string().max(8).default("NGN"),
-      transactionType: z.enum(["ORDER", "DEPOSIT", "WITHDRAWAL", "TRANSFER", "LOAN_DISBURSEMENT"]),
-      metadata: z.record(z.string(), z.unknown()).optional(),
-    }))
-    .mutation(async ({ input }) => {
-      const result = await callService<{
-        riskScore: number; decision: "ALLOW" | "REVIEW" | "BLOCK"; reasons: string[];
-      }>(ENV.fraudEngineUrl, "/check", {
-        method: "POST",
-        body: JSON.stringify(input),
-      });
-      if (!result.ok) return { available: false, riskScore: 0, decision: "ALLOW" as const, reasons: [] };
-      return { available: true, ...result.data };
-    }),
 
   getAlerts: adminProcedure
     .input(z.object({
@@ -163,7 +140,7 @@ const fraudEngineRouter = router({
           body: JSON.stringify({ resolution: input.resolution, notes: input.notes, reviewedBy: ctx.user.id }),
         }
       );
-      if (!result.ok) return { available: false, success: false, error: result.error };
+      if (!result.ok) return { available: false, success: false, error: (result as any).error };
       return { available: true, success: true };
     }),
 
@@ -176,30 +153,7 @@ const fraudEngineRouter = router({
 
 // ─── Crypto Guard Microservice ─────────────────────────────────────────────────
 const cryptoGuardRouter = router({
-  health: publicProcedure.query(async () => {
-    const result = await callService<{ status: string; version: string }>(
-      process.env.CRYPTO_GUARD_URL ?? "http://localhost:8013", "/health"
-    );
-    return result.ok ? result.data : { status: "unavailable", error: result.error };
-  }),
 
-  verifySignature: protectedProcedure
-    .input(z.object({
-      payload: z.string().min(1),
-      signature: z.string().min(1),
-      publicKey: z.string().min(1),
-      algorithm: z.enum(["ED25519", "SECP256K1", "RSA_PSS"]).default("ED25519"),
-    }))
-    .mutation(async ({ input }) => {
-      const result = await callService<{ valid: boolean; details: unknown }>(
-        process.env.CRYPTO_GUARD_URL ?? "http://localhost:8013", "/verify", {
-          method: "POST",
-          body: JSON.stringify(input),
-        }
-      );
-      if (!result.ok) return { available: false, valid: false };
-      return { available: true, ...result.data };
-    }),
 
   encryptData: protectedProcedure
     .input(z.object({
@@ -241,30 +195,7 @@ const cryptoGuardRouter = router({
 
 // ─── DDoS Guard Microservice ──────────────────────────────────────────────────
 const ddosGuardRouter = router({
-  health: publicProcedure.query(async () => {
-    const result = await callService<{ status: string; blockedIPs: number; activeRules: number }>(
-      process.env.DDOS_GUARD_URL ?? "http://localhost:8014", "/health"
-    );
-    return result.ok ? result.data : { status: "unavailable", error: result.error };
-  }),
 
-  getStats: adminProcedure.query(async () => {
-    const result = await callService<{
-      requestsPerSecond: number; blockedRequests: number; topAttackers: unknown[];
-    }>(process.env.DDOS_GUARD_URL ?? "http://localhost:8014", "/stats");
-    if (!result.ok) return { available: false, requestsPerSecond: 0, blockedRequests: 0, topAttackers: [] };
-    return { available: true, ...result.data };
-  }),
-
-  getBlockedIPs: adminProcedure
-    .input(z.object({ limit: z.number().int().min(1).max(500).default(100) }))
-    .query(async ({ input }) => {
-      const result = await callService<{ ips: unknown[]; total: number }>(
-        process.env.DDOS_GUARD_URL ?? "http://localhost:8014", `/blocked?limit=${input.limit}`
-      );
-      if (!result.ok) return { available: false, ips: [], total: 0 };
-      return { available: true, ...result.data };
-    }),
 
   blockIP: adminProcedure
     .input(z.object({
@@ -279,7 +210,7 @@ const ddosGuardRouter = router({
           body: JSON.stringify({ ...input, blockedBy: ctx.user.id }),
         }
       );
-      if (!result.ok) return { available: false, success: false, error: result.error };
+      if (!result.ok) return { available: false, success: false, error: (result as any).error };
       return { available: true, success: true };
     }),
 
@@ -325,32 +256,7 @@ const ddosGuardRouter = router({
 
 // ─── AML Alert Subscriber ─────────────────────────────────────────────────────
 const amlAlertSubscriberRouter = router({
-  health: publicProcedure.query(async () => {
-    const result = await callService<{ status: string; kafkaConnected: boolean; alertsProcessed: number }>(
-      process.env.AML_ALERT_SUBSCRIBER_URL ?? "http://localhost:8016", "/health"
-    );
-    return result.ok ? result.data : { status: "unavailable", error: result.error };
-  }),
 
-  getAlerts: adminProcedure
-    .input(z.object({
-      status: z.enum(["PENDING", "ACKNOWLEDGED", "ESCALATED", "RESOLVED"]).optional(),
-      severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
-      limit: z.number().int().min(1).max(200).default(50),
-      offset: z.number().int().min(0).default(0),
-    }).optional())
-    .query(async ({ input }) => {
-      const params = new URLSearchParams();
-      if (input?.status) params.set("status", input.status);
-      if (input?.severity) params.set("severity", input.severity);
-      params.set("limit", String(input?.limit ?? 50));
-      params.set("offset", String(input?.offset ?? 0));
-      const result = await callService<{ alerts: unknown[]; total: number }>(
-        process.env.AML_ALERT_SUBSCRIBER_URL ?? "http://localhost:8016", `/alerts?${params}`
-      );
-      if (!result.ok) return { available: false, alerts: [], total: 0 };
-      return { available: true, ...result.data };
-    }),
 
   acknowledgeAlert: adminProcedure
     .input(z.object({
@@ -398,36 +304,7 @@ const amlAlertSubscriberRouter = router({
 
 // ─── OpenSearch Sync ──────────────────────────────────────────────────────────
 const opensearchSyncRouter = router({
-  health: publicProcedure.query(async () => {
-    const result = await callService<{ status: string; indicesCount: number; lastSyncAt: string }>(
-      process.env.OPENSEARCH_SYNC_URL ?? "http://localhost:8017", "/health"
-    );
-    return result.ok ? result.data : { status: "unavailable", error: result.error };
-  }),
 
-  getIndexStats: adminProcedure.query(async () => {
-    const result = await callService<{ indices: unknown[] }>(
-      process.env.OPENSEARCH_SYNC_URL ?? "http://localhost:8017", "/indices/stats"
-    );
-    if (!result.ok) return { available: false, indices: [] };
-    return { available: true, ...result.data };
-  }),
-
-  triggerReindex: adminProcedure
-    .input(z.object({
-      index: z.enum(["nexcom-users", "nexcom-orders", "nexcom-instruments", "nexcom-receipts", "nexcom-deposits", "all"]).default("all"),
-      fullReindex: z.boolean().default(false),
-    }))
-    .mutation(async ({ input }) => {
-      const result = await callService<{ jobId: string; status: string; estimatedSeconds: number }>(
-        process.env.OPENSEARCH_SYNC_URL ?? "http://localhost:8017", "/reindex", {
-          method: "POST",
-          body: JSON.stringify(input),
-        }
-      );
-      if (!result.ok) return { available: false, jobId: "", status: "failed", estimatedSeconds: 0 };
-      return { available: true, ...result.data };
-    }),
 
   getReindexStatus: adminProcedure
     .input(z.object({ jobId: z.string().min(1) }))
@@ -450,79 +327,12 @@ const opensearchSyncRouter = router({
 
 // ─── Middleware Hub ───────────────────────────────────────────────────────────
 const middlewareHubRouter = router({
-  health: publicProcedure.query(async () => {
-    const result = await callService<{ status: string; uptime: number; routes: number }>(
-      process.env.MIDDLEWARE_HUB_URL ?? "http://localhost:8018", "/health"
-    );
-    return result.ok ? result.data : { status: "unavailable", error: result.error };
-  }),
 
-  getRoutes: adminProcedure.query(async () => {
-    const result = await callService<{ routes: unknown[] }>(
-      process.env.MIDDLEWARE_HUB_URL ?? "http://localhost:8018", "/routes"
-    );
-    if (!result.ok) return { available: false, routes: [] };
-    return { available: true, ...result.data };
-  }),
-
-  getMetrics: adminProcedure.query(async () => {
-    const result = await callService<{
-      requestsPerSecond: number; p50Latency: number; p99Latency: number; errorRate: number;
-    }>(process.env.MIDDLEWARE_HUB_URL ?? "http://localhost:8018", "/metrics");
-    if (!result.ok) return { available: false, requestsPerSecond: 0, p50Latency: 0, p99Latency: 0, errorRate: 0 };
-    return { available: true, ...result.data };
-  }),
-
-  getCircuitBreakers: adminProcedure.query(async () => {
-    const result = await callService<{ breakers: unknown[] }>(
-      process.env.MIDDLEWARE_HUB_URL ?? "http://localhost:8018", "/circuit-breakers"
-    );
-    if (!result.ok) return { available: false, breakers: [] };
-    return { available: true, ...result.data };
-  }),
-
-  resetCircuitBreaker: adminProcedure
-    .input(z.object({ service: z.string().min(1) }))
-    .mutation(async ({ input }) => {
-      const result = await callService<{ success: boolean }>(
-        process.env.MIDDLEWARE_HUB_URL ?? "http://localhost:8018",
-        `/circuit-breakers/${input.service}/reset`, { method: "POST" }
-      );
-      if (!result.ok) return { available: false, success: false };
-      return { available: true, success: true };
-    }),
 });
 
 // ─── Bot Logic (supplemental — beyond telegramRouter) ────────────────────────
 const botLogicRouter = router({
-  health: publicProcedure.query(async () => {
-    const result = await callService<{ status: string; activeBots: number }>(ENV.botLogicUrl, "/health");
-    return result.ok ? result.data : { status: "unavailable", error: result.error };
-  }),
 
-  getBotStatus: adminProcedure.query(async () => {
-    const result = await callService<{ bots: unknown[] }>(ENV.botLogicUrl, "/bots/status");
-    if (!result.ok) return { available: false, bots: [] };
-    return { available: true, ...result.data };
-  }),
-
-  sendBroadcast: adminProcedure
-    .input(z.object({
-      channel: z.enum(["telegram", "whatsapp", "ussd", "all"]).default("all"),
-      message: z.string().min(1).max(4096),
-      targetUserIds: z.array(z.number().int().positive()).optional(),
-      targetRole: z.enum(["farmer", "trader", "broker", "admin", "all"]).default("all"),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const result = await callService<{ success: boolean; sent: number; failed: number }>(
-        ENV.botLogicUrl, "/broadcast", {
-          method: "POST",
-          body: JSON.stringify({ ...input, sentBy: ctx.user.id }),
-        }
-      );
-      if (!result.ok) return { available: false, success: false, sent: 0, failed: 0 };
-      return { available: true, ...result.data };
-    }),
 
   getConversationLogs: adminProcedure
     .input(z.object({

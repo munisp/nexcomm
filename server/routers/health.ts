@@ -59,19 +59,19 @@ export const healthRouter = router({
   create: protectedProcedure
     .input(z.object({ service: z.string(), status: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await writeAuditLog(ctx.user.id, "health.create", input);
+      await writeAuditLog({ userId: ctx.user.id, action: "health.create", details: input });
       return { success: true };
     }),
   update: protectedProcedure
     .input(z.object({ service: z.string(), status: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await writeAuditLog(ctx.user.id, "health.update", input);
+      await writeAuditLog({ userId: ctx.user.id, action: "health.update", details: input });
       return { success: true };
     }),
   delete: protectedProcedure
     .input(z.object({ service: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await writeAuditLog(ctx.user.id, "health.delete", input);
+      await writeAuditLog({ userId: ctx.user.id, action: "health.delete", details: input });
       return { success: true };
     }),
 });

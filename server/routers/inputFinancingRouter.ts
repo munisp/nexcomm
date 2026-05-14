@@ -88,9 +88,9 @@ export const inputFinancingRouter = router({
         .where(and(eq(inputFinancingLoans.id, input.loanId), eq(inputFinancingLoans.farmerId, ctx.user.id)));
       if (!loan) throw new Error("Loan not found");
       if (loan.status !== "APPLIED") throw new Error("Only APPLIED loans can be cancelled");
-      await db.update(inputFinancingLoans).set({ status: "CANCELLED", updatedAt: new Date() })
+      await db.update(inputFinancingLoans).set({ status: "WRITTEN_OFF", updatedAt: new Date() })
         .where(eq(inputFinancingLoans.id, input.loanId));
-      await writeAuditLog({ userId: ctx.user.id, action: "CANCEL_LOAN", resourceType: "input_financing_loan", resourceId: String(input.loanId), details: {} });
+      await writeAuditLog({ userId: ctx.user.id, action: "CANCEL_LOAN", resource: "input_financing_loan", resourceId: String(input.loanId), details: {} });
       return { success: true };
     }),
 

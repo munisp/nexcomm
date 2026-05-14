@@ -251,18 +251,5 @@ export const userManagementRouter = router({
     }),
 
 
-  adminDeleteUser: protectedProcedure
-    .input(z.object({ userId: z.number().int(), reason: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot delete yourself" });
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [user] = await db.update(users)
-        .set({ role: "user", updatedAt: new Date() })
-        .where(eq(users.id, input.userId))
-        .returning();
-      if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
-      return { success: true, message: "User deactivated" };
-    }),
+
 });

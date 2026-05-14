@@ -170,7 +170,7 @@ export const portfolioRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "portfolio.delete", { positionId: input.positionId });
+      await writeAuditLog({ userId: ctx.user.id, action: "portfolio.delete", details: { positionId: input.positionId } });
       return { success: true };
     }),
 });

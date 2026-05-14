@@ -31,7 +31,8 @@ import { notifyOwner } from "../_core/notification";
 import { sendOtpEmail } from "../_core/email";
 import { sdk } from "../_core/sdk";
 import { getSessionCookieOptions } from "../_core/cookies";
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+// Inlined from @shared/const
+const APP_ID = process.env.VITE_APP_ID || '';
 import { writeAuditLog } from "../audit";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ async function verifyAssertionSignature(
 
     // The signed data is: authData || SHA-256(clientDataJSON)
     const clientDataHash = new Uint8Array(crypto.createHash("sha256").update(clientDataJSON).digest());
-    const signedData = new Uint8Array([...authData, ...clientDataHash]);
+    const signedData = new Uint8Array([...Array.from(authData), ...Array.from(clientDataHash)]);
 
     // The public key is stored as a raw COSE_Key CBOR blob encoded in base64url.
     // For P-256 keys the DER SubjectPublicKeyInfo is 91 bytes; we reconstruct it.
@@ -111,6 +112,8 @@ async function verifyAssertionSignature(
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
+const COOKIE_NAME = 'nexcom_session';
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 export const webauthnRouter = router({
   // ── MFA settings ────────────────────────────────────────────────────────────

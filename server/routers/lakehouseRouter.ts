@@ -16,6 +16,8 @@
  *   - Ray (distributed ML training, inference)
  *   - DataFusion (fast analytical queries)
  */
+import { getDb } from "../db";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
@@ -246,7 +248,7 @@ export const lakehouseRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "lakehouseDataset.create", input.data);
+      await writeAuditLog({ userId: ctx.user.id, action: "lakehouseDataset.create", details: input.data });
       return { success: true, message: "Created successfully" };
     }),
 
@@ -255,7 +257,7 @@ export const lakehouseRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "lakehouseDataset.update", { datasetId: input.datasetId });
+      await writeAuditLog({ userId: ctx.user.id, action: "lakehouseDataset.update", details: { datasetId: input.datasetId } });
       return { success: true };
     }),
 
@@ -264,7 +266,7 @@ export const lakehouseRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "lakehouseDataset.delete", { datasetId: input.datasetId });
+      await writeAuditLog({ userId: ctx.user.id, action: "lakehouseDataset.delete", details: { datasetId: input.datasetId } });
       return { success: true };
     }),
 });

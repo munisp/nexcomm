@@ -546,28 +546,7 @@ export const disputesRouter = router({
     }),
 
 
-  updateDispute: protectedProcedure
-    .input(z.object({ disputeId: z.number().int(), description: z.string().optional(), evidence: z.string().optional() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const { disputeId, ...updates } = input;
-      const [dispute] = await db.update(settlementDisputes)
-        .set({ ...updates, updatedAt: new Date() })
-        .where(and(eq(settlementDisputes.id, disputeId), eq(settlementDisputes.raisedBy, ctx.user.id)))
-        .returning();
-      if (!dispute) throw new TRPCError({ code: "NOT_FOUND", message: "Dispute not found or not yours" });
-      return dispute;
-    }),
 
-  adminDeleteDispute: protectedProcedure
-    .input(z.object({ disputeId: z.number().int(), reason: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [dispute] = await db.delete(settlementDisputes).where(eq(settlementDisputes.id, input.disputeId)).returning();
-      if (!dispute) throw new TRPCError({ code: "NOT_FOUND", message: "Dispute not found" });
-      return { success: true };
-    }),
+
+
 });

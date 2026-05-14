@@ -12,6 +12,7 @@
  *   PUT  /api/v1/notifications/preferences  — update user notification preferences
  */
 
+import { getDb } from "../db";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
@@ -202,7 +203,7 @@ export const notificationServiceRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "notification.create", input.data);
+      await writeAuditLog({ userId: ctx.user.id, action: "notification.create", details: input.data });
       return { success: true, message: "Created successfully" };
     }),
 
@@ -211,7 +212,7 @@ export const notificationServiceRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "notification.delete", { notificationId: input.notificationId });
+      await writeAuditLog({ userId: ctx.user.id, action: "notification.delete", details: { notificationId: input.notificationId } });
       return { success: true };
     }),
 });

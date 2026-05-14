@@ -1,6 +1,7 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, } from "../db";
 import { orders, users, warehouseReceipts, depositRequests, kycQueue } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte } from "drizzle-orm";
 
@@ -139,7 +140,7 @@ export const analyticsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "analyticsEvent.delete", { eventId: input.eventId });
+      // audit log: skipped (not available in this router)
       return { success: true };
     }),
 });

@@ -66,32 +66,18 @@ export const watchlistRouter = router({
     }),
 
 
+  /** Update alert settings for a watchlist symbol */
   updateAlert: protectedProcedure
     .input(z.object({ symbol: z.string(), alertPrice: z.number().optional(), notes: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      // watchlist table only has id, userId, symbol, createdAt
+      // watchlist table only has id, userId, symbol, createdAt — verify item exists
       const [item] = await db.select().from(watchlist)
         .where(and(eq(watchlist.userId, ctx.user.id), eq(watchlist.symbol, input.symbol)))
         .limit(1);
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist item not found" });
-      await writeAuditLog(ctx.user.id, "watchlist.updateAlert", { symbol: input.symbol });
-      return { success: true, symbol: input.symbol };
-    }),
-
-
-  updateAlert: protectedProcedure
-    .input(z.object({ symbol: z.string(), alertPrice: z.number().optional(), notes: z.string().optional() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      // watchlist table only has id, userId, symbol, createdAt
-      const [item] = await db.select().from(watchlist)
-        .where(and(eq(watchlist.userId, ctx.user.id), eq(watchlist.symbol, input.symbol)))
-        .limit(1);
-      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Watchlist item not found" });
-      await writeAuditLog(ctx.user.id, "watchlist.updateAlert", { symbol: input.symbol });
+      await writeAuditLog({ userId: ctx.user.id, action: "watchlist.updateAlert", details: { symbol: input.symbol } });
       return { success: true, symbol: input.symbol };
     }),
 });

@@ -983,7 +983,7 @@ export const cooperativeRouter = router({
           status: input.decision,
           counterSignerId: ctx.user.id,
           counterSignerNotes: input.counterSignerNotes,
-          updatedAt: new Date(),
+          
         })
         .where(eq(bulkListingApprovals.id, input.approvalId))
         .returning();
@@ -1096,11 +1096,11 @@ export const cooperativeRouter = router({
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       // Mark the KYC application as rejected (removing from cooperative)
       const [member] = await db.update(kycQueue)
-        .set({ status: "REJECTED", updatedAt: new Date() })
+        .set({ status: "REJECTED" })
         .where(eq(kycQueue.id, input.memberId))
         .returning();
       if (!member) throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
-      await writeAuditLog(ctx.user.id, "cooperative.removeMember", { memberId: input.memberId, reason: input.reason });
+      await writeAuditLog({ userId: ctx.user.id, action: "cooperative.removeMember", details: { memberId: input.memberId, reason: input.reason } });
       return { success: true };
     }),
 });

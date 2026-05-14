@@ -143,13 +143,13 @@ export const kycAnalysisRouter = router({
             : null,
           ocrAvgConfidence:
             typeof ocr.avg_confidence === "number"
-              ? ocr.avg_confidence
+              ? String(ocr.avg_confidence)
               : null,
           ocrLineCount:
             typeof ocr.line_count === "number" ? ocr.line_count : null,
           documentAuthenticityScore:
             typeof da.authenticity_score === "number"
-              ? da.authenticity_score
+              ? String(da.authenticity_score)
               : null,
           documentType:
             typeof da.document_type === "string" ? da.document_type : null,
@@ -157,17 +157,17 @@ export const kycAnalysisRouter = router({
             ? JSON.stringify(da.risk_flags)
             : null,
           selfieOverallScore:
-            typeof sa.overall_score === "number" ? sa.overall_score : null,
+            typeof sa.overall_score === "number" ? String(sa.overall_score) : null,
           selfielivenessAssessment:
             typeof sa.liveness_assessment === "string"
               ? sa.liveness_assessment
               : null,
           passiveLivenessScore:
-            typeof pl.liveness_score === "number" ? pl.liveness_score : null,
+            typeof pl.liveness_score === "number" ? String(pl.liveness_score) : null,
           passiveLivenessFlags: pl.flags
             ? JSON.stringify(pl.flags)
             : null,
-          overallScore: serviceResult.overall_score,
+          overallScore: String(serviceResult.overall_score),
           overallRiskLevel: serviceResult.overall_risk_level as
             | "LOW"
             | "MEDIUM"
@@ -632,7 +632,7 @@ export const kycAnalysisRouter = router({
         .orderBy(desc(bulkListingApprovals.createdAt));
 
       // Fetch countersigner names separately for rows that have one
-      const countersignerIds = [...new Set(allRows.filter(r => r.counterSignerId).map(r => r.counterSignerId!))];
+      const countersignerIds = Array.from(new Set(allRows.filter(r => r.counterSignerId).map(r => r.counterSignerId!)));
       const countersignerMap: Record<number, { name: string | null; email: string | null }> = {};
       if (countersignerIds.length > 0) {
         const countersigners = await db

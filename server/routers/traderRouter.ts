@@ -572,7 +572,7 @@ export const traderRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [profile] = await db.update(traderProfiles)
-        .set({ status: "DEACTIVATED", updatedAt: new Date() })
+        .set({ accountStatus: "SUSPENDED", updatedAt: new Date() })
         .where(eq(traderProfiles.userId, ctx.user.id))
         .returning();
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Trader profile not found" });
@@ -580,16 +580,5 @@ export const traderRouter = router({
     }),
 
 
-  deactivateProfile: protectedProcedure
-    .input(z.object({ reason: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [profile] = await db.update(traderProfiles)
-        .set({ status: "DEACTIVATED", updatedAt: new Date() })
-        .where(eq(traderProfiles.userId, ctx.user.id))
-        .returning();
-      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Trader profile not found" });
-      return { success: true };
-    }),
+
 });

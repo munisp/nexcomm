@@ -3,6 +3,7 @@
  * tRPC procedures for accessing live commodity prices from the live_prices table.
  * Prices are populated by the priceFeedJob (Yahoo Finance, every 5 minutes).
  */
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { runPriceFeedJob } from "../jobs/priceFeedJob";
@@ -124,7 +125,7 @@ export const livePricesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "livePrice.create", input.data);
+      await writeAuditLog({ userId: ctx.user.id, action: "livePrice.create", details: input.data });
       return { success: true, message: "Created successfully" };
     }),
 
@@ -133,7 +134,7 @@ export const livePricesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "livePrice.delete", { symbol: input.symbol });
+      await writeAuditLog({ userId: ctx.user.id, action: "livePrice.delete", details: { symbol: input.symbol } });
       return { success: true };
     }),
 });

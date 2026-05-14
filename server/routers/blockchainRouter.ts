@@ -6,9 +6,11 @@
  * on-chain settlement, and cross-chain bridge operations.
  */
 
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
+import { getDb } from "../db";
 
 const BC_URL = process.env.BLOCKCHAIN_SERVICE_URL ?? "http://localhost:8004";
 const TIMEOUT_MS = 30000; // Blockchain operations can be slow
@@ -377,7 +379,7 @@ export const blockchainRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "blockchainRecord.update", { recordId: input.recordId });
+      await writeAuditLog({ userId: ctx.user.id, action: "blockchainRecord.update", details: { recordId: input.recordId } });
       return { success: true };
     }),
 
@@ -386,7 +388,7 @@ export const blockchainRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "blockchainRecord.delete", { recordId: input.recordId });
+      await writeAuditLog({ userId: ctx.user.id, action: "blockchainRecord.delete", details: { recordId: input.recordId } });
       return { success: true };
     }),
 });

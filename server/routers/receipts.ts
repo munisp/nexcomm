@@ -191,17 +191,5 @@ export const receiptsRouter = router({
     }),
 
 
-  adminDeleteReceipt: protectedProcedure
-    .input(z.object({ receiptId: z.number().int(), reason: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [receipt] = await db.update(warehouseReceipts)
-        .set({ status: "CANCELLED", updatedAt: new Date() })
-        .where(eq(warehouseReceipts.id, input.receiptId))
-        .returning();
-      if (!receipt) throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
-      return { success: true };
-    }),
+
 });

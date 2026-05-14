@@ -6,7 +6,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { publicProcedure, router } from "../_core/trpc";
-import { COMMODITY_MAP, COMMODITIES, GRADE_SPECS, WAREHOUSES } from "@shared/commodities";
+import { COMMODITY_MAP, COMMODITIES, GRADE_SPECS, WAREHOUSES } from '../../shared/commodities';
 import { getReadDb } from "../db";
 import { livePrices } from "../../drizzle/schema";
 

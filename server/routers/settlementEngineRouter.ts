@@ -84,7 +84,7 @@ async function computeNetPositions(
   }
 
   // Upsert positions
-  for (const pos of positionMap.values()) {
+  for (const pos of Array.from(positionMap.values())) {
     const netQty = pos.grossBuyQty - pos.grossSellQty;
     const netCashObligation = pos.grossBuyValue - pos.grossSellValue;
 
@@ -107,7 +107,7 @@ async function computeNetPositions(
   let totalTrades = 0;
   let matchedTrades = 0;
 
-  for (const instrument of instruments) {
+  for (const instrument of Array.from(instruments)) {
     const buyers = Array.from(positionMap.values()).filter(
       (p) => p.instrument === instrument && p.grossBuyQty > p.grossSellQty
     );

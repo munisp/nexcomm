@@ -752,7 +752,7 @@ export const onboardingRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [app] = await db.update(kycQueue)
-        .set({ status: "WITHDRAWN", updatedAt: new Date() })
+        .set({ status: "REJECTED", reviewNotes: "Withdrawn by applicant" })
         .where(and(eq(kycQueue.id, input.applicationId), eq(kycQueue.userId, ctx.user.id), eq(kycQueue.status, "PENDING")))
         .returning();
       if (!app) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found or cannot be withdrawn" });
@@ -760,16 +760,5 @@ export const onboardingRouter = router({
     }),
 
 
-  deleteApplication: protectedProcedure
-    .input(z.object({ applicationId: z.number().int() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [app] = await db.update(kycQueue)
-        .set({ status: "WITHDRAWN", updatedAt: new Date() })
-        .where(and(eq(kycQueue.id, input.applicationId), eq(kycQueue.userId, ctx.user.id), eq(kycQueue.status, "PENDING")))
-        .returning();
-      if (!app) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found or cannot be withdrawn" });
-      return { success: true };
-    }),
+
 });

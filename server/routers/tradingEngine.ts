@@ -139,13 +139,13 @@ export const tradingEngineRouter = router({
   create: protectedProcedure
     .input(z.object({ data: z.record(z.string(), z.unknown()) }))
     .mutation(async ({ ctx, input }) => {
-      await writeAuditLog(ctx.user.id, "tradingEngine.create", input.data);
+      await writeAuditLog({ userId: ctx.user.id, action: "tradingEngine.create", details: input.data });
       return { success: true };
     }),
   update: protectedProcedure
     .input(z.object({ orderId: z.string(), data: z.record(z.string(), z.unknown()) }))
     .mutation(async ({ ctx, input }) => {
-      await writeAuditLog(ctx.user.id, "tradingEngine.update", { orderId: input.orderId });
+      await writeAuditLog({ userId: ctx.user.id, action: "tradingEngine.update", details: { orderId: input.orderId } });
       return { success: true };
     }),
 });

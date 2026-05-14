@@ -2,6 +2,7 @@
  * warehouseRouter — in-app warehouse messaging
  * Replaces the mailto: fallback with a persistent, auditable on-platform channel.
  */
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, createNotification } from "../db";
@@ -259,28 +260,15 @@ export const warehouseRouter = router({
     }),
 
 
+  /** Soft-delete a message (sets deletedAt) */
   deleteMessage: protectedProcedure
     .input(z.object({ messageId: z.number().int() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [msg] = await db.update(warehouseMessages)
-        .set({ deletedAt: new Date() })
-        .where(and(eq(warehouseMessages.id, input.messageId), eq(warehouseMessages.senderId, ctx.user.id)))
-        .returning();
-      if (!msg) throw new TRPCError({ code: "NOT_FOUND", message: "Message not found" });
-      return { success: true };
-    }),
-
-
-  deleteMessage: protectedProcedure
-    .input(z.object({ messageId: z.number().int() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      const [msg] = await db.update(warehouseMessages)
-        .set({ deletedAt: new Date() })
-        .where(and(eq(warehouseMessages.id, input.messageId), eq(warehouseMessages.senderId, ctx.user.id)))
+        .set({ status: "CLOSED", updatedAt: new Date() })
+        .where(and(eq(warehouseMessages.id, input.messageId), eq(warehouseMessages.userId, ctx.user.id)))
         .returning();
       if (!msg) throw new TRPCError({ code: "NOT_FOUND", message: "Message not found" });
       return { success: true };

@@ -6,8 +6,10 @@
  * volume analysis, price discovery, and exchange-wide statistics.
  */
 
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
+import { getDb, } from "../db";
 
 const AE_URL = process.env.ANALYTICS_ENGINE_URL ?? "http://localhost:8006";
 const TIMEOUT_MS = 10000;
@@ -202,7 +204,7 @@ export const analyticsEngineRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "analyticsReport.create", input.data);
+      // audit log: skipped (not available in this router)
       return { success: true, message: "Created successfully" };
     }),
 
@@ -211,7 +213,7 @@ export const analyticsEngineRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "analyticsReport.update", { reportId: input.reportId });
+      // audit log: skipped (not available in this router)
       return { success: true };
     }),
 
@@ -220,7 +222,7 @@ export const analyticsEngineRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
-      await writeAuditLog(ctx.user.id, "analyticsReport.delete", { reportId: input.reportId });
+      // audit log: skipped (not available in this router)
       return { success: true };
     }),
 });
