@@ -715,8 +715,6 @@ export default function WatchlistPage() {
               <Input
                 className="pl-9 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 h-9 text-sm"
                 placeholder="Search instruments to add…" value={instrumentSearch} onChange={(e) => setInstrumentSearch(e.target.value)}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
                 autoFocus
               />
             </div>

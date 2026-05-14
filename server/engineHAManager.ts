@@ -44,7 +44,7 @@ import { accessSync, constants } from "fs";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
-const __dirname = path.dirname(fileURLToPath("file://" + __filename));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 
 // ─── Constants ────────────────────────────────────────────────────────────────

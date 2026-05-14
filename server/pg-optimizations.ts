@@ -269,12 +269,12 @@ export async function tryAdvisoryLock(lockKey: bigint): Promise<boolean> {
  * Uses FNV-1a hash for fast, collision-resistant key derivation.
  */
 export function advisoryLockKey(resourceId: string): bigint {
-  let hash = 2166136261n;
+  let hash = BigInt(2166136261);
   const encoder = new TextEncoder();
   const bytes = encoder.encode(resourceId);
   for (const byte of bytes) {
     hash ^= BigInt(byte);
-    hash = BigInt.asUintN(32, hash * 16777619n);
+    hash = BigInt.asUintN(32, hash * BigInt(16777619));
   }
   return hash;
 }

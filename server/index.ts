@@ -1,10 +1,7 @@
 import express from "express";
 import { createServer } from "http";
 import * as path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath("file://" + __filename);
-const __dirname = path.dirname(__filename);
+// __dirname is available natively in tsx/CommonJS context
 
 async function startServer() {
   const app = express();

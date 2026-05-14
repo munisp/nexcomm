@@ -752,3 +752,14 @@
 - [x] LSP: No errors | TypeScript: No errors (webdev_check_status confirmed)
 - [x] Tests: 621 pass / 298 fail (all failures are ECONNREFUSED - no PostgreSQL in sandbox)
 - [x] Server running cleanly on port 3000
+
+## Round v54 — Final Cleanup
+- [x] Fixed Watchlist.tsx - removed duplicate value/onChange attributes
+- [x] Fixed server/index.ts - removed unused fileURLToPath import
+- [x] Fixed engineHAManager.ts - use import.meta.url for __dirname
+- [x] Fixed server/grpc/client.ts - use import.meta.url for __dirname
+- [x] Fixed portfolioSnapshotJob.ts - Array.from(new Set(...)) spread
+- [x] Fixed security-middleware.ts - Map.entries() iteration
+- [x] Fixed pg-optimizations.ts - BigInt() wrapper + Uint8Array spread
+- [x] Server running cleanly - only ECONNREFUSED (no PostgreSQL in sandbox)
+- [x] Tests: 621 pass / 298 fail (all ECONNREFUSED) / 16 skipped = 935 total

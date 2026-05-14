@@ -77,7 +77,7 @@ export function ddosCircuitBreaker(req: Request, res: Response, next: NextFuncti
 // Cleanup stale entries every 10 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [ip, entry] of ipRequestCounts.entries()) {
+  for (const [ip, entry] of Array.from(ipRequestCounts.entries())) {
     if (now > entry.resetAt + RATE_LIMIT_WINDOW_MS && !entry.blocked) {
       ipRequestCounts.delete(ip);
     }
