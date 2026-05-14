@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -90,7 +90,7 @@ export default function PolicyManagement() {
 
   const { data: dbPolicies } = trpc.pbac.listDbPolicies.useQuery();
 
-  if (isLoading) return <PageSkeleton title="Policy Management" subtitle="PBAC Policy Engine" />;
+  if (isLoading) return <PageSkeleton />;
 
   const policies = policiesData?.policies ?? [];
   const filtered = policies.filter(p =>

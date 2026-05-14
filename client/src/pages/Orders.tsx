@@ -207,9 +207,7 @@ function AmendmentTimeline({ orderId }: { orderId: number }) {
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
         <input
           type="text"
-          placeholder="Search by reason…" value={reasonSearch} onChange={(e) => setReasonSearch(e.target.value)}
-          value={reasonSearch}
-          onChange={e => setReasonSearch(e.target.value)}
+          placeholder="Search by reason…" value={reasonSearch} onChange={e => setReasonSearch(e.target.value)}
           className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-800/60 border border-slate-700 rounded-md text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50"
         />
         {reasonSearch && (

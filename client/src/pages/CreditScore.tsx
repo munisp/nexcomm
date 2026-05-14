@@ -155,7 +155,7 @@ const LOAN_PURPOSES = [
 function LoanApplicationWizard({ onSuccess }: { onSuccess: () => void }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    amountNgn: "",
+    requestedValueNgn: "",
     purpose: "CROP_INPUTS",
     tenorMonths: "12",
     collateralRef: "",
@@ -169,7 +169,7 @@ function LoanApplicationWizard({ onSuccess }: { onSuccess: () => void }) {
       toast.success("Loan application submitted successfully! We will review it within 2 business days.");
       onSuccess();
       setStep(1);
-      setForm({ amountNgn: "", purpose: "CROP_INPUTS", tenorMonths: "12", collateralRef: "", businessDesc: "", expectedRevenue: "", repaymentSource: "" });
+      setForm({ requestedValueNgn: "", purpose: "CROP_INPUTS", tenorMonths: "12", collateralRef: "", businessDesc: "", expectedRevenue: "", repaymentSource: "" });
     },
     onError: (e) => toast.error(e.message),
   });
@@ -206,8 +206,8 @@ function LoanApplicationWizard({ onSuccess }: { onSuccess: () => void }) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>Loan Amount (NGN) *</Label>
-                <Input type="number" placeholder="e.g. 500000" value={form.amountNgn}
-                  onChange={e => setForm(f => ({ ...f, amountNgn: e.target.value }))} />
+                <Input type="number" placeholder="e.g. 500000" value={form.requestedValueNgn}
+                  onChange={e => setForm(f => ({ ...f, requestedValueNgn: e.target.value }))} />
               </div>
               <div className="space-y-1">
                 <Label>Tenor (months) *</Label>
@@ -238,7 +238,7 @@ function LoanApplicationWizard({ onSuccess }: { onSuccess: () => void }) {
                 onChange={e => setForm(f => ({ ...f, collateralRef: e.target.value }))} />
               <p className="text-xs text-muted-foreground">Link a registered collateral asset to strengthen your application</p>
             </div>
-            <Button className="w-full" onClick={() => setStep(2)} disabled={!form.amountNgn || !form.purpose}>
+            <Button className="w-full" onClick={() => setStep(2)} disabled={!form.requestedValueNgn || !form.purpose}>
               Continue <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           </div>
@@ -277,7 +277,7 @@ function LoanApplicationWizard({ onSuccess }: { onSuccess: () => void }) {
             <div className="bg-muted/30 rounded-lg p-4 space-y-3">
               <h3 className="text-sm font-semibold text-foreground">Application Summary</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-muted-foreground">Amount:</span> <span className="font-medium">NGN {Number(form.amountNgn).toLocaleString()}</span></div>
+                <div><span className="text-muted-foreground">Amount:</span> <span className="font-medium">NGN {Number(form.requestedValueNgn).toLocaleString()}</span></div>
                 <div><span className="text-muted-foreground">Tenor:</span> <span className="font-medium">{form.tenorMonths} months</span></div>
                 <div><span className="text-muted-foreground">Purpose:</span> <span className="font-medium">{form.purpose.replace(/_/g, " ")}</span></div>
                 {form.collateralRef && <div><span className="text-muted-foreground">Collateral:</span> <span className="font-medium">{form.collateralRef}</span></div>}
@@ -293,13 +293,11 @@ function LoanApplicationWizard({ onSuccess }: { onSuccess: () => void }) {
               </Button>
               <Button className="flex-1" disabled={applyMut.isPending}
                 onClick={() => applyMut.mutate({
-                  amountNgn: Number(form.amountNgn),
-                  purpose: form.purpose,
+                  inputType: "CASH",
+                  inputDescription: `${form.purpose.replace(/_/g, " ")} — ${form.businessDesc}`.slice(0, 500),
+                  requestedValueNgn: form.requestedValueNgn,
                   tenorMonths: Number(form.tenorMonths),
-                  collateralRef: form.collateralRef || undefined,
-                  businessDesc: form.businessDesc,
-                  expectedRevenue: form.expectedRevenue ? Number(form.expectedRevenue) : undefined,
-                  repaymentSource: form.repaymentSource,
+                  notes: form.repaymentSource ? `Repayment source: ${form.repaymentSource}` : undefined,
                 })}>
                 {applyMut.isPending ? "Submitting…" : "Submit Application"}
               </Button>

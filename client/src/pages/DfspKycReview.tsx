@@ -190,8 +190,6 @@ export default function DfspKycReview() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search by FSP ID, entity name, or email..." value={search} onChange={(e) => setSearch(e.target.value)}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
           </div>
@@ -454,7 +452,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  if (statsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
+
   return (
     <div className="flex gap-2">
       <span className="text-muted-foreground w-40 shrink-0">{label}:</span>

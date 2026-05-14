@@ -105,6 +105,13 @@ const creditScoringRouter = router({
 
 // ─── Fraud Engine Microservice ─────────────────────────────────────────────────
 const fraudEngineRouter = router({
+  health: publicProcedure.query(async () => {
+    const result = await callService<{ status: string }>(
+      ENV.fraudEngineUrl, "/health"
+    );
+    if (!result.ok) return { available: false, status: "unreachable" };
+    return { available: true, ...result.data };
+  }),
 
 
   getAlerts: adminProcedure
@@ -153,6 +160,13 @@ const fraudEngineRouter = router({
 
 // ─── Crypto Guard Microservice ─────────────────────────────────────────────────
 const cryptoGuardRouter = router({
+  health: publicProcedure.query(async () => {
+    const result = await callService<{ status: string }>(
+      ENV.blockchainServiceUrl, "/health"
+    );
+    if (!result.ok) return { available: false, status: "unreachable" };
+    return { available: true, ...result.data };
+  }),
 
 
   encryptData: protectedProcedure
@@ -195,6 +209,13 @@ const cryptoGuardRouter = router({
 
 // ─── DDoS Guard Microservice ──────────────────────────────────────────────────
 const ddosGuardRouter = router({
+  health: publicProcedure.query(async () => {
+    const result = await callService<{ status: string }>(
+      ENV.gatewayServiceUrl, "/health"
+    );
+    if (!result.ok) return { available: false, status: "unreachable" };
+    return { available: true, ...result.data };
+  }),
 
 
   blockIP: adminProcedure
@@ -252,10 +273,34 @@ const ddosGuardRouter = router({
       if (!result.ok) return { available: false, success: false };
       return { available: true, success: true };
     }),
+
+  getStats: adminProcedure.query(async () => {
+    const result = await callService<{
+      totalBlocked: number; activeRules: number; requestsPerSecond: number;
+    }>(process.env.DDOS_GUARD_URL ?? "http://localhost:8014", "/stats");
+    if (!result.ok) return { available: false, totalBlocked: 0, activeRules: 0, requestsPerSecond: 0 };
+    return { available: true, ...result.data };
+  }),
+  getBlockedIPs: adminProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(500).default(50) }))
+    .query(async ({ input }) => {
+      const result = await callService<{ ips: unknown[] }>(
+        process.env.DDOS_GUARD_URL ?? "http://localhost:8014", `/blocked?limit=${input.limit}`
+      );
+      if (!result.ok) return { available: false, ips: [] };
+      return { available: true, ...result.data };
+    }),
 });
 
 // ─── AML Alert Subscriber ─────────────────────────────────────────────────────
 const amlAlertSubscriberRouter = router({
+  health: publicProcedure.query(async () => {
+    const result = await callService<{ status: string }>(
+      ENV.channelGatewayUrl, "/health"
+    );
+    if (!result.ok) return { available: false, status: "unreachable" };
+    return { available: true, ...result.data };
+  }),
 
 
   acknowledgeAlert: adminProcedure
@@ -304,6 +349,13 @@ const amlAlertSubscriberRouter = router({
 
 // ─── OpenSearch Sync ──────────────────────────────────────────────────────────
 const opensearchSyncRouter = router({
+  health: publicProcedure.query(async () => {
+    const result = await callService<{ status: string }>(
+      ENV.opensearchUrl, "/health"
+    );
+    if (!result.ok) return { available: false, status: "unreachable" };
+    return { available: true, ...result.data };
+  }),
 
 
   getReindexStatus: adminProcedure
@@ -327,11 +379,48 @@ const opensearchSyncRouter = router({
 
 // ─── Middleware Hub ───────────────────────────────────────────────────────────
 const middlewareHubRouter = router({
+  health: publicProcedure.query(async () => {
+    const result = await callService<{ status: string }>(
+      ENV.channelGatewayUrl, "/health"
+    );
+    if (!result.ok) return { available: false, status: "unreachable" };
+    return { available: true, ...result.data };
+  }),
+  getMetrics: adminProcedure.query(async () => {
+    const result = await callService<{
+      requestsPerSecond: number; avgLatencyMs: number; errorRate: number; activeConnections: number;
+    }>(ENV.channelGatewayUrl, "/metrics");
+    if (!result.ok) return { available: false, requestsPerSecond: 0, avgLatencyMs: 0, errorRate: 0, activeConnections: 0 };
+    return { available: true, ...result.data };
+  }),
+  getCircuitBreakers: adminProcedure.query(async () => {
+    const result = await callService<{ breakers: unknown[] }>(
+      ENV.channelGatewayUrl, "/circuit-breakers"
+    );
+    if (!result.ok) return { available: false, breakers: [] };
+    return { available: true, ...result.data };
+  }),
+  resetCircuitBreaker: adminProcedure
+    .input(z.object({ breakerName: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const result = await callService<{ success: boolean }>(
+        ENV.channelGatewayUrl, `/circuit-breakers/${input.breakerName}/reset`, { method: "POST" }
+      );
+      if (!result.ok) return { available: false, success: false };
+      return { available: true, success: true };
+    }),
 
 });
 
 // ─── Bot Logic (supplemental — beyond telegramRouter) ────────────────────────
 const botLogicRouter = router({
+  health: publicProcedure.query(async () => {
+    const result = await callService<{ status: string }>(
+      ENV.botLogicUrl, "/health"
+    );
+    if (!result.ok) return { available: false, status: "unreachable" };
+    return { available: true, ...result.data };
+  }),
 
 
   getConversationLogs: adminProcedure

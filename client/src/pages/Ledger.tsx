@@ -9,7 +9,7 @@
  */
 import { useState, useMemo, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +47,7 @@ type LedgerEntry = {
 
 type LedgerAccount = {
   id: string;
-  userId: string;
+  userId: number;
   accountType: string;
   currency: string;
   balance: string;
@@ -388,9 +388,7 @@ function JournalHistoryTable({ accountId }: { accountId: string }) {
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by description, reference, journal ID…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by description, reference, journal ID…" value={search} onChange={e => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>

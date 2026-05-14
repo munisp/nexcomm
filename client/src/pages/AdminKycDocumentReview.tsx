@@ -456,9 +456,9 @@ export default function AdminKycDocumentReview() {
                       {/* AI scores */}
                       {ai && (
                         <div className="grid grid-cols-3 gap-3 pt-1">
-                          <ScoreBar label="OCR Confidence" value={ai.ocrAvgConfidence} />
-                          <ScoreBar label="Doc Authenticity" value={ai.documentAuthenticityScore} />
-                          <ScoreBar label="Liveness Score" value={ai.selfieOverallScore} />
+                          <ScoreBar label="OCR Confidence" value={ai.ocrAvgConfidence ? Number(ai.ocrAvgConfidence) : null} />
+                          <ScoreBar label="Doc Authenticity" value={ai.documentAuthenticityScore ? Number(ai.documentAuthenticityScore) : null} />
+                          <ScoreBar label="Liveness Score" value={ai.selfieOverallScore ? Number(ai.selfieOverallScore) : null} />
                         </div>
                       )}
 

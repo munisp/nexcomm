@@ -342,17 +342,17 @@ function CircuitBreakerControls() {
 
   const resetCBMut = trpc.microservices.middlewareHub.resetCircuitBreaker.useMutation({
     onSuccess: () => { utils.microservices.middlewareHub.getCircuitBreakers.invalidate(); toast.success("Circuit breaker reset"); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: { message: string }) => toast.error(e.message),
   });
 
   const blockIPMut = trpc.microservices.ddosGuard.blockIP.useMutation({
     onSuccess: () => { utils.microservices.ddosGuard.getBlockedIPs.invalidate(); toast.success("IP blocked"); setNewIp(""); setBlockReason(""); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: { message: string }) => toast.error(e.message),
   });
 
   const unblockIPMut = trpc.microservices.ddosGuard.unblockIP.useMutation({
     onSuccess: () => { utils.microservices.ddosGuard.getBlockedIPs.invalidate(); toast.success("IP unblocked"); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: { message: string }) => toast.error(e.message),
   });
 
   const cbs = circuitBreakers as { breakers?: Array<{ service: string; state: string; failureCount: number; lastFailure?: string }> } | undefined;
@@ -384,7 +384,7 @@ function CircuitBreakerControls() {
                       {cb.state}
                     </Badge>
                     {cb.state !== "closed" && (
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => resetCBMut.mutate({ service: cb.service })} disabled={resetCBMut.isPending}>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => resetCBMut.mutate({ breakerName: cb.service })} disabled={resetCBMut.isPending}>
                         <RefreshCw className="h-3 w-3 mr-1" /> Reset
                       </Button>
                     )}
@@ -443,7 +443,7 @@ function CircuitBreakerControls() {
               onChange={e => setBlockReason(e.target.value)}
               className="h-8 text-sm flex-1"
             />
-            <Button size="sm" className="h-8" onClick={() => blockIPMut.mutate({ ip: newIp, reason: blockReason || undefined })} disabled={!newIp || blockIPMut.isPending}>
+            <Button size="sm" className="h-8" onClick={() => blockIPMut.mutate({ ip: newIp, reason: blockReason || "No reason provided" })} disabled={!newIp || blockIPMut.isPending}>
               <Ban className="h-3 w-3 mr-1" /> Block
             </Button>
           </div>

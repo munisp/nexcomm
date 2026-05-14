@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1390,9 +1390,7 @@ export default function BankingDashboard() {
                       <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
                       <Input
                         className="pl-8 h-8 w-40 text-sm"
-                        placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                        value={adminLoanSearch}
-                        onChange={e => setAdminLoanSearch(e.target.value)}
+                        placeholder="Search..." value={adminLoanSearch} onChange={e => setAdminLoanSearch(e.target.value)}
                       />
                     </div>
                     <Select value={adminLoanStatus} onValueChange={setAdminLoanStatus}>

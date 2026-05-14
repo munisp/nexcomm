@@ -173,9 +173,7 @@ export default function Warehouses() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search warehouse name, city, or ID..." value={query} onChange={(e) => setQuery(e.target.value)}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
+            placeholder="Search warehouse name, city, or ID..." value={query} onChange={e => setQuery(e.target.value)}
             className="pl-9"
           />
         </div>

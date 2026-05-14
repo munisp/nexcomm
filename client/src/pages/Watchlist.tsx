@@ -496,6 +496,7 @@ export default function WatchlistPage() {
   const utils = trpc.useUtils();
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [instrumentSearch, setInstrumentSearch] = useState("");
 
   // ── Display options (column customisation) persisted to localStorage ──────────
   const DISPLAY_OPTS_KEY = "nexcom_watchlist_display_opts";

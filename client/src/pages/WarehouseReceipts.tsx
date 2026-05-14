@@ -46,7 +46,7 @@ export default function WarehouseReceipts() {
   });
   const { enqueue, queueDepth } = useOfflineQueue();
   const receipts = data?.receipts ?? [];
-  const filteredReceipts = receipts.filter(r => !searchQuery || r.ewrNumber?.toLowerCase().includes(searchQuery.toLowerCase()) || r.commodity?.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredReceipts = receipts.filter(r => !searchQuery || r.receiptNumber?.toLowerCase().includes(searchQuery.toLowerCase()) || r.commodity?.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const redeemMutation = trpc.receipts.redeem.useMutation({
     onSuccess: () => {
@@ -114,9 +114,7 @@ export default function WarehouseReceipts() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by EWR number or commodity..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
+            placeholder="Search by EWR number or commodity..." value={query} onChange={e => setQuery(e.target.value)}
             className="pl-9"
           />
         </div>

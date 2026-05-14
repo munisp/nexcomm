@@ -147,7 +147,7 @@ function CreateAlertForm({ onSuccess, initialSymbol }: { onSuccess: () => void; 
           onChange={e => { setSymbolSearch(e.target.value); setShowDropdown(true); }}
           onFocus={() => setShowDropdown(true)}
           onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-          placeholder="Search symbol or name..." value={symbolSearch} onChange={(e) => setSymbolSearch(e.target.value)}
+          placeholder="Search symbol or name..."
           className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
         />
         {showDropdown && filteredSymbols.length > 0 && (
