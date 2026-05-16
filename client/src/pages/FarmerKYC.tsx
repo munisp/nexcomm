@@ -1,6 +1,7 @@
 /**
  * FarmerKYC — KYC document submission screen
  * Farmers upload NIN slip, utility bill, and farm ownership proof via real S3 upload
+ * Includes active liveness check + face match before submission.
  */
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -24,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { KycAnalysisPanel } from "@/components/KycAnalysisPanel";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import LivenessChallengeModal, { LivenessResult } from "@/components/LivenessChallengeModal";
 
 const KYC_DOCS = [
   {
@@ -68,6 +70,11 @@ export default function FarmerKYC() {
   // Track per-doc uploading state
   const [uploadingDoc, setUploadingDoc] = useState<Record<string, boolean>>({});
   const [analysisResult, setAnalysisResult] = useState<{ overallRiskLevel: string; overallScore: number } | null>(null);
+
+  // Liveness state
+  const [livenessOpen, setLivenessOpen] = useState(false);
+  const [livenessResult, setLivenessResult] = useState<LivenessResult | null>(null);
+  const [applicationId] = useState(() => `farmer-kyc-${Date.now()}`);
 
   // Hidden file inputs — one per doc
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -136,6 +143,10 @@ export default function FarmerKYC() {
     const missingRequired = requiredDocs.filter((d) => !allDocs[d.id]);
     if (missingRequired.length > 0) {
       toast.error(`Please upload: ${missingRequired.map((d) => d.label).join(", ")}`);
+      return;
+    }
+    if (!livenessResult?.passed) {
+      toast.error("Please complete the liveness check before submitting.");
       return;
     }
     submitKYCMut.mutate({ kycDocuments: JSON.stringify(allDocs) });
@@ -320,6 +331,32 @@ export default function FarmerKYC() {
           />
         )}
 
+        {/* Liveness Check — shown once passport photo is uploaded */}
+        {allDocs["passport_photo"] && (
+          <div className="pt-1">
+            {livenessResult?.passed ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-950/40 border border-green-800/40 text-green-400 text-sm">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>
+                  Liveness check passed
+                  {livenessResult.faceMatchScore != null
+                    ? ` · Face match: ${Math.round(livenessResult.faceMatchScore * 100)}%`
+                    : ""}
+                </span>
+              </div>
+            ) : (
+              <Button
+                onClick={() => setLivenessOpen(true)}
+                variant="outline"
+                className="w-full h-11 border-slate-600 text-slate-200 hover:bg-slate-700"
+              >
+                <Camera className="w-4 h-4 mr-2" />
+                Complete Liveness Check <span className="text-red-400 ml-1">*</span>
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Submit */}
         <div className="pt-2">
           {analysisResult && analysisResult.overallRiskLevel === "CRITICAL" && (
@@ -343,6 +380,24 @@ export default function FarmerKYC() {
           </p>
         </div>
       </div>
+
+      {/* Liveness Modal */}
+      <LivenessChallengeModal
+        open={livenessOpen}
+        onClose={() => setLivenessOpen(false)}
+        onComplete={(result) => {
+          setLivenessResult(result);
+          setLivenessOpen(false);
+          if (result.passed) {
+            toast.success("Liveness check passed!");
+          } else {
+            toast.error("Liveness check failed. Please try again in good lighting.");
+          }
+        }}
+        applicationId={applicationId}
+        documentPhotoUrl={allDocs["passport_photo"]}
+        title="Farmer Identity Verification"
+      />
     </div>
   );
 }

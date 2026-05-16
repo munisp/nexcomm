@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import {
   CheckCircle2, XCircle, MessageSquareWarning, Eye, FileText,
   User, Calendar, Clock, Shield, AlertTriangle, RefreshCw,
-  ChevronLeft, ChevronRight, Loader2, ExternalLink,
+  ChevronLeft, ChevronRight, Loader2, ExternalLink, Camera,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -317,6 +317,18 @@ export default function AdminKycDocumentReview() {
     { enabled: userIds.length > 0 }
   );
 
+  // Load liveness sessions for current page users
+  const { data: livenessSessions } = trpc.kycService.getLivenessSessions.useQuery(
+    { userIds },
+    { enabled: userIds.length > 0 }
+  );
+  type LivenessSession = NonNullable<typeof livenessSessions>[number];
+  const livenessByUserId = useMemo(() => {
+    const map: Record<number, LivenessSession> = {};
+    (livenessSessions ?? []).forEach((s) => { map[s.userId] = s; });
+    return map;
+  }, [livenessSessions]);
+
   type AiResult = NonNullable<typeof aiResults>[number];
   const aiByUserId = useMemo(() => {
     const map: Record<number, AiResult> = {};
@@ -417,6 +429,7 @@ export default function AdminKycDocumentReview() {
         <div className="space-y-3">
           {records.map((record) => {
             const ai = aiByUserId[record.userId];
+            const ls = livenessByUserId[record.userId];
             const docs = record.documents as Record<string, string> | null;
             const docCount = docs ? Object.values(docs).filter((v) => typeof v === "string" && v.startsWith("http")).length : 0;
 
@@ -459,6 +472,34 @@ export default function AdminKycDocumentReview() {
                           <ScoreBar label="OCR Confidence" value={ai.ocrAvgConfidence ? Number(ai.ocrAvgConfidence) : null} />
                           <ScoreBar label="Doc Authenticity" value={ai.documentAuthenticityScore ? Number(ai.documentAuthenticityScore) : null} />
                           <ScoreBar label="Liveness Score" value={ai.selfieOverallScore ? Number(ai.selfieOverallScore) : null} />
+                        </div>
+                      )}
+                      {/* Liveness session badge */}
+                      {ls ? (
+                        <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-xs rounded px-2 py-1.5 border ${
+                          ls.passed ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"
+                        }`}>
+                          <span className="flex items-center gap-1 font-medium">
+                            {ls.passed ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                            Liveness {ls.passed ? "PASSED" : "FAILED"}
+                          </span>
+                          {ls.faceMatchScore != null && (
+                            <span>Face match: {Math.round(Number(ls.faceMatchScore) * 100)}%</span>
+                          )}
+                          {ls.passiveLivenessScore != null && (
+                            <span>Passive: {Math.round(Number(ls.passiveLivenessScore) * 100)}%</span>
+                          )}
+                          {ls.spoofType && (
+                            <span className="text-red-600 font-semibold">⚠ Spoof: {ls.spoofType}</span>
+                          )}
+                          {ls.completedAt && (
+                            <span className="text-muted-foreground ml-auto">{new Date(ls.completedAt as string).toLocaleString()}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-amber-600">
+                          <Camera className="w-3.5 h-3.5" />
+                          No liveness session recorded
                         </div>
                       )}
 

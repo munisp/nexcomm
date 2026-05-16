@@ -11,6 +11,13 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
+import {
+  upsertLivenessSession,
+  getLivenessSession,
+  getLivenessSessionsByUser,
+  getLivenessSessionsByApplication,
+  createLivenessSecurityEvent,
+} from "../db";
 
 const KYC_URL = process.env.KYC_SERVICE_URL ?? "http://localhost:3002";
 const TIMEOUT_MS = 10000; // OCR can take a few seconds
@@ -143,31 +150,224 @@ export const kycServiceRouter = router({
       }
     }),
 
-  /** Start a liveness check session */
+  /** Start a liveness check session — persists session to DB */
   startLiveness: protectedProcedure
-    .input(z.object({ applicationId: z.string().trim() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({
+      applicationId: z.string().trim(),
+    }))
+    .mutation(async ({ ctx, input }) => {
       try {
-        return await kycFetch(`/api/v1/kyc/applications/${input.applicationId}/liveness/start`, {
+        const data = await kycFetch(`/api/v1/kyc/applications/${input.applicationId}/liveness/start`, {
           method: "POST",
-        });
+        }) as Record<string, unknown>;
+        // Persist the new session to the DB
+        if (data?.session_id) {
+          await upsertLivenessSession({
+            sessionId: String(data.session_id),
+            applicationId: input.applicationId,
+            userId: ctx.user.id,
+            challenges: JSON.stringify(data.challenges ?? []),
+            currentChallengeIndex: 0,
+            results: "[]",
+            status: "PENDING",
+          });
+        }
+        return data;
       } catch {
         return { error: "KYC service offline" };
       }
     }),
 
-  /** Verify a liveness session */
+  /** Verify one liveness challenge frame — persists result and publishes security event */
   verifyLiveness: protectedProcedure
-    .input(z.object({ sessionId: z.string().trim(), imageUrl: z.string().url() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({
+      sessionId: z.string().trim(),
+      imageUrl: z.string().url(),
+    }))
+    .mutation(async ({ ctx, input }) => {
       try {
-        return await kycFetch(`/api/v1/kyc/liveness/${input.sessionId}/verify`, {
+        const data = await kycFetch(`/api/v1/kyc/liveness/${input.sessionId}/verify`, {
           method: "POST",
           body: JSON.stringify({ image_url: input.imageUrl }),
+        }) as Record<string, unknown>;
+
+        // Persist updated session state
+        const isComplete = data?.session_complete === true;
+        const overallResult = isComplete
+          ? (data?.overall_result === "PASS" ? "PASS" : "FAIL")
+          : undefined;
+        const spoofRaw = (data?.spoof_type as string) ?? "UNKNOWN";
+        const spoofTypeMap: Record<string, "NONE" | "PRINTED_PHOTO" | "SCREEN_REPLAY" | "PAPER_MASK" | "3D_MASK" | "DEEPFAKE" | "HIGH_QUALITY_PHOTO" | "UNKNOWN"> = {
+          NONE: "NONE", PRINTED_PHOTO: "PRINTED_PHOTO", SCREEN_REPLAY: "SCREEN_REPLAY",
+          PAPER_MASK: "PAPER_MASK", "3D_MASK": "3D_MASK", DEEPFAKE: "DEEPFAKE",
+          HIGH_QUALITY_PHOTO: "HIGH_QUALITY_PHOTO",
+        };
+        const spoofType = spoofTypeMap[spoofRaw] ?? "UNKNOWN";
+
+        await upsertLivenessSession({
+          sessionId: input.sessionId,
+          applicationId: (data?.application_id as string) ?? undefined,
+          userId: ctx.user.id,
+          challenges: JSON.stringify(data?.challenges ?? []),
+          currentChallengeIndex: Number(data?.current_challenge_index ?? 0),
+          results: JSON.stringify(data?.results ?? []),
+          overallResult,
+          faceMatchScore: (data?.face_match_score as number) ?? undefined,
+          spoofType,
+          spoofConfidence: (data?.spoof_confidence as number) ?? 0,
+          landmarksJson: data?.landmarks ? JSON.stringify(data.landmarks) : undefined,
+          status: isComplete ? (overallResult === "PASS" ? "COMPLETE" : "FAILED") : "PENDING",
         });
+
+        // Publish security event on session completion
+        if (isComplete) {
+          const passed = overallResult === "PASS";
+          const isSpoofDetected = spoofType !== "NONE" && spoofType !== "UNKNOWN";
+          await createLivenessSecurityEvent({
+            userId: ctx.user.id,
+            sessionId: input.sessionId,
+            applicationId: (data?.application_id as string) ?? undefined,
+            eventType: isSpoofDetected
+              ? "LIVENESS_SPOOF_DETECTED"
+              : passed ? "LIVENESS_PASS" : "LIVENESS_FAIL",
+            severity: isSpoofDetected ? "HIGH" : passed ? "LOW" : "MEDIUM",
+            spoofType,
+            faceMatchScore: (data?.face_match_score as number) ?? undefined,
+            confidence: (data?.spoof_confidence as number) ?? undefined,
+          });
+          await writeAuditLog({
+            userId: ctx.user.id,
+            action: passed ? "LIVENESS_PASS" : "LIVENESS_FAIL",
+            resource: "liveness_session",
+            resourceId: input.sessionId,
+            details: { overallResult, spoofType, faceMatchScore: data?.face_match_score },
+          });
+        }
+
+        return data;
+      } catch (err) {
+        return { error: "KYC service offline", detail: String(err) };
+      }
+    }),
+
+  /** Run passive liveness check on a single selfie image */
+  passiveLiveness: protectedProcedure
+    .input(z.object({
+      imageUrl: z.string().url(),
+      applicationId: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await kycFetch("/api/v1/kyc/passive-liveness", {
+          method: "POST",
+          body: JSON.stringify({
+            image_url: input.imageUrl,
+            application_id: input.applicationId,
+          }),
+        }) as Record<string, unknown>;
+
+        // Publish security event if passive liveness fails
+        const result = (data?.result as string) ?? "UNKNOWN";
+        if (result !== "LIKELY_LIVE") {
+          await createLivenessSecurityEvent({
+            userId: ctx.user.id,
+            sessionId: `passive-${Date.now()}`,
+            applicationId: input.applicationId,
+            eventType: "PASSIVE_LIVENESS_FAIL",
+            severity: result === "POSSIBLY_SCREEN" ? "HIGH" : "MEDIUM",
+            spoofType: result === "POSSIBLY_SCREEN" ? "SCREEN_REPLAY" : "PRINTED_PHOTO",
+            confidence: (data?.confidence as number) ?? undefined,
+          });
+        }
+        return data;
       } catch {
         return { error: "KYC service offline" };
       }
+    }),
+
+  /** Face matching — compare selfie against document photo (two-image) */
+  faceMatch: protectedProcedure
+    .input(z.object({
+      selfieUrl: z.string().url(),
+      documentImageUrl: z.string().url(),
+      applicationId: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await kycFetch("/api/v1/kyc/face-match", {
+          method: "POST",
+          body: JSON.stringify({
+            selfie_url: input.selfieUrl,
+            document_image_url: input.documentImageUrl,
+            application_id: input.applicationId,
+          }),
+        }) as Record<string, unknown>;
+
+        // Publish security event
+        const matched = data?.matched === true;
+        const score = (data?.similarity_score as number) ?? 0;
+        await createLivenessSecurityEvent({
+          userId: ctx.user.id,
+          sessionId: `facematch-${Date.now()}`,
+          applicationId: input.applicationId,
+          eventType: matched ? "FACE_MATCH_PASS" : "FACE_MATCH_FAIL",
+          severity: matched ? "LOW" : "HIGH",
+          faceMatchScore: score,
+        });
+        await writeAuditLog({
+          userId: ctx.user.id,
+          action: matched ? "FACE_MATCH_PASS" : "FACE_MATCH_FAIL",
+          resource: "face_match",
+          resourceId: input.applicationId,
+          details: { similarityScore: score, matched },
+        });
+        return data;
+      } catch {
+        return { error: "KYC service offline" };
+      }
+    }),
+
+  /** Get liveness sessions for the current user */
+  getMyLivenessSessions: protectedProcedure
+    .query(async ({ ctx }) => {
+      return getLivenessSessionsByUser(ctx.user.id);
+    }),
+
+  /** Get liveness sessions for a specific KYC application (admin) */
+  getLivenessSessionsByApplication: adminProcedure
+    .input(z.object({ applicationId: z.string().trim() }))
+    .query(async ({ input }) => {
+      return getLivenessSessionsByApplication(input.applicationId);
+    }),
+
+  /** Get liveness sessions for multiple users (admin bulk query) */
+  getLivenessSessions: adminProcedure
+    .input(z.object({ userIds: z.array(z.number()) }))
+    .query(async ({ input }) => {
+      if (!input.userIds.length) return [];
+      const { getDb } = await import("../db");
+      const { kycLivenessSessions } = await import("../../drizzle/schema");
+      const { inArray, desc } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) return [];
+      // Get the most recent session per user
+      const rows = await db
+        .select()
+        .from(kycLivenessSessions)
+        .where(inArray(kycLivenessSessions.userId, input.userIds))
+        .orderBy(desc(kycLivenessSessions.createdAt));
+      // Deduplicate: keep only the latest session per userId
+      const seen = new Set<number>();
+      return rows.filter(r => { if (seen.has(r.userId)) return false; seen.add(r.userId); return true; });
+    }),
+
+  /** Get a single liveness session by ID */
+  getLivenessSession: protectedProcedure
+    .input(z.object({ sessionId: z.string().trim() }))
+    .query(async ({ input }) => {
+      const session = await getLivenessSession(input.sessionId);
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      return session;
     }),
 
   /** Run AI OCR on a document image */

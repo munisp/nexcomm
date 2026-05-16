@@ -50,6 +50,8 @@ from models.schemas import (
 from ocr.paddle_ocr import PaddleOCREngine
 from document.docling_parser import DoclingParser, VLMDocumentVerifier
 from liveness.detector import LivenessDetector
+from liveness.face_matcher import get_face_matcher, SpoofType
+from liveness.session_store import save_session, load_session, delete_session, publish_liveness_event
 from kyb.screening import KYBScreeningEngine, StakeholderOnboarding, OPENSANCTIONS_API_KEY
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -80,7 +82,7 @@ onboarding = StakeholderOnboarding()
 # ── In-memory stores (production: PostgreSQL) ──────────────────────────────────
 kyc_applications: dict[str, KYCApplication] = {}
 kyb_applications: dict[str, KYBApplication] = {}
-liveness_sessions: dict[str, dict] = {}  # session_id -> LivenessSession dict
+liveness_sessions: dict[str, dict] = {}  # session_id -> LivenessSession dict (in-memory fallback; PG used when NEXCOM_PG_URL is set)
 warehouse_receipts: dict[str, WarehouseReceipt] = {}
 produce_registrations: dict[str, ProduceRegistration] = {}
 agent_profiles: dict[str, AgentProfile] = {}
@@ -682,14 +684,25 @@ async def upload_kyc_document(
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/v1/kyc/applications/{application_id}/liveness/start")
-async def start_liveness_session(application_id: str, num_challenges: int = 3):
+async def start_liveness_session(
+    application_id: str,
+    num_challenges: int = 3,
+    user_id: Optional[int] = None,
+):
     """Start a new liveness verification session with random challenges."""
     app_obj = kyc_applications.get(application_id)
     if not app_obj:
         raise HTTPException(status_code=404, detail="KYC application not found")
 
     session = liveness_detector.create_session(num_challenges)
-    liveness_sessions[session.session_id] = session.model_dump()
+    session_dict = session.model_dump()
+    session_dict["application_id"] = application_id
+    session_dict["user_id"] = user_id
+    session_dict["status"] = "PENDING"
+
+    # Persist to PostgreSQL (falls back to in-memory if PG unavailable)
+    await save_session(session.session_id, session_dict)
+    liveness_sessions[session.session_id] = session_dict  # in-memory mirror
 
     app_obj.status = KYCStatus.LIVENESS_PENDING
     app_obj.updated_at = datetime.utcnow()
@@ -712,11 +725,13 @@ async def verify_liveness_frame(
     file: UploadFile = File(...),
 ):
     """Submit a frame for liveness challenge verification."""
-    session_data = liveness_sessions.get(session_id)
+    # Load from PG first, fall back to in-memory
+    session_data = await load_session(session_id) or liveness_sessions.get(session_id)
     if not session_data:
         raise HTTPException(status_code=404, detail="Liveness session not found")
 
-    session = LivenessSession(**session_data)
+    session = LivenessSession(**{k: v for k, v in session_data.items()
+                                 if k in LivenessSession.model_fields})
 
     # Save frame
     frame_path = os.path.join(UPLOAD_DIR, f"liveness_{session_id}_{uuid.uuid4()}.jpg")
@@ -737,7 +752,27 @@ async def verify_liveness_frame(
     if all_done:
         session = liveness_detector.evaluate_session(session)
 
-    liveness_sessions[session_id] = session.model_dump()
+    updated = session.model_dump()
+    updated["application_id"] = session_data.get("application_id")
+    updated["user_id"] = session_data.get("user_id")
+    updated["status"] = "COMPLETE" if all_done else "PENDING"
+
+    # Persist updated session
+    await save_session(session_id, updated)
+    liveness_sessions[session_id] = updated
+
+    # Publish completion event when all challenges are done
+    if all_done and session.overall_result:
+        await publish_liveness_event(
+            session_id=session_id,
+            user_id=session_data.get("user_id"),
+            application_id=session_data.get("application_id"),
+            result=session.overall_result.value,
+            face_match_score=session_data.get("face_match_score"),
+            spoof_type=getattr(result, "spoof_type", "UNKNOWN"),
+            spoof_confidence=float(result.anti_spoof_score or 0.0),
+            confidence=float(result.confidence or 0.0),
+        )
 
     next_challenge = None
     if not all_done and session.current_challenge_index < len(session.challenges):
@@ -764,10 +799,128 @@ async def verify_liveness_frame(
 
 @app.get("/api/v1/kyc/liveness/{session_id}")
 async def get_liveness_session(session_id: str):
-    session_data = liveness_sessions.get(session_id)
+    session_data = await load_session(session_id) or liveness_sessions.get(session_id)
     if not session_data:
         raise HTTPException(status_code=404, detail="Liveness session not found")
     return {"success": True, "data": session_data}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FACE MATCHING  (selfie vs. document photo — two-image comparison)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/v1/kyc/face-match")
+async def face_match(
+    selfie: UploadFile = File(..., description="Live selfie captured during liveness session"),
+    document_photo: UploadFile = File(..., description="Face photo extracted from ID document"),
+    application_id: Optional[str] = Form(None),
+    user_id: Optional[int] = Form(None),
+):
+    """
+    Compare a live selfie against the face on an identity document.
+
+    Returns:
+      - match: bool — whether the two faces belong to the same person
+      - similarity_score: float 0-1 (≥0.68 = match for ArcFace)
+      - confidence: float 0-1
+      - spoof_analysis: detailed anti-spoofing breakdown
+      - landmarks_68: 68-point facial landmark coordinates for the selfie
+      - model_used: the DeepFace model that produced the result
+    """
+    # Save uploads to temp files
+    selfie_path = os.path.join(UPLOAD_DIR, f"selfie_{uuid.uuid4()}.jpg")
+    doc_path = os.path.join(UPLOAD_DIR, f"docphoto_{uuid.uuid4()}.jpg")
+    try:
+        with open(selfie_path, "wb") as f:
+            f.write(await selfie.read())
+        with open(doc_path, "wb") as f:
+            f.write(await document_photo.read())
+
+        matcher = get_face_matcher()
+        result = await matcher.match(selfie_path, doc_path)
+
+        # Persist face match score back to any open liveness session for this application
+        if application_id:
+            app_obj = kyc_applications.get(application_id)
+            if app_obj:
+                app_obj.selfie_match_score = result.similarity_score
+                app_obj.updated_at = datetime.utcnow()
+
+        return {
+            "success": True,
+            "data": {
+                "match": result.match,
+                "similarity_score": result.similarity_score,
+                "confidence": result.confidence,
+                "distance": result.distance,
+                "threshold": result.threshold,
+                "model_used": result.model_used,
+                "spoof_analysis": {
+                    "selfie_spoof_type": result.selfie_spoof_type,
+                    "selfie_spoof_confidence": result.selfie_spoof_confidence,
+                    "selfie_is_live": result.selfie_is_live,
+                },
+                "landmarks_68": result.landmarks_68,
+                "face_detected_selfie": result.face_detected_selfie,
+                "face_detected_document": result.face_detected_document,
+                "error": result.error,
+            },
+        }
+    finally:
+        for p in (selfie_path, doc_path):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+
+@app.post("/api/v1/kyc/passive-liveness")
+async def passive_liveness_check(
+    file: UploadFile = File(..., description="Single selfie image for passive liveness analysis"),
+    application_id: Optional[str] = Form(None),
+):
+    """
+    Passive liveness check on a single image.
+    No challenge-response required — uses heuristics + anti-spoofing classifier.
+
+    Returns:
+      - is_live: bool
+      - confidence: float 0-1
+      - spoof_type: NONE | PRINTED_PHOTO | SCREEN_REPLAY | PAPER_MASK | 3D_MASK | DEEPFAKE | HIGH_QUALITY_PHOTO
+      - spoof_confidence: float 0-1
+      - passive_score: float 0-1
+      - landmarks_68: 68-point facial landmarks
+      - face_detected: bool
+    """
+    img_path = os.path.join(UPLOAD_DIR, f"passive_{uuid.uuid4()}.jpg")
+    try:
+        with open(img_path, "wb") as f:
+            f.write(await file.read())
+
+        matcher = get_face_matcher()
+        spoof_result = await matcher.classify_spoof(img_path)
+        landmarks = await matcher.extract_landmarks_68(img_path)
+
+        is_live = spoof_result["spoof_type"] == SpoofType.NONE.value
+        confidence = 1.0 - spoof_result["spoof_confidence"] if is_live else spoof_result["spoof_confidence"]
+
+        return {
+            "success": True,
+            "data": {
+                "is_live": is_live,
+                "confidence": round(confidence, 4),
+                "spoof_type": spoof_result["spoof_type"],
+                "spoof_confidence": spoof_result["spoof_confidence"],
+                "passive_score": round(1.0 - spoof_result["spoof_confidence"], 4),
+                "landmarks_68": landmarks,
+                "face_detected": landmarks is not None,
+            },
+        }
+    finally:
+        try:
+            os.unlink(img_path)
+        except OSError:
+            pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════

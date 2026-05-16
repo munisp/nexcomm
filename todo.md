@@ -771,3 +771,25 @@
 - [x] MicroservicesHealth.tsx: resetCircuitBreaker uses breakerName (not service)
 - [x] 621 tests passing, 298 pre-existing DB-dependent failures (ECONNREFUSED - no PostgreSQL in sandbox)
 - [x] Server running cleanly with zero compilation errors
+
+## Liveness Production Gaps (v56)
+- [ ] Face matching (selfie vs document) — DeepFace cosine similarity endpoint
+- [ ] Active liveness session persistence — write to DB on start/complete
+- [ ] Liveness event publishing — emit to securityEvents on PASS/FAIL
+- [ ] Frontend active liveness camera UI — LivenessChallengeModal component
+- [ ] Wire liveness UI into KYC onboarding flow
+- [ ] Wire liveness results into admin KYC review panel
+
+## Liveness Gaps Closed (v56)
+- [x] Face matching module (DeepFace cosine similarity) in Python kyc-service
+- [x] /api/v1/kyc/face-match endpoint (selfie vs document photo comparison)
+- [x] /api/v1/kyc/passive-liveness endpoint (single-image heuristic + VLM)
+- [x] asyncpg DB persistence for liveness sessions (session_store.py)
+- [x] Event webhook emitter in kyc-service on session completion
+- [x] kycLivenessSessions table added to schema.ts
+- [x] LIVENESS_PASS/FAIL/SPOOF_DETECTED/FACE_MATCH_PASS/FACE_MATCH_FAIL/PASSIVE_LIVENESS_FAIL added to securityEventTypeEnum
+- [x] upsertLivenessSession, getLivenessSession, getLivenessSessionsByUser, getLivenessSessionsByApplication, createLivenessSecurityEvent helpers in db.ts
+- [x] startLiveness, verifyLiveness, faceMatch, passiveLiveness, getLivenessSessions tRPC procedures in kycServiceRouter.ts
+- [x] LivenessChallengeModal React component (camera capture, challenge display, face match flow)
+- [x] LivenessChallengeModal wired into FarmerKYC.tsx onboarding flow
+- [x] Liveness session results displayed in AdminKycDocumentReview.tsx

@@ -4,6 +4,8 @@ import postgres from "postgres";
 import {
   InsertUser, users, profiles, watchlist, priceAlerts,
   savedOrders, notifications, kycQueue, auditLog, userPreferences,
+  kycLivenessSessions, InsertKycLivenessSession,
+  securityEvents,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -304,4 +306,93 @@ export async function logAudit(data: { userId?: number; action: string; resource
 export async function getAuditLog(limit = 100) {
   const db = await getDb(); if (!db) return [];
   return db.select().from(auditLog).orderBy(desc(auditLog.createdAt)).limit(limit);
+}
+
+// ============================================================
+// KYC Liveness Sessions
+// ============================================================
+export async function upsertLivenessSession(data: InsertKycLivenessSession) {
+  const db = await getDb(); if (!db) return;
+  await db
+    .insert(kycLivenessSessions)
+    .values(data)
+    .onConflictDoUpdate({
+      target: kycLivenessSessions.sessionId,
+      set: {
+        currentChallengeIndex: data.currentChallengeIndex,
+        results: data.results,
+        overallResult: data.overallResult,
+        faceMatchScore: data.faceMatchScore,
+        spoofType: data.spoofType,
+        spoofConfidence: data.spoofConfidence,
+        landmarksJson: data.landmarksJson,
+        status: data.status,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+export async function getLivenessSession(sessionId: string) {
+  const db = await getDb(); if (!db) return null;
+  const rows = await db
+    .select()
+    .from(kycLivenessSessions)
+    .where(eq(kycLivenessSessions.sessionId, sessionId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getLivenessSessionsByUser(userId: number, limit = 20) {
+  const db = await getDb(); if (!db) return [];
+  return db
+    .select()
+    .from(kycLivenessSessions)
+    .where(eq(kycLivenessSessions.userId, userId))
+    .orderBy(desc(kycLivenessSessions.createdAt))
+    .limit(limit);
+}
+
+export async function getLivenessSessionsByApplication(applicationId: string) {
+  const db = await getDb(); if (!db) return [];
+  return db
+    .select()
+    .from(kycLivenessSessions)
+    .where(eq(kycLivenessSessions.applicationId, applicationId))
+    .orderBy(desc(kycLivenessSessions.createdAt));
+}
+
+// ============================================================
+// Security Events (liveness-specific helpers)
+// ============================================================
+export async function createLivenessSecurityEvent(data: {
+  userId?: number | null;
+  sessionId: string;
+  applicationId?: string | null;
+  eventType: "LIVENESS_PASS" | "LIVENESS_FAIL" | "LIVENESS_SPOOF_DETECTED" | "FACE_MATCH_PASS" | "FACE_MATCH_FAIL" | "PASSIVE_LIVENESS_FAIL";
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  spoofType?: string;
+  faceMatchScore?: number | null;
+  confidence?: number;
+}) {
+  const db = await getDb(); if (!db) return;
+  try {
+    await db.insert(securityEvents).values({
+      userId: data.userId ?? undefined,
+      eventType: data.eventType,
+      severity: data.severity,
+      status: "OPEN",
+      title: `Liveness ${data.eventType.replace(/_/g, " ")}`,
+      description: `Liveness session ${data.sessionId}: ${data.eventType}` +
+        (data.spoofType && data.spoofType !== "NONE" ? ` (spoof: ${data.spoofType})` : ""),
+      metadata: {
+        sessionId: data.sessionId,
+        applicationId: data.applicationId,
+        spoofType: data.spoofType,
+        faceMatchScore: data.faceMatchScore,
+        confidence: data.confidence,
+      },
+    });
+  } catch (e) {
+    console.warn("[SecurityEvent] Failed to write liveness event:", e);
+  }
 }

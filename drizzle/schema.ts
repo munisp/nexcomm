@@ -560,6 +560,12 @@ export const securityEventTypeEnum = pgEnum("security_event_type", [
   "SUSPICIOUS_IP",
   "UNUSUAL_TRADE_PATTERN",
   "ACCOUNT_TAKEOVER_ATTEMPT",
+  "LIVENESS_PASS",
+  "LIVENESS_FAIL",
+  "LIVENESS_SPOOF_DETECTED",
+  "FACE_MATCH_PASS",
+  "FACE_MATCH_FAIL",
+  "PASSIVE_LIVENESS_FAIL",
 ]);
 export const securityEventStatusEnum = pgEnum("security_event_status", [
   "OPEN", "INVESTIGATING", "RESOLVED", "FALSE_POSITIVE",
@@ -1636,6 +1642,33 @@ export const kycAnalysisResults = pgTable("kyc_analysis_results", {
 
 export type KycAnalysisResult = typeof kycAnalysisResults.$inferSelect;
 export type InsertKycAnalysisResult = typeof kycAnalysisResults.$inferInsert;
+
+// ─── KYC Active Liveness Sessions ─────────────────────────────────────────────
+export const livenessSessionStatusEnum = pgEnum("liveness_session_status", [
+  "PENDING", "COMPLETE", "EXPIRED", "FAILED",
+]);
+export const spoofTypeEnum = pgEnum("spoof_type", [
+  "NONE", "PRINTED_PHOTO", "SCREEN_REPLAY", "PAPER_MASK", "3D_MASK", "DEEPFAKE", "HIGH_QUALITY_PHOTO", "UNKNOWN",
+]);
+export const kycLivenessSessions = pgTable("kyc_liveness_sessions", {
+  id:                    serial("id").primaryKey(),
+  sessionId:             varchar("session_id", { length: 64 }).notNull().unique(),
+  applicationId:         varchar("application_id", { length: 64 }),
+  userId:                integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  challenges:            text("challenges").notNull().default("[]"),
+  currentChallengeIndex: integer("current_challenge_index").notNull().default(0),
+  results:               text("results").notNull().default("[]"),
+  overallResult:         varchar("overall_result", { length: 16 }),
+  faceMatchScore:        real("face_match_score"),
+  spoofType:             spoofTypeEnum("spoof_type").default("UNKNOWN"),
+  spoofConfidence:       real("spoof_confidence").default(0),
+  landmarksJson:         text("landmarks_json"),
+  status:                livenessSessionStatusEnum("status").notNull().default("PENDING"),
+  createdAt:             timestamp("created_at").defaultNow().notNull(),
+  updatedAt:             timestamp("updated_at").defaultNow().notNull(),
+});
+export type KycLivenessSession = typeof kycLivenessSessions.$inferSelect;
+export type InsertKycLivenessSession = typeof kycLivenessSessions.$inferInsert;
 
 // ─── Bulk Listing Dual-Authorisation ──────────────────────────────────────────
 export const bulkListingApprovalStatusEnum = pgEnum("bulk_listing_approval_status", [
