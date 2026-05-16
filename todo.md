@@ -793,3 +793,11 @@
 - [x] LivenessChallengeModal React component (camera capture, challenge display, face match flow)
 - [x] LivenessChallengeModal wired into FarmerKYC.tsx onboarding flow
 - [x] Liveness session results displayed in AdminKycDocumentReview.tsx
+
+## Round v57 — Liveness Test Fixes + Final Checkpoint
+- [x] Fixed AdminKycDocumentReview.tsx — removed invalid passiveLivenessScore/completedAt fields, fixed ls.passed → ls.overallResult === "PASS", fixed null userId in livenessByUserId map
+- [x] Fixed server/liveness.test.ts — rewrote using appRouter.createCaller pattern (removed createCallerFactory which is not available)
+- [x] Fixed kycServiceRouter.ts — added .min(1) to startLiveness applicationId and getLivenessSession sessionId validators so empty strings are rejected
+- [x] All 11 liveness tests passing (0 failures)
+- [x] Tests: 621 pass / 298 fail (all ECONNREFUSED - no PostgreSQL in sandbox)
+- [x] 0 TypeScript errors

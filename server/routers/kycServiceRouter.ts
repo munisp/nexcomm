@@ -153,7 +153,7 @@ export const kycServiceRouter = router({
   /** Start a liveness check session — persists session to DB */
   startLiveness: protectedProcedure
     .input(z.object({
-      applicationId: z.string().trim(),
+      applicationId: z.string().trim().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -358,12 +358,17 @@ export const kycServiceRouter = router({
         .orderBy(desc(kycLivenessSessions.createdAt));
       // Deduplicate: keep only the latest session per userId
       const seen = new Set<number>();
-      return rows.filter(r => { if (seen.has(r.userId)) return false; seen.add(r.userId); return true; });
+      return rows.filter(r => {
+        const uid = r.userId ?? 0;
+        if (seen.has(uid)) return false;
+        seen.add(uid);
+        return true;
+      });
     }),
 
   /** Get a single liveness session by ID */
   getLivenessSession: protectedProcedure
-    .input(z.object({ sessionId: z.string().trim() }))
+    .input(z.object({ sessionId: z.string().trim().min(1) }))
     .query(async ({ input }) => {
       const session = await getLivenessSession(input.sessionId);
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });

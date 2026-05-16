@@ -325,7 +325,7 @@ export default function AdminKycDocumentReview() {
   type LivenessSession = NonNullable<typeof livenessSessions>[number];
   const livenessByUserId = useMemo(() => {
     const map: Record<number, LivenessSession> = {};
-    (livenessSessions ?? []).forEach((s) => { map[s.userId] = s; });
+    (livenessSessions ?? []).forEach((s) => { if (s.userId != null) map[s.userId] = s; });
     return map;
   }, [livenessSessions]);
 
@@ -477,24 +477,19 @@ export default function AdminKycDocumentReview() {
                       {/* Liveness session badge */}
                       {ls ? (
                         <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-xs rounded px-2 py-1.5 border ${
-                          ls.passed ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"
+                          ls.overallResult === "PASS" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"
                         }`}>
                           <span className="flex items-center gap-1 font-medium">
-                            {ls.passed ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                            Liveness {ls.passed ? "PASSED" : "FAILED"}
+                            {ls.overallResult === "PASS" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                            Liveness {ls.overallResult === "PASS" ? "PASSED" : "FAILED"}
                           </span>
                           {ls.faceMatchScore != null && (
                             <span>Face match: {Math.round(Number(ls.faceMatchScore) * 100)}%</span>
                           )}
-                          {ls.passiveLivenessScore != null && (
-                            <span>Passive: {Math.round(Number(ls.passiveLivenessScore) * 100)}%</span>
-                          )}
-                          {ls.spoofType && (
+                          {ls.spoofType && ls.spoofType !== "UNKNOWN" && (
                             <span className="text-red-600 font-semibold">⚠ Spoof: {ls.spoofType}</span>
                           )}
-                          {ls.completedAt && (
-                            <span className="text-muted-foreground ml-auto">{new Date(ls.completedAt as string).toLocaleString()}</span>
-                          )}
+                          <span className="text-muted-foreground ml-auto">{new Date(ls.updatedAt).toLocaleString()}</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5 text-xs text-amber-600">
