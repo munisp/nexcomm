@@ -663,6 +663,27 @@ services:
       start_period: 90s
     networks: [nexcom]
 
+  temporal-setup:
+    image: temporalio/admin-tools:1.24.2
+    container_name: nexcom-temporal-setup
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for Temporal to be ready..."
+        until tctl --address temporal:7233 cluster health 2>/dev/null | grep -q "SERVING"; do
+          sleep 3
+        done
+        echo "Temporal is ready. Registering nexcom namespace..."
+        tctl --address temporal:7233 --namespace nexcom namespace describe 2>/dev/null           && echo "Namespace nexcom already exists"           || tctl --address temporal:7233 --namespace nexcom namespace register                --retention 30                --description "NEXCOM Exchange — production workflow namespace"                --history-archival-state disabled                --visibility-archival-state disabled
+        echo "Namespace registration complete."
+    environment:
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+    depends_on:
+      temporal:
+        condition: service_healthy
+    restart: "no"
+    networks: [nexcom]
+
   temporal-ui:
     image: temporalio/ui:2.26.2
     container_name: nexcom-temporal-ui
@@ -693,6 +714,7 @@ services:
       LOG_LEVEL: info
     depends_on:
       - temporal
+      - temporal-setup
       - kafka
       - redis
       - postgres

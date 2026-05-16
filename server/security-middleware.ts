@@ -365,6 +365,27 @@ export async function deepHealthCheck(): Promise<Record<string, { status: "ok" |
     })
   );
 
+  // Permify RBAC health check
+  const permifyUrl = process.env.PERMIFY_URL ?? "http://localhost:3476";
+  const permifyTenant = process.env.PERMIFY_TENANT ?? "nexcom";
+  const permifyStart = Date.now();
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3000);
+    const pr = await fetch(`${permifyUrl}/v1/tenants/${permifyTenant}/schemas/list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ page_size: 1, continuous_token: "" }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    results["permify-rbac"] = pr.ok
+      ? { status: "ok", latencyMs: Date.now() - permifyStart }
+      : { status: "degraded", latencyMs: Date.now() - permifyStart, error: `HTTP ${pr.status}` };
+  } catch (err: unknown) {
+    results["permify-rbac"] = { status: "down", latencyMs: Date.now() - permifyStart, error: err instanceof Error ? err.message : "unknown" };
+  }
+
   return results;
 }
 

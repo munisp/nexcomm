@@ -42,6 +42,7 @@ import { ddosProtection, slowLorisGuard, tradingLimiter, transferLimiter, applyD
 import { ddosCircuitBreaker, bruteForceProtection, inputSanitization, additionalSecurityHeaders, sessionFixationPrevention, csrfProtection, csrfTokenEndpoint } from "../security-middleware";
 import cookieParser from "cookie-parser";
 import { policyStore } from "../pbac";
+import { bootstrapPermify } from "../permify-bootstrap";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -342,6 +343,9 @@ async function startServer() {
   await startAllEngines();
   // Load PBAC policies persisted in the database (merges with in-memory defaults)
   void policyStore.loadFromDb();
+  // Permify RBAC schema bootstrap: writes NEXCOM schema + seeds owner as exchange#admin.
+  // Gracefully degrades if Permify is unreachable.
+  bootstrapPermify().catch(err => console.warn("[Permify Bootstrap] Startup error:", err));
 
   // Graceful shutdown: stop all native engines when Node process exits
   process.on("SIGTERM", async () => { stopAllEngines(); stopMojaloopHealthJob(); await stopKafkaConsumer(); await disconnectKafkaProducer(); process.exit(0); });

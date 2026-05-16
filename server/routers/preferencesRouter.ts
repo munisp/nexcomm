@@ -207,6 +207,39 @@ export const preferencesRouter = router({
       return { ok: true };
     }),
 
+  /** Get per-user margin alert thresholds */
+  getMarginAlertPrefs: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { marginWarningPct: 80, marginCriticalPct: 95 };
+    const [row] = await db
+      .select({ marginWarningPct: userPreferences.marginWarningPct, marginCriticalPct: userPreferences.marginCriticalPct })
+      .from(userPreferences)
+      .where(eq(userPreferences.userId, ctx.user.id))
+      .limit(1);
+    return row ?? { marginWarningPct: 80, marginCriticalPct: 95 };
+  }),
+
+  /** Update per-user margin alert thresholds */
+  updateMarginAlertPrefs: protectedProcedure
+    .input(z.object({
+      marginWarningPct:  z.number().int().min(1).max(99).optional(),
+      marginCriticalPct: z.number().int().min(1).max(100).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { ok: true };
+      const patch: Record<string, number | Date> = { updatedAt: new Date() };
+      if (input.marginWarningPct  !== undefined) patch.marginWarningPct  = input.marginWarningPct;
+      if (input.marginCriticalPct !== undefined) patch.marginCriticalPct = input.marginCriticalPct;
+      const existing = await db.select({ id: userPreferences.id }).from(userPreferences).where(eq(userPreferences.userId, ctx.user.id)).limit(1);
+      if (existing.length > 0) {
+        await db.update(userPreferences).set(patch).where(eq(userPreferences.userId, ctx.user.id));
+      } else {
+        await db.insert(userPreferences).values({ userId: ctx.user.id, ...patch });
+      }
+      return { ok: true };
+    }),
+
   /** List supported languages */
   languages: protectedProcedure.query(async () => {
     return [

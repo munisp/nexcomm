@@ -403,6 +403,9 @@ export const userPreferences = pgTable("user_preferences", {
   survAlertCircuitBreaker:    boolean("surv_alert_circuit_breaker").default(true).notNull(),
   survNotifEmail:             boolean("surv_notif_email").default(true).notNull(),
   survNotifSms:               boolean("surv_notif_sms").default(false).notNull(),
+  // Per-user margin alert thresholds (overrides global defaults of 80%/95%)
+  marginWarningPct:  integer("margin_warning_pct").default(80).notNull(),
+  marginCriticalPct: integer("margin_critical_pct").default(95).notNull(),
 });
 export type UserPreferences = typeof userPreferences.$inferSelect;
 

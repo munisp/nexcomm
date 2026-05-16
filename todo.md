@@ -893,3 +893,11 @@
 - [x] Seed data: seed-comprehensive.mjs (732 lines, 24 entity types), rbac-seed.mjs (Permify relationships), smoke-test.sh (25+ services)
 - [x] All 81 router files registered in routers.ts — zero orphan routers
 - [x] 964/964 tests passing — 0 failures
+
+## Round v61 — Final Production-Readiness Sprint (all suggestions resolved)
+- [ ] Permify schema bootstrap: writePolicy on startup + health-check gate before accepting traffic
+- [ ] Temporal namespace provisioning: temporal-setup docker-compose service (tctl namespace register nexcom)
+- [ ] Per-user surveillance alert thresholds wired into marginAlertJob (custom vs global thresholds)
+- [ ] Full gap audit: any remaining stubs, orphans, or missing integrations
+- [ ] 964+/964 tests passing, 0 TypeScript errors
+- [ ] Comprehensive tar.gz archive generated and compared with v60
