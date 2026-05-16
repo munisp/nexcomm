@@ -4410,8 +4410,6 @@ describe("Phase 35: Settlement Engine — Fail Management", () => {
   const admin = appRouter.createCaller(adminCtx);
 
   async function createCycleWithInstruction() {
-    const db = await getDb();
-    if (!db) throw new Error("DB unavailable");
     const cycleDate = new Date(Date.now() + Math.random() * 86400 * 1000 * 1000);
     const cycle = await admin.settlementEngine.adminCreateCycle({
       cycleDate,
@@ -4419,7 +4417,24 @@ describe("Phase 35: Settlement Engine — Fail Management", () => {
       assetClass: "COMMODITY",
       currency: "NGN",
     });
-    const [instruction] = await db.insert(settlementInstructions).values({
+    const db = await getDb();
+    if (db) {
+      const [instruction] = await db.insert(settlementInstructions).values({
+        cycleId: cycle.id,
+        buyerUserId: 35021,
+        sellerUserId: 35022,
+        instrument: "MAIZE-NGN",
+        quantity: "100",
+        price: "50000",
+        totalValue: "5000000",
+        currency: "NGN",
+        instructionType: "DVP",
+        status: "CONFIRMED",
+      }).returning();
+      return { cycle, instruction };
+    }
+    // In-memory fallback: use adminCreateTestInstruction
+    const instruction = await admin.settlementEngine.adminCreateTestInstruction({
       cycleId: cycle.id,
       buyerUserId: 35021,
       sellerUserId: 35022,
@@ -4427,10 +4442,8 @@ describe("Phase 35: Settlement Engine — Fail Management", () => {
       quantity: "100",
       price: "50000",
       totalValue: "5000000",
-      currency: "NGN",
-      instructionType: "DVP",
       status: "CONFIRMED",
-    }).returning();
+    });
     return { cycle, instruction };
   }
 
@@ -6194,7 +6207,19 @@ describe("Phase 41 — Derivatives & Futures Trading", () => {
 
     beforeAll(async () => {
       const db = await getDb();
-      if (!db) return;
+      if (!db) {
+        // Populate in-memory circuit breaker store when DB is unavailable
+        const { _cbEvents } = await import("./routers/surveillanceRouter");
+        const now = new Date();
+        _cbEvents.set(99999, {
+          id: 99999, ruleId: null, instrument: HALTED_SYMBOL, assetClass: "COMMODITY",
+          triggerPct: "5.00", haltDurationMinutes: 60,
+          haltStartAt: now, haltEndAt: new Date(now.getTime() + 60 * 60 * 1000),
+          liftedAt: null, liftedBy: null, status: "ACTIVE",
+          notes: "Test halt for Phase 41", triggeredBy: null, createdAt: now,
+        } as any);
+        return;
+      }
       // Remove any existing halt for this symbol
       await db.delete(circuitBreakerEvents).where(eq(circuitBreakerEvents.instrument, HALTED_SYMBOL));
       // Insert an active halt
@@ -6927,9 +6952,10 @@ describe("Phase 43-EXT: Bulk KYC, Market Prices, Cooperative", () => {
 
   beforeAll(async () => {
     const db = await getDb();
-    if (!db) return;
-    await db.delete(farmerProfiles).where(eq(farmerProfiles.userId, D43EXT_BASE + 1));
-    await db.delete(farmerProfiles).where(eq(farmerProfiles.userId, D43EXT_BASE + 2));
+    if (db) {
+      await db.delete(farmerProfiles).where(eq(farmerProfiles.userId, D43EXT_BASE + 1));
+      await db.delete(farmerProfiles).where(eq(farmerProfiles.userId, D43EXT_BASE + 2));
+    }
 
     const caller1 = appRouter.createCaller(makeUserCtxD43Ext(D43EXT_BASE + 1));
     const f1 = await caller1.farmer.registerFarmer({
@@ -7501,6 +7527,7 @@ describe("Phase HUB: Unified Onboarding Hub", () => {
 
   beforeAll(async () => {
     const db = await getDb();
+    if (!db) return; // DB unavailable — in-memory stores are used instead
     await db.delete(farmerProfiles).where(inArray(farmerProfiles.userId, [HUB_BASE + 1, HUB_BASE + 2, HUB_BASE + 3]));
     await db.delete(traderProfiles).where(inArray(traderProfiles.userId, [HUB_BASE + 1, HUB_BASE + 2, HUB_BASE + 3]));
     await db.delete(brokerProfiles).where(inArray(brokerProfiles.userId, [HUB_BASE + 1, HUB_BASE + 2, HUB_BASE + 3]));
@@ -7575,6 +7602,7 @@ describe("Phase HUB: KYC Notification Wiring (submitKYC returns UNDER_REVIEW for
 
   beforeAll(async () => {
     const db = await getDb();
+    if (!db) return; // DB unavailable — in-memory stores are used instead
     await db.delete(farmerProfiles).where(inArray(farmerProfiles.userId, [NOTIF_BASE + 1, NOTIF_BASE + 2, NOTIF_BASE + 3, NOTIF_BASE + 4, NOTIF_BASE + 5]));
     await db.delete(traderProfiles).where(inArray(traderProfiles.userId, [NOTIF_BASE + 1, NOTIF_BASE + 2, NOTIF_BASE + 3, NOTIF_BASE + 4, NOTIF_BASE + 5]));
     await db.delete(brokerProfiles).where(inArray(brokerProfiles.userId, [NOTIF_BASE + 1, NOTIF_BASE + 2, NOTIF_BASE + 3, NOTIF_BASE + 4, NOTIF_BASE + 5]));
@@ -7696,6 +7724,7 @@ describe("Phase EDIT: Stakeholder Profile Edit & KYC Reset", () => {
   }
   beforeAll(async () => {
     const db = await getDb();
+    if (!db) return; // DB unavailable — in-memory stores are used instead
     await db.delete(farmerProfiles).where(inArray(farmerProfiles.userId, [EDIT_BASE + 1, EDIT_BASE + 2, EDIT_BASE + 3, EDIT_BASE + 4, EDIT_BASE + 5]));
     await db.delete(traderProfiles).where(inArray(traderProfiles.userId, [EDIT_BASE + 1, EDIT_BASE + 2, EDIT_BASE + 3, EDIT_BASE + 4, EDIT_BASE + 5]));
     await db.delete(brokerProfiles).where(inArray(brokerProfiles.userId, [EDIT_BASE + 1, EDIT_BASE + 2, EDIT_BASE + 3, EDIT_BASE + 4, EDIT_BASE + 5]));

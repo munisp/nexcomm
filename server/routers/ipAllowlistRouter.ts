@@ -6,15 +6,27 @@ import { getDb } from "../db";
 import { adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
 
-// ─── CIDR Matching Utility ────────────────────────────────────────────────────
+// ── In-memory fallback store ──────────────────────────────────────────────────
+type MemEntry = {
+  id: number;
+  cidr: string;
+  label: string;
+  scope: "GLOBAL_ADMIN" | "BULK_OPERATIONS" | "LIQUIDATION_OVERRIDE" | "WITHDRAWAL_APPROVAL";
+  isActive: boolean;
+  createdBy: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+const _memEntries = new Map<number, MemEntry>();
+let _memSeq = 1;
 
+// ─── CIDR Matching Utility ────────────────────────────────────────────────────
 function ipToInt(ip: string): number {
   return ip.split(".").reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 }
 
 function isIpInCidr(ip: string, cidr: string): boolean {
   try {
-    // Handle IPv6 loopback / non-IPv4
     if (!ip || ip.includes(":")) return false;
     const [network, prefixStr] = cidr.split("/");
     const prefix = parseInt(prefixStr ?? "32", 10);
@@ -25,12 +37,6 @@ function isIpInCidr(ip: string, cidr: string): boolean {
   }
 }
 
-/**
- * Check if an IP address is allowed for a given scope.
- * If no active entries exist for the scope, the allowlist is considered
- * "not configured" and access is permitted (open by default).
- * Returns { allowed, reason }.
- */
 export async function checkIpAllowlist(
   ip: string,
   scope: "GLOBAL_ADMIN" | "BULK_OPERATIONS" | "LIQUIDATION_OVERRIDE" | "WITHDRAWAL_APPROVAL"
@@ -58,10 +64,6 @@ export async function checkIpAllowlist(
   };
 }
 
-/**
- * tRPC middleware factory: enforces IP allowlist for a given scope.
- * Logs a SUSPICIOUS_IP security event when access is denied.
- */
 export async function enforceIpAllowlist(
   ip: string,
   scope: "GLOBAL_ADMIN" | "BULK_OPERATIONS" | "LIQUIDATION_OVERRIDE" | "WITHDRAWAL_APPROVAL",
@@ -70,7 +72,6 @@ export async function enforceIpAllowlist(
   const { allowed, reason } = await checkIpAllowlist(ip, scope);
   if (allowed) return;
 
-  // Log security event
   const db = await getDb();
   if (db) {
     await db.insert(securityEvents).values({
@@ -92,9 +93,7 @@ export async function enforceIpAllowlist(
 }
 
 // ─── tRPC Router ─────────────────────────────────────────────────────────────
-
 export const ipAllowlistRouter = router({
-  /** Admin: list all IP allowlist entries */
   adminList: adminProcedure
     .input(z.object({
       scope: z.enum(["GLOBAL_ADMIN", "BULK_OPERATIONS", "LIQUIDATION_OVERRIDE", "WITHDRAWAL_APPROVAL", "ALL"]).default("ALL"),
@@ -102,22 +101,20 @@ export const ipAllowlistRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) return [];
-
+      if (!db) {
+        return Array.from(_memEntries.values())
+          .filter(e => (input.includeInactive || e.isActive) && (input.scope === "ALL" || e.scope === input.scope));
+      }
       const conditions = [];
       if (!input.includeInactive) conditions.push(eq(ipAllowlist.isActive, true));
       if (input.scope !== "ALL") conditions.push(eq(ipAllowlist.scope, input.scope));
-
-      const rows = await db
+      return db
         .select()
         .from(ipAllowlist)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(ipAllowlist.createdAt));
-
-      return rows;
     }),
 
-  /** Admin: add a new CIDR entry */
   adminCreate: adminProcedure
     .input(z.object({
       cidr: z.string().regex(
@@ -129,68 +126,51 @@ export const ipAllowlistRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
-
+      if (!db) {
+        const id = _memSeq++;
+        const now = new Date();
+        _memEntries.set(id, { id, cidr: input.cidr, label: input.label, scope: input.scope, isActive: true, createdBy: ctx.user.id, createdAt: now, updatedAt: now });
+        return { success: true, id };
+      }
       const [entry] = await db
         .insert(ipAllowlist)
-        .values({
-          cidr: input.cidr,
-          label: input.label,
-          scope: input.scope,
-          isActive: true,
-          createdBy: ctx.user.id,
-        })
+        .values({ cidr: input.cidr, label: input.label, scope: input.scope, isActive: true, createdBy: ctx.user.id })
         .returning();
-
       return { success: true, id: entry.id };
     }),
 
-  /** Admin: toggle an entry active/inactive */
   adminToggle: adminProcedure
-    .input(z.object({
-      id: z.number().int().positive(),
-      isActive: z.boolean(),
-    }))
+    .input(z.object({ id: z.number().int().positive(), isActive: z.boolean() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
-
-      const [existing] = await db
-        .select()
-        .from(ipAllowlist)
-        .where(eq(ipAllowlist.id, input.id))
-        .limit(1);
-
+      if (!db) {
+        const e = _memEntries.get(input.id);
+        if (!e) throw new TRPCError({ code: "NOT_FOUND", message: "Entry not found" });
+        e.isActive = input.isActive;
+        e.updatedAt = new Date();
+        return { success: true };
+      }
+      const [existing] = await db.select().from(ipAllowlist).where(eq(ipAllowlist.id, input.id)).limit(1);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Entry not found" });
-
-      await db
-        .update(ipAllowlist)
-        .set({ isActive: input.isActive, updatedAt: new Date() })
-        .where(eq(ipAllowlist.id, input.id));
-
+      await db.update(ipAllowlist).set({ isActive: input.isActive, updatedAt: new Date() }).where(eq(ipAllowlist.id, input.id));
       return { success: true };
     }),
 
-  /** Admin: delete an entry */
   adminDelete: adminProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
-
-      const [existing] = await db
-        .select()
-        .from(ipAllowlist)
-        .where(eq(ipAllowlist.id, input.id))
-        .limit(1);
-
+      if (!db) {
+        if (!_memEntries.has(input.id)) throw new TRPCError({ code: "NOT_FOUND", message: "Entry not found" });
+        _memEntries.delete(input.id);
+        return { success: true };
+      }
+      const [existing] = await db.select().from(ipAllowlist).where(eq(ipAllowlist.id, input.id)).limit(1);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Entry not found" });
-
       await db.delete(ipAllowlist).where(eq(ipAllowlist.id, input.id));
       return { success: true };
     }),
 
-  /** Admin: check if a specific IP is allowed for a scope */
   adminCheckIp: adminProcedure
     .input(z.object({
       ip: z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/, "Must be a valid IPv4 address"),

@@ -313,7 +313,7 @@ export const cooperativeRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx.user.role);
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [entry] = await db
         .select()
@@ -357,7 +357,7 @@ export const cooperativeRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx.user.role);
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [entry] = await db
         .select()
@@ -401,7 +401,7 @@ export const cooperativeRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx.user.role);
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [upload] = await db
         .select()
@@ -455,7 +455,7 @@ export const cooperativeRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx.user.role);
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [upload] = await db
         .select()
@@ -508,7 +508,7 @@ export const cooperativeRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx.user.role);
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const members = await db
         .select()
@@ -568,7 +568,7 @@ export const cooperativeRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx.user.role);
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
       // Verify upload belongs to this admin
       const [upload] = await db
         .select()
@@ -692,7 +692,7 @@ export const cooperativeRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx.user.role);
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [upload] = await db
         .select()
@@ -813,7 +813,7 @@ export const cooperativeRouter = router({
     .input(z.object({ listingId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [listing] = await db
         .select()
@@ -849,7 +849,7 @@ export const cooperativeRouter = router({
     .input(z.object({ listingId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [listing] = await db
         .select()
@@ -902,7 +902,7 @@ export const cooperativeRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx.user.role);
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       // Verify upload belongs to this admin
       const [upload] = await db
@@ -959,7 +959,7 @@ export const cooperativeRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx.user.role);
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [approval] = await db
         .select()

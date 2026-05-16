@@ -33,6 +33,10 @@ export const ENV = {
   fraudEngineUrl: process.env.FRAUD_ENGINE_URL ?? "http://localhost:8011",
   creditScoringUrl: process.env.CREDIT_SCORING_URL ?? "http://localhost:8012",
 
+  // Workflow & ledger infrastructure
+  temporalUrl: process.env.TEMPORAL_URL ?? "http://localhost:7233",
+  tigerBeetleUrl: process.env.TIGERBEETLE_URL ?? "http://localhost:3001",
+  daprHttpUrl: process.env.DAPR_HTTP_URL ?? "http://localhost:3500",
   // Channel gateway secrets — set in production Secrets panel
   africastalkingApiKey: process.env.AFRICASTALKING_API_KEY ?? "",
   africastalkingUsername: process.env.AFRICASTALKING_USERNAME ?? "sandbox",

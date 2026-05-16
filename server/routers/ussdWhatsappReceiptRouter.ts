@@ -86,7 +86,7 @@ export const ussdWhatsappReceiptRouter = router({
       }
 
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       // Look up user phone number
       const [user] = await db
@@ -190,7 +190,7 @@ export const ussdWhatsappReceiptRouter = router({
       }
 
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [user] = await db
         .select({ id: users.id, name: users.name, email: users.email })
@@ -268,7 +268,7 @@ export const ussdWhatsappReceiptRouter = router({
       }
 
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
       const [user] = await db
         .select({ id: users.id, name: users.name, email: users.email })

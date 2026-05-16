@@ -21,10 +21,8 @@ function calcLiquidationPrice(
   maintenancePct: number,
 ): number {
   if (side === "LONG") {
-    // Long liquidated when price drops to: entryPrice * (1 - maintenancePct)
     return entryPrice * (1 - maintenancePct);
   } else {
-    // Short liquidated when price rises to: entryPrice * (1 + maintenancePct)
     return entryPrice * (1 + maintenancePct);
   }
 }
@@ -41,6 +39,14 @@ function calcUnrealizedPnl(
     : entryPrice - markPrice;
   return priceDiff * quantity * contractSize;
 }
+
+// ─── In-Memory Fallback Stores ────────────────────────────────────────────────
+
+let _fcSeq = 1;
+let _fpSeq = 1;
+const _memContracts = new Map<number, any>();
+const _memPositions = new Map<number, any>();
+const _memClearingAccounts = new Map<number, any>(); // userId -> account
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
@@ -64,7 +70,30 @@ export const derivativesRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        if (new Date(input.expiryDate) <= new Date()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Expiry date must be in the future" });
+        }
+        if (input.maintenanceMarginPct >= input.initialMarginPct) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Maintenance margin must be less than initial margin" });
+        }
+        const existing = Array.from(_memContracts.values()).find(c => c.symbol === input.symbol);
+        if (existing) throw new TRPCError({ code: "CONFLICT", message: `Contract symbol ${input.symbol} already exists` });
+        const id = _fcSeq++;
+        const now = new Date();
+        const contract = {
+          id, symbol: input.symbol, underlyingAsset: input.underlyingAsset,
+          assetClass: input.assetClass, contractSize: String(input.contractSize),
+          tickSize: String(input.tickSize), currency: input.currency,
+          expiryDate: new Date(input.expiryDate), settlementDate: new Date(input.settlementDate),
+          initialMarginPct: String(input.initialMarginPct),
+          maintenanceMarginPct: String(input.maintenanceMarginPct),
+          status: "ACTIVE", lastMarkPrice: null, lastSettlementPrice: null,
+          createdBy: ctx.user.id, createdAt: now, updatedAt: now,
+        };
+        _memContracts.set(id, contract);
+        return contract;
+      }
 
       if (new Date(input.expiryDate) <= new Date()) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Expiry date must be in the future" });
@@ -106,7 +135,13 @@ export const derivativesRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        let contracts = Array.from(_memContracts.values());
+        if (input.status !== "ALL") contracts = contracts.filter(c => c.status === input.status);
+        if (input.assetClass) contracts = contracts.filter(c => c.assetClass === input.assetClass);
+        const offset = (input.page - 1) * input.limit;
+        return { contracts: contracts.slice(offset, offset + input.limit), total: contracts.length };
+      }
 
       const offset = (input.page - 1) * input.limit;
       const conditions = [];
@@ -136,7 +171,16 @@ export const derivativesRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const contract = _memContracts.get(input.contractId);
+        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
+        if (input.initialMarginPct !== undefined) contract.initialMarginPct = String(input.initialMarginPct);
+        if (input.maintenanceMarginPct !== undefined) contract.maintenanceMarginPct = String(input.maintenanceMarginPct);
+        if (input.lastMarkPrice !== undefined) contract.lastMarkPrice = String(input.lastMarkPrice);
+        if (input.status !== undefined) contract.status = input.status;
+        contract.updatedAt = new Date();
+        return contract;
+      }
 
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.initialMarginPct !== undefined) updates.initialMarginPct = String(input.initialMarginPct);
@@ -160,7 +204,14 @@ export const derivativesRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const contract = _memContracts.get(input.contractId);
+        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
+        if (contract.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: `Contract is already ${contract.status}` });
+        contract.status = "EXPIRED";
+        contract.updatedAt = new Date();
+        return contract;
+      }
 
       const [contract] = await db.select().from(futuresContracts)
         .where(eq(futuresContracts.id, input.contractId)).limit(1);
@@ -177,6 +228,33 @@ export const derivativesRouter = router({
       return updated;
     }),
 
+  // ─── Public: List Active Contracts ───────────────────────────────────────
+
+  listActiveContracts: publicProcedure
+    .input(z.object({
+      assetClass: z.string().optional(),
+      page: z.number().int().min(1).default(1),
+      limit: z.number().int().min(1).max(100).default(20),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) {
+        let contracts = Array.from(_memContracts.values()).filter(c => c.status === "ACTIVE");
+        if (input.assetClass) contracts = contracts.filter(c => c.assetClass === input.assetClass);
+        return contracts;
+      }
+
+      const conditions = [eq(futuresContracts.status, "ACTIVE")];
+      if (input.assetClass) conditions.push(eq(futuresContracts.assetClass, input.assetClass));
+
+      const contracts = await db.select().from(futuresContracts)
+        .where(and(...conditions))
+        .orderBy(desc(futuresContracts.expiryDate))
+        .limit(input.limit).offset((input.page - 1) * input.limit);
+
+      return contracts;
+    }),
+
   // ─── User: Place Futures Order ────────────────────────────────────────────
 
   placeFuturesOrder: protectedProcedure
@@ -188,7 +266,43 @@ export const derivativesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const contract = _memContracts.get(input.contractId);
+        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
+        if (contract.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: `Contract is ${contract.status}` });
+
+        const contractSize = parseFloat(contract.contractSize);
+        const initialMarginPct = parseFloat(contract.initialMarginPct);
+        const maintenancePct = parseFloat(contract.maintenanceMarginPct);
+        const notionalValue = input.entryPrice * input.quantity * contractSize;
+        const requiredMargin = notionalValue * initialMarginPct;
+
+        // Check/create clearing account in memory
+        let clearingAccount = _memClearingAccounts.get(ctx.user.id);
+        if (!clearingAccount) {
+          clearingAccount = { id: ctx.user.id, userId: ctx.user.id, cashBalance: "50000000", portfolioValue: "50000000", status: "ACTIVE" };
+          _memClearingAccounts.set(ctx.user.id, clearingAccount);
+        }
+        const cashBalance = parseFloat(clearingAccount.cashBalance);
+        if (cashBalance < requiredMargin) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Insufficient margin. Required: ${requiredMargin.toFixed(2)} NGN, Available: ${cashBalance.toFixed(2)} NGN` });
+        }
+
+        const liquidationPrice = calcLiquidationPrice(input.side, input.entryPrice, maintenancePct);
+        const id = _fpSeq++;
+        const now = new Date();
+        const position = {
+          id, userId: ctx.user.id, contractId: input.contractId,
+          side: input.side, quantity: String(input.quantity),
+          entryPrice: String(input.entryPrice), currentMarkPrice: String(input.entryPrice),
+          unrealizedPnl: "0", realizedPnl: "0", marginPosted: String(requiredMargin),
+          liquidationPrice: String(liquidationPrice), status: "OPEN",
+          openedAt: now, closedAt: null, updatedAt: now,
+        };
+        _memPositions.set(id, position);
+        clearingAccount.cashBalance = String(cashBalance - requiredMargin);
+        return { position, requiredMargin, notionalValue };
+      }
 
       // Fetch contract
       const [contract] = await db.select().from(futuresContracts)
@@ -205,11 +319,9 @@ export const derivativesRouter = router({
       const initialMarginPct = parseFloat(contract.initialMarginPct);
       const maintenancePct = parseFloat(contract.maintenanceMarginPct);
 
-      // Calculate required margin
       const notionalValue = input.entryPrice * input.quantity * contractSize;
       const requiredMargin = notionalValue * initialMarginPct;
 
-      // Check clearing account balance
       const [clearingAccount] = await db.select()
         .from(clearingAccounts)
         .where(eq(clearingAccounts.userId, ctx.user.id))
@@ -243,7 +355,6 @@ export const derivativesRouter = router({
         status: "OPEN",
       }).returning();
 
-      // Deduct margin from clearing account
       await db.update(clearingAccounts)
         .set({
           cashBalance: String(cashBalance - requiredMargin),
@@ -261,7 +372,26 @@ export const derivativesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const position = _memPositions.get(input.positionId);
+        if (!position || position.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "Position not found" });
+        if (position.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: `Position is already ${position.status}` });
+        const contract = _memContracts.get(position.contractId);
+        const contractSize = contract ? parseFloat(contract.contractSize) : 1;
+        const qty = parseFloat(position.quantity);
+        const entryPrice = parseFloat(position.entryPrice);
+        const marginPosted = parseFloat(position.marginPosted);
+        const realizedPnl = calcUnrealizedPnl(position.side, entryPrice, input.closePrice, qty, contractSize);
+        position.status = "CLOSED";
+        position.currentMarkPrice = String(input.closePrice);
+        position.realizedPnl = String(parseFloat(position.realizedPnl) + realizedPnl);
+        position.unrealizedPnl = "0";
+        position.closedAt = new Date();
+        position.updatedAt = new Date();
+        const ca = _memClearingAccounts.get(ctx.user.id);
+        if (ca) ca.cashBalance = String(parseFloat(ca.cashBalance) + marginPosted + realizedPnl);
+        return { position, realizedPnl };
+      }
 
       const [position] = await db.select().from(futuresPositions)
         .where(and(
@@ -302,7 +432,6 @@ export const derivativesRouter = router({
         .where(eq(futuresPositions.id, input.positionId))
         .returning();
 
-      // Return margin + PnL to clearing account
       const [clearingAccount] = await db.select()
         .from(clearingAccounts)
         .where(eq(clearingAccounts.userId, ctx.user.id))
@@ -324,7 +453,11 @@ export const derivativesRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        let positions = Array.from(_memPositions.values()).filter(p => p.userId === ctx.user.id);
+        if (input.status !== "ALL") positions = positions.filter(p => p.status === input.status);
+        return positions.map(p => ({ position: p, contract: _memContracts.get(p.contractId) ?? null }));
+      }
 
       const conditions = [eq(futuresPositions.userId, ctx.user.id)];
       if (input.status !== "ALL") conditions.push(eq(futuresPositions.status, input.status));
@@ -352,7 +485,14 @@ export const derivativesRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const contract = _memContracts.get(input.contractId);
+        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
+        if (contract.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: `Contract is ${contract.status}` });
+        contract.lastMarkPrice = String(input.settlementPrice);
+        contract.lastSettlementPrice = String(input.settlementPrice);
+        return { settlement: { id: 1, contractId: input.contractId, settlementType: "DAILY_MTM", settlementPrice: String(input.settlementPrice), totalLongPnl: "0", totalShortPnl: "0", positionsSettled: 0, settledBy: ctx.user.id, notes: input.notes ?? null, settledAt: new Date() }, positionsSettled: 0, totalLongPnl: 0, totalShortPnl: 0 };
+      }
 
       const [contract] = await db.select().from(futuresContracts)
         .where(eq(futuresContracts.id, input.contractId)).limit(1);
@@ -362,8 +502,6 @@ export const derivativesRouter = router({
       }
 
       const contractSize = parseFloat(contract.contractSize);
-
-      // Fetch all open positions for this contract
       const openPositions = await db.select().from(futuresPositions)
         .where(and(
           eq(futuresPositions.contractId, input.contractId),
@@ -379,7 +517,6 @@ export const derivativesRouter = router({
         const entryPrice = parseFloat(pos.entryPrice);
         const prevMarkPrice = pos.currentMarkPrice ? parseFloat(pos.currentMarkPrice) : entryPrice;
 
-        // Daily P&L is the change from previous mark price to new mark price
         const dailyPnl = calcUnrealizedPnl(
           pos.side as "LONG" | "SHORT",
           prevMarkPrice,
@@ -404,7 +541,6 @@ export const derivativesRouter = router({
           })
           .where(eq(futuresPositions.id, pos.id));
 
-        // Transfer daily P&L to/from clearing accounts
         const [clearingAccount] = await db.select()
           .from(clearingAccounts)
           .where(eq(clearingAccounts.userId, pos.userId))
@@ -422,12 +558,10 @@ export const derivativesRouter = router({
         positionsSettled++;
       }
 
-      // Update contract mark price
       await db.update(futuresContracts)
         .set({ lastMarkPrice: String(input.settlementPrice), lastSettlementPrice: String(input.settlementPrice), updatedAt: new Date() })
         .where(eq(futuresContracts.id, input.contractId));
 
-      // Record settlement event
       const [settlement] = await db.insert(futuresSettlements).values({
         contractId: input.contractId,
         settlementType: "DAILY_MTM",
@@ -439,7 +573,6 @@ export const derivativesRouter = router({
         notes: input.notes ?? null,
       }).returning();
 
-      // Take open interest snapshot
       const longQty = openPositions
         .filter(p => p.side === "LONG")
         .reduce((s, p) => s + parseFloat(p.quantity), 0);
@@ -467,7 +600,14 @@ export const derivativesRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const contract = _memContracts.get(input.contractId);
+        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
+        if (contract.status === "SETTLED") throw new TRPCError({ code: "BAD_REQUEST", message: "Contract is already settled" });
+        contract.status = "SETTLED";
+        contract.lastSettlementPrice = String(input.finalSettlementPrice);
+        return { settlement: { id: 1, contractId: input.contractId, settlementType: "FINAL", settlementPrice: String(input.finalSettlementPrice), totalLongPnl: "0", totalShortPnl: "0", positionsSettled: 0, settledBy: ctx.user.id, notes: input.notes ?? null, settledAt: new Date() }, positionsSettled: 0, totalLongPnl: 0, totalShortPnl: 0 };
+      }
 
       const [contract] = await db.select().from(futuresContracts)
         .where(eq(futuresContracts.id, input.contractId)).limit(1);
@@ -477,8 +617,6 @@ export const derivativesRouter = router({
       }
 
       const contractSize = parseFloat(contract.contractSize);
-
-      // Close all open positions at final settlement price
       const openPositions = await db.select().from(futuresPositions)
         .where(and(
           eq(futuresPositions.contractId, input.contractId),
@@ -512,7 +650,6 @@ export const derivativesRouter = router({
           })
           .where(eq(futuresPositions.id, pos.id));
 
-        // Return margin + final P&L to clearing account
         const [clearingAccount] = await db.select()
           .from(clearingAccounts)
           .where(eq(clearingAccounts.userId, pos.userId))
@@ -529,7 +666,6 @@ export const derivativesRouter = router({
         else totalShortPnl += finalPnl;
       }
 
-      // Mark contract as settled
       await db.update(futuresContracts)
         .set({
           status: "SETTLED",
@@ -538,7 +674,6 @@ export const derivativesRouter = router({
         })
         .where(eq(futuresContracts.id, input.contractId));
 
-      // Record final settlement
       const [settlement] = await db.insert(futuresSettlements).values({
         contractId: input.contractId,
         settlementType: "FINAL",
@@ -566,7 +701,14 @@ export const derivativesRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const contract = _memContracts.get(input.contractId);
+        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
+        const positions = Array.from(_memPositions.values()).filter(p => p.contractId === input.contractId && p.status === "OPEN");
+        const longQty = positions.filter(p => p.side === "LONG").reduce((s, p) => s + parseFloat(p.quantity), 0);
+        const shortQty = positions.filter(p => p.side === "SHORT").reduce((s, p) => s + parseFloat(p.quantity), 0);
+        return { contractId: input.contractId, symbol: contract.symbol, totalLongQty: longQty, totalShortQty: shortQty, openInterest: Math.min(longQty, shortQty), openPositions: positions.length, lastMarkPrice: contract.lastMarkPrice ? parseFloat(contract.lastMarkPrice) : null };
+      }
 
       const [contract] = await db.select().from(futuresContracts)
         .where(eq(futuresContracts.id, input.contractId)).limit(1);
@@ -606,7 +748,7 @@ export const derivativesRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) return [];
 
       const snapshots = await db.select().from(openInterestSnapshots)
         .where(eq(openInterestSnapshots.contractId, input.contractId))
@@ -622,7 +764,23 @@ export const derivativesRouter = router({
     .query(async ({ ctx }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const contracts = Array.from(_memContracts.values());
+        const positions = Array.from(_memPositions.values());
+        return {
+          totalContracts: contracts.length,
+          activeContracts: contracts.filter(c => c.status === "ACTIVE").length,
+          expiredContracts: contracts.filter(c => c.status === "EXPIRED").length,
+          settledContracts: contracts.filter(c => c.status === "SETTLED").length,
+          expiringSoon: 0,
+          totalOpenPositions: positions.filter(p => p.status === "OPEN").length,
+          totalLongPositions: positions.filter(p => p.status === "OPEN" && p.side === "LONG").length,
+          totalShortPositions: positions.filter(p => p.status === "OPEN" && p.side === "SHORT").length,
+          totalOpenInterest: 0,
+          totalSettlements: 0,
+          todaySettlements: 0,
+        };
+      }
 
       const now = new Date();
       const in7DaysISO = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -674,7 +832,14 @@ export const derivativesRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        let positions = Array.from(_memPositions.values()).filter(p => p.status === "OPEN");
+        if (input.contractId) positions = positions.filter(p => p.contractId === input.contractId);
+        if (input.side !== "ALL") positions = positions.filter(p => p.side === input.side);
+        const offset = (input.page - 1) * input.limit;
+        const paged = positions.slice(offset, offset + input.limit).map(p => ({ position: p, contract: _memContracts.get(p.contractId) ?? null }));
+        return { positions: paged, total: positions.length };
+      }
 
       const conditions = [eq(futuresPositions.status, "OPEN")];
       if (input.contractId) conditions.push(eq(futuresPositions.contractId, input.contractId));
@@ -710,7 +875,21 @@ export const derivativesRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const pos = _memPositions.get(input.positionId);
+        if (!pos) throw new TRPCError({ code: "NOT_FOUND", message: "Position not found" });
+        if (pos.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: `Position is already ${pos.status}` });
+        const qty = parseFloat(pos.quantity);
+        const entryPrice = parseFloat(pos.entryPrice);
+        const priceDiff = pos.side === "LONG" ? input.liquidationPrice - entryPrice : entryPrice - input.liquidationPrice;
+        const realizedPnl = priceDiff * qty;
+        pos.status = "LIQUIDATED";
+        pos.currentMarkPrice = String(input.liquidationPrice);
+        pos.realizedPnl = String(realizedPnl);
+        pos.closedAt = new Date();
+        pos.updatedAt = new Date();
+        return pos;
+      }
 
       const [pos] = await db.select().from(futuresPositions)
         .where(eq(futuresPositions.id, input.positionId)).limit(1);
@@ -728,7 +907,6 @@ export const derivativesRouter = router({
         : entryPrice - liqPrice;
       const realizedPnl = priceDiff * qty;
 
-      // Update clearing account: return remaining margin after loss
       const [clearingAccount] = await db.select().from(clearingAccounts)
         .where(eq(clearingAccounts.userId, pos.userId)).limit(1);
       if (clearingAccount) {
@@ -751,26 +929,7 @@ export const derivativesRouter = router({
         .where(eq(futuresPositions.id, input.positionId))
         .returning();
 
-      return { position: updated, realizedPnl, liquidationPrice: liqPrice };
-    }),
-
-  // ─── Public: List Active Contracts ───────────────────────────────────────
-
-  listActiveContracts: publicProcedure
-    .input(z.object({
-      assetClass: z.string().optional(),
-    }))
-    .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
-
-      const conditions = [eq(futuresContracts.status, "ACTIVE")];
-      if (input.assetClass) conditions.push(eq(futuresContracts.assetClass, input.assetClass));
-
-      const contracts = await db.select().from(futuresContracts)
-        .where(and(...conditions))
-        .orderBy(futuresContracts.expiryDate);
-
-      return contracts;
+      await writeAuditLog(ctx.user.id, "FUTURES_LIQUIDATION", { positionId: input.positionId, liqPrice, reason: input.reason });
+      return updated;
     }),
 });

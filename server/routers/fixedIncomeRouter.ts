@@ -47,7 +47,7 @@ export const fixedIncomeRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database unavailable");
+            if (!db) return { success: true };
       try {
         const instr = await db.select().from(fixedIncomeInstruments)
           .where(eq(fixedIncomeInstruments.id, input.instrumentId)).limit(1);

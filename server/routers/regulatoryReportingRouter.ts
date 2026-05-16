@@ -352,7 +352,24 @@ export function computeNextRunAt(
   return next;
 }
 
-// ─── Router ──────────────────────────────────────────────────────────────────
+// ─── In-memory fallback stores ──────────────────────────────────────────────
+type MemReport = {
+  id: number; reportType: string; reportDate: Date; periodStart: Date; periodEnd: Date;
+  assetClass: string | null; format: string; status: string; content: string | null;
+  rowCount: number | null; fileSize: number | null; generatedBy: number | null;
+  scheduleId: number | null; errorMessage: string | null; createdAt: Date; updatedAt: Date;
+};
+type MemSchedule = {
+  id: number; reportType: string; assetClass: string | null; format: string;
+  frequency: string; dayOfWeek: number | null; dayOfMonth: number | null;
+  timeUtc: string; isActive: boolean; nextRunAt: Date | null; lastRunAt: Date | null;
+  createdBy: number | null; createdAt: Date; updatedAt: Date;
+};
+const _memReports = new Map<number, MemReport>();
+const _memSchedules = new Map<number, MemSchedule>();
+let _repSeq = 1;
+let _schSeq = 1;
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const regulatoryReportingRouter = router({
   // ── Admin: generate a report ──────────────────────────────────────────────
@@ -368,7 +385,25 @@ export const regulatoryReportingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      if (!db) {
+        const { content, rowCount } = await generateReportContent(
+          input.reportType, input.periodStart, input.periodEnd,
+          input.assetClass ?? null, input.format
+        );
+        const id = _repSeq++;
+        const now = new Date();
+        const report: MemReport = {
+          id, reportType: input.reportType, reportDate: now,
+          periodStart: input.periodStart, periodEnd: input.periodEnd,
+          assetClass: input.assetClass ?? null, format: input.format,
+          status: "READY", content, rowCount, fileSize: Buffer.byteLength(content, "utf8"),
+          generatedBy: ctx.user.id, scheduleId: null, errorMessage: null,
+          createdAt: now, updatedAt: now,
+        };
+        _memReports.set(id, report);
+        return report;
+      }
 
       // Create report record in PENDING state
       const [report] = await db
@@ -431,7 +466,12 @@ export const regulatoryReportingRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) return [];
+      if (!db) {
+        let results = Array.from(_memReports.values());
+        if (input.reportType) results = results.filter(r => r.reportType === input.reportType);
+        results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        return results.slice(input.offset, input.offset + input.limit);
+      }
 
       const conditions = [];
       if (input.reportType) conditions.push(eq(regulatoryReports.reportType, input.reportType));
@@ -464,7 +504,14 @@ export const regulatoryReportingRouter = router({
     .input(z.object({ reportId: z.number().int() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!db) {
+        const report = _memReports.get(input.reportId);
+        if (!report) throw new TRPCError({ code: "NOT_FOUND", message: "Report not found" });
+        if (report.status !== "READY") throw new TRPCError({ code: "BAD_REQUEST", message: "Report is not ready" });
+        return { id: report.id, reportType: report.reportType, format: report.format,
+          content: report.content ?? "", rowCount: report.rowCount, fileSize: report.fileSize,
+          periodStart: report.periodStart, periodEnd: report.periodEnd };
+      }
 
       const [report] = await db
         .select()
@@ -494,7 +541,7 @@ export const regulatoryReportingRouter = router({
     .input(z.object({ reportId: z.number().int() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!db) { _memReports.delete(input.reportId); return { success: true }; }
 
       await db
         .delete(regulatoryReports)
@@ -506,7 +553,12 @@ export const regulatoryReportingRouter = router({
   // ── Admin: get report stats ───────────────────────────────────────────────
   adminGetReportStats: adminProcedure.query(async () => {
     const db = await getDb();
-    if (!db) return { total: 0, ready: 0, failed: 0, generating: 0 };
+    if (!db) {
+      const all = Array.from(_memReports.values());
+      return { total: all.length, ready: all.filter(r => r.status === "READY").length,
+        failed: all.filter(r => r.status === "FAILED").length,
+        generating: all.filter(r => r.status === "GENERATING").length };
+    }
 
     const all = await db.select({ status: regulatoryReports.status }).from(regulatoryReports);
     return {
@@ -532,7 +584,21 @@ export const regulatoryReportingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      if (!db) {
+        const id = _schSeq++;
+        const now = new Date();
+        const nextRunAt = computeNextRunAt(input.frequency, input.dayOfWeek ?? null, input.dayOfMonth ?? null, input.timeUtc);
+        const schedule: MemSchedule = {
+          id, reportType: input.reportType, assetClass: input.assetClass ?? null,
+          format: input.format, frequency: input.frequency,
+          dayOfWeek: input.dayOfWeek ?? null, dayOfMonth: input.dayOfMonth ?? null,
+          timeUtc: input.timeUtc, isActive: true, nextRunAt, lastRunAt: null,
+          createdBy: ctx.user.id, createdAt: now, updatedAt: now,
+        };
+        _memSchedules.set(id, schedule);
+        return schedule;
+      }
 
       const nextRunAt = computeNextRunAt(
         input.frequency,
@@ -563,7 +629,9 @@ export const regulatoryReportingRouter = router({
   // ── Admin: list schedules ─────────────────────────────────────────────────
   adminListSchedules: adminProcedure.query(async () => {
     const db = await getDb();
-    if (!db) return [];
+    if (!db) {
+      return Array.from(_memSchedules.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }
 
     return db
       .select()
@@ -576,7 +644,12 @@ export const regulatoryReportingRouter = router({
     .input(z.object({ scheduleId: z.number().int() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!db) {
+        const s = _memSchedules.get(input.scheduleId);
+        if (!s) throw new TRPCError({ code: "NOT_FOUND" });
+        s.isActive = false;
+        return s;
+      }
 
       const [updated] = await db
         .update(regulatoryReportSchedules)
@@ -593,7 +666,28 @@ export const regulatoryReportingRouter = router({
     .input(z.object({ scheduleId: z.number().int() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      if (!db) {
+        const schedule = _memSchedules.get(input.scheduleId);
+        if (!schedule) throw new TRPCError({ code: "NOT_FOUND" });
+        const now = new Date();
+        const periodStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const { content, rowCount } = await generateReportContent(
+          schedule.reportType, periodStart, now, schedule.assetClass ?? null, schedule.format as "CSV" | "JSON"
+        );
+        const id = _repSeq++;
+        const report: MemReport = {
+          id, reportType: schedule.reportType, reportDate: now, periodStart, periodEnd: now,
+          assetClass: schedule.assetClass ?? null, format: schedule.format, status: "READY",
+          content, rowCount, fileSize: Buffer.byteLength(content, "utf8"),
+          generatedBy: ctx.user.id, scheduleId: schedule.id, errorMessage: null,
+          createdAt: now, updatedAt: now,
+        };
+        _memReports.set(id, report);
+        schedule.lastRunAt = now;
+        schedule.nextRunAt = computeNextRunAt(schedule.frequency, schedule.dayOfWeek ?? null, schedule.dayOfMonth ?? null, schedule.timeUtc, now);
+        return report;
+      }
 
       const [schedule] = await db
         .select()
@@ -677,7 +771,12 @@ export const regulatoryReportingRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return [];
+      if (!db) {
+        return Array.from(_memReports.values())
+          .filter(r => r.generatedBy === ctx.user.id)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(input.offset, input.offset + input.limit);
+      }
 
       return db
         .select({

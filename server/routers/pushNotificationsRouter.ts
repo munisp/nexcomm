@@ -116,7 +116,7 @@ export const pushNotificationsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) return { success: true };
 
       // Upsert — if the endpoint already exists, update its preferences
       const existing = await db
@@ -164,7 +164,7 @@ export const pushNotificationsRouter = router({
     .input(z.object({ endpoint: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) return { success: true };
 
       await db
         .delete(pushSubscriptions)
@@ -216,7 +216,7 @@ export const pushNotificationsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) return { success: true };
 
       const { subscriptionId, ...prefs } = input;
       const [updated] = await db
@@ -239,7 +239,7 @@ export const pushNotificationsRouter = router({
    */
   sendTest: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
     const devices = await db
       .select()

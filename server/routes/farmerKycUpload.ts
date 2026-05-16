@@ -16,6 +16,7 @@ import multer, { FileFilterCallback } from "multer";
 import type { Request as ExpressRequest } from "express";
 import { sdk } from "../_core/sdk";
 import { storagePut } from "../storage";
+import { validateFileUpload } from "../security-middleware";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -82,6 +83,13 @@ export function registerFarmerKycUploadRoute(app: Router): void {
       const label = DOCUMENT_TYPE_LABELS[documentType] ?? "Document";
 
       const { originalname, mimetype, buffer, size } = req.file;
+      // ── Ransomware / malware file validation ──────────────────────────────────
+      const fileValidation = validateFileUpload(originalname, buffer, mimetype);
+      if (!fileValidation.valid) {
+        console.warn(`[FarmerKycUpload] Blocked suspicious file from user ${userId}: ${fileValidation.reason}`);
+        res.status(400).json({ error: `File rejected: ${fileValidation.reason}` });
+        return;
+      }
       const safeName = originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
       const fileKey = `farmer-kyc/${userId}/${documentType}/${safeName}-${randomSuffix()}`;
 

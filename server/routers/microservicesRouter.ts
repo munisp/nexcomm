@@ -450,6 +450,81 @@ const botLogicRouter = router({
   }),
 });
 
+// ─── Temporal Workflow Engine ─────────────────────────────────────────────
+const temporalRouter = router({
+  getHealth: adminProcedure.query(async () => {
+    // Temporal HTTP UI runs on :8233 — probe cluster-info endpoint
+    const uiBase = ENV.temporalUrl.replace(":7233", ":8233");
+    const result = await callService<{ serverVersion: string; clusterName: string }>(
+      uiBase, "/api/v1/cluster-info"
+    );
+    if (!result.ok) return { available: false, status: "unreachable", error: result.error };
+    return { available: true, status: "healthy", ...result.data };
+  }),
+  listWorkflows: adminProcedure
+    .input(z.object({ namespace: z.string().trim().default("default"), pageSize: z.number().min(1).max(100).default(20) }))
+    .query(async ({ input }) => {
+      const uiBase = ENV.temporalUrl.replace(":7233", ":8233");
+      const result = await callService<{ executions: unknown[]; nextPageToken: string }>(
+        uiBase, `/api/v1/namespaces/${input.namespace}/workflows?pageSize=${input.pageSize}`
+      );
+      if (!result.ok) return { available: false, executions: [], nextPageToken: "" };
+      return { available: true, ...result.data };
+    }),
+});
+
+// ─── TigerBeetle Ledger ─────────────────────────────────────────────
+const tigerBeetleRouter = router({
+  getHealth: adminProcedure.query(async () => {
+    // TigerBeetle uses a custom binary protocol; probe via middleware-hub /tigerbeetle/health
+    const result = await callService<{ status: string; cluster: number; replica: number }>(
+      ENV.tigerBeetleUrl, "/health"
+    );
+    if (!result.ok) return { available: false, status: "unreachable", error: result.error };
+    return { available: true, ...result.data };
+  }),
+  getLedgerStats: adminProcedure.query(async () => {
+    const result = await callService<{ totalAccounts: number; totalTransfers: number; totalDebits: number; totalCredits: number }>(
+      ENV.tigerBeetleUrl, "/stats"
+    );
+    if (!result.ok) return { available: false, totalAccounts: 0, totalTransfers: 0, totalDebits: 0, totalCredits: 0 };
+    return { available: true, ...result.data };
+  }),
+});
+
+// ─── Dapr Sidecar ─────────────────────────────────────────────
+const daprRouter = router({
+  getHealth: adminProcedure.query(async () => {
+    const result = await callService<{ status: string }>(
+      ENV.daprHttpUrl, "/v1.0/healthz"
+    );
+    if (!result.ok) return { available: false, status: "unreachable", error: result.error };
+    return { available: true, status: "healthy" };
+  }),
+  getMetadata: adminProcedure.query(async () => {
+    const result = await callService<{ id: string; actors: unknown[]; components: unknown[]; subscriptions: unknown[] }>(
+      ENV.daprHttpUrl, "/v1.0/metadata"
+    );
+    if (!result.ok) return { available: false, id: "", actors: [], components: [], subscriptions: [] };
+    return { available: true, ...result.data };
+  }),
+  publishEvent: adminProcedure
+    .input(z.object({
+      pubsubName: z.string().trim().min(1),
+      topic: z.string().trim().min(1),
+      data: z.record(z.unknown()),
+    }))
+    .mutation(async ({ input }) => {
+      const result = await callService<Record<string, never>>(
+        ENV.daprHttpUrl,
+        `/v1.0/publish/${input.pubsubName}/${input.topic}`,
+        { method: "POST", body: JSON.stringify(input.data) }
+      );
+      if (!result.ok) return { success: false, error: result.error };
+      return { success: true };
+    }),
+});
+
 // ─── Unified microservices router ─────────────────────────────────────────────
 export const microservicesRouter = router({
   creditScoring: creditScoringRouter,
@@ -460,4 +535,7 @@ export const microservicesRouter = router({
   opensearchSync: opensearchSyncRouter,
   middlewareHub: middlewareHubRouter,
   botLogic: botLogicRouter,
+  temporal: temporalRouter,
+  tigerBeetle: tigerBeetleRouter,
+  dapr: daprRouter,
 });

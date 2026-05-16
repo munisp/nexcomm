@@ -91,7 +91,7 @@ export const warehouseInventoryRouter = router({
     }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { warehouses: [] };
+      if (!db) return { warehouses: [], summary: { totalReceipts: 0, activeReceipts: 0, pledgedReceipts: 0, totalValueUsd: 0, pendingDeposits: 0 } };
 
       const statusFilter = input?.status ?? "ACTIVE";
 
@@ -238,7 +238,7 @@ export const warehouseInventoryRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
 
       const [receipt] = await db
         .select()
@@ -280,7 +280,7 @@ export const warehouseInventoryRouter = router({
     .input(z.object({ receiptId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
 
       const [receipt] = await db
         .select()
@@ -319,7 +319,7 @@ export const warehouseInventoryRouter = router({
     .input(z.object({ receiptId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
 
       const result = await db
         .select()

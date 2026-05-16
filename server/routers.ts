@@ -52,11 +52,11 @@ import { investorRelationsRouter } from "./routers/investorRelationsRouter";
 import { surveillanceRouter } from "./routers/surveillanceRouter";
 import { derivativesRouter } from "./routers/derivativesRouter";
 import { optionsRouter } from "./routers/optionsRouter";
-import { farmerRouter } from "./routers/farmerRouter";
-import { traderRouter } from "./routers/traderRouter";
-import { brokerRouter } from "./routers/brokerRouter";
-import { warehouseOpRouter } from "./routers/warehouseOpRouter";
-import { marketMakerOnboardingRouter } from "./routers/marketMakerOnboardingRouter";
+import { farmerRouter, _memFarmerProfiles } from "./routers/farmerRouter";
+import { traderRouter, _memTraderProfiles } from "./routers/traderRouter";
+import { brokerRouter, _memBrokerProfiles } from "./routers/brokerRouter";
+import { warehouseOpRouter, _memWarehouseOpProfiles } from "./routers/warehouseOpRouter";
+import { marketMakerOnboardingRouter, _memMmOnboardingProfiles } from "./routers/marketMakerOnboardingRouter";
 import { kycAnalysisRouter } from "./routers/kycAnalysisRouter";
 import { livePricesRouter } from "./routers/livePricesRouter";
 import { corporateActionsRouter } from "./routers/corporateActionsRouter";
@@ -251,7 +251,15 @@ export const appRouter = router({
     getMyOnboardingStatus: protectedProcedure
       .query(async ({ ctx }) => {
         const db = await getDb();
-        if (!db) return { farmer: null, trader: null, broker: null, warehouseOp: null, marketMaker: null };
+        if (!db) {
+          const uid = ctx.user.id;
+          const farmer = Array.from(_memFarmerProfiles.values()).find((p: Record<string, unknown>) => p.userId === uid) ?? null;
+          const trader = Array.from(_memTraderProfiles.values()).find((p: Record<string, unknown>) => p.userId === uid) ?? null;
+          const broker = Array.from(_memBrokerProfiles.values()).find((p: Record<string, unknown>) => p.userId === uid) ?? null;
+          const warehouseOp = Array.from(_memWarehouseOpProfiles.values()).find((p: Record<string, unknown>) => p.userId === uid) ?? null;
+          const marketMaker = Array.from(_memMmOnboardingProfiles.values()).find((p: Record<string, unknown>) => p.userId === uid) ?? null;
+          return { farmer, trader, broker, warehouseOp, marketMaker };
+        }
         const uid = ctx.user.id;
         const [[farmer], [trader], [broker], [warehouseOp], [marketMaker]] = await Promise.all([
           db.select({ id: farmerProfiles.id, kycStatus: farmerProfiles.kycStatus, fullName: farmerProfiles.fullName }).from(farmerProfiles).where(eq(farmerProfiles.userId, uid)).limit(1),

@@ -178,7 +178,6 @@ function BalanceCard({ account }: { account: LedgerAccount }) {
 // ─── Transfer Dialog ──────────────────────────────────────────────────────────
 function InternalTransferDialog({ accounts }: { accounts: LedgerAccount[] }) {
   const [open, setOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [fromAccountId, setFromAccountId] = useState("");
   const [toAccountId, setToAccountId]     = useState("");
   const [amount, setAmount]               = useState("");

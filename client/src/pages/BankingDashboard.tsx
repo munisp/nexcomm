@@ -87,8 +87,6 @@ function CropInsuranceForm({ onSuccess }: { onSuccess: () => void }) {
     previousClaimsCount: 0,
     additionalNotes: "",
   });
-  const [searchQuery, setSearchQuery] = useState("");
-
   const apply = trpc.banking.applyForInsurance.useMutation({
     onSuccess: (data) => {
       toast.success("Insurance Application Submitted", { description: data.message });

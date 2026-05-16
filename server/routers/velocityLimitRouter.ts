@@ -9,8 +9,57 @@ import { writeAuditLog } from "../audit";
 const DEFAULT_LIMIT_NGN = 5_000_000; // ₦5M per 24h by default
 const DEFAULT_WINDOW_HOURS = 24;
 
+// ── In-memory fallback stores ─────────────────────────────────────────────────
+type MemLimit = {
+  id: number;
+  userId: number | null;
+  windowHours: number;
+  maxAmount: string;
+  currency: string;
+  isActive: boolean;
+  createdBy: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+type MemLedger = {
+  id: number;
+  userId: number;
+  amount: string;
+  currency: string;
+  reference: string | null;
+  recordedAt: Date;
+};
+const _memLimits = new Map<number, MemLimit>();
+const _memLedger: MemLedger[] = [];
+let _limSeq = 1;
+let _ledSeq = 1;
+
+function _getActiveLimit(userId: number, currency: string): MemLimit | null {
+  // User-specific limit first
+  for (const lim of _memLimits.values()) {
+    if (lim.userId === userId && lim.currency === currency && lim.isActive) return lim;
+  }
+  // Global limit
+  for (const lim of _memLimits.values()) {
+    if (lim.userId === null && lim.currency === currency && lim.isActive) return lim;
+  }
+  return null;
+}
+
+function _getUsedAmount(userId: number, currency: string, windowHours: number): number {
+  const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000);
+  let total = 0;
+  for (const entry of _memLedger) {
+    if (entry.userId === userId && entry.currency === currency && entry.recordedAt >= windowStart) {
+      total += parseFloat(entry.amount);
+    }
+  }
+  return total;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function getActiveLimit(db: Awaited<ReturnType<typeof getDb>>, userId: number, currency: string) {
-  if (!db) return null;
+  if (!db) return _getActiveLimit(userId, currency);
 
   const [userLimit] = await db
     .select()
@@ -40,7 +89,7 @@ async function getActiveLimit(db: Awaited<ReturnType<typeof getDb>>, userId: num
 }
 
 async function getUsedAmount(db: Awaited<ReturnType<typeof getDb>>, userId: number, currency: string, windowHours: number): Promise<number> {
-  if (!db) return 0;
+  if (!db) return _getUsedAmount(userId, currency, windowHours);
   const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000);
 
   const [sumResult] = await db
@@ -96,7 +145,6 @@ export const velocityLimitRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const activeLimit = await getActiveLimit(db, ctx.user.id, input.currency);
       const limitAmount = activeLimit ? parseFloat(activeLimit.maxAmount) : DEFAULT_LIMIT_NGN;
@@ -105,23 +153,24 @@ export const velocityLimitRouter = router({
       const newTotal = usedAmount + input.amount;
 
       if (newTotal > limitAmount) {
-        // Log a security event for the velocity breach attempt
-        await db.insert(securityEvents).values({
-          userId: ctx.user.id,
-          eventType: "LARGE_WITHDRAWAL",
-          severity: "HIGH",
-          title: "Withdrawal Velocity Limit Exceeded",
-          description: `Withdrawal velocity limit exceeded: attempted ₦${input.amount.toLocaleString()}, limit ₦${limitAmount.toLocaleString()} per ${windowHours}h`,
-          metadata: JSON.stringify({ amount: input.amount, limitAmount, usedAmount, windowHours }),
-          status: "OPEN",
-        });
+        if (db) {
+          await db.insert(securityEvents).values({
+            userId: ctx.user.id,
+            eventType: "LARGE_WITHDRAWAL",
+            severity: "HIGH",
+            title: "Withdrawal Velocity Limit Exceeded",
+            description: `Withdrawal velocity limit exceeded: attempted ₦${input.amount.toLocaleString()}, limit ₦${limitAmount.toLocaleString()} per ${windowHours}h`,
+            metadata: JSON.stringify({ amount: input.amount, limitAmount, usedAmount, windowHours }),
+            status: "OPEN",
+          });
 
-        await db.insert(notifications).values({
-          userId: ctx.user.id,
-          title: "Withdrawal Blocked — Velocity Limit Reached",
-          message: `Your ₦${input.amount.toLocaleString()} withdrawal was blocked. You have used ₦${usedAmount.toLocaleString()} of your ₦${limitAmount.toLocaleString()} / ${windowHours}h limit.`,
-          type: "SECURITY_ALERT",
-        });
+          await db.insert(notifications).values({
+            userId: ctx.user.id,
+            title: "Withdrawal Blocked — Velocity Limit Reached",
+            message: `Your ₦${input.amount.toLocaleString()} withdrawal was blocked. You have used ₦${usedAmount.toLocaleString()} of your ₦${limitAmount.toLocaleString()} / ${windowHours}h limit.`,
+            type: "SECURITY_ALERT",
+          });
+        }
 
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -129,14 +178,26 @@ export const velocityLimitRouter = router({
         });
       }
 
-      // Record the withdrawal in the velocity ledger
-      await db.insert(velocityLedger).values({
-        userId: ctx.user.id,
-        amount: input.amount.toString(),
-        currency: input.currency,
-        reference: input.reference ?? null,
-        recordedAt: new Date(),
-      });
+      if (db) {
+        // Record the withdrawal in the velocity ledger
+        await db.insert(velocityLedger).values({
+          userId: ctx.user.id,
+          amount: input.amount.toString(),
+          currency: input.currency,
+          reference: input.reference ?? null,
+          recordedAt: new Date(),
+        });
+      } else {
+        // In-memory fallback
+        _memLedger.push({
+          id: _ledSeq++,
+          userId: ctx.user.id,
+          amount: input.amount.toString(),
+          currency: input.currency,
+          reference: input.reference ?? null,
+          recordedAt: new Date(),
+        });
+      }
 
       return {
         success: true,
@@ -166,7 +227,12 @@ export const velocityLimitRouter = router({
     .input(z.object({ currency: z.string().default("NGN"), limit: z.number().int().max(50).default(20) }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return [];
+      if (!db) {
+        return _memLedger
+          .filter(e => e.userId === ctx.user.id && e.currency === input.currency)
+          .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())
+          .slice(0, input.limit);
+      }
 
       return db
         .select()
@@ -185,7 +251,9 @@ export const velocityLimitRouter = router({
   adminListLimits: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
     const db = await getDb();
-    if (!db) return [];
+    if (!db) {
+      return Array.from(_memLimits.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }
 
     return db
       .select()
@@ -206,7 +274,30 @@ export const velocityLimitRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      if (!db) {
+        // Deactivate existing limits for the same user+currency
+        for (const lim of _memLimits.values()) {
+          if (lim.userId === (input.userId ?? null) && lim.currency === input.currency && lim.isActive) {
+            lim.isActive = false;
+          }
+        }
+        const id = _limSeq++;
+        const now = new Date();
+        const newLimit: MemLimit = {
+          id,
+          userId: input.userId ?? null,
+          windowHours: input.windowHours,
+          maxAmount: input.maxAmount.toString(),
+          currency: input.currency,
+          isActive: true,
+          createdBy: ctx.user.id,
+          createdAt: now,
+          updatedAt: now,
+        };
+        _memLimits.set(id, newLimit);
+        return newLimit;
+      }
 
       // Deactivate any existing limit for this user/global scope
       if (input.userId) {
@@ -254,7 +345,12 @@ export const velocityLimitRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      if (!db) {
+        const lim = _memLimits.get(input.limitId);
+        if (lim) lim.isActive = false;
+        return { success: true };
+      }
 
       await db
         .update(velocityLimitConfig)

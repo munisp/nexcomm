@@ -12,6 +12,18 @@ import {
 import { notifyOwner } from "../_core/notification";
 import { writeAuditLog } from "../audit";
 
+
+// ─── In-memory fallback stores ────────────────────────────────────────────────
+type MemIREvent = { id: number; companySymbol: string; companyName: string; eventType: string; title: string; eventDate: string; description: string | null; epsActual: string | null; epsEstimate: string | null; revenueActual: string | null; revenueEstimate: string | null; dividendAmount: string | null; dividendPayDate: string | null; isPublished: boolean; publishedAt: Date | null; createdBy: number | null; createdAt: Date; updatedAt: Date; };
+type MemIRDoc = { id: number; companySymbol: string; companyName: string; documentType: string; title: string; fiscalYear: number | null; fiscalPeriod: string | null; fileUrl: string; fileKey: string; fileSizeBytes: number | null; isPublished: boolean; publishedAt: Date | null; downloadCount: number; createdBy: number | null; createdAt: Date; updatedAt: Date; };
+type MemIRShareholder = { id: number; companySymbol: string; userId: number | null; shareholderName: string; shareholderType: string; sharesHeld: string; totalShares: string; holdingPct: string; asOfDate: string | null; createdAt: Date; updatedAt: Date; };
+type MemIRSub = { id: number; userId: number; companySymbol: string; notifyEarnings: boolean; notifyDividends: boolean; notifyAGM: boolean; notifyAnnualReport: boolean; createdAt: Date; updatedAt: Date; };
+const _irEvents = new Map<number, MemIREvent>();
+const _irDocs = new Map<number, MemIRDoc>();
+const _irShareholders = new Map<number, MemIRShareholder>();
+const _irSubs = new Map<number, MemIRSub>();
+let _irEvSeq = 1; let _irDocSeq = 1; let _irShSeq = 1; let _irSubSeq = 1;
+
 export const investorRelationsRouter = router({
   // ─── Public: Event Calendar ──────────────────────────────────────────────────
 
@@ -31,7 +43,13 @@ export const investorRelationsRouter = router({
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        let events = Array.from(_irEvents.values());
+        if (input?.companySymbol) events = events.filter(e => e.companySymbol === input.companySymbol);
+        if (input?.eventType && input.eventType !== "ALL") events = events.filter(e => e.eventType === input.eventType);
+        if (input?.publishedOnly !== false) events = events.filter(e => e.isPublished);
+        return { events: events.slice(input?.offset ?? 0, (input?.offset ?? 0) + (input?.limit ?? 50)), total: events.length };
+      }
 
       const conditions: ReturnType<typeof eq>[] = [];
       if (input?.companySymbol) conditions.push(eq(irEvents.companySymbol, input.companySymbol));
@@ -54,7 +72,11 @@ export const investorRelationsRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const event = _irEvents.get(input.id);
+        if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
+        return event;
+      }
       const [event] = await db.select().from(irEvents).where(eq(irEvents.id, input.id));
       if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
       return event;
@@ -78,7 +100,13 @@ export const investorRelationsRouter = router({
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        let docs = Array.from(_irDocs.values());
+        if (input?.companySymbol) docs = docs.filter(d => d.companySymbol === input.companySymbol);
+        if (input?.documentType && input.documentType !== "ALL") docs = docs.filter(d => d.documentType === input.documentType);
+        if (input?.publishedOnly !== false) docs = docs.filter(d => d.isPublished);
+        return { documents: docs.slice(input?.offset ?? 0, (input?.offset ?? 0) + (input?.limit ?? 50)), total: docs.length };
+      }
 
       const conditions: ReturnType<typeof eq>[] = [];
       if (input?.companySymbol) conditions.push(eq(irDocuments.companySymbol, input.companySymbol));
@@ -100,7 +128,7 @@ export const investorRelationsRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
       const [doc] = await db.select().from(irDocuments).where(eq(irDocuments.id, input.id));
       if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
       if (!doc.isPublished) throw new TRPCError({ code: "FORBIDDEN", message: "Document not published" });
@@ -124,7 +152,11 @@ export const investorRelationsRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        let shareholders = Array.from(_irShareholders.values()).filter(s => s.companySymbol === input.companySymbol);
+        if (input.shareholderType !== "ALL") shareholders = shareholders.filter(s => s.shareholderType === input.shareholderType);
+        return { shareholders: shareholders.slice(input.offset, input.offset + input.limit), totalShares: 0, topHoldersPct: "0" };
+      }
 
       const conditions: ReturnType<typeof eq>[] = [eq(shareholderRegistry.companySymbol, input.companySymbol)];
       if (input.shareholderType !== "ALL") {
@@ -147,7 +179,11 @@ export const investorRelationsRouter = router({
     .input(z.object({ companySymbol: z.string().max(16).optional() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        let holdings = Array.from(_irShareholders.values()).filter(s => s.userId === ctx.user.id);
+        if (input.companySymbol) holdings = holdings.filter(s => s.companySymbol === input.companySymbol);
+        return holdings;
+      }
 
       const conditions: ReturnType<typeof eq>[] = [eq(shareholderRegistry.userId, ctx.user.id)];
       if (input.companySymbol) conditions.push(eq(shareholderRegistry.companySymbol, input.companySymbol));
@@ -162,7 +198,7 @@ export const investorRelationsRouter = router({
   getMySubscriptions: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) return Array.from(_irSubs.values()).filter(s => s.userId === ctx.user.id);
       return db.select().from(irSubscriptions)
         .where(eq(irSubscriptions.userId, ctx.user.id))
         .orderBy(asc(irSubscriptions.companySymbol));
@@ -178,7 +214,24 @@ export const investorRelationsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const existing = Array.from(_irSubs.values()).find(s => s.userId === ctx.user.id && s.companySymbol === input.companySymbol);
+        if (existing) {
+          existing.notifyEarnings = input.notifyEarnings;
+          existing.notifyDividends = input.notifyDividends;
+          existing.updatedAt = new Date();
+          return existing;
+        }
+        const id = _irSubSeq++;
+        const sub: MemIRSub = {
+          id, userId: ctx.user.id, companySymbol: input.companySymbol,
+          notifyEarnings: input.notifyEarnings, notifyDividends: input.notifyDividends,
+          notifyAGM: (input as any).notifyAGM ?? false, notifyAnnualReport: (input as any).notifyAnnualReport ?? false,
+          createdAt: new Date(), updatedAt: new Date(),
+        };
+        _irSubs.set(id, sub);
+        return sub;
+      }
 
       const [existing] = await db.select().from(irSubscriptions)
         .where(and(
@@ -214,7 +267,11 @@ export const investorRelationsRouter = router({
     .input(z.object({ companySymbol: z.string().min(1).max(16) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const sub = Array.from(_irSubs.values()).find(s => s.userId === ctx.user.id && s.companySymbol === input.companySymbol);
+        if (sub) _irSubs.delete(sub.id);
+        return { success: true };
+      }
       await db.delete(irSubscriptions)
         .where(and(
           eq(irSubscriptions.userId, ctx.user.id),
@@ -252,7 +309,23 @@ export const investorRelationsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const id = _irEvSeq++;
+        const now = new Date();
+        const event: MemIREvent = {
+          id, companySymbol: input.companySymbol, companyName: input.companyName,
+          eventType: input.eventType, title: input.title,
+          eventDate: input.eventDate,
+          description: input.description ?? null,
+          epsActual: input.epsActual ?? null, epsEstimate: input.epsEstimate ?? null,
+          revenueActual: input.revenueActual ?? null, revenueEstimate: input.revenueEstimate ?? null,
+          dividendAmount: (input as any).dividendPerShare ?? null, dividendPayDate: (input as any).paymentDate ?? null,
+          isPublished: false, publishedAt: null, createdBy: ctx.user.id,
+          createdAt: now, updatedAt: now,
+        };
+        _irEvents.set(id, event);
+        return event;
+      }
 
       const [event] = await db.insert(irEvents).values({
         companySymbol: input.companySymbol,
@@ -295,7 +368,14 @@ export const investorRelationsRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const event = _irEvents.get(input.id);
+        if (!event) throw new TRPCError({ code: "NOT_FOUND" });
+        if (input.title !== undefined) event.title = input.title;
+        if (input.description !== undefined) event.description = input.description ?? null;
+        event.updatedAt = new Date();
+        return event;
+      }
 
       const updates: Record<string, any> = { updatedAt: new Date() };
       if (input.title !== undefined) updates.title = input.title;
@@ -319,7 +399,14 @@ export const investorRelationsRouter = router({
     .input(z.object({ id: z.number().int().positive(), publish: z.boolean() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const event = _irEvents.get(input.id);
+        if (!event) throw new TRPCError({ code: "NOT_FOUND" });
+        event.isPublished = input.publish;
+        event.publishedAt = input.publish ? new Date() : null;
+        event.updatedAt = new Date();
+        return event;
+      }
 
       const [updated] = await db.update(irEvents).set({
         isPublished: input.publish,
@@ -341,7 +428,10 @@ export const investorRelationsRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        _irEvents.delete(input.id);
+        return { success: true };
+      }
       await db.delete(irEvents).where(eq(irEvents.id, input.id));
       return { success: true };
     }),
@@ -353,7 +443,11 @@ export const investorRelationsRouter = router({
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        let events = Array.from(_irEvents.values());
+        if (input?.companySymbol) events = events.filter(e => e.companySymbol === input.companySymbol);
+        return { events, total: events.length };
+      }
 
        const conditions: ReturnType<typeof eq>[] = [];
       if (input?.companySymbol) conditions.push(eq(irEvents.companySymbol, input.companySymbol));
@@ -385,7 +479,21 @@ export const investorRelationsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+            if (!db) {
+        const id = _irDocSeq++;
+        const now = new Date();
+        const doc: MemIRDoc = {
+          id, companySymbol: input.companySymbol, companyName: input.companyName,
+          documentType: input.documentType, title: input.title,
+          fiscalYear: input.fiscalYear ?? null, fiscalPeriod: input.fiscalPeriod ?? null,
+          fileUrl: input.fileUrl, fileKey: input.fileKey,
+          fileSizeBytes: input.fileSizeBytes ?? null,
+          isPublished: false, publishedAt: null, downloadCount: 0,
+          createdBy: (ctx as any).user?.id ?? null, createdAt: now, updatedAt: now,
+        };
+        _irDocs.set(id, doc);
+        return doc;
+      }
 
       const [doc] = await db.insert(irDocuments).values({
         companySymbol: input.companySymbol,
@@ -408,7 +516,14 @@ export const investorRelationsRouter = router({
     .input(z.object({ id: z.number().int().positive(), publish: z.boolean() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const doc = _irDocs.get(input.id);
+        if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+        doc.isPublished = input.publish;
+        doc.publishedAt = input.publish ? new Date() : null;
+        doc.updatedAt = new Date();
+        return doc;
+      }
 
       const [updated] = await db.update(irDocuments).set({
         isPublished: input.publish,
@@ -423,7 +538,10 @@ export const investorRelationsRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        _irDocs.delete(input.id);
+        return { success: true };
+      }
       await db.delete(irDocuments).where(eq(irDocuments.id, input.id));
       return { success: true };
     }),
@@ -435,7 +553,11 @@ export const investorRelationsRouter = router({
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        let docs = Array.from(_irDocs.values());
+        if (input?.companySymbol) docs = docs.filter(d => d.companySymbol === input.companySymbol);
+        return docs;
+      }
 
       const conditions: ReturnType<typeof eq>[] = [];
       if (input?.companySymbol) conditions.push(eq(irDocuments.companySymbol, input.companySymbol));
@@ -459,7 +581,29 @@ export const investorRelationsRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const sharesHeld = parseFloat(input.sharesHeld);
+        const totalShares = parseFloat(input.totalShares);
+        const holdingPct = (sharesHeld / totalShares * 100).toFixed(6);
+        const existing = Array.from(_irShareholders.values()).find(s => s.companySymbol === input.companySymbol && s.userId === input.userId);
+        if (existing) {
+          existing.shareholderType = input.shareholderType;
+          existing.sharesHeld = input.sharesHeld;
+          existing.totalShares = input.totalShares;
+          existing.holdingPct = holdingPct;
+          existing.updatedAt = new Date();
+          return existing;
+        }
+        const id = _irShSeq++;
+        const sh: MemIRShareholder = {
+          id, companySymbol: input.companySymbol, userId: input.userId,
+          shareholderName: input.shareholderName, shareholderType: input.shareholderType,
+          sharesHeld: input.sharesHeld, totalShares: input.totalShares,
+          holdingPct, asOfDate: null, createdAt: new Date(), updatedAt: new Date(),
+        };
+        _irShareholders.set(id, sh);
+        return sh;
+      }
 
       const sharesHeld = parseFloat(input.sharesHeld);
       const totalShares = parseFloat(input.totalShares);
@@ -502,7 +646,10 @@ export const investorRelationsRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        _irShareholders.delete(input.id);
+        return { success: true };
+      }
       await db.delete(shareholderRegistry).where(eq(shareholderRegistry.id, input.id));
       return { success: true };
     }),
@@ -510,7 +657,21 @@ export const investorRelationsRouter = router({
   adminGetStats: adminProcedure
     .query(async () => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (!db) {
+        const events = Array.from(_irEvents.values());
+        const docs = Array.from(_irDocs.values());
+        return {
+          totalEvents: events.length,
+          publishedEvents: events.filter(e => e.isPublished).length,
+          draftEvents: events.filter(e => !e.isPublished).length,
+          totalDocuments: docs.length,
+          publishedDocuments: docs.filter(d => d.isPublished).length,
+          draftDocuments: docs.filter(d => !d.isPublished).length,
+          totalDownloads: 0,
+          totalShareholders: _irShareholders.size,
+          totalSubscriptions: _irSubs.size,
+        };
+      }
 
       const [totalEvents, totalDocs, totalShareholders, totalSubscriptions] = await Promise.all([
         db.select().from(irEvents),

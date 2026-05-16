@@ -6,6 +6,25 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { writeAuditLog } from "../audit";
 
+// ── In-memory fallback store ──────────────────────────────────────────────────
+type MemSession = {
+  id: number;
+  userId: number;
+  fingerprint: string;
+  userAgent: string;
+  screenResolution: string | null;
+  timezone: string | null;
+  ipAddress: string | null;
+  isKnown: boolean;
+  isTrusted: boolean;
+  lastSeenAt: Date;
+  firstSeenAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+};
+const _memSessions = new Map<number, MemSession>();
+let _memSeq = 1;
+
 export const deviceSessionRouter = router({
   // Record/update a device session fingerprint on login
   recordSession: protectedProcedure
@@ -20,7 +39,40 @@ export const deviceSessionRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { isNewDevice: false };
+      // Build fingerprint
+      const fingerprintParts2 = [
+        input.userAgent,
+        input.screenResolution ?? "",
+        input.timezone ?? "",
+        input.language ?? "",
+      ].join("|");
+      let hash2 = 0;
+      for (let i = 0; i < fingerprintParts2.length; i++) {
+        hash2 = ((hash2 << 5) - hash2 + fingerprintParts2.charCodeAt(i)) | 0;
+      }
+      const fingerprintKey = Math.abs(hash2).toString(16).padStart(8, "0");
+
+      if (!db) {
+        const existing = Array.from(_memSessions.values()).find(
+          s => s.userId === ctx.user.id && s.fingerprint === fingerprintKey
+        );
+        const isNewDevice = !existing;
+        if (isNewDevice) {
+          const id = _memSeq++;
+          const now = new Date();
+          _memSessions.set(id, {
+            id, userId: ctx.user.id, fingerprint: fingerprintKey,
+            userAgent: input.userAgent, screenResolution: input.screenResolution ?? null,
+            timezone: input.timezone ?? null, ipAddress: input.ipAddress ?? null,
+            isKnown: false, isTrusted: false, lastSeenAt: now, firstSeenAt: now,
+            createdAt: now, updatedAt: now,
+          });
+        } else {
+          existing!.lastSeenAt = new Date();
+          if (input.ipAddress) existing!.ipAddress = input.ipAddress;
+        }
+        return { isNewDevice, fingerprint: fingerprintKey };
+      }
 
       // Build a stable fingerprint from the device characteristics
       const fingerprintParts = [
@@ -96,7 +148,11 @@ export const deviceSessionRouter = router({
   // List all device sessions for the current user
   listMySessions: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) return [];
+    if (!db) {
+      return Array.from(_memSessions.values())
+        .filter(s => s.userId === ctx.user.id)
+        .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime());
+    }
 
     return db
       .select()
@@ -110,22 +166,24 @@ export const deviceSessionRouter = router({
     .input(z.object({ sessionId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
+      if (!db) {
+        const session = _memSessions.get(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found." });
+        session.isTrusted = true;
+        session.updatedAt = new Date();
+        return { success: true };
+      }
       const [session] = await db
         .select({ userId: deviceSessions.userId })
         .from(deviceSessions)
         .where(eq(deviceSessions.id, input.sessionId));
-
       if (!session || session.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Session not found." });
       }
-
       await db
         .update(deviceSessions)
         .set({ isTrusted: true })
         .where(eq(deviceSessions.id, input.sessionId));
-
       return { success: true };
     }),
 
@@ -134,21 +192,22 @@ export const deviceSessionRouter = router({
     .input(z.object({ sessionId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
+      if (!db) {
+        const session = _memSessions.get(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found." });
+        _memSessions.delete(input.sessionId);
+        return { success: true };
+      }
       const [session] = await db
         .select({ userId: deviceSessions.userId })
         .from(deviceSessions)
         .where(eq(deviceSessions.id, input.sessionId));
-
       if (!session || session.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Session not found." });
       }
-
       await db
         .delete(deviceSessions)
         .where(eq(deviceSessions.id, input.sessionId));
-
       return { success: true };
     }),
 
@@ -157,8 +216,14 @@ export const deviceSessionRouter = router({
     .input(z.object({ currentFingerprint: z.string().trim() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
+      if (!db) {
+        for (const [id, s] of _memSessions.entries()) {
+          if (s.userId === ctx.user.id && s.fingerprint !== input.currentFingerprint) {
+            _memSessions.delete(id);
+          }
+        }
+        return { success: true };
+      }
       await db
         .delete(deviceSessions)
         .where(
@@ -167,7 +232,6 @@ export const deviceSessionRouter = router({
             ne(deviceSessions.fingerprint, input.currentFingerprint)
           )
         );
-
       return { success: true };
     }),
 
@@ -179,8 +243,11 @@ export const deviceSessionRouter = router({
         throw new TRPCError({ code: "FORBIDDEN" });
       }
       const db = await getDb();
-      if (!db) return [];
-
+      if (!db) {
+        return Array.from(_memSessions.values())
+          .filter(s => s.userId === input.userId)
+          .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime());
+      }
       return db
         .select()
         .from(deviceSessions)

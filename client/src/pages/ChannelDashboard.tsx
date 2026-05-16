@@ -67,8 +67,6 @@ function StatCard({
 // ─── USSD Tab ─────────────────────────────────────────────────────────────────
 function UssdTab() {
   const [page, setPage] = useState(1);
-  const [usernameSearch, setUsernameSearch] = useState("");
-  const [phoneSearch, setPhoneSearch] = useState("");
   const [phoneFilter, setPhoneFilter] = useState("");
 
   const { data: statsData } = trpc.ussd.getSessionStats.useQuery({});
