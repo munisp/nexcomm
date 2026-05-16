@@ -210,21 +210,21 @@ export default function WarehouseDashboard() {
               <div>
                 <p className="text-xs text-amber-400">Storage Capacity</p>
                 <p className="text-sm font-medium text-white">
-                  {profile.storageCapacityMt ? `${parseFloat(profile.storageCapacityMt).toLocaleString()} MT` : "—"}
+                  {profile.storageCapacityMt ? `${parseFloat(profile.storageCapacityMt as string).toLocaleString()} MT` : "—"}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-amber-400">Grading Staff</p>
-                <p className="text-sm font-medium text-white">{profile.gradingStaffCount ?? "—"}</p>
+                <p className="text-sm font-medium text-white">{(profile.gradingStaffCount as string | number | null) ?? "—"}</p>
               </div>
               <div>
                 <p className="text-xs text-amber-400">Operating Hours</p>
-                <p className="text-sm font-medium text-white">{profile.operatingHours ?? "—"}</p>
+                <p className="text-sm font-medium text-white">{(profile.operatingHours as string | null) ?? "—"}</p>
               </div>
               <div>
                 <p className="text-xs text-amber-400">Account Status</p>
                 <p className={`text-sm font-medium ${profile.accountStatus === "ACTIVE" ? "text-green-400" : "text-gray-400"}`}>
-                  {profile.accountStatus}
+                  {profile.accountStatus as string}
                 </p>
               </div>
             </div>
