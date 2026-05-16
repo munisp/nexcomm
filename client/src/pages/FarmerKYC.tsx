@@ -92,12 +92,19 @@ export default function FarmerKYC() {
     },
   });
 
+  const [submitted, setSubmitted] = useState(false);
   const submitKYCMut = trpc.farmer.submitKYC.useMutation({
     onSuccess: () => {
-      toast.success("KYC submitted! We'll review within 1-2 business days.");
-      navigate("/farmer-dashboard");
+      setSubmitted(true);
+      toast.success(
+        "KYC submitted successfully!",
+        {
+          description: "We'll review your documents within 1-2 business days. You'll receive a notification once approved.",
+          duration: 6000,
+        }
+      );
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error("Submission failed", { description: e.message }),
   });
 
   type FarmerKYCProfile = { id: number; userId: number; fullName: string; kycStatus: string; kycNotes?: string | null; kycDocuments?: Record<string, string> | string | null };
@@ -189,6 +196,46 @@ export default function FarmerKYC() {
   }
 
   if (profileQ.isLoading) return <PageSkeleton cards={2} tableRows={4} tableCols={3} />;
+
+  // ── Success screen shown immediately after submission ──────────────────────
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <div className="relative mb-6">
+          <div className="w-24 h-24 rounded-full bg-green-500/20 flex items-center justify-center">
+            <CheckCircle2 className="w-14 h-14 text-green-400" />
+          </div>
+          <div className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-green-500 flex items-center justify-center">
+            <span className="text-white text-xs font-bold">✓</span>
+          </div>
+        </div>
+        <h2 className="text-white text-2xl font-bold mb-2">Documents Submitted!</h2>
+        <p className="text-slate-300 text-sm mb-1">Your KYC documents have been received.</p>
+        <p className="text-slate-400 text-xs mb-6">Our compliance team will review them within <strong className="text-slate-300">1–2 business days</strong>. You’ll be notified once approved.</p>
+        <div className="w-full max-w-xs bg-slate-800/60 border border-slate-700 rounded-xl p-4 mb-6 text-left space-y-2">
+          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">What happens next?</p>
+          {[
+            { step: "1", text: "Our team reviews your documents" },
+            { step: "2", text: "Identity verified against NIN database" },
+            { step: "3", text: "You receive an approval notification" },
+            { step: "4", text: "Start listing your crops on NEXCOM" },
+          ].map(({ step, text }) => (
+            <div key={step} className="flex items-center gap-3">
+              <span className="w-6 h-6 rounded-full bg-green-700/50 text-green-300 text-xs font-bold flex items-center justify-center shrink-0">{step}</span>
+              <span className="text-slate-300 text-sm">{text}</span>
+            </div>
+          ))}
+        </div>
+        <Button
+          onClick={() => navigate("/farmer-dashboard")}
+          className="w-full max-w-xs bg-green-600 hover:bg-green-700 text-white font-semibold h-12"
+        >
+          Back to Dashboard
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto">
       {/* Header */}
@@ -382,6 +429,23 @@ export default function FarmerKYC() {
         </div>
       </div>
 
+      {/* Full-screen submission overlay */}
+      {submitKYCMut.isPending && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-slate-900/90 border border-green-800/40 shadow-2xl">
+            <Loader2 className="w-12 h-12 text-green-400 animate-spin" />
+            <div className="text-center">
+              <p className="text-white font-semibold text-lg">Submitting KYC Documents</p>
+              <p className="text-slate-400 text-sm mt-1">Please wait while we securely process your submission…</p>
+            </div>
+            <div className="flex gap-1.5 mt-1">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="w-2 h-2 rounded-full bg-green-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Liveness Modal */}
       <LivenessChallengeModal
         open={livenessOpen}

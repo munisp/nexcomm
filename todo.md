@@ -901,3 +901,15 @@
 - [ ] Full gap audit: any remaining stubs, orphans, or missing integrations
 - [ ] 964+/964 tests passing, 0 TypeScript errors
 - [ ] Comprehensive tar.gz archive generated and compared with v60
+
+## Sprint — May 2026 (UX Improvements)
+- [ ] Promote owner user to admin role via SQL
+- [ ] FarmerKYC: add loading spinner + success toast on KYC submission
+- [ ] BrokerDashboard: add transaction filtering (by type/status/date) and sorting
+- [ ] Compliance: add Export to CSV button for KYC review reports
+
+## Sprint — May 2026 (UX Improvements)
+- [x] Promote owner user to admin role via SQL (use Database panel: UPDATE user SET role = 'admin' WHERE email = 'your@email.com')
+- [x] FarmerKYC: full-screen overlay spinner during submission + dedicated success screen with "What happens next?" steps + 6s toast
+- [x] BrokerDashboard: Transactions tab with symbol search, side (BUY/SELL) filter, asset class filter, and sortable columns (date/price/qty/value) with pagination; server-side filtering via extended getMyTradeHistory procedure
+- [x] Compliance: Export CSV button on KYC Management tab — exports filtered records with all fields, named kyc-report-{status}-{date}.csv

@@ -3,7 +3,7 @@
  * Handles Broker firm registration, licensing KYC, admin review, and dashboard.
  */
 import { z } from "zod";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, asc, sql, and, ilike } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -525,17 +525,38 @@ export const brokerRouter = router({
     .input(z.object({
       page: z.number().int().min(1).default(1),
       pageSize: z.number().int().min(1).max(100).default(20),
+      symbol: z.string().optional(),
+      assetClass: z.string().optional(),
+      side: z.enum(["BUY", "SELL"]).optional(),
+      sortBy: z.enum(["createdAt", "fillPrice", "filledQty", "grossValue"]).default("createdAt"),
+      sortDir: z.enum(["asc", "desc"]).default("desc"),
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
             if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const offset = (input.page - 1) * input.pageSize;
+      const conditions: ReturnType<typeof eq>[] = [];
+      // side filter: BUY = user is buyer, SELL = user is seller, none = either
+      if (input.side === "BUY") {
+        conditions.push(eq(tradeFills.buyerUserId, ctx.user.id));
+      } else if (input.side === "SELL") {
+        conditions.push(eq(tradeFills.sellerUserId, ctx.user.id));
+      } else {
+        conditions.push(sql`(${tradeFills.buyerUserId} = ${ctx.user.id} OR ${tradeFills.sellerUserId} = ${ctx.user.id})` as unknown as ReturnType<typeof eq>);
+      }
+      if (input.symbol) conditions.push(ilike(tradeFills.symbol, `%${input.symbol}%`) as unknown as ReturnType<typeof eq>);
+      if (input.assetClass) conditions.push(eq(tradeFills.assetClass, input.assetClass) as unknown as ReturnType<typeof eq>);
+      const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
+      const colMap = {
+        createdAt: tradeFills.createdAt,
+        fillPrice: tradeFills.fillPrice,
+        filledQty: tradeFills.filledQty,
+        grossValue: tradeFills.grossValue,
+      } as const;
+      const orderExpr = input.sortDir === "asc" ? asc(colMap[input.sortBy]) : desc(colMap[input.sortBy]);
       const [trades, countResult] = await Promise.all([
-        db.select().from(tradeFills)
-          .where(sql`${tradeFills.buyerUserId} = ${ctx.user.id} OR ${tradeFills.sellerUserId} = ${ctx.user.id}`)
-          .orderBy(desc(tradeFills.createdAt)).limit(input.pageSize).offset(offset),
-        db.select({ count: sql<number>`COUNT(*)::int` }).from(tradeFills)
-          .where(sql`${tradeFills.buyerUserId} = ${ctx.user.id} OR ${tradeFills.sellerUserId} = ${ctx.user.id}`),
+        db.select().from(tradeFills).where(whereClause).orderBy(orderExpr).limit(input.pageSize).offset(offset),
+        db.select({ count: sql<number>`COUNT(*)::int` }).from(tradeFills).where(whereClause),
       ]);
       return { trades, total: Number(countResult[0]?.count ?? 0), page: input.page, pageSize: input.pageSize };
     }),

@@ -278,6 +278,37 @@ export default function Compliance() {
             </Select>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">{filteredKYC.length} records</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1 text-xs"
+                disabled={filteredKYC.length === 0}
+                onClick={() => {
+                  const headers = ["ID","Name","Email","Stakeholder Type","Submitted At","Status","Reviewed At","Reviewer","Notes"];
+                  const rows = filteredKYC.map((k: Record<string, unknown>) => [
+                    k.id,
+                    (k.userName ?? `User #${k.userId}`),
+                    (k.userEmail ?? ""),
+                    (k.stakeholderType ?? ""),
+                    k.submittedAt ? new Date(k.submittedAt as string).toISOString() : "",
+                    k.status,
+                    k.reviewedAt ? new Date(k.reviewedAt as string).toISOString() : "",
+                    (k.reviewerName ?? ""),
+                    String(k.reviewNotes ?? "").replace(/"/g, "'"),
+                  ]);
+                  const csv = [headers.join(","), ...rows.map((r: unknown[]) => r.map(v => `"${v}"`).join(","))].join("\n");
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `kyc-report-${kycFilter.toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success(`Exported ${filteredKYC.length} KYC records to CSV`);
+                }}
+              >
+                <Download className="w-3 h-3" />Export CSV
+              </Button>
               <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => refetchKyc()}>
                 <RefreshCw className="w-3 h-3" />Refresh
               </Button>
