@@ -913,3 +913,8 @@
 - [x] FarmerKYC: full-screen overlay spinner during submission + dedicated success screen with "What happens next?" steps + 6s toast
 - [x] BrokerDashboard: Transactions tab with symbol search, side (BUY/SELL) filter, asset class filter, and sortable columns (date/price/qty/value) with pagination; server-side filtering via extended getMyTradeHistory procedure
 - [x] Compliance: Export CSV button on KYC Management tab — exports filtered records with all fields, named kyc-report-{status}-{date}.csv
+
+## Sprint — May 2026 (Round 2 UX Improvements)
+- [x] Broker commission analytics chart — monthly earnings bar/line chart in Commissions tab
+- [x] KYC email notifications — notify farmer/broker via owner notification when KYC status changes to APPROVED or REJECTED
+- [x] Compliance AML CSV export — Export CSV button on AML Alerts tab

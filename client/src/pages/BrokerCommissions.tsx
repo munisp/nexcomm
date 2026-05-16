@@ -2,7 +2,7 @@
  * NEXCOM Exchange — Broker Commission Dashboard
  * Full CRUD: client management, commission earnings, and trade routing history.
  */
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -45,9 +45,93 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  BarChart2,
 } from "lucide-react";
 
-type Tab = "clients" | "commissions" | "trades";
+type Tab = "clients" | "commissions" | "chart" | "trades";
+
+// ── Inline Commission Chart ──────────────────────────────────────────────────
+function CommissionChart({ data }: { data: { label: string; earned: number; paid: number; pending: number }[] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || !data.length) return;
+    let cancelled = false;
+    import("chart.js/auto").then((mod) => {
+      if (cancelled || !canvasRef.current) return;
+      const Chart = mod.default;
+      if (chartRef.current) (chartRef.current as { destroy: () => void }).destroy();
+      chartRef.current = new Chart(canvasRef.current, {
+        type: "bar",
+        data: {
+          labels: data.map((d) => d.label),
+          datasets: [
+            {
+              label: "Total Earned",
+              data: data.map((d) => d.earned),
+              backgroundColor: "rgba(52, 211, 153, 0.7)",
+              borderColor: "rgba(52, 211, 153, 1)",
+              borderWidth: 1,
+              borderRadius: 4,
+              order: 2,
+            },
+            {
+              label: "Paid Out",
+              data: data.map((d) => d.paid),
+              backgroundColor: "rgba(96, 165, 250, 0.7)",
+              borderColor: "rgba(96, 165, 250, 1)",
+              borderWidth: 1,
+              borderRadius: 4,
+              order: 2,
+            },
+            {
+              label: "Pending",
+              type: "line" as const,
+              data: data.map((d) => d.pending),
+              borderColor: "rgba(251, 191, 36, 1)",
+              backgroundColor: "rgba(251, 191, 36, 0.1)",
+              borderWidth: 2,
+              pointRadius: 3,
+              fill: false,
+              tension: 0.3,
+              order: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: "#9ca3af", font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ₦${Number(ctx.raw).toLocaleString()}`,
+              },
+            },
+          },
+          scales: {
+            x: { ticks: { color: "#9ca3af", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.05)" } },
+            y: {
+              ticks: { color: "#9ca3af", font: { size: 10 }, callback: (v) => `₦${Number(v).toLocaleString()}` },
+              grid: { color: "rgba(255,255,255,0.05)" },
+            },
+          },
+        },
+      });
+    });
+    return () => {
+      cancelled = true;
+      if (chartRef.current) (chartRef.current as { destroy: () => void }).destroy();
+    };
+  }, [data]);
+
+  return (
+    <div style={{ height: 260 }}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
 
 export default function BrokerCommissions() {
   const { user, loading } = useAuth();
@@ -58,6 +142,7 @@ export default function BrokerCommissions() {
   const [tradePage, setTradePage] = useState(1);
   const [clientStatusFilter, setClientStatusFilter] = useState<string>("ALL");
   const [commStatusFilter, setCommStatusFilter] = useState<string>("ALL");
+  const [chartMonths, setChartMonths] = useState<number>(12);
 
   // Add client dialog state
   const [addOpen, setAddOpen] = useState(false);
@@ -77,6 +162,11 @@ export default function BrokerCommissions() {
     pageSize: 15,
     status: commStatusFilter !== "ALL" ? (commStatusFilter as "PENDING" | "PAID" | "CANCELLED") : undefined,
   }, { enabled: !!user });
+
+  const chartQuery = trpc.broker.getMonthlyCommissionChart.useQuery(
+    { months: chartMonths },
+    { enabled: !!user },
+  );
 
   const tradesQuery = trpc.broker.getMyTradeHistory.useQuery({
     page: tradePage,
@@ -118,6 +208,7 @@ export default function BrokerCommissions() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "clients", label: "My Clients", icon: <Users className="w-4 h-4" /> },
     { id: "commissions", label: "Commissions", icon: <DollarSign className="w-4 h-4" /> },
+    { id: "chart", label: "Earnings Chart", icon: <BarChart2 className="w-4 h-4" /> },
     { id: "trades", label: "Trade History", icon: <TrendingUp className="w-4 h-4" /> },
   ];
 
@@ -342,6 +433,63 @@ export default function BrokerCommissions() {
                   <Button variant="outline" size="sm" disabled={commPage === 1} onClick={() => setCommPage(p => p - 1)} className="border-white/10 text-white"><ChevronLeft className="w-4 h-4" /></Button>
                   <Button variant="outline" size="sm" disabled={commPage >= Math.ceil((commissionsQuery.data?.total ?? 0) / 15)} onClick={() => setCommPage(p => p + 1)} className="border-white/10 text-white"><ChevronRight className="w-4 h-4" /></Button>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Earnings Chart Tab */}
+        {activeTab === "chart" && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-white font-semibold">Monthly Commission Earnings</h3>
+                <p className="text-gray-400 text-xs mt-0.5">Bars: total earned &amp; paid out &nbsp;·&nbsp; Line: pending</p>
+              </div>
+              <Select value={String(chartMonths)} onValueChange={(v) => setChartMonths(Number(v))}>
+                <SelectTrigger className="w-32 bg-white/5 border-white/10 text-white text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3">3 months</SelectItem>
+                  <SelectItem value="6">6 months</SelectItem>
+                  <SelectItem value="12">12 months</SelectItem>
+                  <SelectItem value="24">24 months</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+              {chartQuery.isLoading ? (
+                <div className="flex items-center justify-center" style={{ height: 260 }}>
+                  <RefreshCw className="animate-spin text-emerald-400 w-6 h-6" />
+                </div>
+              ) : (
+                <CommissionChart data={chartQuery.data ?? []} />
+              )}
+            </div>
+            {/* Monthly breakdown table */}
+            {chartQuery.data && chartQuery.data.some((d) => d.earned > 0) && (
+              <div className="mt-4 bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-white/10 hover:bg-transparent">
+                      <TableHead className="text-gray-400">Month</TableHead>
+                      <TableHead className="text-gray-400 text-right">Earned</TableHead>
+                      <TableHead className="text-gray-400 text-right">Paid</TableHead>
+                      <TableHead className="text-gray-400 text-right">Pending</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...(chartQuery.data ?? [])].reverse().map((row) => (
+                      <TableRow key={row.month} className="border-white/10 hover:bg-white/5">
+                        <TableCell className="text-white">{row.label}</TableCell>
+                        <TableCell className="text-emerald-400 font-semibold text-right">₦{row.earned.toLocaleString()}</TableCell>
+                        <TableCell className="text-blue-400 text-right">₦{row.paid.toLocaleString()}</TableCell>
+                        <TableCell className="text-amber-400 text-right">₦{row.pending.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>

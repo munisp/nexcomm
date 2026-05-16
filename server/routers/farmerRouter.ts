@@ -801,6 +801,17 @@ export const farmerRouter = router({
       const rejected = results.filter(r => r.success && input.decision === "REJECTED").length;
       const failed = results.filter(r => !r.success).length;
 
+      // Notify owner of bulk review outcome
+      if (approved > 0 || rejected > 0) {
+        notifyOwner({
+          title: `📋 Bulk KYC Review Complete`,
+          content:
+            `Bulk KYC review processed ${input.farmerProfileIds.length} farmer application(s). ` +
+            `Approved: ${approved}, Rejected: ${rejected}, Failed: ${failed}.` +
+            (input.notes ? `\n\nNotes: ${input.notes}` : ""),
+        }).catch(e => console.warn("[farmerRouter] notifyOwner (bulk review) failed:", (e as Error).message));
+      }
+
       return { results, approved, rejected, failed, total: input.farmerProfileIds.length };
     }),
 

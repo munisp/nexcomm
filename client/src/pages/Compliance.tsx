@@ -378,6 +378,41 @@ export default function Compliance() {
 
         {/* AML Tab */}
         <TabsContent value="aml" className="mt-4">
+          {/* AML Alerts header with export */}
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-muted-foreground">{liveAmlAlerts.length} alert{liveAmlAlerts.length !== 1 ? "s" : ""}</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1 text-xs"
+              disabled={liveAmlAlerts.length === 0}
+              onClick={() => {
+                const headers = ["ID","Alert Type","Entity","Amount","Currency","Date","Risk Level","Status","Description"];
+                const rows = liveAmlAlerts.map((a) => [
+                  a.id,
+                  a.alertType,
+                  a.entity,
+                  a.amount > 0 ? a.amount : "",
+                  a.currency,
+                  a.date,
+                  a.riskLevel,
+                  a.status,
+                  String(a.description ?? "").replace(/"/g, "'"),
+                ]);
+                const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${v}"`).join(","))].join("\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `aml-alerts-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+                toast.success(`Exported ${liveAmlAlerts.length} AML alert${liveAmlAlerts.length !== 1 ? "s" : ""} to CSV`);
+              }}
+            >
+              <Download className="w-3 h-3" />Export CSV
+            </Button>
+          </div>
           <div className="rounded-xl border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[700px]">

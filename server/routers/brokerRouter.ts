@@ -240,10 +240,23 @@ export const brokerRouter = router({
         decision: input.decision,
         notes: input.notes ?? null,
       });
-      notifyOwner({
-        title: `[Broker KYC] Application ${input.decision}`,
-        content: `Broker profile ID ${updated.id} (${updated.firmName}) KYC has been ${input.decision}. Account status: ${updated.accountStatus}. Notes: ${input.notes ?? "None"}.`,
-      }).catch(e => console.warn("[brokerRouter] notifyOwner failed:", (e as Error).message));
+      const brokerFirm = updated.firmName ?? `Broker #${updated.id}`;
+      if (input.decision === "APPROVED") {
+        notifyOwner({
+          title: `✅ Broker KYC Approved — ${brokerFirm}`,
+          content:
+            `Broker firm "${brokerFirm}" (Profile ID: ${updated.id}) has been KYC-approved by ${ctx.user.name ?? "admin"}. ` +
+            `Their account is now ACTIVE and they can begin onboarding clients.` +
+            (input.notes ? `\n\nReviewer notes: ${input.notes}` : ""),
+        }).catch(e => console.warn("[brokerRouter] notifyOwner (approved) failed:", (e as Error).message));
+      } else {
+        notifyOwner({
+          title: `❌ Broker KYC Rejected — ${brokerFirm}`,
+          content:
+            `Broker firm "${brokerFirm}" (Profile ID: ${updated.id}) KYC application was rejected by ${ctx.user.name ?? "admin"}.` +
+            (input.notes ? `\n\nReason: ${input.notes}` : ""),
+        }).catch(e => console.warn("[brokerRouter] notifyOwner (rejected) failed:", (e as Error).message));
+      }
       return { kycStatus: updated.kycStatus, accountStatus: updated.accountStatus };
     }),
 
@@ -559,5 +572,65 @@ export const brokerRouter = router({
         db.select({ count: sql<number>`COUNT(*)::int` }).from(tradeFills).where(whereClause),
       ]);
       return { trades, total: Number(countResult[0]?.count ?? 0), page: input.page, pageSize: input.pageSize };
+    }),
+
+  // ── getMonthlyCommissionChart ────────────────────────────────────────────────
+  getMonthlyCommissionChart: protectedProcedure
+    .input(z.object({
+      months: z.number().int().min(3).max(24).default(12),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        // Return demo data when DB is unavailable
+        const now = new Date();
+        return Array.from({ length: input.months }, (_, i) => {
+          const d = new Date(now.getFullYear(), now.getMonth() - (input.months - 1 - i), 1);
+          return {
+            month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+            label: d.toLocaleDateString("en-NG", { month: "short", year: "2-digit" }),
+            earned: 0,
+            paid: 0,
+            pending: 0,
+          };
+        });
+      }
+      const [profile] = await db
+        .select({ id: brokerProfiles.id })
+        .from(brokerProfiles)
+        .where(eq(brokerProfiles.userId, ctx.user.id))
+        .limit(1);
+      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Broker profile not found" });
+
+      const rows = await db
+        .select({
+          month: sql<string>`TO_CHAR(created_at, 'YYYY-MM')`,
+          earned: sql<string>`COALESCE(SUM(commission_amount), 0)::text`,
+          paid: sql<string>`COALESCE(SUM(CASE WHEN status = 'PAID' THEN commission_amount ELSE 0 END), 0)::text`,
+          pending: sql<string>`COALESCE(SUM(CASE WHEN status = 'PENDING' THEN commission_amount ELSE 0 END), 0)::text`,
+        })
+        .from(brokerCommissions)
+        .where(and(
+          eq(brokerCommissions.brokerProfileId, profile.id),
+          sql`created_at >= NOW() - INTERVAL '${sql.raw(String(input.months))} months'`,
+        ))
+        .groupBy(sql`TO_CHAR(created_at, 'YYYY-MM')`)
+        .orderBy(sql`TO_CHAR(created_at, 'YYYY-MM')`);
+
+      // Build a full month range so months with 0 earnings still appear
+      const now = new Date();
+      const monthMap = new Map(rows.map((r) => [r.month, r]));
+      return Array.from({ length: input.months }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (input.months - 1 - i), 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const row = monthMap.get(key);
+        return {
+          month: key,
+          label: d.toLocaleDateString("en-NG", { month: "short", year: "2-digit" }),
+          earned: Number(row?.earned ?? 0),
+          paid: Number(row?.paid ?? 0),
+          pending: Number(row?.pending ?? 0),
+        };
+      });
     }),
 });
