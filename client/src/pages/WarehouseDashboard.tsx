@@ -245,7 +245,7 @@ export default function WarehouseDashboard() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {profile.commoditiesHandled.map((c: string) => (
+                {(profile.commoditiesHandled as string[]).map((c: string) => (
                   <Badge key={c} className="bg-amber-700 text-amber-200 text-xs">{c}</Badge>
                 ))}
               </div>
@@ -261,7 +261,7 @@ export default function WarehouseDashboard() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {profile.acceptedGrades.map((g: string) => (
+                {(profile.acceptedGrades as string[]).map((g: string) => (
                   <Badge key={g} className="bg-amber-600 text-amber-100 text-xs">{g}</Badge>
                 ))}
               </div>
@@ -273,7 +273,7 @@ export default function WarehouseDashboard() {
         <button
           onClick={() => {
             setEditForm({
-              facilityAddress: profile.facilityAddress ?? "",
+              facilityAddress: (profile.facilityAddress as string) ?? "",
               storageCapacityMt: profile.storageCapacityMt ? String(profile.storageCapacityMt) : "",
               contactPhone: (profile as { contactPhone?: string }).contactPhone ?? "",
             });
