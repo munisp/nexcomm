@@ -14,8 +14,8 @@ import { writeAuditLog } from "../audit";
 
 
 // ─── In-memory fallback stores ────────────────────────────────────────────────
-type MemIREvent = { id: number; companySymbol: string; companyName: string; eventType: string; title: string; eventDate: string; description: string | null; epsActual: string | null; epsEstimate: string | null; revenueActual: string | null; revenueEstimate: string | null; dividendAmount: string | null; dividendPayDate: string | null; isPublished: boolean; publishedAt: Date | null; createdBy: number | null; createdAt: Date; updatedAt: Date; };
-type MemIRDoc = { id: number; companySymbol: string; companyName: string; documentType: string; title: string; fiscalYear: number | null; fiscalPeriod: string | null; fileUrl: string; fileKey: string; fileSizeBytes: number | null; isPublished: boolean; publishedAt: Date | null; downloadCount: number; createdBy: number | null; createdAt: Date; updatedAt: Date; };
+type MemIREvent = { id: number; companySymbol: string; companyName: string; eventType: string; title: string; eventDate: string; description: string | null; epsActual: string | null; epsEstimate: string | null; revenueActual: string | null; revenueEstimate: string | null; dividendAmount: string | null; dividendPayDate: string | null; dividendPerShare: string | null; dividendCurrency: string | null; exDividendDate: string | null; paymentDate: string | null; isAllDay: boolean; venue: string | null; webcastUrl: string | null; isPublished: boolean; publishedAt: Date | null; createdBy: number | null; createdAt: Date; updatedAt: Date; };
+type MemIRDoc = { id: number; companySymbol: string; companyName: string; documentType: string; title: string; description: string | null; fiscalYear: number | null; fiscalPeriod: string | null; fileUrl: string; fileKey: string; fileSizeBytes: number | null; isPublished: boolean; publishedAt: Date | null; downloadCount: number; createdBy: number | null; createdAt: Date; updatedAt: Date; };
 type MemIRShareholder = { id: number; companySymbol: string; userId: number | null; shareholderName: string; shareholderType: string; sharesHeld: string; totalShares: string; holdingPct: string; asOfDate: string | null; createdAt: Date; updatedAt: Date; };
 type MemIRSub = { id: number; userId: number; companySymbol: string; notifyEarnings: boolean; notifyDividends: boolean; notifyAGM: boolean; notifyAnnualReport: boolean; createdAt: Date; updatedAt: Date; };
 const _irEvents = new Map<number, MemIREvent>();
@@ -319,7 +319,10 @@ export const investorRelationsRouter = router({
           description: input.description ?? null,
           epsActual: input.epsActual ?? null, epsEstimate: input.epsEstimate ?? null,
           revenueActual: input.revenueActual ?? null, revenueEstimate: input.revenueEstimate ?? null,
-          dividendAmount: (input as any).dividendPerShare ?? null, dividendPayDate: (input as any).paymentDate ?? null,
+          dividendAmount: input.dividendPerShare ?? null, dividendPayDate: input.paymentDate ?? null,
+          dividendPerShare: input.dividendPerShare ?? null, dividendCurrency: input.dividendCurrency ?? null,
+          exDividendDate: input.exDividendDate ?? null, paymentDate: input.paymentDate ?? null,
+          isAllDay: input.isAllDay ?? true, venue: input.venue ?? null, webcastUrl: input.webcastUrl ?? null,
           isPublished: false, publishedAt: null, createdBy: ctx.user.id,
           createdAt: now, updatedAt: now,
         };
@@ -484,7 +487,7 @@ export const investorRelationsRouter = router({
         const now = new Date();
         const doc: MemIRDoc = {
           id, companySymbol: input.companySymbol, companyName: input.companyName,
-          documentType: input.documentType, title: input.title,
+          documentType: input.documentType, title: input.title, description: (input as any).description ?? null,
           fiscalYear: input.fiscalYear ?? null, fiscalPeriod: input.fiscalPeriod ?? null,
           fileUrl: input.fileUrl, fileKey: input.fileKey,
           fileSizeBytes: input.fileSizeBytes ?? null,

@@ -286,7 +286,7 @@ export const clearingHouseRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const atRisk = await db.select().from(clearingAccounts)
         .where(and(
@@ -402,7 +402,7 @@ export const clearingHouseRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const conditions = [];
       if (input.status) conditions.push(eq(marginCalls.status, input.status));
@@ -625,7 +625,7 @@ export const clearingHouseRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const conditions = input.status ? [eq(autoLiquidationOrders.status, input.status)] : [];
       const orders = await db.select().from(autoLiquidationOrders)
@@ -641,7 +641,7 @@ export const clearingHouseRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const events = await db.select().from(marginCallEvents)
         .where(eq(marginCallEvents.marginCallId, input.marginCallId))
@@ -755,7 +755,7 @@ export const clearingHouseRouter = router({
     }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+      if (!db) return [];
 
       const conditions = [eq(marginCalls.userId, ctx.user.id)];
       if (input?.status) conditions.push(eq(marginCalls.status, input.status));
@@ -772,7 +772,7 @@ export const clearingHouseRouter = router({
     .input(z.object({ marginCallId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const [call] = await db.select().from(marginCalls)
         .where(and(eq(marginCalls.id, input.marginCallId), eq(marginCalls.userId, ctx.user.id))).limit(1);

@@ -138,7 +138,7 @@ export const dfspKycRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
       }
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const rows = await db
         .select()
         .from(dfspKycRecords)

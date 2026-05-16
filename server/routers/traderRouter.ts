@@ -150,7 +150,7 @@ export const traderRouter = router({
   getTraderDashboard: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const [profile] = await db
         .select()
         .from(traderProfiles)
@@ -201,7 +201,7 @@ export const traderRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const conditions: ReturnType<typeof eq>[] = [
         sql`(${tradeFills.buyerUserId} = ${ctx.user.id} OR ${tradeFills.sellerUserId} = ${ctx.user.id})` as unknown as ReturnType<typeof eq>,
       ];
@@ -250,7 +250,7 @@ export const traderRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const conditions: ReturnType<typeof eq>[] = [
         eq(orders.userId, ctx.user.id) as unknown as ReturnType<typeof eq>,
         inArray(orders.status, ["OPEN", "PARTIALLY_FILLED"]) as unknown as ReturnType<typeof eq>,
@@ -322,7 +322,7 @@ export const traderRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const since = new Date();
       since.setDate(since.getDate() - input.days);
       // Per-symbol realized P&L from positions table
@@ -520,7 +520,7 @@ export const traderRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const conditions = input.kycStatus
         ? [eq(traderProfiles.kycStatus, input.kycStatus)]
         : [];

@@ -116,7 +116,7 @@ export const whatsappRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const offset = (input.page - 1) * input.limit;
 
@@ -245,7 +245,7 @@ export const whatsappRouter = router({
   // ─── Protected: Get My Contact ────────────────────────────────────────────────
   getMyContact: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) return [] as any[];
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
     const [contact] = await db
       .select({

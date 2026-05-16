@@ -27,6 +27,48 @@ import { useState, useRef } from "react";
 import PushNotificationSettings from "@/pages/PushNotificationSettings";
 import { PageSkeleton } from "@/components/PageSkeleton";
 
+type WarehouseOpProfile = {
+  id: string;
+  userId: number;
+  facilityName: string;
+  facilityAddress: string;
+  state: string;
+  lga: string | null;
+  storageCapacityMt: number | null;
+  commoditiesHandled: string[];
+  gradingStaffCount: number | null;
+  operatingHours: string | null;
+  acceptedGrades: string[];
+  kycStatus: string;
+  accountStatus: string;
+  kycDocuments: unknown;
+  kycNotes: string | null;
+  kycReviewedAt: number | null;
+  kycReviewedBy: string | null;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+  nwrCertNumber?: string | null;
+  contactPhone?: string | null;
+};
+
+type DashStats = {
+  receiptStats: { active: number; total: number; pledged: number; redeemed: number; pendingRelease?: number };
+  inventoryStats: { totalItems: number; totalQuantityMt: number };
+  utilizationPct: number;
+  storageUtilizationPct?: number;
+  pendingKycDocs?: number;
+  recentActivity?: Array<{ type: string; description: string; timestamp: number }>;
+  profile?: unknown;
+  kycStatus?: string;
+  accountStatus?: string;
+  isRegistered?: boolean;
+  isKycApproved?: boolean;
+  isActive?: boolean;
+  storageCapacityMt?: number;
+  commoditiesHandled?: string[];
+};
+
 const KYC_BADGE: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   PENDING: { label: "Pending", color: "bg-gray-700 text-gray-200", icon: Clock },
   UNDER_REVIEW: { label: "Under Review", color: "bg-yellow-700 text-yellow-200", icon: Clock },
@@ -36,8 +78,10 @@ const KYC_BADGE: Record<string, { label: string; color: string; icon: React.Elem
 
 export default function WarehouseDashboard() {
   const [, navigate] = useLocation();
-  const { data: profile, isLoading, refetch } = trpc.warehouseOp.getMyWarehouseOpProfile.useQuery();
-  const { data: dashStats } = trpc.warehouseOp.getWarehouseOpDashboard.useQuery(undefined, { enabled: !!profile });
+  const { data: _profile, isLoading, refetch } = trpc.warehouseOp.getMyWarehouseOpProfile.useQuery();
+  const profile = _profile as WarehouseOpProfile | undefined;
+  const { data: _dashStats } = trpc.warehouseOp.getWarehouseOpDashboard.useQuery(undefined, { enabled: !!profile });
+  const dashStats = _dashStats as DashStats | undefined;
   const [editOpen, setEditOpen] = useState(false);
   const [kycReset, setKycReset] = useState(false);
   const [editForm, setEditForm] = useState({ facilityAddress: "", storageCapacityMt: "", contactPhone: "" });
@@ -49,13 +93,13 @@ export default function WarehouseDashboard() {
   const insuranceRef = useRef<HTMLInputElement>(null);
   const uploadKycDoc = trpc.warehouseOp.uploadKycDocument.useMutation({
     onSuccess: (data, vars) => {
-      setUploadedUrls(prev => ({ ...prev, [vars.docId]: data.url }));
+      setUploadedUrls(prev => ({ ...prev, [vars.docId]: (data as { url: string }).url }));
       toast.success("Document uploaded successfully");
-      setUploading(prev => ({ ...prev, [vars.docId]: false }));
+      setUploading(prev => ({ ...prev, [vars.docId as string]: false }));
     },
     onError: (e, vars) => {
       toast.error(e.message);
-      setUploading(prev => ({ ...prev, [vars.docId]: false }));
+      setUploading(prev => ({ ...prev, [vars.docId as string]: false }));
     },
   });
   const handleFileUpload = async (docId: string, file: File) => {
@@ -210,7 +254,7 @@ export default function WarehouseDashboard() {
               <div>
                 <p className="text-xs text-amber-400">Storage Capacity</p>
                 <p className="text-sm font-medium text-white">
-                  {profile.storageCapacityMt ? `${parseFloat(profile.storageCapacityMt as string).toLocaleString()} MT` : "—"}
+                  {profile.storageCapacityMt ? `${Number(profile.storageCapacityMt).toLocaleString()} MT` : "—"}
                 </p>
               </div>
               <div>

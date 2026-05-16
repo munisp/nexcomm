@@ -177,7 +177,7 @@ export const disputesRouter = router({
     .input(z.object({ disputeId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const [dispute] = await db
         .select()

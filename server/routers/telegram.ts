@@ -127,7 +127,7 @@ export const telegramRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const offset = (input.page - 1) * input.limit;
 
@@ -260,7 +260,7 @@ export const telegramRouter = router({
   // ─── Protected: Get My Contact ────────────────────────────────────────────────
   getMyContact: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) return [] as any[];
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
     const [contact] = await db
       .select({
@@ -319,7 +319,7 @@ export const telegramRouter = router({
   // ─── Protected: Get My Price Alerts ────────────────────────────────────────────────
   getAlerts: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) return [] as any[];
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const alerts = await db
       .select()
       .from(priceAlerts)
@@ -431,7 +431,7 @@ export const telegramRouter = router({
    */
   getMarketBroadcastStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) return [] as any[];
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const [contact] = await db
       .select({
         isLinked: telegramContacts.id,

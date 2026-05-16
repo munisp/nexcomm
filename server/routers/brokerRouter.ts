@@ -175,7 +175,7 @@ export const brokerRouter = router({
   getBrokerDashboard: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const [profile] = await db
         .select()
         .from(brokerProfiles)
@@ -328,7 +328,7 @@ export const brokerRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const conditions = input.kycStatus
         ? [eq(brokerProfiles.kycStatus, input.kycStatus)]
         : [];
@@ -406,7 +406,7 @@ export const brokerRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const [profile] = await db.select({ id: brokerProfiles.id }).from(brokerProfiles).where(eq(brokerProfiles.userId, ctx.user.id)).limit(1);
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Broker profile not found" });
       const offset = (input.page - 1) * input.pageSize;
@@ -491,7 +491,7 @@ export const brokerRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const [profile] = await db.select({ id: brokerProfiles.id, commissionRate: brokerProfiles.commissionRate }).from(brokerProfiles).where(eq(brokerProfiles.userId, ctx.user.id)).limit(1);
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Broker profile not found" });
       const offset = (input.page - 1) * input.pageSize;
@@ -528,7 +528,7 @@ export const brokerRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const offset = (input.page - 1) * input.pageSize;
       const [trades, countResult] = await Promise.all([
         db.select().from(tradeFills)

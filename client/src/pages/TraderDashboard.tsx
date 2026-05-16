@@ -175,14 +175,30 @@ const DOC_FIELDS: { id: DocId; label: string; required: boolean }[] = [
   { id: "bankStatementUrl", label: "Bank Statement (last 3 months)", required: true },
 ];
 
+type TraderProfile = {
+  id: number; userId: number; fullName: string; kycStatus: string; kycNotes?: string | null;
+  tradingExperience?: string | null; riskProfile?: string | null; capitalRange?: string | null;
+  accountStatus?: string | null; idDocumentUrl?: string | null; proofOfAddressUrl?: string | null;
+  bankStatementUrl?: string | null;
+  bankName?: string | null; accountNumber?: string | null;
+};
+type TDashboard = {
+  activeOrders?: number; totalVolume?: number | string; openPositions?: number;
+  totalPnl?: number | string; unrealisedPnl?: number | string;
+  recentTrades?: { id: number | string; instrument: string; side: string; quantity: number | string; price: number | string; status: string; createdAt: Date | string }[];
+  marginUtilization?: number | string;
+};
+type TTraderProfile = TraderProfile & { preferredMarkets?: string[] | null };
 export default function TraderDashboard() {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
 
-  const { data: profile, isLoading } = trpc.trader.getMyTraderProfile.useQuery();
-  const { data: dashboard } = trpc.trader.getTraderDashboard.useQuery(undefined, {
+  const { data: profileRaw, isLoading } = trpc.trader.getMyTraderProfile.useQuery();
+  const profile = profileRaw as TTraderProfile | null | undefined;
+  const { data: dashboardRaw } = trpc.trader.getTraderDashboard.useQuery(undefined, {
     enabled: !!profile,
   });
+  const dashboard = dashboardRaw as TDashboard | null | undefined;
 
   const [editOpen, setEditOpen] = useState(false);
   const [kycReset, setKycReset] = useState(false);
@@ -307,7 +323,7 @@ export default function TraderDashboard() {
     );
   }
 
-  const kycInfo = KYC_BADGE[profile.kycStatus] ?? KYC_BADGE.PENDING;
+  const kycInfo = KYC_BADGE[profile.kycStatus as string] ?? KYC_BADGE.PENDING;
   const KycIcon = kycInfo.icon;
   const allDocsUploaded = DOC_FIELDS.every((f) => !f.required || uploadedUrls[f.id]);
 

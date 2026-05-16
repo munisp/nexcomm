@@ -53,7 +53,7 @@ interface MemSar {
   activityDescription: string; totalAmount: string | null; currency: string;
   activityStartDate: Date | null; activityEndDate: Date | null;
   filedBy: number; status: string; regulatoryRef: string | null;
-  filedAt: Date; exportedAt: Date | null; updatedAt: Date;
+  filedAt: Date; exportedAt: Date | null; updatedAt: Date; createdAt: Date;
 }
 interface MemExport {
   id: number; exportType: string; format: string; dateFrom: Date | null;
@@ -367,7 +367,7 @@ export const amlRouter = router({
           totalAmount: input.totalAmount ? String(input.totalAmount) : null,
           currency: input.currency, activityStartDate: input.activityStartDate ?? null,
           activityEndDate: input.activityEndDate ?? null, filedBy: ctx.user.id,
-          status: "DRAFT", regulatoryRef: null, filedAt: now, exportedAt: null, updatedAt: now,
+          status: "DRAFT", regulatoryRef: null, filedAt: now, exportedAt: null, updatedAt: now, createdAt: now,
         };
         _sars.push(sar);
         if (input.flagId) {

@@ -482,7 +482,7 @@ export const farmerRouter = router({
   // ── getMyFarms ─────────────────────────────────────────────────────────────
   getMyFarms: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) return [] as any[];
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
     return db
       .select()
@@ -616,7 +616,7 @@ export const farmerRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const conditions = [eq(cropListings.userId, ctx.user.id)];
       if (input.status) conditions.push(eq(cropListings.status, input.status));
@@ -881,7 +881,7 @@ export const farmerRouter = router({
   // ── listCooperativesForFarmer ─────────────────────────────────────────────
   listCooperativesForFarmer: protectedProcedure.query(async () => {
     const db = await getDb();
-        if (!db) return [] as any[];
+    if (!db) return [];
 
     const { cooperativeBulkUploads } = await import("../../drizzle/schema");
     const uploads = await db
@@ -970,7 +970,7 @@ export const farmerRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       // Only the listing owner or the sender can read messages
       const messages = await db
         .select()
@@ -1003,7 +1003,7 @@ export const farmerRouter = router({
   getMyInbox: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       // Get latest message per listing thread
       const threads = await db
         .select()
@@ -1227,7 +1227,7 @@ export const farmerRouter = router({
   // ── getDraft ───────────────────────────────────────────────────────────────
   getDraft: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) return [] as any[];
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const [draft] = await db
       .select()
       .from(farmerOnboardingDrafts)

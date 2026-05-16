@@ -508,7 +508,7 @@ function StepAddFarm({ data, onChange, kycStatus, farmPin, onPinChange, farmBoun
         </div>
         <div className="space-y-1.5">
           <Label className="text-slate-300">Farm Size (hectares) <span className="text-red-400">*</span></Label>
-          <Input type="number" min="0.1" step="0.1" placeholder="e.g. 5.5" value={data.sizeHectares} onChange={set("sizeHectares")}
+          <Input type="number" min="0.1" step="0.1" placeholder="e.g. 5.5" value={String((data as any).sizeHectares ?? "")} onChange={set("sizeHectares")}
             className="bg-slate-800 border-slate-600 text-white h-11" />
         </div>
         <div className="space-y-1.5">
@@ -629,7 +629,7 @@ export default function FarmerOnboarding() {
     enabled: isAuthenticated,
     staleTime: 30_000,
   });
-  const kycStatus = farmerProfile?.kycStatus ?? "PENDING";
+  const kycStatus = (farmerProfile?.kycStatus ?? "PENDING") as string;
 
   const saveDraftMutation = trpc.farmer.saveDraft.useMutation();
   const deleteDraftMutation = trpc.farmer.deleteDraft.useMutation();

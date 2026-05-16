@@ -113,7 +113,9 @@ export default function BrokerDashboard() {
     );
   }
 
-  const kycInfo = KYC_BADGE[profile.kycStatus] ?? KYC_BADGE.PENDING;
+  type BrokerProfile = { id: number; userId: number; firmName: string; kycStatus: string; kycNotes?: string | null; rcNumber?: string | null; state?: string | null; commissionRate?: string | number | null; accountStatus?: string | null; yearsInOperation?: string | number | null; clientBookSize?: string | number | null; secLicenseNumber?: string | null; cbnLicenseNumber?: string | null; contactPhone?: string | null; contactEmail?: string | null };
+  const typedProfile = profile as BrokerProfile;
+  const kycInfo = KYC_BADGE[typedProfile.kycStatus] ?? KYC_BADGE.PENDING;
   const KycIcon = kycInfo.icon;
 
   if (isLoading) return <PageSkeleton cards={4} tableRows={6} tableCols={4} showChart />;
@@ -128,29 +130,29 @@ export default function BrokerDashboard() {
             {kycInfo.label}
           </Badge>
         </div>
-        <p className="text-purple-300 text-sm">{profile.firmName}</p>
+        <p className="text-purple-300 text-sm">{typedProfile.firmName}</p>
       </div>
 
       {/* Live Price Ticker — real-time WebSocket feed */}
       <WatchlistTickerFilter />
       <div className="px-4 space-y-4">
         {/* KYC Status Alert */}
-        {profile.kycStatus !== "APPROVED" && (
+        {typedProfile.kycStatus !== "APPROVED" && (
           <Card className="bg-yellow-900/30 border-yellow-700">
             <CardContent className="p-4 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-yellow-200 text-sm font-medium">
-                  {profile.kycStatus === "PENDING" ? "KYC Not Submitted" : profile.kycStatus === "UNDER_REVIEW" ? "KYC Under Review" : "KYC Rejected"}
+                  {typedProfile.kycStatus === "PENDING" ? "KYC Not Submitted" : typedProfile.kycStatus === "UNDER_REVIEW" ? "KYC Under Review" : "KYC Rejected"}
                 </p>
                 <p className="text-yellow-400 text-xs mt-0.5">
-                  {profile.kycStatus === "PENDING"
+                  {typedProfile.kycStatus === "PENDING"
                     ? "Submit your regulatory documents to activate your broker account."
-                    : profile.kycStatus === "UNDER_REVIEW"
+                    : typedProfile.kycStatus === "UNDER_REVIEW"
                     ? "Your documents are being reviewed. Approval takes 2–5 business days."
-                    : `Reason: ${profile.kycNotes ?? "Please resubmit with correct documents."}`}
+                    : `Reason: ${typedProfile.kycNotes ?? "Please resubmit with correct documents."}`}
                 </p>
-                {profile.kycStatus === "PENDING" && (
+                {typedProfile.kycStatus === "PENDING" && (
                   <button onClick={() => navigate("/broker-onboarding")} className="text-yellow-300 text-xs underline mt-1">
                     Complete KYC →
                   </button>
@@ -169,58 +171,58 @@ export default function BrokerDashboard() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-xs text-purple-400">RC Number</p>
-                <p className="text-sm font-medium text-white">{profile.rcNumber ?? "—"}</p>
+                <p className="text-sm font-medium text-white">{typedProfile.rcNumber ?? "—"}</p>
               </div>
               <div>
                 <p className="text-xs text-purple-400">State</p>
-                <p className="text-sm font-medium text-white">{profile.state ?? "—"}</p>
+                <p className="text-sm font-medium text-white">{typedProfile.state ?? "—"}</p>
               </div>
               <div>
                 <p className="text-xs text-purple-400">Commission Rate</p>
                 <p className="text-sm font-medium text-white">
-                  {profile.commissionRate ? `${parseFloat(profile.commissionRate).toFixed(2)}%` : "—"}
+                  {typedProfile.commissionRate ? `${parseFloat(String(typedProfile.commissionRate ?? 0)).toFixed(2)}%` : "—"}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-purple-400">Account Status</p>
-                <p className={`text-sm font-medium ${profile.accountStatus === "ACTIVE" ? "text-green-400" : "text-gray-400"}`}>
-                  {profile.accountStatus}
+                <p className={`text-sm font-medium ${typedProfile.accountStatus === "ACTIVE" ? "text-green-400" : "text-gray-400"}`}>
+                  {typedProfile.accountStatus}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-purple-400">Years Operating</p>
-                <p className="text-sm font-medium text-white">{profile.yearsInOperation ?? "—"}</p>
+                <p className="text-sm font-medium text-white">{typedProfile.yearsInOperation ?? "—"}</p>
               </div>
               <div>
                 <p className="text-xs text-purple-400">Client Book Size</p>
-                <p className="text-sm font-medium text-white">{profile.clientBookSize ?? "—"}</p>
+                <p className="text-sm font-medium text-white">{typedProfile.clientBookSize ?? "—"}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Regulatory Info */}
-        {(profile.secLicenseNumber || profile.cbnLicenseNumber) && (
+        {(typedProfile.secLicenseNumber || typedProfile.cbnLicenseNumber) && (
           <Card className="bg-purple-800/30 border-purple-700">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-purple-300 font-medium">Regulatory Licenses</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {profile.secLicenseNumber && (
+              {typedProfile.secLicenseNumber && (
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4 text-purple-400" />
                   <div>
                     <p className="text-xs text-purple-400">SEC License</p>
-                    <p className="text-sm text-white">{profile.secLicenseNumber}</p>
+                    <p className="text-sm text-white">{typedProfile.secLicenseNumber}</p>
                   </div>
                 </div>
               )}
-              {profile.cbnLicenseNumber && (
+              {typedProfile.cbnLicenseNumber && (
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4 text-purple-400" />
                   <div>
                     <p className="text-xs text-purple-400">CBN License</p>
-                    <p className="text-sm text-white">{profile.cbnLicenseNumber}</p>
+                    <p className="text-sm text-white">{typedProfile.cbnLicenseNumber}</p>
                   </div>
                 </div>
               )}
@@ -232,9 +234,9 @@ export default function BrokerDashboard() {
         <button
           onClick={() => {
             setEditForm({
-              contactPhone: profile.contactPhone ?? "",
-              contactEmail: profile.contactEmail ?? "",
-              commissionRate: profile.commissionRate ? String(profile.commissionRate) : "",
+              contactPhone: typedProfile.contactPhone ?? "",
+              contactEmail: typedProfile.contactEmail ?? "",
+              commissionRate: typedProfile.commissionRate ? String(typedProfile.commissionRate) : "",
             });
             setEditOpen(true);
           }}

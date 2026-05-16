@@ -151,7 +151,7 @@ export const mojaloopRouter = router({
     .input(z.object({ transferId: z.string().trim() }))
     .query(async ({ input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const rows = await db
         .select()
         .from(mojaloopTransfers)
@@ -475,7 +475,7 @@ export const mojaloopRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const fromDate = input.fromDate ? new Date(input.fromDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const toDate = input.toDate ? new Date(input.toDate) : new Date();

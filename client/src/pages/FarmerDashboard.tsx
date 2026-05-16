@@ -104,13 +104,17 @@ export default function FarmerDashboard() {
     (draftQ.data.step ?? 0) > 1 &&
     (draftQ.data.step ?? 0) < 5;
 
-  const profile = profileQ.data;
-  const farms = farmsQ.data ?? [];
-  const listings = listingsQ.data ?? [];
-  const kycStatus = profile?.kycStatus ?? "PENDING";
+  type FarmerProfile = { id: number; userId: number; fullName: string; phone?: string | null; nin?: string | null; bvn?: string | null; state?: string | null; lga?: string | null; kycStatus: string; ninDocumentUrl?: string | null; bvnDocumentUrl?: string | null };
+  type FarmerFarm = { id: number; farmName: string; location?: string | null; sizeHectares?: string | number | null };
+  type FarmerListing = { id: number; cropType: string; quantityKg: string; askingPricePerKg: string; status: string; createdAt?: Date | string };
+  type CoopInfo = { id: number; fileName: string; totalMembers?: number; state?: string | null };
+  const profile = profileQ.data as FarmerProfile | null | undefined;
+  const farms = (farmsQ.data ?? []) as FarmerFarm[];
+  const listings = (listingsQ.data ?? []) as FarmerListing[];
+  const kycStatus = (profile?.kycStatus ?? "PENDING") as string;
   const KYCIcon = KYC_ICONS[kycStatus] ?? Clock;
-  const cooperative = cooperativeQ.data?.cooperative ?? null;
-  const membershipStatus = cooperativeQ.data?.membershipStatus ?? null;
+  const cooperative = (cooperativeQ.data?.cooperative ?? null) as CoopInfo | null;
+  const membershipStatus = (cooperativeQ.data?.membershipStatus ?? null) as string | null;
 
   // ── Edit Profile dialog state ──────────────────────────────────────────────
   const [editOpen, setEditOpen] = useState(false);

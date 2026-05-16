@@ -183,7 +183,7 @@ export const mojaloopTiersRouter = router({
     .input(z.object({ name: z.enum(TIER_NAMES) }))
     .query(async ({ input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const [tier] = await db
         .select()
         .from(dfspTiers)

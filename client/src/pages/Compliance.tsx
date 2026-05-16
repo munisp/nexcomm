@@ -134,7 +134,7 @@ export default function Compliance() {
   // ── tRPC mutations ────────────────────────────────────────────────────────
   const decideKyc = trpc.kycAnalysis.adminDecideKyc.useMutation({
     onSuccess: (data) => {
-      toast.success(`KYC ${data.status === "APPROVED" ? "approved" : "rejected"} successfully`);
+      toast.success(`KYC ${(data as { status?: string }).status === "APPROVED" ? "approved" : "rejected"} successfully`);
       refetchKyc();
       setKycDecideDialog(null);
       setKycNotes("");

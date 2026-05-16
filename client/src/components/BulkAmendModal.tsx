@@ -101,10 +101,11 @@ export default function BulkAmendModal({ orders, open, onClose, onAmended }: Pro
   const utils = trpc.useUtils();
   const amendManyMutation = trpc.orders.amendMany.useMutation({
     onSuccess: (res) => {
-      if (res.amended > 0 && res.failed === 0) {
-        toast.success(`${res.amended} order${res.amended !== 1 ? "s" : ""} amended successfully`);
-      } else if (res.amended > 0) {
-        toast.warning(`${res.amended} amended, ${res.failed} failed`);
+      const amendedCount = (res?.amended as number | undefined) ?? 0;
+      if (amendedCount > 0 && res.failed === 0) {
+        toast.success(`${amendedCount} order${amendedCount !== 1 ? "s" : ""} amended successfully`);
+      } else if (amendedCount > 0) {
+        toast.warning(`${amendedCount} amended, ${res.failed} failed`);
       } else {
         toast.error(`All ${res.failed} amendments failed`);
       }

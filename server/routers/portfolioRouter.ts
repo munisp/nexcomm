@@ -97,7 +97,7 @@ export const portfolioRouter = router({
     .input(z.object({ days: z.number().min(7).max(365).default(30) }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+      if (!db) return [];
 
       const since = new Date(Date.now() - input.days * 24 * 60 * 60 * 1000);
       const snapshots = await db

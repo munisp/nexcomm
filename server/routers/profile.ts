@@ -140,7 +140,7 @@ export const profileRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const [userRow] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
       if (!userRow) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });

@@ -138,7 +138,7 @@ export const creditRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const [row] = await db
         .select()
         .from(collateralRegistry)
@@ -342,7 +342,7 @@ export const creditRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const [row] = await db.select().from(cropInsurancePolicies)
         .where(and(eq(cropInsurancePolicies.id, input.id), eq(cropInsurancePolicies.userId, ctx.user.id)))
         .limit(1);

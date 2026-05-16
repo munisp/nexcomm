@@ -276,7 +276,9 @@ export default function TradeSurveillance() {
 
   const statsQuery = trpc.surveillance.adminGetSurveillanceStats.useQuery(undefined, { refetchInterval: 30_000 });
   const rulesQuery = trpc.surveillance.adminListCircuitBreakerRules.useQuery({ activeOnly: false });
+  type HaltedInstrument = { id: number | string; instrument: string; haltUntil: Date | string; status?: string | null; };
   const haltedQuery = trpc.surveillance.adminGetHaltedInstruments.useQuery(undefined, { refetchInterval: 15_000 });
+  const haltedList = (haltedQuery.data as HaltedInstrument[] | undefined) ?? [];
   const eventsQuery = trpc.surveillance.adminListCircuitBreakerEvents.useQuery({ page: haltEventPage, limit: 20 });
   const washQuery = trpc.surveillance.adminListWashTradeFlags.useQuery({
     page: washPage,
@@ -370,17 +372,17 @@ export default function TradeSurveillance() {
       </div>
 
       {/* Active Halts Banner */}
-      {(haltedQuery.data?.length ?? 0) > 0 && (
+      {haltedList.length > 0 && (
         <Card className="border-red-500/40 bg-red-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-red-400 flex items-center gap-2">
               <ShieldAlert className="h-4 w-4" />
-              Currently Halted Instruments ({haltedQuery.data?.length})
+              Currently Halted Instruments ({haltedList.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {haltedQuery.data?.map((halt) => (
+              {haltedList.map((halt) => (
                 <div
                   key={halt.id}
                   className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-md px-3 py-1.5 text-sm"
@@ -536,7 +538,7 @@ export default function TradeSurveillance() {
                       </TableCell>
                     </TableRow>
                   )}
-                  {eventsQuery.data?.events.map((evt) => (
+                  {eventsQuery.data?.events.map((evt: any) => (
                     <TableRow key={evt.id}>
                       <TableCell className="font-mono font-semibold">{evt.instrument}</TableCell>
                       <TableCell className="text-red-400 font-semibold">
@@ -642,9 +644,9 @@ export default function TradeSurveillance() {
                       </TableCell>
                     </TableRow>
                   )}
-                  {washQuery.data?.flags.map((flag) => (
-                    <TableRow key={flag.id}>
-                      <TableCell className="font-mono text-xs">{flag.userId}</TableCell>
+                  {washQuery.data?.flags.map((flag: any) => (
+                    <TableRow key={(flag as any).id}>
+                      <TableCell className="font-mono text-xs">{(flag as any).userId}</TableCell>
                       <TableCell className="font-semibold">{flag.instrument}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">#{flag.buyOrderId}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">#{flag.sellOrderId}</TableCell>
@@ -655,7 +657,7 @@ export default function TradeSurveillance() {
                       <TableCell className="text-xs text-muted-foreground">
                         {new Date(flag.detectedAt).toLocaleString()}
                       </TableCell>
-                      <TableCell><StatusBadge status={flag.status} /></TableCell>
+                      <TableCell><StatusBadge status={(flag as any).status} /></TableCell>
                       <TableCell>
                         {flag.penaltyApplied ? (
                           <CheckCircle className="h-4 w-4 text-red-400" />
@@ -664,12 +666,12 @@ export default function TradeSurveillance() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {flag.status === "PENDING" && (
+                        {(flag as any).status === "PENDING" && (
                           <Button
                             size="sm"
                             variant="ghost"
                             className="h-7 px-2 text-xs"
-                            onClick={() => setReviewFlagId(Number(flag.id))}
+                            onClick={() => setReviewFlagId(Number((flag as any).id))}
                           >
                             <Eye className="h-3 w-3 mr-1" />
                             Review

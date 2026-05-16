@@ -75,7 +75,7 @@ function KycThresholdPanel() {
 
   const setThresholdMutation = trpc.kycAnalysis.setKycThreshold.useMutation({
     onSuccess: (data) => {
-      toast.success(`KYC threshold updated to ${(data.threshold * 100).toFixed(0)}%.`);
+      toast.success(`KYC threshold updated to ${(data?.threshold ?? 0 * 100).toFixed(0)}%.`);
       utils.kycAnalysis.getKycThreshold.invalidate();
     },
     onError: (err) => toast.error(err.message),

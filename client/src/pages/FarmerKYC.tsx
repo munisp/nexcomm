@@ -100,8 +100,9 @@ export default function FarmerKYC() {
     onError: (e) => toast.error(e.message),
   });
 
-  const profile = profileQ.data;
-  const kycStatus = profile?.kycStatus ?? "PENDING";
+  type FarmerKYCProfile = { id: number; userId: number; fullName: string; kycStatus: string; kycNotes?: string | null; kycDocuments?: Record<string, string> | string | null };
+  const profile = profileQ.data as FarmerKYCProfile | null | undefined;
+  const kycStatus = (profile?.kycStatus ?? "PENDING") as string;
 
   // Merge server-stored docs with locally uploaded ones
   const serverDocs: Record<string, string> = profile?.kycDocuments

@@ -44,7 +44,7 @@ export const userManagementRouter = router({
     } catch {
       // Fallback to DB
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const rows = await db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1);
       if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
       return { ...rows[0], source: "db-fallback" };
@@ -103,7 +103,7 @@ export const userManagementRouter = router({
       } catch {
         // Fallback: query DB directly
         const db = await getDb();
-                if (!db) return [] as any[];
+                if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
         const offset = (input.page - 1) * input.pageSize;
         const conditions = [];
         if (input.search) {

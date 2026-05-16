@@ -73,12 +73,12 @@ export function PasskeyLoginButton({ email, className, onSuccess }: PasskeyLogin
       // Step 2: browser passkey assertion
       const credential = await navigator.credentials.get({
         publicKey: {
-          challenge: base64urlToBuffer(options.challenge),
+          challenge: base64urlToBuffer(options.challenge ?? ""),
           timeout: options.timeout,
-          rpId: options.rpId,
-          allowCredentials: options.allowCredentials.map((c) => ({
+          rpId: options.rpId!,
+          allowCredentials: (options.allowCredentials ?? []).map((c) => ({
             type: c.type as PublicKeyCredentialType,
-            id: base64urlToBuffer(c.id),
+            id: base64urlToBuffer(c.id ?? ""),
             transports: c.transports as AuthenticatorTransport[],
           })),
           userVerification: options.userVerification as UserVerificationRequirement,
@@ -95,12 +95,12 @@ export function PasskeyLoginButton({ email, className, onSuccess }: PasskeyLogin
 
       // Step 3: verify on server
       await verifyLogin.mutateAsync({
-        credentialId: bufferToBase64url(credential.rawId),
-        authenticatorData: bufferToBase64url(response.authenticatorData),
-        clientDataJSON: bufferToBase64url(response.clientDataJSON),
-        signature: bufferToBase64url(response.signature),
-        userHandle: response.userHandle ? bufferToBase64url(response.userHandle) : undefined,
-        challenge: options.challenge,
+        credentialId: bufferToBase64url!(credential.rawId),
+        authenticatorData: bufferToBase64url!(response.authenticatorData),
+        clientDataJSON: bufferToBase64url!(response.clientDataJSON),
+        signature: bufferToBase64url!(response.signature),
+        userHandle: response.userHandle! ? bufferToBase64url(response.userHandle) : undefined,
+        challenge: options.challenge!,
       });
 
       toast.success("Signed in with passkey!");

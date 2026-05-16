@@ -300,7 +300,8 @@ export default function AdminKycDocumentReview() {
 
   const decideMutation = trpc.kycAnalysis.adminDecideKyc.useMutation({
     onSuccess: (updated) => {
-      toast.success(`Application #${updated.id} — ${updated.status.replace("_", " ")}`);
+      const upd = updated as { id?: number; status?: string };
+      toast.success(`Application #${upd.id} — ${(upd.status ?? "").replace("_", " ")}`);
       setReviewTarget(null);
       utils.kycAnalysis.adminListKycQueue.invalidate();
     },

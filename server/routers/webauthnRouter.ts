@@ -789,7 +789,7 @@ export const webauthnRouter = router({
   // ── List user's passkey credentials ─────────────────────────────────────────
   listCredentials: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) return [] as any[];
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const uid = ctx.user.id;
     return db
       .select({

@@ -33,9 +33,22 @@ const KYC_BADGE: Record<string, { label: string; color: string; icon: React.Elem
   REJECTED: { label: "Rejected", color: "bg-red-700 text-red-200", icon: XCircle },
 };
 
+type MMProfile = {
+  id: number; userId: number; firmName: string; tradingDesk?: string | null;
+  contactPhone?: string | null; contactEmail?: string | null;
+  yearsOfOperation?: number | null; regulatoryRegistrations?: string | null;
+  instrumentObligations?: string[] | null; minQuoteSizeLots?: number | null;
+  maxSpreadBps?: number | null; capitalCommitmentNgn?: string | null;
+  performanceBondNgn?: string | null; kycStatus: string; kycNotes?: string | null;
+  accountStatus: string; firmRegistrationUrl?: string | null;
+  tradingLicenseUrl?: string | null; capitalAdequacyUrl?: string | null;
+  createdAt?: Date | string; updatedAt?: Date | string;
+};
+
 export default function MarketMakerOnboardingDashboard() {
   const [, navigate] = useLocation();
-  const { data: profile, isLoading, refetch } = trpc.marketMakerOnboarding.getMyMarketMakerProfile.useQuery();
+  const { data: profileRaw, isLoading, refetch } = trpc.marketMakerOnboarding.getMyMarketMakerProfile.useQuery();
+  const profile = profileRaw as MMProfile | null | undefined;
   const [editOpen, setEditOpen] = useState(false);
   const [kycReset, setKycReset] = useState(false);
   const [editForm, setEditForm] = useState({ tradingDesk: "", maxSpreadBps: "", capitalCommitmentNgn: "" });
@@ -172,14 +185,14 @@ export default function MarketMakerOnboardingDashboard() {
                 <p className="text-xs text-cyan-400">Min Quote Size</p>
                 <p className="text-sm font-medium text-white">
                   {profile.minQuoteSizeLots
-                    ? `${parseFloat(profile.minQuoteSizeLots).toLocaleString()} lots`
+                    ? `${parseFloat(String(profile.minQuoteSizeLots ?? 0)).toLocaleString()} lots`
                     : "—"}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-cyan-400">Max Spread</p>
                 <p className="text-sm font-medium text-white">
-                  {profile.maxSpreadBps ? `${parseFloat(profile.maxSpreadBps)} bps` : "—"}
+                  {profile.maxSpreadBps ? `${parseFloat(String(profile.maxSpreadBps ?? 0))} bps` : "—"}
                 </p>
               </div>
               <div>
@@ -209,14 +222,14 @@ export default function MarketMakerOnboardingDashboard() {
         </Card>
 
         {/* Instrument Obligations */}
-        {profile.instrumentObligations && profile.instrumentObligations.length > 0 && (
+        {profile.instrumentObligations && (profile.instrumentObligations as string[]).length > 0 && (
           <Card className="bg-cyan-800/30 border-cyan-700">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-cyan-300 font-medium">Instrument Obligations</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {profile.instrumentObligations.map((inst: string) => (
+                {(profile.instrumentObligations as string[]).map((inst: string) => (
                   <Badge key={inst} className="bg-cyan-700 text-cyan-200 text-xs">
                     {inst}
                   </Badge>

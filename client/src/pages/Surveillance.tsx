@@ -252,9 +252,10 @@ export default function Surveillance() {
     { retry: false }
   );
 
+  type CBEvent = { id: number | string; instrument?: string | null; status?: string | null; haltedAt?: Date | string | null; actualMovePct?: number | string | null; };
   // Map real circuit breaker events to SurveillanceAlert interface
   const liveCbAlerts = useMemo<SurveillanceAlert[]>(() => {
-    const events = cbEventsData?.events;
+    const events = cbEventsData?.events as CBEvent[] | undefined;
     if (!events || events.length === 0) return [];
     return events.map(e => ({
       id: String(e.id),
