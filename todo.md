@@ -918,3 +918,22 @@
 - [x] Broker commission analytics chart — monthly earnings bar/line chart in Commissions tab
 - [x] KYC email notifications — notify farmer/broker via owner notification when KYC status changes to APPROVED or REJECTED
 - [x] Compliance AML CSV export — Export CSV button on AML Alerts tab
+
+## Sprint — May 2026 (Round A — Production Loop)
+- [x] Broker commission CSV export — one-click CSV download on Commissions tab
+- [x] KYC SLA dashboard widget — avg review time card on Compliance overview
+- [x] AML alert risk filter — risk-level dropdown on AML Alerts tab
+
+## Sprint — May 2026 (Round B — Production Loop)
+- [x] Broker trade history CSV export — Export CSV button on Trade History tab
+- [x] KYC queue name/email search — search input on KYC Management tab
+- [x] Regulatory report overdue badge — highlight overdue reports with red border
+- [x] Farmer dashboard crop listing search — search/filter on My Listings tab
+- [x] Admin stakeholder page search — search by name/email on admin KYC review page
+
+## Sprint — May 2026 (Round C — Production Loop)
+- [x] Broker dashboard summary cards — add total clients, total commissions, pending commissions to BrokerDashboard header
+- [x] Compliance audit trail CSV export — Export CSV on Audit Trail tab
+- [ ] Admin KYC bulk action — select all / deselect all checkbox on AdminKycDocumentReview
+- [ ] Market price page empty state — improve empty state when no prices are available
+- [x] Farmer onboarding progress bar — visual step indicator on FarmerOnboarding multi-step form

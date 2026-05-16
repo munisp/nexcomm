@@ -103,10 +103,12 @@ export default function Compliance() {
   // KYC decide dialog state
   const [kycDecideDialog, setKycDecideDialog] = useState<{ id: number; name: string; decision: "APPROVED" | "REJECTED" } | null>(null);
   const [kycNotes, setKycNotes] = useState("");
+  const [kycSearch, setKycSearch] = useState("");
 
   // AML review dialog state
   const [amlReviewDialog, setAmlReviewDialog] = useState<{ id: number; status: "ESCALATED" | "CLEARED"; alertType: string } | null>(null);
   const [amlNotes, setAmlNotes] = useState("");
+  const [amlRiskFilter, setAmlRiskFilter] = useState<"ALL" | "CRITICAL" | "HIGH" | "MEDIUM" | "LOW">("ALL");
 
   // Generate report dialog state
   const [generateDialog, setGenerateDialog] = useState<{ reportType: string } | null>(null);
@@ -129,6 +131,10 @@ export default function Compliance() {
   );
   const { data: reportsData, refetch: refetchReports } = trpc.regulatoryReporting.adminListReports.useQuery(
     { limit: 50, offset: 0 }, { retry: false }
+  );
+  const [auditPage, setAuditPage] = useState(1);
+  const { data: auditData, isLoading: auditLoading, refetch: refetchAudit } = trpc.analytics.auditLog.useQuery(
+    { page: auditPage, limit: 50 }, { retry: false }
   );
 
   // ── tRPC mutations ────────────────────────────────────────────────────────
@@ -220,12 +226,34 @@ export default function Compliance() {
   }, [reportsData]);
 
   const filteredKYC = liveKycRecords
-    ? liveKycRecords.filter(k => kycFilter === "ALL" || k.status === kycFilter)
+    ? liveKycRecords.filter(k => {
+        const matchesStatus = kycFilter === "ALL" || k.status === kycFilter;
+        const q = kycSearch.trim().toLowerCase();
+        const matchesSearch = !q ||
+          String(k.userName ?? "").toLowerCase().includes(q) ||
+          String(k.userEmail ?? "").toLowerCase().includes(q) ||
+          String(k.id ?? "").includes(q);
+        return matchesStatus && matchesSearch;
+      })
     : [];
   const pendingKYC = analyticsSummary ? analyticsSummary.pendingKyc : (kycQueueData?.records?.filter(k => k.status === "PENDING" || k.status === "UNDER_REVIEW").length ?? 0);
   const openAlerts = liveAmlAlerts.filter(a => a.status === "OPEN" || a.status === "INVESTIGATING" || a.status === "ESCALATED").length;
+  const filteredAmlAlerts = amlRiskFilter === "ALL" ? liveAmlAlerts : liveAmlAlerts.filter(a => a.riskLevel === amlRiskFilter);
   const overdueReports = liveReports.filter(r => r.status === "OVERDUE").length;
   const approvedKYC = kycQueueData?.records?.filter(k => k.status === "APPROVED").length ?? 0;
+
+  // KYC SLA: average hours from submittedAt → reviewedAt for APPROVED/REJECTED records
+  const avgReviewHours = useMemo(() => {
+    const reviewed = (kycQueueData?.records ?? []).filter(
+      (k) => (k.status === "APPROVED" || k.status === "REJECTED") && k.submittedAt && k.reviewedAt,
+    );
+    if (!reviewed.length) return null;
+    const totalMs = reviewed.reduce((sum, k) => {
+      const ms = new Date(k.reviewedAt!).getTime() - new Date(k.submittedAt!).getTime();
+      return sum + (ms > 0 ? ms : 0);
+    }, 0);
+    return Math.round(totalMs / reviewed.length / 1000 / 3600 * 10) / 10; // hours, 1dp
+  }, [kycQueueData]);
 
   if (amlFlagsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
@@ -238,19 +266,27 @@ export default function Compliance() {
         <p className="text-sm text-muted-foreground mt-0.5">KYC/AML management, regulatory reporting, and audit trail</p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: "Pending KYC",     value: pendingKYC,  icon: Clock,         color: "text-yellow-400" },
-          { label: "Open AML Alerts", value: openAlerts,  icon: AlertTriangle, color: "text-negative" },
-          { label: "Overdue Reports", value: overdueReports, icon: FileText,   color: overdueReports > 0 ? "text-negative" : "text-positive" },
-          { label: "Approved KYC",    value: approvedKYC, icon: CheckCircle2,  color: "text-positive" },
-        ].map(({ label, value, icon: Icon, color }) => (
+          { label: "Pending KYC",     value: pendingKYC,  icon: Clock,         color: "text-yellow-400",  sub: null },
+          { label: "Open AML Alerts", value: openAlerts,  icon: AlertTriangle, color: "text-negative",    sub: null },
+          { label: "Overdue Reports", value: overdueReports, icon: FileText,   color: overdueReports > 0 ? "text-negative" : "text-positive", sub: null },
+          { label: "Approved KYC",    value: approvedKYC, icon: CheckCircle2,  color: "text-positive",    sub: null },
+          {
+            label: "Avg Review Time",
+            value: avgReviewHours !== null ? `${avgReviewHours}h` : "—",
+            icon: Clock,
+            color: avgReviewHours === null ? "text-muted-foreground" : avgReviewHours <= 24 ? "text-positive" : avgReviewHours <= 48 ? "text-yellow-400" : "text-negative",
+            sub: avgReviewHours !== null ? (avgReviewHours <= 24 ? "Within SLA" : avgReviewHours <= 48 ? "Near SLA" : "SLA Breach") : "No data yet",
+          },
+        ].map(({ label, value, icon: Icon, color, sub }) => (
           <div key={label} className="stat-card">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-muted-foreground">{label}</span>
               <Icon className={`w-4 h-4 ${color}`} />
             </div>
             <div className={`text-2xl font-bold font-mono ${color}`}>{value}</div>
+            {sub && <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>}
           </div>
         ))}
       </div>
@@ -260,13 +296,22 @@ export default function Compliance() {
           <TabsTrigger value="kyc">KYC Management</TabsTrigger>
           <TabsTrigger value="aml">AML Alerts ({openAlerts})</TabsTrigger>
           <TabsTrigger value="reports">Regulatory Reports</TabsTrigger>
+          <TabsTrigger value="audit">Audit Trail</TabsTrigger>
         </TabsList>
 
         {/* KYC Tab */}
         <TabsContent value="kyc" className="mt-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <Select value={kycFilter} onValueChange={v => setKycFilter(v as KYCStatus | "ALL")}>
-              <SelectTrigger className="w-44 h-9"><SelectValue /></SelectTrigger>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-1">
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={kycSearch}
+                onChange={(e) => setKycSearch(e.target.value)}
+                className="h-9 px-3 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary w-52"
+              />
+              <Select value={kycFilter} onValueChange={v => setKycFilter(v as KYCStatus | "ALL")}>
+                <SelectTrigger className="w-44 h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Statuses</SelectItem>
                 <SelectItem value="APPROVED">Approved</SelectItem>
@@ -275,7 +320,8 @@ export default function Compliance() {
                 <SelectItem value="REJECTED">Rejected</SelectItem>
                 <SelectItem value="EXPIRED">Expired</SelectItem>
               </SelectContent>
-            </Select>
+              </Select>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">{filteredKYC.length} records</span>
               <Button
@@ -380,15 +426,27 @@ export default function Compliance() {
         <TabsContent value="aml" className="mt-4">
           {/* AML Alerts header with export */}
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-muted-foreground">{liveAmlAlerts.length} alert{liveAmlAlerts.length !== 1 ? "s" : ""}</span>
+            <div className="flex items-center gap-2">
+              <Select value={amlRiskFilter} onValueChange={(v) => setAmlRiskFilter(v as typeof amlRiskFilter)}>
+                <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Risk Levels</SelectItem>
+                  <SelectItem value="CRITICAL">Critical</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="LOW">Low</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground">{filteredAmlAlerts.length} alert{filteredAmlAlerts.length !== 1 ? "s" : ""}</span>
+            </div>
             <Button
               size="sm"
               variant="outline"
               className="h-8 gap-1 text-xs"
-              disabled={liveAmlAlerts.length === 0}
+              disabled={filteredAmlAlerts.length === 0}
               onClick={() => {
                 const headers = ["ID","Alert Type","Entity","Amount","Currency","Date","Risk Level","Status","Description"];
-                const rows = liveAmlAlerts.map((a) => [
+                const rows = filteredAmlAlerts.map((a) => [
                   a.id,
                   a.alertType,
                   a.entity,
@@ -407,7 +465,7 @@ export default function Compliance() {
                 a.download = `aml-alerts-${new Date().toISOString().slice(0, 10)}.csv`;
                 a.click();
                 URL.revokeObjectURL(url);
-                toast.success(`Exported ${liveAmlAlerts.length} AML alert${liveAmlAlerts.length !== 1 ? "s" : ""} to CSV`);
+                toast.success(`Exported ${filteredAmlAlerts.length} AML alert${filteredAmlAlerts.length !== 1 ? "s" : ""} to CSV`);
               }}
             >
               <Download className="w-3 h-3" />Export CSV
@@ -424,7 +482,7 @@ export default function Compliance() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {liveAmlAlerts.map(a => (
+                  {filteredAmlAlerts.map(a => (
                     <tr key={a.id} className="hover:bg-secondary/30 transition-colors">
                       <td className="px-3 py-3 font-mono text-xs text-muted-foreground">{a.id}</td>
                       <td className="px-3 py-3 text-sm font-semibold text-foreground">{a.alertType}</td>
@@ -489,7 +547,7 @@ export default function Compliance() {
               </thead>
               <tbody className="divide-y divide-border">
                 {liveReports.map(r => (
-                  <tr key={r.id} className="hover:bg-secondary/30 transition-colors">
+                  <tr key={r.id} className={`hover:bg-secondary/30 transition-colors${r.status === "OVERDUE" ? " border-l-2 border-l-destructive bg-destructive/5" : ""}`}>
                     <td className="px-3 py-3 font-semibold text-foreground text-sm">{r.reportType}</td>
                     <td className="px-3 py-3 text-xs text-muted-foreground">{r.period}</td>
                     <td className="px-3 py-3 text-xs font-semibold text-primary">{r.regulator}</td>
@@ -523,6 +581,81 @@ export default function Compliance() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </TabsContent>
+
+        {/* Audit Trail Tab */}
+        <TabsContent value="audit" className="mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-muted-foreground">{auditData?.logs?.length ?? 0} entries (page {auditPage})</span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => refetchAudit()}>
+                <RefreshCw className="w-3 h-3" />Refresh
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1 text-xs"
+                disabled={!auditData?.logs?.length}
+                onClick={() => {
+                  const logs = auditData?.logs ?? [];
+                  const headers = ["ID","User ID","Action","Resource","Resource ID","IP Address","Date"];
+                  const rows = logs.map((l: Record<string, unknown>) => [
+                    l.id, l.userId ?? "", l.action, l.resource ?? "", l.resourceId ?? "", l.ipAddress ?? "",
+                    l.createdAt ? new Date(l.createdAt as string).toISOString() : "",
+                  ]);
+                  const csv = [headers.join(","), ...rows.map((r: unknown[]) => r.map((v) => `"${v}"`).join(","))].join("\n");
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `audit-trail-${new Date().toISOString().slice(0,10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success(`Exported ${logs.length} audit entries to CSV`);
+                }}
+              >
+                <Download className="w-3 h-3" />Export CSV
+              </Button>
+            </div>
+          </div>
+          {auditLoading ? (
+            <div className="flex items-center justify-center h-32"><span className="text-xs text-muted-foreground">Loading audit trail...</span></div>
+          ) : !auditData?.logs?.length ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <FileText className="w-8 h-8 mb-2" />
+              <p className="text-sm">No audit entries found</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/40">
+                  <tr>
+                    {["ID","User","Action","Resource","Resource ID","IP","Date"].map(h => (
+                      <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {auditData.logs.map((l: Record<string, unknown>) => (
+                    <tr key={String(l.id)} className="hover:bg-secondary/20 transition-colors">
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{String(l.id)}</td>
+                      <td className="px-3 py-2 text-xs">{l.userId ? `#${l.userId}` : "—"}</td>
+                      <td className="px-3 py-2 text-xs font-medium text-foreground">{String(l.action)}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{String(l.resource ?? "—")}</td>
+                      <td className="px-3 py-2 text-xs font-mono text-muted-foreground">{String(l.resourceId ?? "—")}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{String(l.ipAddress ?? "—")}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{l.createdAt ? new Date(l.createdAt as string).toLocaleString() : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="flex items-center justify-between mt-3">
+            <Button size="sm" variant="outline" className="h-8 text-xs" disabled={auditPage <= 1} onClick={() => setAuditPage(p => p - 1)}>Previous</Button>
+            <span className="text-xs text-muted-foreground">Page {auditPage}</span>
+            <Button size="sm" variant="outline" className="h-8 text-xs" disabled={(auditData?.logs?.length ?? 0) < 50} onClick={() => setAuditPage(p => p + 1)}>Next</Button>
           </div>
         </TabsContent>
       </Tabs>

@@ -46,6 +46,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart2,
+  Download,
 } from "lucide-react";
 
 type Tab = "clients" | "commissions" | "chart" | "trades";
@@ -378,17 +379,48 @@ export default function BrokerCommissions() {
         {/* Commissions Tab */}
         {activeTab === "commissions" && (
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <Select value={commStatusFilter} onValueChange={setCommStatusFilter}>
-                <SelectTrigger className="w-36 bg-white/5 border-white/10 text-white text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Status</SelectItem>
-                  <SelectItem value="PENDING">Pending</SelectItem>
-                  <SelectItem value="PAID">Paid</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-xs text-gray-400">{commissionsQuery.data?.total ?? 0} records</span>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Select value={commStatusFilter} onValueChange={setCommStatusFilter}>
+                  <SelectTrigger className="w-36 bg-white/5 border-white/10 text-white text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Status</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="PAID">Paid</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-gray-400">{commissionsQuery.data?.total ?? 0} records</span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/10 text-white hover:bg-white/10 h-8 gap-1 text-xs"
+                disabled={!commissionsQuery.data?.commissions.length}
+                onClick={() => {
+                  const comms = commissionsQuery.data?.commissions ?? [];
+                  const headers = ["Order ID","Commodity","Trade Value (NGN)","Commission (NGN)","Status","Date"];
+                  const rows = comms.map((c) => [
+                    c.orderId ?? "",
+                    c.symbol ?? "",
+                    Number(c.tradeValue ?? 0),
+                    Number(c.commissionAmount ?? 0),
+                    c.status,
+                    new Date(c.createdAt).toISOString(),
+                  ]);
+                  const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${v}"`).join(","))].join("\n");
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `commissions-${commStatusFilter.toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success(`Exported ${comms.length} commission record${comms.length !== 1 ? "s" : ""} to CSV`);
+                }}
+              >
+                <Download className="w-3 h-3" />Export CSV
+              </Button>
             </div>
 
             <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
@@ -498,8 +530,39 @@ export default function BrokerCommissions() {
         {/* Trade History Tab */}
         {activeTab === "trades" && (
           <div>
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center justify-between mb-4">
               <span className="text-xs text-gray-400">{tradesQuery.data?.total ?? 0} fills</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/10 text-white hover:bg-white/10 h-8 gap-1 text-xs"
+                disabled={!tradesQuery.data?.trades.length}
+                onClick={() => {
+                  const trades = tradesQuery.data?.trades ?? [];
+                  const headers = ["Fill ID","Symbol","Side","Qty","Price (NGN)","Value (NGN)","Asset Class","Date"];
+                  const rows = trades.map((t) => [
+                    t.id,
+                    t.symbol ?? "",
+                    "", // side not available at fill level
+                    Number(t.filledQty ?? 0),
+                    Number(t.fillPrice ?? 0),
+                    Number(t.grossValue ?? 0),
+                    t.assetClass ?? "",
+                    new Date(t.createdAt).toISOString(),
+                  ]);
+                  const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${v}"`).join(","))].join("\n");
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `trade-history-${new Date().toISOString().slice(0,10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success(`Exported ${trades.length} trade fill${trades.length !== 1 ? "s" : ""} to CSV`);
+                }}
+              >
+                <Download className="w-3 h-3" />Export CSV
+              </Button>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
               <Table>

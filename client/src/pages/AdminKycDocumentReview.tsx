@@ -290,6 +290,7 @@ export default function AdminKycDocumentReview() {
   const [statusFilter, setStatusFilter] = useState<QueueStatus>("PENDING");
   const [page, setPage] = useState(0);
   const [reviewTarget, setReviewTarget] = useState<KycQueueRecord | null>(null);
+  const [adminSearch, setAdminSearch] = useState("");
 
   const utils = trpc.useUtils();
 
@@ -364,8 +365,17 @@ export default function AdminKycDocumentReview() {
     );
   }
 
-  const records: KycQueueRecord[] = data?.records ?? [];
-  const total = data?.total ?? 0;
+  const allRecords: KycQueueRecord[] = data?.records ?? [];
+  const records = useMemo(() => {
+    const q = adminSearch.trim().toLowerCase();
+    if (!q) return allRecords;
+    return allRecords.filter(r =>
+      String(r.userName ?? "").toLowerCase().includes(q) ||
+      String(r.userEmail ?? "").toLowerCase().includes(q) ||
+      String(r.id ?? "").includes(q)
+    );
+  }, [allRecords, adminSearch]);
+  const total = records.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
@@ -388,7 +398,14 @@ export default function AdminKycDocumentReview() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <input
+          type="text"
+          placeholder="Search by name or email..."
+          value={adminSearch}
+          onChange={(e) => { setAdminSearch(e.target.value); setPage(0); }}
+          className="h-9 px-3 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary w-56"
+        />
         <Select
           value={statusFilter}
           onValueChange={(v) => { setStatusFilter(v as QueueStatus); setPage(0); }}

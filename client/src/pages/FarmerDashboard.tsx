@@ -4,7 +4,7 @@
  * cooperative membership card, and quick-action navigation.
  * Includes Edit Profile dialog with KYC-reset document re-upload.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -111,6 +111,15 @@ export default function FarmerDashboard() {
   const profile = profileQ.data as FarmerProfile | null | undefined;
   const farms = (farmsQ.data ?? []) as FarmerFarm[];
   const listings = (listingsQ.data ?? []) as FarmerListing[];
+  const [listingSearch, setListingSearch] = useState("");
+  const [listingCropFilter, setListingCropFilter] = useState("ALL");
+  const uniqueCropTypes = useMemo(() => [...new Set(listings.map(l => l.cropType))].sort(), [listings]);
+  const filteredListings = useMemo(() => listings.filter(l => {
+    const q = listingSearch.trim().toLowerCase();
+    const matchesSearch = !q || l.cropType.toLowerCase().includes(q);
+    const matchesCrop = listingCropFilter === "ALL" || l.cropType === listingCropFilter;
+    return matchesSearch && matchesCrop;
+  }), [listings, listingSearch, listingCropFilter]);
   const kycStatus = (profile?.kycStatus ?? "PENDING") as string;
   const KYCIcon = KYC_ICONS[kycStatus] ?? Clock;
   const cooperative = (cooperativeQ.data?.cooperative ?? null) as CoopInfo | null;
@@ -414,6 +423,27 @@ export default function FarmerDashboard() {
               View all <ChevronRight className="w-3 h-3" />
             </button>
           </div>
+          {listings.length > 0 && (
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="Search crop..."
+                value={listingSearch}
+                onChange={(e) => setListingSearch(e.target.value)}
+                className="flex-1 h-8 px-3 rounded-md bg-slate-800 border border-slate-700 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+              />
+              {uniqueCropTypes.length > 1 && (
+                <select
+                  value={listingCropFilter}
+                  onChange={(e) => setListingCropFilter(e.target.value)}
+                  className="h-8 px-2 rounded-md bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
+                >
+                  <option value="ALL">All Crops</option>
+                  {uniqueCropTypes.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
+            </div>
+          )}
           {listings.length === 0 ? (
             <Card className="bg-slate-800/50 border-slate-700 border-dashed">
               <CardContent className="p-6 text-center">
@@ -435,7 +465,9 @@ export default function FarmerDashboard() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {listings.slice(0, 4).map((listing) => (
+              {filteredListings.length === 0 ? (
+                <p className="text-slate-400 text-xs text-center py-3">No listings match your search</p>
+              ) : filteredListings.slice(0, 6).map((listing) => (
                 <Card key={listing.id} className="bg-slate-800 border-slate-700">
                   <CardContent className="p-3 flex items-center justify-between">
                     <div>

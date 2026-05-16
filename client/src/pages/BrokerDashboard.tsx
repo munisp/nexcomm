@@ -88,6 +88,8 @@ export default function BrokerDashboard() {
   }), [txPage, txSymbol, txAssetClass, txSide, txSortBy, txSortDir]);
 
   const txQuery = trpc.broker.getMyTradeHistory.useQuery(txQueryInput);
+  const clientsCountQuery = trpc.broker.getMyClients.useQuery({ page: 1, pageSize: 1 });
+  const commissionsCountQuery = trpc.broker.getMyCommissions.useQuery({ page: 1, pageSize: 1 });
 
   function toggleSort(col: SortBy) {
     if (txSortBy === col) {
@@ -244,6 +246,41 @@ export default function BrokerDashboard() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Summary Stats Cards */}
+            <div className="grid grid-cols-3 gap-2">
+              <Card className="bg-purple-800/40 border-purple-700">
+                <CardContent className="p-3 text-center">
+                  <p className="text-xs text-purple-400 mb-1">Total Clients</p>
+                  <p className="text-xl font-bold text-white font-mono">
+                    {clientsCountQuery.data?.total ?? "—"}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-800/40 border-purple-700">
+                <CardContent className="p-3 text-center">
+                  <p className="text-xs text-purple-400 mb-1">Total Trades</p>
+                  <p className="text-xl font-bold text-white font-mono">
+                    {txQuery.data?.total ?? "—"}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-800/40 border-purple-700">
+                <CardContent className="p-3 text-center">
+                  <p className="text-xs text-purple-400 mb-1">Total Earned</p>
+                  <p className="text-sm font-bold text-green-400 font-mono">
+                    {commissionsCountQuery.data?.summary?.totalEarned
+                      ? `₦${parseFloat(commissionsCountQuery.data.summary.totalEarned).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                      : "₦0"}
+                  </p>
+                  <p className="text-[10px] text-purple-400 mt-0.5">
+                    Pending: {commissionsCountQuery.data?.summary?.totalPending
+                      ? `₦${parseFloat(commissionsCountQuery.data.summary.totalPending).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                      : "₦0"}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Firm Summary */}
             <Card className="bg-purple-800/30 border-purple-700">

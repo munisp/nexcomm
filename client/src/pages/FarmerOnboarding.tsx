@@ -1060,6 +1060,20 @@ export default function FarmerOnboarding() {
           </div>
         </div>
 
+        {/* Progress bar */}
+        <div className="mt-3 mb-1">
+          <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+            <span>Progress</span>
+            <span>{Math.round(((step - 1) / totalWizardSteps) * 100)}%</span>
+          </div>
+          <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-500 rounded-full transition-all duration-300"
+              style={{ width: `${Math.round(((step - 1) / totalWizardSteps) * 100)}%` }}
+            />
+          </div>
+        </div>
+
         {/* Step content */}
         <div className="min-h-[320px]">
           {step === 2 && <StepPersonal data={personal} onChange={setPersonal} />}
