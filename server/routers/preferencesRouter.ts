@@ -155,6 +155,58 @@ export const preferencesRouter = router({
       return { ok: true };
     }),
 
+  /** Get surveillance alert preferences */
+  getSurvAlertPrefs: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    const defaults = {
+      positionBreach: true, washTrading: true, priceManipulation: true,
+      volumeSpike: true, circuitBreaker: true, emailNotify: true, smsNotify: false,
+    };
+    if (!db) return defaults;
+    const [prefs] = await db.select().from(userPreferences).where(eq(userPreferences.userId, ctx.user.id)).limit(1);
+    if (!prefs) return defaults;
+    return {
+      positionBreach:    prefs.survAlertPositionBreach,
+      washTrading:       prefs.survAlertWashTrading,
+      priceManipulation: prefs.survAlertPriceManipulation,
+      volumeSpike:       prefs.survAlertVolumeSpike,
+      circuitBreaker:    prefs.survAlertCircuitBreaker,
+      emailNotify:       prefs.survNotifEmail,
+      smsNotify:         prefs.survNotifSms,
+    };
+  }),
+
+  /** Update surveillance alert preferences — idempotent upsert */
+  updateSurvAlertPrefs: protectedProcedure
+    .input(z.object({
+      positionBreach:    z.boolean().optional(),
+      washTrading:       z.boolean().optional(),
+      priceManipulation: z.boolean().optional(),
+      volumeSpike:       z.boolean().optional(),
+      circuitBreaker:    z.boolean().optional(),
+      emailNotify:       z.boolean().optional(),
+      smsNotify:         z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { ok: true };
+      const patch: Record<string, boolean | Date> = { updatedAt: new Date() };
+      if (input.positionBreach    !== undefined) patch.survAlertPositionBreach    = input.positionBreach;
+      if (input.washTrading       !== undefined) patch.survAlertWashTrading       = input.washTrading;
+      if (input.priceManipulation !== undefined) patch.survAlertPriceManipulation = input.priceManipulation;
+      if (input.volumeSpike       !== undefined) patch.survAlertVolumeSpike       = input.volumeSpike;
+      if (input.circuitBreaker    !== undefined) patch.survAlertCircuitBreaker    = input.circuitBreaker;
+      if (input.emailNotify       !== undefined) patch.survNotifEmail             = input.emailNotify;
+      if (input.smsNotify         !== undefined) patch.survNotifSms               = input.smsNotify;
+      const existing = await db.select({ id: userPreferences.id }).from(userPreferences).where(eq(userPreferences.userId, ctx.user.id)).limit(1);
+      if (existing.length > 0) {
+        await db.update(userPreferences).set(patch).where(eq(userPreferences.userId, ctx.user.id));
+      } else {
+        await db.insert(userPreferences).values({ userId: ctx.user.id, ...patch });
+      }
+      return { ok: true };
+    }),
+
   /** List supported languages */
   languages: protectedProcedure.query(async () => {
     return [

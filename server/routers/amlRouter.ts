@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
-import { requireAmlEscalate } from "../_core/permify";
+import { requireAmlEscalate, requireExchangeAdmin } from "../_core/permify";
 import { getDb } from "../db";
 import {
   amlRules,
@@ -177,6 +177,7 @@ export const amlRouter = router({
   }),
 
   adminCreateRule: adminProcedure
+    .use(requireExchangeAdmin)
     .input(z.object({
       name: z.string().min(3).max(128),
       ruleType: z.enum(["LARGE_TRANSACTION", "RAPID_MOVEMENT", "STRUCTURING", "UNUSUAL_PATTERN", "SANCTIONS_MATCH"]),
@@ -213,6 +214,7 @@ export const amlRouter = router({
     }),
 
   adminUpdateRule: adminProcedure
+    .use(requireExchangeAdmin)
     .input(z.object({
       id: z.number(),
       name: z.string().min(3).max(128).optional(),
@@ -253,6 +255,7 @@ export const amlRouter = router({
     }),
 
   adminDeleteRule: adminProcedure
+    .use(requireExchangeAdmin)
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -339,6 +342,7 @@ export const amlRouter = router({
 
   // ── SAR Filing ─────────────────────────────────────────────────────────────
   adminCreateSAR: adminProcedure
+    .use(requireAmlEscalate)
     .input(z.object({
       flagId: z.number().optional(),
       userId: z.number(),
@@ -414,6 +418,7 @@ export const amlRouter = router({
     }),
 
   adminUpdateSARStatus: adminProcedure
+    .use(requireAmlEscalate)
     .input(z.object({
       sarId: z.number(),
       status: z.enum(["SUBMITTED", "ACKNOWLEDGED", "CLOSED"]),
@@ -441,6 +446,7 @@ export const amlRouter = router({
 
   // ── Compliance Report Export ───────────────────────────────────────────────
   adminGenerateExport: adminProcedure
+    .use(requireAmlEscalate)
     .input(z.object({
       exportType: z.enum(["AML_FLAGS", "SAR_SUMMARY", "TRANSACTION_AUDIT"]),
       format: z.enum(["CSV", "PDF"]),

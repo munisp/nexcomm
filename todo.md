@@ -876,3 +876,20 @@
 - [x] Phase 44 tests: 18 new tests for Permify RBAC + Temporal workflow triggers
 - [x] 964/964 tests passing (946 original + 18 new Phase 44 tests) — 0 failures
 - [x] Save v59 checkpoint and generate archive
+
+## Round v60 — Production-Readiness Sprint (16-Point Audit) — COMPLETED
+- [x] Deep audit: 124 PWA pages all routed, 81 routers all registered, 46 RN screens, 41 Flutter screens — no orphans
+- [x] P0 Security: requireKycApprove guard wired to kycServiceRouter.reviewApplication
+- [x] P0 Security: requireExchangeAdmin guard wired to amlRouter.adminCreateRule/UpdateRule/DeleteRule and livePricesRouter.triggerRefresh
+- [x] P0 Security: requireAmlEscalate guard wired to amlRouter.adminCreateSAR/UpdateSARStatus/GenerateExport
+- [x] P0 Security: tradingLimiter (60 req/min) and transferLimiter (10 req/min) wired via applyDDoSProtections(app) in index.ts
+- [x] P0 Security: CSRF double-submit cookie protection added to security-middleware.ts, wired in index.ts, tRPC client sends x-csrf-token header
+- [x] Kafka: emitRiskAlert wired in marginAlertJob on CRITICAL/HIGH margin breaches
+- [x] Kafka: emitPriceUpdated wired in priceFeedJob after each Yahoo Finance price upsert
+- [x] Kafka: emitMojaloopTransferInitiated + emitMojaloopQuoteAccepted wired in mojaloopRouter.initiateTransfer
+- [x] UI/Backend: Surveillance alert config dialog wired to preferences.getSurvAlertPrefs / updateSurvAlertPrefs (7 new DB columns in 0054 migration)
+- [x] Mobile parity: Flutter has /trade/:symbol, /trade/orderbook/:symbol, /farmer/:id deep links — full parity confirmed
+- [x] WebSocket resilience: useWebSocketFeed.ts confirmed with exponential backoff + jitter, offline detection, adaptive polling fallback, connection quality monitoring
+- [x] Seed data: seed-comprehensive.mjs (732 lines, 24 entity types), rbac-seed.mjs (Permify relationships), smoke-test.sh (25+ services)
+- [x] All 81 router files registered in routers.ts — zero orphan routers
+- [x] 964/964 tests passing — 0 failures

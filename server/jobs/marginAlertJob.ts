@@ -12,6 +12,7 @@
 import { getDb } from "../db";
 import { marginAccounts, notifications } from "../../drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { emitRiskAlert } from "../kafka/kafkaProducer";
 
 const JOB_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -78,12 +79,18 @@ export async function runMarginAlertJob(): Promise<number> {
         read:   false,
       });
 
-      // Update lastMarginCallAt on the account
+            // Update lastMarginCallAt on the account
       await db
         .update(marginAccounts)
         .set({ lastMarginCallAt: now, updatedAt: now })
         .where(eq(marginAccounts.id, acct.id));
-
+      // Emit Kafka risk alert for downstream consumers (risk-management service, AML)
+      emitRiskAlert({
+        alertType: "MARGIN_CALL",
+        userId: acct.userId,
+        severity: isCritical ? "CRITICAL" : "HIGH",
+        message: `Margin utilisation ${utilisationPct.toFixed(1)}% exceeds ${isCritical ? CRITICAL_PCT : WARNING_PCT}% threshold`,
+      }).catch(e => console.warn("[Kafka] emitRiskAlert failed:", (e as Error).message));
       alertsFired++;
       console.log(`[MarginAlertJob] ${level} alert fired for userId=${acct.userId} (${pctStr}%)`);
     } catch (err) {

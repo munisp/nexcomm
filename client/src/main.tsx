@@ -38,15 +38,32 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+// Bootstrap CSRF token on app start — fetches from /api/csrf-token and stores in memory
+let _csrfToken: string | null = null;
+async function bootstrapCsrf() {
+  try {
+    const res = await fetch("/api/csrf-token", { credentials: "include" });
+    const data = await res.json() as { csrfToken?: string };
+    if (data.csrfToken) _csrfToken = data.csrfToken;
+  } catch {
+    // Non-fatal: CSRF token will be absent; server will reject state-changing requests
+    console.warn("[CSRF] Failed to bootstrap CSRF token");
+  }
+}
+bootstrapCsrf();
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
+        const headers = new Headers((init as RequestInit)?.headers);
+        if (_csrfToken) headers.set("x-csrf-token", _csrfToken);
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
+          headers,
         });
       },
     }),

@@ -395,6 +395,14 @@ export const userPreferences = pgTable("user_preferences", {
   notifSms:              boolean("notif_sms").default(false).notNull(),
   notifPush:             boolean("notif_push").default(true).notNull(),
   biometricEnabled:      boolean("biometric_enabled").default(false).notNull(),
+  // Surveillance alert preferences
+  survAlertPositionBreach:    boolean("surv_alert_position_breach").default(true).notNull(),
+  survAlertWashTrading:       boolean("surv_alert_wash_trading").default(true).notNull(),
+  survAlertPriceManipulation: boolean("surv_alert_price_manipulation").default(true).notNull(),
+  survAlertVolumeSpike:       boolean("surv_alert_volume_spike").default(true).notNull(),
+  survAlertCircuitBreaker:    boolean("surv_alert_circuit_breaker").default(true).notNull(),
+  survNotifEmail:             boolean("surv_notif_email").default(true).notNull(),
+  survNotifSms:               boolean("surv_notif_sms").default(false).notNull(),
 });
 export type UserPreferences = typeof userPreferences.$inferSelect;
 

@@ -8,6 +8,7 @@ import { callDataApi } from "../_core/dataApi";
 import { getDb } from "../db";
 import { livePrices, priceAlerts, pushTokens } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { emitPriceUpdated } from "../kafka/kafkaProducer";
 
 // Mapping: NEXCOM symbol → Yahoo Finance futures symbol + metadata
 const PRICE_FEED_MAP: Array<{
@@ -197,8 +198,17 @@ export async function runPriceFeedJob(): Promise<void> {
           },
         });
 
-      if (priceData) updated++;
-      else fallback++;
+      if (priceData) {
+        updated++;
+        // Emit Kafka price.updated event for downstream consumers (market-data service, analytics)
+        emitPriceUpdated({
+          symbol: entry.symbol,
+          price,
+          change: change ?? 0,
+          changePercent: changePct ?? 0,
+          volume: 0, // Yahoo Finance futures don't always provide volume
+        }).catch(e => console.warn("[Kafka] emitPriceUpdated failed:", (e as Error).message));
+      } else fallback++;
     } catch (err) {
       console.error(`[PriceFeed] Failed to update ${entry.symbol}:`, err);
     }

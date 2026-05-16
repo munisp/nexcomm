@@ -10,6 +10,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure, router } from "../_core/trpc";
+import { requireKycApprove } from "../_core/permify";
 import { writeAuditLog } from "../audit";
 import {
   upsertLivenessSession,
@@ -414,6 +415,7 @@ export const kycServiceRouter = router({
 
   /** Review a KYC application (admin) */
   reviewApplication: adminProcedure
+    .use(requireKycApprove)
     .input(z.object({
       applicationId: z.string().trim(),
       decision: z.enum(["APPROVED", "REJECTED", "PENDING_INFO"]),

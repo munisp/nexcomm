@@ -6,6 +6,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "../_core/trpc";
+import { requireExchangeAdmin } from "../_core/permify";
 import { runPriceFeedJob } from "../jobs/priceFeedJob";
 import { getDb } from "../db";
 import { livePrices } from "../../drizzle/schema";
@@ -86,7 +87,9 @@ export const livePricesRouter = router({
   /**
    * Force-trigger the price feed job immediately (admin only).
    */
-  triggerRefresh: adminProcedure.mutation(async () => {
+  triggerRefresh: adminProcedure
+    .use(requireExchangeAdmin)
+    .mutation(async () => {
     try {
       await runPriceFeedJob();
       const db = await getDb();

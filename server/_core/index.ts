@@ -38,8 +38,9 @@ import { startMojaloopHubHealthJob } from "../jobs/mojaloopHubHealthJob";
 import { spatialProxyRouter } from "../routes/spatialProxy";
 import { haStatusRouter } from "../routes/haStatusRoute";
 import { suspiciousPatternDetector, ipBlocklistMiddleware, securityHeaders } from "../security";
-import { ddosProtection, slowLorisGuard } from "../ddos-protection";
-import { ddosCircuitBreaker, bruteForceProtection, inputSanitization, additionalSecurityHeaders, sessionFixationPrevention } from "../security-middleware";
+import { ddosProtection, slowLorisGuard, tradingLimiter, transferLimiter, applyDDoSProtections } from "../ddos-protection";
+import { ddosCircuitBreaker, bruteForceProtection, inputSanitization, additionalSecurityHeaders, sessionFixationPrevention, csrfProtection, csrfTokenEndpoint } from "../security-middleware";
+import cookieParser from "cookie-parser";
 import { policyStore } from "../pbac";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -127,7 +128,10 @@ async function startServer() {
     maxAge: 86400,
   }));
 
+  // ── Cookie parsing (required for CSRF double-submit cookie pattern) ────────
+  app.use(cookieParser());
   // ── Additional security middleware ─────────────────────────────────────────
+  applyDDoSProtections(app);             // DDoS: full protection suite (trading/transfer/upload limiters, velocity guards, bot detection)
   app.use(ddosProtection);               // DDoS: per-IP rate limiting + connection flood guard
   app.use(slowLorisGuard);               // Slow Loris: request body timeout enforcement
   app.use(ipBlocklistMiddleware);          // Block known abusive IPs
@@ -169,7 +173,15 @@ async function startServer() {
     message: { error: "Too many authentication attempts, please try again later." },
   });
   app.use("/api/oauth", authLimiter);
-
+  // Financial endpoint rate limits — applied before tRPC middleware to prevent order flooding
+  // Trading: 60 orders/min per user; Transfer: 10 transfers/min per user
+  app.use("/api/trpc/orders", tradingLimiter);
+  app.use("/api/trpc/trading", tradingLimiter);
+  app.use("/api/trpc/derivatives", tradingLimiter);
+  app.use("/api/trpc/banking.transfer", transferLimiter);
+  app.use("/api/trpc/banking.withdraw", transferLimiter);
+  app.use("/api/trpc/banking.deposit", transferLimiter);
+  app.use("/api/trpc/mojaloop", transferLimiter);
   // Stripe webhook MUST be registered before express.json() to preserve raw body for signature verification
   registerStripeWebhook(app);
 
@@ -199,7 +211,10 @@ async function startServer() {
 
   // HA status REST endpoint — /api/ha/status, /api/ha/status/metrics, /api/ha/status/engines
   app.use(haStatusRouter);
-
+  // CSRF token endpoint — SPA calls this on boot to get a fresh token
+  app.get("/api/csrf-token", csrfTokenEndpoint);
+  // CSRF protection middleware — validates double-submit cookie on all state-changing requests
+  app.use("/api/trpc", csrfProtection);
   // Deep health check endpoint — pings all 19 downstream microservices
   app.get("/api/health/deep", async (_req, res) => {
     try {

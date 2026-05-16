@@ -367,3 +367,61 @@ export async function deepHealthCheck(): Promise<Record<string, { status: "ok" |
 
   return results;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. CSRF Double-Submit Cookie Protection
+//    Because the session cookie uses SameSite=none (cross-origin OAuth flow),
+//    we implement the double-submit cookie pattern as the CSRF mitigation layer.
+//    - GET /api/csrf-token: issues a random CSRF token as a readable cookie + JSON body
+//    - csrfProtection middleware: validates X-CSRF-Token header against the cookie
+//    - Exempt: GET/HEAD/OPTIONS, Stripe webhook (/api/stripe/webhook), OAuth callback
+// ─────────────────────────────────────────────────────────────────────────────
+import { randomBytes } from "crypto";
+
+const CSRF_COOKIE = "nexcom-csrf";
+const CSRF_HEADER = "x-csrf-token";
+const CSRF_EXEMPT_PATHS = new Set([
+  "/api/oauth/callback",
+  "/api/oauth/logout",
+  "/api/stripe/webhook",
+  "/api/health",
+  "/api/ha/status",
+]);
+
+/**
+ * GET /api/csrf-token — issues a fresh CSRF token.
+ * The token is set as a non-httpOnly cookie (so JS can read it) and also
+ * returned in the response body for SPA bootstrapping.
+ */
+export function csrfTokenEndpoint(req: Request, res: Response): void {
+  const token = randomBytes(32).toString("hex");
+  res.cookie(CSRF_COOKIE, token, {
+    httpOnly: false,   // Must be readable by JS
+    sameSite: "none",
+    secure: req.protocol === "https" || req.headers["x-forwarded-proto"] === "https",
+    path: "/",
+    maxAge: 3600_000,  // 1 hour
+  });
+  res.json({ csrfToken: token });
+}
+
+/**
+ * Express middleware: validates the CSRF double-submit cookie on state-changing requests.
+ * Skips safe methods (GET, HEAD, OPTIONS) and exempt paths.
+ */
+export function csrfProtection(req: Request, res: Response, next: NextFunction): void {
+  const method = req.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    return next();
+  }
+  if (CSRF_EXEMPT_PATHS.has(req.path)) {
+    return next();
+  }
+  const cookieToken = (req.cookies as Record<string, string>)?.[CSRF_COOKIE];
+  const headerToken = req.headers[CSRF_HEADER] as string | undefined;
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    res.status(403).json({ error: "CSRF token mismatch — request rejected" });
+    return;
+  }
+  next();
+}

@@ -232,6 +232,16 @@ export default function Surveillance() {
     smsNotify: false,
   });
 
+  // Load and save surveillance alert preferences from backend
+  const { data: survPrefs } = trpc.preferences.getSurvAlertPrefs.useQuery();
+  const updateSurvPrefs = trpc.preferences.updateSurvAlertPrefs.useMutation({
+    onSuccess: () => toast.success("Alert configuration saved"),
+    onError: () => toast.error("Failed to save alert configuration"),
+  });
+  useEffect(() => {
+    if (survPrefs) setAlertSettings(survPrefs);
+  }, [survPrefs]);
+
   // Real circuit breaker events from surveillance router
   const { data: cbEventsData, isLoading: cbEventsLoading } = trpc.surveillance.adminListCircuitBreakerEvents.useQuery(
     { limit: 50 },
@@ -493,7 +503,7 @@ export default function Surveillance() {
             </div>
             <Button
               className="w-full"
-              onClick={() => { setShowAlertConfig(false); toast.success("Alert configuration saved"); }}
+              onClick={() => { updateSurvPrefs.mutate(alertSettings); setShowAlertConfig(false); }}
             >
               Save Configuration
             </Button>

@@ -20,6 +20,7 @@ import {
 import { eq, desc, and, sql, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
+import { emitMojaloopTransferInitiated, emitMojaloopQuoteAccepted } from "../kafka/kafkaProducer";
 
 const MOJALOOP_ADAPTER_URL =
   process.env.MOJALOOP_ADAPTER_URL ?? "http://localhost:4001";
@@ -216,6 +217,26 @@ export const mojaloopRouter = router({
         }),
       });
 
+      // Emit Kafka events for lakehouse ingestion and downstream analytics
+      emitMojaloopQuoteAccepted({
+        quoteId: quote.quoteId,
+        payerFspId: "nexcom-exchange",
+        payeeFspId: input.payeeFspId,
+        transferAmount: parseFloat(quote.transferAmount.amount),
+        currency: input.currency,
+        payeeFspFee: parseFloat(quote.payeeFspFee.amount),
+        ilpPacket: quote.ilpPacket,
+        condition: quote.condition,
+      }).catch(e => console.warn("[Kafka] emitMojaloopQuoteAccepted failed:", (e as Error).message));
+      emitMojaloopTransferInitiated({
+        transferId: transfer.transferId,
+        payerFspId: "nexcom-exchange",
+        payeeFspId: input.payeeFspId,
+        amount: parseFloat(input.amount),
+        currency: input.currency,
+        ilpPacket: quote.ilpPacket,
+        condition: quote.condition,
+      }).catch(e => console.warn("[Kafka] emitMojaloopTransferInitiated failed:", (e as Error).message));
       return {
         transferId: transfer.transferId,
         quoteId: quote.quoteId,
