@@ -183,7 +183,7 @@ export const warehouseOpRouter = router({
   getWarehouseOpDashboard: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) return { profile: null, kycStatus: "PENDING" as const, accountStatus: "INACTIVE" as const, isRegistered: false, isKycApproved: false, isActive: false, storageCapacityMt: 0, commoditiesHandled: [] as string[], receiptStats: { total: 0, active: 0, pledged: 0, redeemed: 0 }, inventoryStats: { totalItems: 0, totalQuantityMt: 0 }, utilizationPct: 0 };
       const [profile] = await db
         .select()
         .from(warehouseOperatorProfiles)
@@ -367,7 +367,7 @@ export const warehouseOpRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-            if (!db) return [] as any[];
+            if (!db) return { profiles: [], total: 0 };
       const conditions = input.kycStatus
         ? [eq(warehouseOperatorProfiles.kycStatus, input.kycStatus)]
         : [];

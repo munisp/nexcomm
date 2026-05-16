@@ -202,8 +202,8 @@ export default function WarehouseDashboard() {
               <MapPin className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-xs text-amber-400">Address</p>
-                <p className="text-sm text-white">{profile.facilityAddress}</p>
-                <p className="text-xs text-amber-300">{profile.state}{profile.lga ? `, ${profile.lga}` : ""}</p>
+                <p className="text-sm text-white">{profile.facilityAddress as string}</p>
+                <p className="text-xs text-amber-300">{profile.state as string}{profile.lga ? `, ${profile.lga as string}` : ""}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -231,7 +231,7 @@ export default function WarehouseDashboard() {
             {profile.nwrCertNumber && (
               <div>
                 <p className="text-xs text-amber-400">NWR Certificate</p>
-                <p className="text-sm font-medium text-white">{profile.nwrCertNumber as string}</p>
+                <p className="text-sm font-medium text-white">{String(profile.nwrCertNumber)}</p>
               </div>
             )}
           </CardContent>
