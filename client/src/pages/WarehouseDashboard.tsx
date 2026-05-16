@@ -231,14 +231,14 @@ export default function WarehouseDashboard() {
             {profile.nwrCertNumber && (
               <div>
                 <p className="text-xs text-amber-400">NWR Certificate</p>
-                <p className="text-sm font-medium text-white">{profile.nwrCertNumber}</p>
+                <p className="text-sm font-medium text-white">{profile.nwrCertNumber as string}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Commodities */}
-        {profile.commoditiesHandled && profile.commoditiesHandled.length > 0 && (
+        {profile.commoditiesHandled && (profile.commoditiesHandled as string[]).length > 0 && (
           <Card className="bg-amber-800/30 border-amber-700">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-amber-300 font-medium">Commodities Handled</CardTitle>
@@ -254,7 +254,7 @@ export default function WarehouseDashboard() {
         )}
 
         {/* Accepted Grades */}
-        {profile.acceptedGrades && profile.acceptedGrades.length > 0 && (
+        {profile.acceptedGrades && (profile.acceptedGrades as string[]).length > 0 && (
           <Card className="bg-amber-800/30 border-amber-700">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-amber-300 font-medium">Accepted Grades</CardTitle>
