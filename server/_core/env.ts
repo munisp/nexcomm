@@ -37,6 +37,7 @@ export const ENV = {
   temporalUrl: process.env.TEMPORAL_URL ?? "http://localhost:7233",
   tigerBeetleUrl: process.env.TIGERBEETLE_URL ?? "http://localhost:3001",
   daprHttpUrl: process.env.DAPR_HTTP_URL ?? "http://localhost:3500",
+  permifyUrl: process.env.PERMIFY_URL ?? "http://localhost:3476",
   // Channel gateway secrets — set in production Secrets panel
   africastalkingApiKey: process.env.AFRICASTALKING_API_KEY ?? "",
   africastalkingUsername: process.env.AFRICASTALKING_USERNAME ?? "sandbox",

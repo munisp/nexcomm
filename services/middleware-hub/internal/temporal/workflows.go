@@ -292,3 +292,164 @@ var (
 	ComputeAMLRiskScoreActivity     = activity.RegisterOptions{Name: "ComputeAMLRiskScore"}
 	NotifyKYCDecisionActivity       = activity.RegisterOptions{Name: "NotifyKYCDecision"}
 )
+
+// ─── Loan Disbursement Workflow ───────────────────────────────────────────────
+
+// LoanDisbursementInput represents the input for a loan disbursement workflow
+type LoanDisbursementInput struct {
+	LoanID               string  `json:"loan_id"`
+	UserID               string  `json:"user_id"`
+	Amount               float64 `json:"amount"`
+	Currency             string  `json:"currency"`
+	DisbursementAccount  string  `json:"disbursement_account"`
+	TenorMonths          int     `json:"tenor_months"`
+}
+
+// LoanDisbursementResult represents the result of a loan disbursement workflow
+type LoanDisbursementResult struct {
+	DisbursementID  string    `json:"disbursement_id"`
+	Status          string    `json:"status"`
+	TigerBeetleID   uint64    `json:"tiger_beetle_id"`
+	CompletedAt     time.Time `json:"completed_at"`
+}
+
+// LoanDisbursementWorkflow orchestrates the full loan disbursement pipeline:
+// CreditCheck → ReserveFunds → DisburseLoan → EmitLoanEvent
+func LoanDisbursementWorkflow(ctx workflow.Context, input LoanDisbursementInput) (*LoanDisbursementResult, error) {
+	logger := workflow.GetLogger(ctx)
+	logger.Info("Starting loan disbursement workflow", "loan_id", input.LoanID, "user_id", input.UserID)
+
+	activityOptions := workflow.ActivityOptions{
+		StartToCloseTimeout: 2 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts:        3,
+			InitialInterval:        5 * time.Second,
+			BackoffCoefficient:     2.0,
+			MaximumInterval:        30 * time.Second,
+		},
+	}
+	ctx = workflow.WithActivityOptions(ctx, activityOptions)
+
+	// Step 1: Credit check via credit-scoring service
+	var creditApproved bool
+	if err := workflow.ExecuteActivity(ctx, CreditCheckActivity, input).Get(ctx, &creditApproved); err != nil {
+		return nil, fmt.Errorf("credit check failed: %w", err)
+	}
+	if !creditApproved {
+		return &LoanDisbursementResult{
+			DisbursementID: fmt.Sprintf("LOAN-REJECTED-%s", input.LoanID),
+			Status:         "REJECTED",
+			CompletedAt:    workflow.Now(ctx),
+		}, nil
+	}
+
+	// Step 2: Reserve funds in TigerBeetle
+	var tbID uint64
+	if err := workflow.ExecuteActivity(ctx, ReserveFundsActivity, input).Get(ctx, &tbID); err != nil {
+		return nil, fmt.Errorf("reserve funds failed: %w", err)
+	}
+
+	// Step 3: Disburse loan via core-banking
+	var disbursementID string
+	if err := workflow.ExecuteActivity(ctx, DisburseLoanActivity, input, tbID).Get(ctx, &disbursementID); err != nil {
+		return nil, fmt.Errorf("loan disbursement failed: %w", err)
+	}
+
+	// Step 4: Emit loan event to Kafka (non-critical)
+	if err := workflow.ExecuteActivity(ctx, EmitLoanEventActivity, input, disbursementID).Get(ctx, nil); err != nil {
+		logger.Warn("Loan event emission failed (non-critical)", "error", err)
+	}
+
+	result := &LoanDisbursementResult{
+		DisbursementID: disbursementID,
+		Status:         "DISBURSED",
+		TigerBeetleID:  tbID,
+		CompletedAt:    workflow.Now(ctx),
+	}
+	logger.Info("Loan disbursement workflow completed", "disbursement_id", disbursementID, "loan_id", input.LoanID)
+	return result, nil
+}
+
+// ─── Settlement Finalize Workflow ─────────────────────────────────────────────
+
+// SettlementFinalizeInput wraps SettlementInput with finalization metadata
+type SettlementFinalizeInput struct {
+	SettlementInput
+	CounterpartyIDs []string `json:"counterparty_ids"`
+	LakehousePath   string   `json:"lakehouse_path"`
+}
+
+// SettlementFinalizeResult extends SettlementResult with finalization details
+type SettlementFinalizeResult struct {
+	SettlementResult
+	SettlementNoteID string `json:"settlement_note_id"`
+	LakehouseRef     string `json:"lakehouse_ref"`
+	NotifiedCount    int    `json:"notified_count"`
+}
+
+// SettlementFinalizeWorkflow wraps SettlementWorkflow with additional finalization:
+// Run core settlement → GenerateSettlementNote → ArchiveToLakehouse → NotifyCounterparties
+func SettlementFinalizeWorkflow(ctx workflow.Context, input SettlementFinalizeInput) (*SettlementFinalizeResult, error) {
+	logger := workflow.GetLogger(ctx)
+	logger.Info("Starting settlement finalize workflow", "trade_id", input.TradeID)
+
+	activityOptions := workflow.ActivityOptions{
+		StartToCloseTimeout: 5 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts: 3,
+		},
+	}
+	ctx = workflow.WithActivityOptions(ctx, activityOptions)
+
+	// Step 1: Run core settlement workflow as child workflow
+	childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		WorkflowID: fmt.Sprintf("settlement-core-%s", input.TradeID),
+	})
+	var coreResult SettlementResult
+	if err := workflow.ExecuteChildWorkflow(childCtx, SettlementWorkflow, input.SettlementInput).Get(ctx, &coreResult); err != nil {
+		return nil, fmt.Errorf("core settlement failed: %w", err)
+	}
+
+	// Step 2: Generate settlement note
+	var noteID string
+	if err := workflow.ExecuteActivity(ctx, GenerateSettlementNoteActivity, input, &coreResult).Get(ctx, &noteID); err != nil {
+		return nil, fmt.Errorf("settlement note generation failed: %w", err)
+	}
+
+	// Step 3: Archive to lakehouse (non-critical)
+	var lakehouseRef string
+	if err := workflow.ExecuteActivity(ctx, ArchiveToLakehouseActivity, input, &coreResult, noteID).Get(ctx, &lakehouseRef); err != nil {
+		logger.Warn("Lakehouse archival failed (non-critical)", "error", err)
+		lakehouseRef = ""
+	}
+
+	// Step 4: Notify counterparties (non-critical)
+	var notifiedCount int
+	if err := workflow.ExecuteActivity(ctx, NotifyCounterpartiesActivity, input, &coreResult).Get(ctx, &notifiedCount); err != nil {
+		logger.Warn("Counterparty notification failed (non-critical)", "error", err)
+		notifiedCount = 0
+	}
+
+	result := &SettlementFinalizeResult{
+		SettlementResult: coreResult,
+		SettlementNoteID: noteID,
+		LakehouseRef:     lakehouseRef,
+		NotifiedCount:    notifiedCount,
+	}
+	logger.Info("Settlement finalize workflow completed",
+		"settlement_id", coreResult.SettlementID,
+		"note_id", noteID,
+	)
+	return result, nil
+}
+
+// Activity stubs for new workflows
+var (
+	CreditCheckActivity           = activity.RegisterOptions{Name: "CreditCheck"}
+	ReserveFundsActivity          = activity.RegisterOptions{Name: "ReserveFunds"}
+	DisburseLoanActivity          = activity.RegisterOptions{Name: "DisburseLoan"}
+	EmitLoanEventActivity         = activity.RegisterOptions{Name: "EmitLoanEvent"}
+	GenerateSettlementNoteActivity = activity.RegisterOptions{Name: "GenerateSettlementNote"}
+	ArchiveToLakehouseActivity    = activity.RegisterOptions{Name: "ArchiveToLakehouse"}
+	NotifyCounterpartiesActivity  = activity.RegisterOptions{Name: "NotifyCounterparties"}
+)

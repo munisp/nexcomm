@@ -471,6 +471,35 @@ const temporalRouter = router({
       if (!result.ok) return { available: false, executions: [], nextPageToken: "" };
       return { available: true, ...result.data };
     }),
+  triggerWorkflow: adminProcedure
+    .input(z.object({
+      workflowType: z.string().trim().min(1),
+      input: z.record(z.string(), z.unknown()),
+    }))
+    .mutation(async ({ input }) => {
+      const middlewareHubUrl = process.env.MIDDLEWARE_HUB_URL ?? "http://localhost:8020";
+      const result = await callService<{ status: string; workflow_id: string }>(
+        middlewareHubUrl,
+        "/api/v1/workflow/trigger",
+        {
+          method: "POST",
+          body: JSON.stringify({ workflow_type: input.workflowType, input: input.input }),
+        }
+      );
+      if (!result.ok) return { available: false, workflowId: "", error: result.error };
+      return { available: true, workflowId: result.data.workflow_id, status: result.data.status };
+    }),
+  getWorkflowStatus: adminProcedure
+    .input(z.object({ workflowId: z.string().trim().min(1), namespace: z.string().trim().default("nexcom") }))
+    .query(async ({ input }) => {
+      const uiBase = ENV.temporalUrl.replace(":7233", ":8233");
+      const result = await callService<{ workflowExecutionInfo: unknown; status: string }>(
+        uiBase,
+        `/api/v1/namespaces/${input.namespace}/workflows/${input.workflowId}`
+      );
+      if (!result.ok) return { available: false, status: "UNKNOWN", error: result.error };
+      return { available: true, ...result.data };
+    }),
 });
 
 // ─── TigerBeetle Ledger ─────────────────────────────────────────────
@@ -512,7 +541,7 @@ const daprRouter = router({
     .input(z.object({
       pubsubName: z.string().trim().min(1),
       topic: z.string().trim().min(1),
-      data: z.record(z.unknown()),
+      data: z.record(z.string(), z.unknown()),
     }))
     .mutation(async ({ input }) => {
       const result = await callService<Record<string, never>>(
@@ -522,6 +551,88 @@ const daprRouter = router({
       );
       if (!result.ok) return { success: false, error: result.error };
       return { success: true };
+    }),
+});
+
+// ─── Permify RBAC ─────────────────────────────────────────────────────────────
+const PERMIFY_TENANT = process.env.PERMIFY_TENANT ?? "nexcom";
+const permifyRouter = router({
+  getHealth: publicProcedure.query(async () => {
+    const result = await callService<{ status: string }>(ENV.permifyUrl, "/healthz");
+    if (!result.ok) return { available: false, status: "unreachable", error: result.error };
+    return { available: true, status: "healthy" };
+  }),
+  checkPermission: protectedProcedure
+    .input(z.object({
+      subject: z.object({ type: z.string().trim().min(1), id: z.string().trim().min(1) }),
+      entity: z.object({ type: z.string().trim().min(1), id: z.string().trim().min(1) }),
+      permission: z.string().trim().min(1),
+    }))
+    .query(async ({ input }) => {
+      const result = await callService<{ can: string; metadata: unknown }>(
+        ENV.permifyUrl,
+        `/v1/tenants/${PERMIFY_TENANT}/permissions/check`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            metadata: { schema_version: "", snap_token: "", depth: 20 },
+            entity: input.entity,
+            permission: input.permission,
+            subject: input.subject,
+          }),
+        }
+      );
+      if (!result.ok) return { available: false, can: "RESULT_UNKNOWN", error: result.error };
+      return { available: true, can: result.data.can, metadata: result.data.metadata };
+    }),
+  listPolicies: adminProcedure.query(async () => {
+    const result = await callService<{ schema: { schema: string; version: string } }>(
+      ENV.permifyUrl,
+      `/v1/tenants/${PERMIFY_TENANT}/schemas/read`,
+      { method: "POST", body: JSON.stringify({ metadata: { schema_version: "" } }) }
+    );
+    if (!result.ok) return { available: false, schema: "", version: "", error: result.error };
+    return { available: true, schema: result.data.schema?.schema ?? "", version: result.data.schema?.version ?? "" };
+  }),
+  writePolicy: adminProcedure
+    .input(z.object({ schema: z.string().trim().min(1) }))
+    .mutation(async ({ input }) => {
+      const result = await callService<{ schema_version: string }>(
+        ENV.permifyUrl,
+        `/v1/tenants/${PERMIFY_TENANT}/schemas/write`,
+        { method: "POST", body: JSON.stringify({ schema: input.schema }) }
+      );
+      if (!result.ok) return { success: false, error: result.error };
+      return { success: true, schemaVersion: result.data.schema_version };
+    }),
+  writeRelationship: adminProcedure
+    .input(z.object({
+      entity: z.object({ type: z.string().trim().min(1), id: z.string().trim().min(1) }),
+      relation: z.string().trim().min(1),
+      subject: z.object({
+        type: z.string().trim().min(1),
+        id: z.string().trim().min(1),
+        relation: z.string().optional(),
+      }),
+    }))
+    .mutation(async ({ input }) => {
+      const result = await callService<{ snap_token: string }>(
+        ENV.permifyUrl,
+        `/v1/tenants/${PERMIFY_TENANT}/relationships/write`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            metadata: { schema_version: "" },
+            tuples: [{
+              entity: input.entity,
+              relation: input.relation,
+              subject: { type: input.subject.type, id: input.subject.id, relation: input.subject.relation ?? "" },
+            }],
+          }),
+        }
+      );
+      if (!result.ok) return { success: false, error: result.error };
+      return { success: true, snapToken: result.data.snap_token };
     }),
 });
 
@@ -538,4 +649,5 @@ export const microservicesRouter = router({
   temporal: temporalRouter,
   tigerBeetle: tigerBeetleRouter,
   dapr: daprRouter,
+  permify: permifyRouter,
 });

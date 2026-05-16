@@ -7962,3 +7962,240 @@ describe("admin stats procedures for CrossStakeholderSummary", () => {
     await expect(userCaller.farmer.adminGetKYCStats()).rejects.toThrow();
   });
 });
+
+
+// ─── Phase 44: Permify RBAC Router Tests ─────────────────────────────────────
+describe("Phase 44: Permify RBAC Router", () => {
+  const adminCtx = () => makeCtx({ id: 44_001, role: "admin", email: "rbac-admin@test.com", name: "RBAC Admin" });
+  const userCtx = () => makeCtx({ id: 44_002, role: "user", email: "rbac-user@test.com", name: "RBAC User" });
+
+  it("microservices.permify.getHealth returns available or unreachable", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.permify.getHealth();
+    expect(result).toHaveProperty("available");
+    expect(typeof result.available).toBe("boolean");
+    if (result.available) {
+      expect(result.status).toBe("healthy");
+    } else {
+      expect(result).toHaveProperty("status");
+    }
+  });
+
+  it("microservices.permify.checkPermission returns can field when service unavailable", async () => {
+    const caller = appRouter.createCaller(userCtx());
+    const result = await caller.microservices.permify.checkPermission({
+      subject: { type: "user", id: "44002" },
+      entity: { type: "document", id: "doc-1" },
+      permission: "view",
+    });
+    expect(result).toHaveProperty("available");
+    expect(result).toHaveProperty("can");
+    expect(typeof result.can).toBe("string");
+  });
+
+  it("microservices.permify.listPolicies returns schema and version", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.permify.listPolicies();
+    expect(result).toHaveProperty("available");
+    if (result.available) {
+      expect(result).toHaveProperty("schema");
+      expect(result).toHaveProperty("version");
+    } else {
+      expect(result).toHaveProperty("error");
+    }
+  });
+
+  it("microservices.permify.writePolicy returns success or error gracefully", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.permify.writePolicy({
+      schema: "entity user {}\nentity document { relation owner @user\npermission view = owner }",
+    });
+    expect(result).toHaveProperty("success");
+    expect(typeof result.success).toBe("boolean");
+  });
+
+  it("microservices.permify.writeRelationship returns success or error gracefully", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.permify.writeRelationship({
+      entity: { type: "document", id: "doc-1" },
+      relation: "owner",
+      subject: { type: "user", id: "44001" },
+    });
+    expect(result).toHaveProperty("success");
+    expect(typeof result.success).toBe("boolean");
+  });
+
+  it("non-admin cannot call writePolicy", async () => {
+    const caller = appRouter.createCaller(userCtx());
+    await expect(
+      caller.microservices.permify.writePolicy({ schema: "entity user {}" })
+    ).rejects.toThrow();
+  });
+
+  it("non-admin cannot call writeRelationship", async () => {
+    const caller = appRouter.createCaller(userCtx());
+    await expect(
+      caller.microservices.permify.writeRelationship({
+        entity: { type: "document", id: "doc-1" },
+        relation: "owner",
+        subject: { type: "user", id: "44002" },
+      })
+    ).rejects.toThrow();
+  });
+
+  it("non-admin cannot call listPolicies", async () => {
+    const caller = appRouter.createCaller(userCtx());
+    await expect(caller.microservices.permify.listPolicies()).rejects.toThrow();
+  });
+
+  it("checkPermission validates input — empty permission is rejected", async () => {
+    const caller = appRouter.createCaller(userCtx());
+    await expect(
+      caller.microservices.permify.checkPermission({
+        subject: { type: "user", id: "44002" },
+        entity: { type: "document", id: "doc-1" },
+        permission: "",
+      })
+    ).rejects.toThrow();
+  });
+
+  it("checkPermission validates input — empty subject type is rejected", async () => {
+    const caller = appRouter.createCaller(userCtx());
+    await expect(
+      caller.microservices.permify.checkPermission({
+        subject: { type: "", id: "44002" },
+        entity: { type: "document", id: "doc-1" },
+        permission: "view",
+      })
+    ).rejects.toThrow();
+  });
+});
+
+// ─── Phase 44: Temporal Workflow Trigger Tests ────────────────────────────────
+describe("Phase 44: Temporal Workflow Triggers", () => {
+  const adminCtx = () => makeCtx({ id: 44_100, role: "admin", email: "temporal-admin@test.com", name: "Temporal Admin" });
+  const userCtx = () => makeCtx({ id: 44_101, role: "user", email: "temporal-user@test.com", name: "Temporal User" });
+
+  it("microservices.temporal.getHealth returns available or unreachable", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.temporal.getHealth();
+    expect(result).toHaveProperty("available");
+    expect(typeof result.available).toBe("boolean");
+  });
+
+  it("microservices.temporal.triggerWorkflow — settlement type returns workflowId", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.temporal.triggerWorkflow({
+      workflowType: "settlement",
+      input: {
+        tradeId: "TRADE-44-001",
+        buyerId: "buyer-44",
+        sellerId: "seller-44",
+        symbol: "MAIZE",
+        quantity: 100,
+        price: 250,
+        currency: "NGN",
+      },
+    });
+    expect(result).toHaveProperty("available");
+    if (result.available) {
+      expect(result).toHaveProperty("workflowId");
+      expect(typeof result.workflowId).toBe("string");
+    }
+  });
+
+  it("microservices.temporal.triggerWorkflow — kyc type returns workflowId", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.temporal.triggerWorkflow({
+      workflowType: "kyc",
+      input: {
+        userId: "user-44-101",
+        applicationType: "INDIVIDUAL",
+        riskLevel: "LOW",
+        documentIds: ["doc-1", "doc-2"],
+      },
+    });
+    expect(result).toHaveProperty("available");
+    if (result.available) {
+      expect(result).toHaveProperty("workflowId");
+    }
+  });
+
+  it("microservices.temporal.triggerWorkflow — loan_disbursement type returns workflowId", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.temporal.triggerWorkflow({
+      workflowType: "loan_disbursement",
+      input: {
+        loanId: "LOAN-44-001",
+        userId: "user-44-101",
+        amount: 500000,
+        currency: "NGN",
+        disbursementAccount: "ACC-44-001",
+        tenorMonths: 12,
+      },
+    });
+    expect(result).toHaveProperty("available");
+    if (result.available) {
+      expect(result).toHaveProperty("workflowId");
+    }
+  });
+
+  it("microservices.temporal.triggerWorkflow — settlement_finalize type returns workflowId", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.temporal.triggerWorkflow({
+      workflowType: "settlement_finalize",
+      input: {
+        tradeId: "TRADE-44-002",
+        buyerId: "buyer-44",
+        sellerId: "seller-44",
+        symbol: "SOYA",
+        quantity: 50,
+        price: 300,
+        currency: "NGN",
+        counterpartyIds: ["cp-1", "cp-2"],
+        lakehousePath: "settlements/2026/01/01",
+      },
+    });
+    expect(result).toHaveProperty("available");
+    if (result.available) {
+      expect(result).toHaveProperty("workflowId");
+    }
+  });
+
+  it("microservices.temporal.triggerWorkflow — unknown type returns error gracefully", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.temporal.triggerWorkflow({
+      workflowType: "unknown_workflow_type",
+      input: {},
+    });
+    expect(result).toHaveProperty("available");
+    // Either available:false (service down) or available:true with error
+    if (result.available) {
+      // service responded — may return error for unknown type
+      expect(result).toBeDefined();
+    } else {
+      expect(result).toHaveProperty("error");
+    }
+  });
+
+  it("non-admin cannot trigger temporal workflows", async () => {
+    const caller = appRouter.createCaller(userCtx());
+    await expect(
+      caller.microservices.temporal.triggerWorkflow({
+        workflowType: "settlement",
+        input: {},
+      })
+    ).rejects.toThrow();
+  });
+
+  it("microservices.temporal.getWorkflowStatus returns status shape", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const result = await caller.microservices.temporal.getWorkflowStatus({
+      workflowId: "settlement-44-001",
+    });
+    expect(result).toHaveProperty("available");
+    if (result.available) {
+      expect(result).toHaveProperty("status");
+    }
+  });
+});

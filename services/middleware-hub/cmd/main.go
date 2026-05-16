@@ -46,6 +46,24 @@ func main() {
 	defer zapLogger.Sync()
 	logger := zapLogger.Sugar()
 
+	// Check for --mode=worker flag (used by temporal-worker docker-compose service)
+	workerMode := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--mode=worker" {
+			workerMode = true
+			break
+		}
+	}
+
+	if workerMode {
+		logger.Info("Starting NEXCOM Middleware Hub in Temporal Worker mode")
+		activities := temporal.NewActivityWorker(logger)
+		if err := temporal.RunWorker(logger, activities); err != nil {
+			logger.Fatalw("Temporal worker exited with error", "error", err)
+		}
+		return
+	}
+
 	logger.Info("Starting NEXCOM Middleware Hub")
 
 	// Initialize all middleware clients

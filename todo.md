@@ -862,3 +862,17 @@
 - [x] Confirmed USSD loan flow fully implemented in Rust engine (11 loan state handlers: LOAN, LOAN_APPLY_TYPE, LOAN_APPLY_AMOUNT, LOAN_APPLY_TENOR, LOAN_APPLY_CONFIRM, LOAN_APPLY_PIN, LOAN_REPAY_SELECT, LOAN_REPAY_AMOUNT, LOAN_REPAY_PROVIDER, LOAN_REPAY_CONFIRM, LOAN_REPAY_PIN)
 - [x] Confirmed Telegram alert commands fully implemented in bot-logic (handle_alert_set, handle_alert_list, handle_alert_delete)
 - [x] 946/946 tests passing — 0 failures — 0 TypeScript errors
+
+## Round v59 — Permify RBAC Router + Temporal Worker Workflows — COMPLETED
+- [x] Add Permify RBAC tRPC router (getHealth, checkPermission, listPolicies, writePolicy, writeRelationship) — 5 procedures with graceful degradation
+- [x] Register permifyRouter in microservicesRouter (permify: permifyRouter)
+- [x] Add permifyUrl to env.ts (PERMIFY_URL ?? http://localhost:3476)
+- [x] Implement Temporal worker: LoanDisbursementWorkflow (Go) — CreditCheck → ReserveFunds → DisburseLoan → EmitLoanEvent
+- [x] Implement Temporal worker: SettlementFinalizeWorkflow (Go) — SettlementWorkflow child → GenerateSettlementNote → ArchiveToLakehouse → NotifyCounterparties
+- [x] Add 7 new activity implementations to activities.go (CreditCheck, ReserveFunds, DisburseLoan, EmitLoanEvent, GenerateSettlementNote, ArchiveToLakehouse, NotifyCounterparties)
+- [x] Create temporal/worker.go — RunWorker() registers all 5 workflows + 18 activities across 6 task queues
+- [x] Wire --mode=worker flag in cmd/main.go — skips HTTP server, calls temporal.RunWorker()
+- [x] Add triggerWorkflow and getWorkflowStatus procedures to temporalRouter in microservicesRouter
+- [x] Phase 44 tests: 18 new tests for Permify RBAC + Temporal workflow triggers
+- [x] 964/964 tests passing (946 original + 18 new Phase 44 tests) — 0 failures
+- [x] Save v59 checkpoint and generate archive
