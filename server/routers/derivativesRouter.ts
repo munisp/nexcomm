@@ -929,7 +929,7 @@ export const derivativesRouter = router({
         .where(eq(futuresPositions.id, input.positionId))
         .returning();
 
-      await writeAuditLog(ctx.user.id, "FUTURES_LIQUIDATION", { positionId: input.positionId, liqPrice, reason: input.reason });
+      await writeAuditLog({ userId: ctx.user.id, action: "FUTURES_LIQUIDATION", resource: "futures_positions", resourceId: String(input.positionId), details: { positionId: input.positionId, liqPrice, reason: input.reason } });
       return updated;
     }),
 });

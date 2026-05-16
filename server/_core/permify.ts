@@ -164,7 +164,10 @@ export function withPermify(
       });
     }
 
-    return next({ ctx });
+    // Pass ctx with user narrowed to non-null so downstream procedure handlers
+    // don't receive TS18047 "possibly null" errors.
+    const narrowedCtx = { ...ctx, user: ctx.user };
+    return next({ ctx: narrowedCtx });
   });
 }
 
