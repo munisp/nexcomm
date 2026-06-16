@@ -1,0 +1,87 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "trade": "Trade",
+    "orders": "Orders",
+    "portfolio": "Portfolio",
+    "wallet": "Wallet",
+    "compliance": "Compliance",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "auth": {
+    "login": "Sign In",
+    "logout": "Sign Out",
+    "register": "Register",
+    "email": "Email address",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "loginWithPasskey": "Sign in with Passkey",
+    "loginWithManus": "Sign in with Manus"
+  },
+  "kyc": {
+    "title": "KYC Verification",
+    "status": {
+      "PENDING": "Pending",
+      "SUBMITTED": "Submitted",
+      "UNDER_REVIEW": "Under Review",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "REQUIRES_RESUBMISSION": "Resubmission Required"
+    },
+    "submit": "Submit for Review",
+    "submitting": "Submitting…",
+    "successTitle": "KYC Submitted Successfully",
+    "successMessage": "Your documents have been submitted. You will be notified within 1–2 business days."
+  },
+  "orders": {
+    "buy": "Buy",
+    "sell": "Sell",
+    "market": "Market",
+    "limit": "Limit",
+    "quantity": "Quantity",
+    "price": "Price",
+    "total": "Total",
+    "placeOrder": "Place Order",
+    "cancel": "Cancel Order",
+    "status": {
+      "OPEN": "Open",
+      "PARTIAL": "Partial Fill",
+      "FILLED": "Filled",
+      "CANCELLED": "Cancelled",
+      "EXPIRED": "Expired",
+      "REJECTED": "Rejected"
+    }
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "download": "Download",
+    "upload": "Upload",
+    "submit": "Submit",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No",
+    "noData": "No data available",
+    "noResults": "No results found",
+    "currency": "NGN"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all as read",
+    "noNotifications": "No notifications yet"
+  }
+}

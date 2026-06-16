@@ -1,3 +1,4 @@
+import "./i18n"; // i18n must be imported before React tree renders
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

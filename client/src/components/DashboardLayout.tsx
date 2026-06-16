@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { CommandPaletteProvider, useCommandPalette } from "@/components/CommandPalette";
 import { useOrderFillToast } from "@/hooks/useOrderFillToast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -389,6 +390,9 @@ function TopBar({
             {navigator.platform?.toLowerCase().includes("mac") ? "⌘K" : "Ctrl K"}
           </kbd>
         </button>
+
+        {/* Language switcher */}
+        <LanguageSwitcher />
 
         {/* Notification bell */}
         {unreadCount > 0 && (

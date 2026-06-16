@@ -43,6 +43,7 @@ import { ddosCircuitBreaker, bruteForceProtection, inputSanitization, additional
 import cookieParser from "cookie-parser";
 import { policyStore } from "../pbac";
 import { bootstrapPermify } from "../permify-bootstrap";
+import { startTemporalWorker } from "../temporal/worker";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -366,6 +367,7 @@ async function startServer() {
   // Permify RBAC schema bootstrap: writes NEXCOM schema + seeds owner as exchange#admin.
   // Gracefully degrades if Permify is unreachable.
   bootstrapPermify().catch(err => console.warn("[Permify Bootstrap] Startup error:", err));
+  startTemporalWorker().catch(err => console.warn("[Temporal] Startup error:", err));
 
   // Graceful shutdown: stop all native engines when Node process exits
   process.on("SIGTERM", async () => { stopAllEngines(); stopMojaloopHealthJob(); await stopKafkaConsumer(); await disconnectKafkaProducer(); process.exit(0); });

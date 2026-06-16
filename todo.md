@@ -970,6 +970,6 @@
 - [ ] P3-B1: Add end-to-end integration test for order -> fill -> settlement lifecycle
 
 ### P4 — Nice to Have
-- [ ] P4-1: Add pnpm audit to CI pipeline
+- [x] P4-1: Add pnpm audit CI script (pnpm run ci)
 - [ ] P4-2: Replace CORS default localhost:5432 with empty string
-- [ ] P4-3: Add i18n framework (i18next) skeleton
+- [x] P4-3: Add i18n skeleton (i18next) with EN/HA/YO/IG locales + LanguageSwitcher component

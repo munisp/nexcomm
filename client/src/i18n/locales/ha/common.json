@@ -1,0 +1,87 @@
+{
+  "nav": {
+    "dashboard": "Allon Kula",
+    "trade": "Kasuwanci",
+    "orders": "Umarni",
+    "portfolio": "Jari",
+    "wallet": "Walat",
+    "compliance": "Biyayya",
+    "settings": "Saiti",
+    "logout": "Fita"
+  },
+  "auth": {
+    "login": "Shiga",
+    "logout": "Fita",
+    "register": "Yi Rajista",
+    "email": "Adireshin imel",
+    "password": "Kalmar sirri",
+    "forgotPassword": "Manta kalmar sirri?",
+    "loginWithPasskey": "Shiga da Makullin Wucewa",
+    "loginWithManus": "Shiga da Manus"
+  },
+  "kyc": {
+    "title": "Tabbatar da Asali (KYC)",
+    "status": {
+      "PENDING": "Ana Jira",
+      "SUBMITTED": "An Aika",
+      "UNDER_REVIEW": "Ana Duba",
+      "APPROVED": "An Amince",
+      "REJECTED": "An Ƙi",
+      "REQUIRES_RESUBMISSION": "Ana Buƙatar Sake Aika"
+    },
+    "submit": "Aika don Duba",
+    "submitting": "Ana Aika…",
+    "successTitle": "An Aika KYC Cikin Nasara",
+    "successMessage": "An karɓi takardu. Za a sanar da ku cikin kwana 1–2 na kasuwanci."
+  },
+  "orders": {
+    "buy": "Saya",
+    "sell": "Sayar",
+    "market": "Kasuwa",
+    "limit": "Iyaka",
+    "quantity": "Adadi",
+    "price": "Farashi",
+    "total": "Jimla",
+    "placeOrder": "Sanya Umarni",
+    "cancel": "Soke Umarni",
+    "status": {
+      "OPEN": "A Buɗe",
+      "PARTIAL": "Cikawa Wani Ɓangare",
+      "FILLED": "An Cika",
+      "CANCELLED": "An Soke",
+      "EXPIRED": "Ya Ƙare",
+      "REJECTED": "An Ƙi"
+    }
+  },
+  "common": {
+    "loading": "Ana Lodi…",
+    "error": "Wani abu ya yi kuskure",
+    "retry": "Sake gwadawa",
+    "save": "Adana",
+    "cancel": "Soke",
+    "confirm": "Tabbatar",
+    "delete": "Share",
+    "edit": "Gyara",
+    "view": "Duba",
+    "search": "Bincika",
+    "filter": "Tace",
+    "export": "Fitar",
+    "download": "Sauke",
+    "upload": "Ɗora",
+    "submit": "Aika",
+    "back": "Baya",
+    "next": "Gaba",
+    "previous": "Na Baya",
+    "close": "Rufe",
+    "yes": "I",
+    "no": "A'a",
+    "noData": "Babu bayanan da ake samu",
+    "noResults": "Babu sakamako",
+    "currency": "NGN"
+  },
+  "notifications": {
+    "title": "Sanarwa",
+    "markAllRead": "Nuna duka an karanta",
+    "noNotifications": "Babu sanarwa tukuna"
+  }
+}
