@@ -4,6 +4,7 @@
 package tigerbeetle
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -274,4 +275,31 @@ func (c *Client) HealthCheck(ctx context.Context) bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
+}
+
+// CreateTransfer creates a double-entry transfer in TigerBeetle.
+func (c *Client) CreateTransfer(ctx context.Context, transferID uint64, debitAccount uint64, creditAccount uint64, amount uint64, ledger uint32, code uint16) error {
+	payload := map[string]interface{}{
+		"transfer_id":    transferID,
+		"debit_account":  debitAccount,
+		"credit_account": creditAccount,
+		"amount":         amount,
+		"ledger":         ledger,
+		"code":           code,
+	}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/transfers", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("tigerbeetle CreateTransfer: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("tigerbeetle CreateTransfer: status %d", resp.StatusCode)
+	}
+	return nil
 }

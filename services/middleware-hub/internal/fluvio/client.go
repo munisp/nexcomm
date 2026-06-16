@@ -200,7 +200,7 @@ func (c *Client) PublishMarketTick(ctx context.Context, tick MarketTickEvent) er
 type TradeConfirmEvent struct {
 	TradeID   string    `json:"trade_id"`
 	Symbol    string    `json:"symbol"`
-	BuyerID   int       `json:"buyer_id"`
+	BuyerID   string    `json:"buyer_id"`
 	SellerID  int       `json:"seller_id"`
 	Price     float64   `json:"price"`
 	Quantity  float64   `json:"quantity"`

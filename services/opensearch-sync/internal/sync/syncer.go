@@ -15,7 +15,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nexcom/opensearch-sync/internal/mapping"
-	opensearch "github.com/opensearch-project/opensearch-go/v4"
 	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 	"github.com/rs/zerolog/log"
 )
@@ -23,12 +22,12 @@ import (
 // Syncer orchestrates all table sync jobs.
 type Syncer struct {
 	pg *pgxpool.Pool
-	os *opensearch.Client
+	os *opensearchapi.Client
 }
 
 // New creates a Syncer and ensures all OpenSearch indices and the watermark
 // table exist.
-func New(pg *pgxpool.Pool, os *opensearch.Client) (*Syncer, error) {
+func New(pg *pgxpool.Pool, os *opensearchapi.Client) (*Syncer, error) {
 	s := &Syncer{pg: pg, os: os}
 	if err := s.ensureWatermarkTable(context.Background()); err != nil {
 		return nil, fmt.Errorf("watermark table: %w", err)

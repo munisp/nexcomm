@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nexcom/opensearch-sync/internal/sync"
 	opensearch "github.com/opensearch-project/opensearch-go/v4"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -48,8 +49,10 @@ func main() {
 	log.Info().Str("url", maskPassword(pgURL)).Msg("[OpenSearchSync] PostgreSQL connected")
 
 	// ── OpenSearch client ──────────────────────────────────────────────────────
-	osClient, err := opensearch.NewClient(opensearch.Config{
-		Addresses: []string{osURL},
+	osClient, err := opensearchapi.NewClient(opensearchapi.Config{
+		Client: opensearch.Config{
+			Addresses: []string{osURL},
+		},
 	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create OpenSearch client")
