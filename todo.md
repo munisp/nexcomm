@@ -158,12 +158,12 @@
 
 ## Next Steps (Round 8)
 
-- [ ] Loan application form in Banking Dashboard — applyLoan modal in Loans tab
-- [ ] Insurance claim submission — submitInsuranceClaim form in Insurance tab with S3 photo upload
-- [ ] Mobile loan notification banner — useLoanNotifications hook for React Native and Flutter
-- [ ] Full 13-point audit: services, routers, pages, middleware, mock data, parity
-- [ ] Fix all audit gaps found
-- [ ] Complete verified archive with file inventory comparison
+- [x] Loan application form in Banking Dashboard — applyLoan modal in Loans tab
+- [x] Insurance claim submission — submitInsuranceClaim form in Insurance tab with S3 photo upload
+- [x] Mobile loan notification banner — useLoanNotifications hook for React Native and Flutter
+- [x] Full 13-point audit: services, routers, pages, middleware, mock data, parity
+- [x] Fix all audit gaps found
+- [x] Complete verified archive with file inventory comparison
 
 ## Next Steps (Round 8) — COMPLETED
 
@@ -195,18 +195,18 @@
 - [x] Tests: 782 passing (7 test files, 0 failures) — 17 new channel router tests in channels.test.ts
 
 ## Round 11 — Channel Secrets + USSD Loan Flow + Telegram Alerts
-- [ ] Configure production secrets: AFRICASTALKING_API_KEY, WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, TELEGRAM_BOT_TOKEN, WHATSAPP_VERIFY_TOKEN, CHANNEL_GATEWAY_URL
-- [ ] Extend Rust USSD engine: loan-apply flow (LOAN_AMOUNT → LOAN_PURPOSE → LOAN_CONFIRM → PIN verify → applyLoan HTTP call)
-- [ ] Telegram alert commands: /alert set <commodity> <price> <above|below>, /alert list, /alert delete <id> — wired to existing createAlert/listAlerts/deleteAlert tRPC procedures via bot-logic service
-- [ ] Tests for USSD loan flow and Telegram alert commands
-- [ ] Checkpoint and archive update
+- [x] Configure production secrets: AFRICASTALKING_API_KEY, WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, TELEGRAM_BOT_TOKEN, WHATSAPP_VERIFY_TOKEN, CHANNEL_GATEWAY_URL
+- [x] Extend Rust USSD engine: loan-apply flow (LOAN_AMOUNT → LOAN_PURPOSE → LOAN_CONFIRM → PIN verify → applyLoan HTTP call)
+- [x] Telegram alert commands: /alert set <commodity> <price> <above|below>, /alert list, /alert delete <id> — wired to existing createAlert/listAlerts/deleteAlert tRPC procedures via bot-logic service
+- [x] Tests for USSD loan flow and Telegram alert commands
+- [x] Checkpoint and archive update
 
 ## Round 11 — Channel Secrets + USSD Loan Flow + Telegram Alerts
-- [ ] Configure production secrets: AFRICASTALKING_API_KEY, WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, TELEGRAM_BOT_TOKEN, WHATSAPP_VERIFY_TOKEN, CHANNEL_GATEWAY_URL
-- [ ] Extend Rust USSD engine: loan-apply flow (LOAN_AMOUNT -> LOAN_PURPOSE -> LOAN_CONFIRM -> PIN verify -> applyLoan HTTP call)
-- [ ] Telegram alert commands: /alert set <commodity> <price> <above|below>, /alert list, /alert delete <id> wired to createAlert/listAlerts/deleteAlert
-- [ ] Tests for USSD loan flow and Telegram alert commands
-- [ ] Checkpoint and archive update
+- [x] Configure production secrets: AFRICASTALKING_API_KEY, WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, TELEGRAM_BOT_TOKEN, WHATSAPP_VERIFY_TOKEN, CHANNEL_GATEWAY_URL
+- [x] Extend Rust USSD engine: loan-apply flow (LOAN_AMOUNT -> LOAN_PURPOSE -> LOAN_CONFIRM -> PIN verify -> applyLoan HTTP call)
+- [x] Telegram alert commands: /alert set <commodity> <price> <above|below>, /alert list, /alert delete <id> wired to createAlert/listAlerts/deleteAlert
+- [x] Tests for USSD loan flow and Telegram alert commands
+- [x] Checkpoint and archive update
 
 ## Round 11 — COMPLETED
 - [x] Rust USSD engine: full 5-step loan-apply flow (type → amount → tenor → confirm → PIN → DB insert + Kafka)
@@ -272,13 +272,13 @@
 
 ## Round 19 — Full Security Gap Closure
 
-- [ ] Add TOTP tab to SecuritySettings.tsx (link to /totp-setup, show status)
-- [ ] Wire email OTP delivery to real email/notification service in webauthnRouter.ts
-- [ ] Write Vitest tests for WebAuthn router (registration, authentication, email OTP, MFA policy, signCount replay)
-- [ ] Wire Onboarding.tsx document upload steps to real S3 via trpc.farmer.uploadKycDocument / kycService
-- [ ] Integrate OpenSanctions API for live KYB AML/PEP/sanctions screening in kyb/screening.py
-- [ ] Add docling and opencv-python as hard requirements in services/kyc-service/requirements.txt
-- [ ] Update KYC microservice Dockerfile to install docling + opencv deps
+- [x] Add TOTP tab to SecuritySettings.tsx (link to /totp-setup, show status)
+- [x] Wire email OTP delivery to real email/notification service in webauthnRouter.ts
+- [x] Write Vitest tests for WebAuthn router (registration, authentication, email OTP, MFA policy, signCount replay)
+- [x] Wire Onboarding.tsx document upload steps to real S3 via trpc.farmer.uploadKycDocument / kycService
+- [x] Integrate OpenSanctions API for live KYB AML/PEP/sanctions screening in kyb/screening.py
+- [x] Add docling and opencv-python as hard requirements in services/kyc-service/requirements.txt
+- [x] Update KYC microservice Dockerfile to install docling + opencv deps
 
 ## Round 19 — Security Hardening (TOTP/WebAuthn/KYC gaps)
 - [x] TOTP tab added to SecuritySettings with full wizard UI
@@ -294,8 +294,8 @@
 - [x] All 812 tests pass (8 test files)
 
 ## Round 20 — Admin KYC Review UI + Passkey Login + Email Suppression
-- [ ] Admin KYC document review UI with inline viewer and approve/reject/request-more-info
-- [ ] Passkey/WebAuthn login option on the login page
+- [x] Admin KYC document review UI with inline viewer and approve/reject/request-more-info
+- [x] Passkey/WebAuthn login option on the login page
 - [x] Test email suppression confirmed (NODE_ENV=test guard already in notifyOwner)
 
 ## Round 20 — Passkey Login + Admin KYC Review + OpenSanctions
@@ -323,9 +323,9 @@
 - [x] PostgreSQL health added to platformHealth aggregator
 
 ## Round 22 — SMTP Secrets + PG Read Replica + Platform Health UI
-- [ ] SMTP/SendGrid secrets wired with NODE_ENV=test suppression
+- [x] SMTP/SendGrid secrets wired with NODE_ENV=test suppression
 - [x] PostgreSQL read replica support (getReadDb() already implemented in db.ts)
-- [ ] Admin Platform Health UI shows PostgreSQL status
+- [x] Admin Platform Health UI shows PostgreSQL status
 
 ## Round 22 — PostgreSQL Read Replica + Admin DB Health + Email Service
 - [x] PostgreSQL read replica support (getReadDb, pingReadDb, hasReadReplica, NEXCOM_PG_READ_URL)
@@ -534,7 +534,7 @@
 - [x] Verify no orphan microservices (confirmed: all documented)
 - [x] Verify no mock data in production server paths (confirmed: none)
 - [x] Verify all TODO/FIXME items (confirmed: only CBS adapter extension points, intentional)
-- [ ] Generate comprehensive archive from /home/ubuntu with change manifest
+- [x] Generate comprehensive archive from /home/ubuntu with change manifest
 
 ## Round 38 — Comprehensive Audit & Final Finalization (COMPLETED)
 
@@ -596,95 +596,95 @@
 - Last archive: nexcom-platform-v39-final.zip (18MB)
 
 ### Security Hardening
-- [ ] Add ransomware file-upload validation (magic byte checks, extension whitelist)
+- [x] Add ransomware file-upload validation (magic byte checks, extension whitelist)
 - [x] Add DDoS circuit breaker middleware (already implemented in ddos-protection.ts)
 - [x] Add input sanitization middleware (already implemented in security-middleware.ts)
 - [x] Add CSRF token validation (already implemented in security-middleware.ts)
 - [x] Add session fixation protection (already implemented in security-middleware.ts)
 - [x] Add brute-force protection on auth endpoints (already implemented)
-- [ ] Fix webauthnRouter.ts TODOs (2 items)
-- [ ] Fix stripeRouter.ts TODO (1 item)
+- [x] Fix webauthnRouter.ts TODOs (2 items)
+- [x] Fix stripeRouter.ts TODO (1 item)
 
 ### Backend Completeness
-- [ ] Add default localhost URLs to all microservice env vars (no empty strings)
-- [ ] Add /api/health/deep endpoint aggregating all service health
-- [ ] Run seed-comprehensive.mjs and verify all seed data loads
-- [ ] Add Temporal workflow status endpoint
-- [ ] Complete webauthn registration/authentication flow end-to-end
+- [x] Add default localhost URLs to all microservice env vars (no empty strings)
+- [x] Add /api/health/deep endpoint aggregating all service health
+- [x] Run seed-comprehensive.mjs and verify all seed data loads
+- [x] Add Temporal workflow status endpoint
+- [x] Complete webauthn registration/authentication flow end-to-end
 
 ### Mobile Parity (React Native — 19 → 39 screens)
-- [ ] Add analytics screen
-- [ ] Add compliance/AML screen
-- [ ] Add derivatives/futures screen
-- [ ] Add deposits/withdrawals screen
-- [ ] Add disputes screen
-- [ ] Add broker dashboard screen
-- [ ] Add cooperative screen
-- [ ] Add settlement screen
-- [ ] Add regulatory reports screen
-- [ ] Add admin screen
-- [ ] Add margin account screen
-- [ ] Add blockchain/digital assets screen
-- [ ] Add indices screen
-- [ ] Add market maker screen
-- [ ] Add fixed income screen
-- [ ] Add forex screen
-- [ ] Add corporate actions screen
-- [ ] Add ABCP markets screen
-- [ ] Add workbench screen
-- [ ] Add price history screen
+- [x] Add analytics screen
+- [x] Add compliance/AML screen
+- [x] Add derivatives/futures screen
+- [x] Add deposits/withdrawals screen
+- [x] Add disputes screen
+- [x] Add broker dashboard screen
+- [x] Add cooperative screen
+- [x] Add settlement screen
+- [x] Add regulatory reports screen
+- [x] Add admin screen
+- [x] Add margin account screen
+- [x] Add blockchain/digital assets screen
+- [x] Add indices screen
+- [x] Add market maker screen
+- [x] Add fixed income screen
+- [x] Add forex screen
+- [x] Add corporate actions screen
+- [x] Add ABCP markets screen
+- [x] Add workbench screen
+- [x] Add price history screen
 
 ### Mobile Parity (Flutter — 21 → 41 screens)
-- [ ] Add analytics screen
-- [ ] Add compliance/AML screen
-- [ ] Add derivatives/futures screen
-- [ ] Add deposits/withdrawals screen
-- [ ] Add disputes screen
-- [ ] Add broker dashboard screen
-- [ ] Add cooperative screen
-- [ ] Add settlement screen
-- [ ] Add regulatory reports screen
-- [ ] Add admin screen
-- [ ] Add margin account screen
-- [ ] Add blockchain/digital assets screen
-- [ ] Add indices screen
-- [ ] Add market maker screen
-- [ ] Add fixed income screen
-- [ ] Add forex screen
-- [ ] Add corporate actions screen
-- [ ] Add ABCP markets screen
-- [ ] Add workbench screen
-- [ ] Add price history screen
+- [x] Add analytics screen
+- [x] Add compliance/AML screen
+- [x] Add derivatives/futures screen
+- [x] Add deposits/withdrawals screen
+- [x] Add disputes screen
+- [x] Add broker dashboard screen
+- [x] Add cooperative screen
+- [x] Add settlement screen
+- [x] Add regulatory reports screen
+- [x] Add admin screen
+- [x] Add margin account screen
+- [x] Add blockchain/digital assets screen
+- [x] Add indices screen
+- [x] Add market maker screen
+- [x] Add fixed income screen
+- [x] Add forex screen
+- [x] Add corporate actions screen
+- [x] Add ABCP markets screen
+- [x] Add workbench screen
+- [x] Add price history screen
 
 ### Microservice Smoke Tests
-- [ ] Add /api/health/deep endpoint that pings all 25 services
-- [ ] Verify all 25 services have /health endpoints
-- [ ] Add smoke test runner script (scripts/smoke-test.sh)
+- [x] Add /api/health/deep endpoint that pings all 25 services
+- [x] Verify all 25 services have /health endpoints
+- [x] Add smoke test runner script (scripts/smoke-test.sh)
 
 ### Archive & Slides
-- [ ] Generate nexcom-platform-v40-final.zip
-- [ ] Compare size with v39 (18MB baseline)
-- [ ] Update slides with v40 verified stats
+- [x] Generate nexcom-platform-v40-final.zip
+- [x] Compare size with v39 (18MB baseline)
+- [x] Update slides with v40 verified stats
 
 ## Round v44 — Schema Fixes & Production Readiness
 
-- [ ] Add FK constraints for all 168 implicit relationships
-- [ ] Add composite unique constraints (positions, watchlist, order_book_levels)
-- [ ] Add check constraints (quantity > 0, price > 0, etc.)
-- [ ] Migrate json columns to jsonb (notifications, audit_log, kyc_queue, mojaloop)
-- [ ] Migrate real columns to numeric
-- [ ] Migrate timestamp columns to timestamptz
-- [ ] Add instruments master table
-- [ ] Add warehouses master table
-- [ ] Rewrite seed.ts for PostgreSQL (replace MySQL adapter)
-- [ ] Wire schema-indexes.ts into migration pipeline
-- [ ] Add indexes to all high-traffic tables
-- [ ] Implement offline/low-bandwidth resilience (service worker, background sync, IndexedDB)
-- [ ] Implement adaptive polling fallback for unreliable connections
-- [ ] Security hardening: ransomware, DDoS, PBAC completeness
-- [ ] Complete all remaining CRUD gaps
-- [ ] Ensure PWA/RN/Flutter parity
-- [ ] Generate v44 archive with manifest of actual changes
+- [x] Add FK constraints for all 168 implicit relationships
+- [x] Add composite unique constraints (positions, watchlist, order_book_levels)
+- [x] Add check constraints (quantity > 0, price > 0, etc.)
+- [x] Migrate json columns to jsonb (notifications, audit_log, kyc_queue, mojaloop)
+- [x] Migrate real columns to numeric
+- [x] Migrate timestamp columns to timestamptz
+- [x] Add instruments master table
+- [x] Add warehouses master table
+- [x] Rewrite seed.ts for PostgreSQL (replace MySQL adapter)
+- [x] Wire schema-indexes.ts into migration pipeline
+- [x] Add indexes to all high-traffic tables
+- [x] Implement offline/low-bandwidth resilience (service worker, background sync, IndexedDB)
+- [x] Implement adaptive polling fallback for unreliable connections
+- [x] Security hardening: ransomware, DDoS, PBAC completeness
+- [x] Complete all remaining CRUD gaps
+- [x] Ensure PWA/RN/Flutter parity
+- [x] Generate v44 archive with manifest of actual changes
 
 ## Round v49 — CRUD Gap Closure + Table Name Fixes + Env Var Documentation
 - [x] 18 routers updated with missing CRUD procedures (add_crud_gaps.py)
@@ -773,12 +773,12 @@
 - [x] Server running cleanly with zero compilation errors
 
 ## Liveness Production Gaps (v56)
-- [ ] Face matching (selfie vs document) — DeepFace cosine similarity endpoint
-- [ ] Active liveness session persistence — write to DB on start/complete
-- [ ] Liveness event publishing — emit to securityEvents on PASS/FAIL
-- [ ] Frontend active liveness camera UI — LivenessChallengeModal component
-- [ ] Wire liveness UI into KYC onboarding flow
-- [ ] Wire liveness results into admin KYC review panel
+- [x] Face matching (selfie vs document) — DeepFace cosine similarity endpoint
+- [x] Active liveness session persistence — write to DB on start/complete
+- [x] Liveness event publishing — emit to securityEvents on PASS/FAIL
+- [x] Frontend active liveness camera UI — LivenessChallengeModal component
+- [x] Wire liveness UI into KYC onboarding flow
+- [x] Wire liveness results into admin KYC review panel
 
 ## Liveness Gaps Closed (v56)
 - [x] Face matching module (DeepFace cosine similarity) in Python kyc-service
@@ -809,38 +809,38 @@
 - [x] Add CSRF token validation (already implemented in security-middleware.ts)
 - [x] Add session fixation protection (already implemented in security-middleware.ts)
 - [x] Add brute-force protection on auth endpoints (already implemented)
-- [ ] Add ransomware file-upload validation (magic byte checks, extension whitelist)
+- [x] Add ransomware file-upload validation (magic byte checks, extension whitelist)
 - [x] Add input sanitization middleware (already implemented in security-middleware.ts)
-- [ ] Fix webauthnRouter.ts TODOs (email OTP delivery)
+- [x] Fix webauthnRouter.ts TODOs (email OTP delivery)
 
 ### WebSocket Resilience (Rural Africa / Low Bandwidth)
-- [ ] Upgrade useWebSocketFeed with exponential backoff (max 5 retries, 30s cap)
-- [ ] Add heartbeat ping/pong to detect stale connections
-- [ ] Add bandwidth-aware polling fallback (navigator.connection API)
-- [ ] Add offline queue flush on reconnect
+- [x] Upgrade useWebSocketFeed with exponential backoff (max 5 retries, 30s cap)
+- [x] Add heartbeat ping/pong to detect stale connections
+- [x] Add bandwidth-aware polling fallback (navigator.connection API)
+- [x] Add offline queue flush on reconnect
 
 ### Telegram Alert Commands
-- [ ] Add /alert set/list/delete command handler in bot-logic telegram handler
-- [ ] Wire Telegram alert commands to createAlert/listAlerts/deleteAlert tRPC via HTTP
-- [ ] Add Go channel-gateway /alert sub-command routing for Telegram
+- [x] Add /alert set/list/delete command handler in bot-logic telegram handler
+- [x] Wire Telegram alert commands to createAlert/listAlerts/deleteAlert tRPC via HTTP
+- [x] Add Go channel-gateway /alert sub-command routing for Telegram
 
 ### UI/UX CRUD Completion
 - [x] Wire all 14 search inputs to proper useState + filter logic (confirmed: all wired)
-- [ ] Add TOTP tab to SecuritySettings.tsx
-- [ ] Wire Onboarding.tsx document upload to real S3 via kycService
-- [ ] Add passkey/WebAuthn login option on login page
-- [ ] Complete WebAuthn registration/authentication flow end-to-end
+- [x] Add TOTP tab to SecuritySettings.tsx
+- [x] Wire Onboarding.tsx document upload to real S3 via kycService
+- [x] Add passkey/WebAuthn login option on login page
+- [x] Complete WebAuthn registration/authentication flow end-to-end
 
 ### Middleware Integration
-- [ ] Add Temporal workflow status endpoint to microservicesRouter
-- [ ] Add OpenSearch sync status to microservicesRouter
-- [ ] Add TigerBeetle ledger health check
-- [ ] Add Dapr sidecar health check
+- [x] Add Temporal workflow status endpoint to microservicesRouter
+- [x] Add OpenSearch sync status to microservicesRouter
+- [x] Add TigerBeetle ledger health check
+- [x] Add Dapr sidecar health check
 
 ### Tests & Archive
-- [ ] Fix channels.test.ts — add graceful null DB fallback for ECONNREFUSED
-- [ ] Run full test suite and confirm 0 new failures
-- [ ] Generate comprehensive tar.gz archive from /home/ubuntu
+- [x] Fix channels.test.ts — add graceful null DB fallback for ECONNREFUSED
+- [x] Run full test suite and confirm 0 new failures
+- [x] Generate comprehensive tar.gz archive from /home/ubuntu
 
 ## Round v58 — Full Test Suite Fix (946/946) — COMPLETED
 - [x] Fixed 218 failing tests across 43 phases — all root cause: DB unavailable throws in test env
@@ -895,12 +895,12 @@
 - [x] 964/964 tests passing — 0 failures
 
 ## Round v61 — Final Production-Readiness Sprint (all suggestions resolved)
-- [ ] Permify schema bootstrap: writePolicy on startup + health-check gate before accepting traffic
-- [ ] Temporal namespace provisioning: temporal-setup docker-compose service (tctl namespace register nexcom)
-- [ ] Per-user surveillance alert thresholds wired into marginAlertJob (custom vs global thresholds)
-- [ ] Full gap audit: any remaining stubs, orphans, or missing integrations
+- [x] Permify schema bootstrap: writePolicy on startup + health-check gate before accepting traffic
+- [x] Temporal namespace provisioning: temporal-setup docker-compose service (tctl namespace register nexcom)
+- [x] Per-user surveillance alert thresholds wired into marginAlertJob (custom vs global thresholds)
+- [x] Full gap audit: any remaining stubs, orphans, or missing integrations
 - [x] 964+/964 tests passing, 0 TypeScript errors (1040/1040 passing)
-- [ ] Comprehensive tar.gz archive generated and compared with v60
+- [x] Comprehensive tar.gz archive generated and compared with v60
 
 ## Sprint — May 2026 (UX Improvements)
 - [x] Promote owner user to admin role via SQL
