@@ -392,6 +392,13 @@
       "when": 1781639273863,
       "tag": "0055_thin_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1781641942403,
+      "tag": "0056_furry_namora",
+      "breakpoints": true
     }
   ]
 }
