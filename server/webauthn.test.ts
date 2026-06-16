@@ -73,7 +73,7 @@ function toBase64url(buf: Buffer): string {
 beforeAll(async () => {
   const db = await getDb();
   if (!db) return;
-  // Ensure test user row exists
+  // Ensure primary test user row exists
   await db
     .insert(users)
     .values({
@@ -85,17 +85,35 @@ beforeAll(async () => {
       role: "user",
     })
     .onConflictDoNothing();
+  // Ensure "other user" (99999) exists for cross-user isolation tests
+  await db
+    .insert(users)
+    .values({
+      id: 99999,
+      openId: "webauthn-other-user",
+      email: "webauthn-other@nexcom.ng",
+      name: "WebAuthn Other User",
+      loginMethod: "manus",
+      role: "user",
+    })
+    .onConflictDoNothing();
 });
 
 afterAll(async () => {
   const db = await getDb();
   if (!db) return;
-  // Clean up all test data
+  // Clean up all test data for primary test user
   await db.delete(webauthnCredentials).where(eq(webauthnCredentials.userId, TEST_USER_ID));
   await db.delete(webauthnChallenges).where(eq(webauthnChallenges.userId, TEST_USER_ID));
   await db.delete(mfaOtpCodes).where(eq(mfaOtpCodes.userId, TEST_USER_ID));
   await db.delete(userMfaSettings).where(eq(userMfaSettings.userId, TEST_USER_ID));
   await db.delete(notifications).where(eq(notifications.userId, TEST_USER_ID));
+  // Clean up "other user" credentials and the user row itself
+  await db.delete(webauthnCredentials).where(eq(webauthnCredentials.userId, 99999));
+  // Delete all FK-dependent rows before deleting the user row
+  const { marginAccounts } = await import('../drizzle/schema');
+  await db.delete(marginAccounts).where(eq(marginAccounts.userId, 99999));
+  await db.delete(users).where(eq(users.id, 99999));
 });
 
 // ─── Phase W1: getMfaStatus ───────────────────────────────────────────────────
