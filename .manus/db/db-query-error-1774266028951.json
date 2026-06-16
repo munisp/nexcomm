@@ -1,8 +1,0 @@
-{
-  "query": "\nALTER TABLE telegram_contacts ADD COLUMN IF NOT EXISTS market_broadcasts BOOLEAN NOT NULL DEFAULT TRUE;\nSELECT column_name, data_type, column_default, is_nullable\nFROM information_schema.columns\nWHERE table_name = 'telegram_contacts'\n  AND column_name = 'market_broadcasts';\n",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2t5rixfHAYLQmtB.5315d4d6da10 --database TWM5ZVegrZm24G2Y3WgoyD --execute \nALTER TABLE telegram_contacts ADD COLUMN IF NOT EXISTS market_broadcasts BOOLEAN NOT NULL DEFAULT TRUE;\nSELECT column_name, data_type, column_default, is_nullable\nFROM information_schema.columns\nWHERE table_name = 'telegram_contacts'\n  AND column_name = 'market_broadcasts';\n",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1146 (42S02) at line 2: Table 'twm5zvegrzm24g2y3wgoyd.telegram_contacts' doesn't exist"
-  ]
-}

@@ -8,7 +8,7 @@ CREATE TABLE "collateral_registry" (
 	"loan_id" bigint,
 	"owner_id" integer NOT NULL,
 	"type" "collateral_type" NOT NULL,
-	"status" "collateral_status" DEFAULT 'REGISTERED' NOT NULL,
+	"status" "collateral_status" DEFAULT 'ACTIVE' NOT NULL,
 	"description" text NOT NULL,
 	"valuation_ngn" numeric(18, 2) NOT NULL,
 	"ltv_pct" numeric(6, 3) DEFAULT '70',
