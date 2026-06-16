@@ -650,15 +650,16 @@ export const ordersRouter = router({
       if (input.quantity !== undefined) updates.quantity = String(input.quantity);
       if (input.price !== undefined) updates.price = String(input.price);
 
-      const [updated] = await db
-        .update(orders)
-        .set(updates)
-        .where(and(eq(orders.id, input.orderId), eq(orders.userId, ctx.user.id)))
-        .returning();
+      // ── Wrap update + amendment + notification in a single transaction ────────
+      const [updated] = await db.transaction(async (tx) => {
+        const [upd] = await tx
+          .update(orders)
+          .set(updates)
+          .where(and(eq(orders.id, input.orderId), eq(orders.userId, ctx.user.id)))
+          .returning();
 
-      // ── Persist amendment to audit trail ────────────────────────────────────
-      try {
-        await db.insert(orderAmendments).values({
+        // Persist amendment to audit trail
+        await tx.insert(orderAmendments).values({
           orderId: input.orderId,
           userId: ctx.user.id,
           oldQty: String(existing.quantity),
@@ -668,11 +669,11 @@ export const ordersRouter = router({
           reason: input.reason ?? null,
           isBulk: false,
         });
-      } catch (amendErr) {
-        console.warn(`[Orders] Failed to insert amendment record for order ${input.orderId}:`, (amendErr as Error).message);
-      }
 
-      // ── In-app audit notification ────────────────────────────────────────────
+        return [upd];
+      });
+
+      // ── In-app audit notification (outside transaction — non-critical) ────────
       const changes: string[] = [];
       if (input.quantity !== undefined) changes.push(`Qty: ${parseFloat(String(existing.quantity)).toLocaleString()} → ${input.quantity.toLocaleString()}`);
       if (input.price !== undefined) changes.push(`Price: ${parseFloat(String(existing.price ?? 0)).toLocaleString()} → ${input.price.toLocaleString()}`);

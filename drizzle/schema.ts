@@ -67,7 +67,7 @@ export type InsertUser = typeof users.$inferInsert;
 // ============================================================
 export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   accountType: accountTypeEnum("account_type").default("TRADER").notNull(),
   // Personal info
   firstName: varchar("first_name", { length: 64 }),
@@ -102,7 +102,7 @@ export type Profile = typeof profiles.$inferSelect;
 // ============================================================
 export const orders = pgTable("orders", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: varchar("symbol", { length: 32 }).notNull(),
   assetClass: assetClassEnum("asset_class").default("COMMODITY").notNull(),
   side: orderSideEnum("side").notNull(),
@@ -129,7 +129,7 @@ export type InsertOrder = typeof orders.$inferInsert;
 export const orderAmendments = pgTable("order_amendments", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   orderId: integer("order_id").notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   /** Snapshot of old values before the amendment */
   oldQty: numeric("old_qty", { precision: 18, scale: 6 }).notNull(),
   newQty: numeric("new_qty", { precision: 18, scale: 6 }).notNull(),
@@ -149,7 +149,7 @@ export type InsertOrderAmendment = typeof orderAmendments.$inferInsert;
 // ============================================================
 export const positions = pgTable("positions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: varchar("symbol", { length: 32 }).notNull(),
   assetClass: assetClassEnum("asset_class").default("COMMODITY").notNull(),
   quantity: numeric("quantity", { precision: 18, scale: 6 }).default("0").notNull(),
@@ -164,7 +164,7 @@ export type Position = typeof positions.$inferSelect;
 // ============================================================
 export const watchlist = pgTable("watchlist", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: varchar("symbol", { length: 32 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -174,7 +174,7 @@ export const watchlist = pgTable("watchlist", {
 // ============================================================
 export const priceAlerts = pgTable("price_alerts", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: varchar("symbol", { length: 32 }).notNull(),
   condition: alertConditionEnum("condition").notNull(),
   targetPrice: numeric("target_price", { precision: 18, scale: 6 }).notNull(),
@@ -189,7 +189,7 @@ export type PriceAlert = typeof priceAlerts.$inferSelect;
 // ============================================================
 export const savedOrders = pgTable("saved_orders", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 128 }).notNull(),
   symbol: varchar("symbol", { length: 32 }).notNull(),
   side: orderSideEnum("side").notNull(),
@@ -204,7 +204,7 @@ export const savedOrders = pgTable("saved_orders", {
 // ============================================================
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   title: varchar("title", { length: 256 }).notNull(),
   message: text("message").notNull(),
   type: notificationTypeEnum("type").default("SYSTEM").notNull(),
@@ -219,7 +219,7 @@ export type Notification = typeof notifications.$inferSelect;
 // ============================================================
 export const kycQueue = pgTable("kyc_queue", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   status: kycQueueStatusEnum("status").default("PENDING").notNull(),
   reviewedBy: integer("reviewed_by"),
   reviewNotes: text("review_notes"),
@@ -235,7 +235,7 @@ export type KycQueue = typeof kycQueue.$inferSelect;
 // ============================================================
 export const auditLog = pgTable("audit_log", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id"),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
   action: varchar("action", { length: 128 }).notNull(),
   resource: varchar("resource", { length: 128 }),
   resourceId: varchar("resource_id", { length: 64 }),
@@ -252,7 +252,7 @@ export const warehouseReceiptStatusEnum = pgEnum("warehouse_receipt_status", ["A
 
 export const warehouseReceipts = pgTable("warehouse_receipts", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   receiptNumber: varchar("receipt_number", { length: 64 }).notNull().unique(),
   commodity: varchar("commodity", { length: 64 }).notNull(),
   grade: varchar("grade", { length: 32 }),
@@ -277,7 +277,7 @@ export const depositStatusEnum = pgEnum("deposit_status", ["PENDING", "RECEIVED"
 
 export const depositRequests = pgTable("deposit_requests", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   commodity: varchar("commodity", { length: 64 }).notNull(),
   grade: varchar("grade", { length: 32 }),
   quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
@@ -299,7 +299,7 @@ export const deliveryStatusEnum = pgEnum("delivery_status", ["PENDING", "SCHEDUL
 
 export const deliveryOrders = pgTable("delivery_orders", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   receiptId: integer("receipt_id"),
   commodity: varchar("commodity", { length: 64 }).notNull(),
   quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
@@ -318,7 +318,7 @@ export type DeliveryOrder = typeof deliveryOrders.$inferSelect;
 // ============================================================
 export const apiKeys = pgTable("api_keys", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 128 }).notNull(),
   keyHash: varchar("key_hash", { length: 256 }).notNull(),
   keyPrefix: varchar("key_prefix", { length: 16 }).notNull(),
@@ -337,8 +337,8 @@ export const settlementStatusEnum = pgEnum("settlement_status", ["PENDING", "MAT
 
 export const settlements = pgTable("settlements", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  orderId: bigint("order_id", { mode: "number" }).notNull(),
-  userId: integer("user_id").notNull(),
+  orderId: bigint("order_id", { mode: "number" }).notNull().unique(), // P1-C: one settlement per order
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: varchar("symbol", { length: 32 }).notNull(),
   assetClass: assetClassEnum("asset_class").default("COMMODITY").notNull(),
   side: orderSideEnum("side").notNull(),
@@ -362,7 +362,7 @@ export type Settlement = typeof settlements.$inferSelect;
 // ============================================================
 export const portfolioSnapshots = pgTable("portfolio_snapshots", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   snapshotDate: timestamp("snapshot_date").notNull(),
   totalValue: numeric("total_value", { precision: 18, scale: 2 }).default("0").notNull(),
   totalCost: numeric("total_cost", { precision: 18, scale: 2 }).default("0").notNull(),
@@ -378,7 +378,7 @@ export type PortfolioSnapshot = typeof portfolioSnapshots.$inferSelect;
 // ============================================================
 export const userPreferences = pgTable("user_preferences", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   currency: varchar("currency", { length: 8 }).default("NGN").notNull(),
   language: varchar("language", { length: 16 }).default("en").notNull(),
   theme: varchar("theme", { length: 16 }).default("dark").notNull(),
@@ -452,7 +452,7 @@ export const collateralLedgerActionEnum = pgEnum("collateral_ledger_action", [
 
 export const marginAccounts = pgTable("margin_accounts", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   status: marginAccountStatusEnum("status").default("ACTIVE").notNull(),
   cashBalance: numeric("cash_balance", { precision: 18, scale: 2 }).default("0").notNull(),
   totalCollateralValue: numeric("total_collateral_value", { precision: 18, scale: 2 }).default("0").notNull(),
@@ -469,7 +469,7 @@ export type MarginAccount = typeof marginAccounts.$inferSelect;
 export const collateralItems = pgTable("collateral_items", {
   id: serial("id").primaryKey(),
   marginAccountId: integer("margin_account_id").notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   collateralType: collateralTypeEnum("collateral_type").notNull(),
   referenceId: integer("reference_id"),
   description: text("description").notNull(),
@@ -486,7 +486,7 @@ export type CollateralItem = typeof collateralItems.$inferSelect;
 
 export const collateralLedger = pgTable("collateral_ledger", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   collateralItemId: integer("collateral_item_id"),
   action: collateralLedgerActionEnum("action").notNull(),
   amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
@@ -584,7 +584,7 @@ export const securityEventStatusEnum = pgEnum("security_event_status", [
 
 export const securityEvents = pgTable("security_events", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id"),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
   eventType: securityEventTypeEnum("event_type").notNull(),
   severity: securityEventSeverityEnum("severity").notNull(),
   status: securityEventStatusEnum("status").default("OPEN").notNull(),
@@ -603,7 +603,7 @@ export type SecurityEvent = typeof securityEvents.$inferSelect;
 // Rate-limiting: track per-user action counts within a rolling window
 export const rateLimitCounters = pgTable("rate_limit_counters", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   action: varchar("action", { length: 64 }).notNull(),
   windowStart: timestamp("window_start").notNull(),
   count: integer("count").notNull().default(1),
@@ -618,7 +618,7 @@ export const withdrawalVerificationStatusEnum = pgEnum("withdrawal_verification_
 ]);
 export const withdrawalVerifications = pgTable("withdrawal_verifications", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
   challengeText: varchar("challenge_text", { length: 512 }).notNull(),
   expectedAnswer: varchar("expected_answer", { length: 512 }).notNull(),
@@ -682,7 +682,7 @@ export type PlatformSetting = typeof platformSettings.$inferSelect;
 // TOTP secrets for admin 2FA
 export const totpSecrets = pgTable("totp_secrets", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   secret: varchar("secret", { length: 64 }).notNull(),
   isEnabled: boolean("is_enabled").default(false).notNull(),
   confirmedAt: timestamp("confirmed_at"),
@@ -695,7 +695,7 @@ export type TotpSecret = typeof totpSecrets.$inferSelect;
 // Device sessions for fingerprinting
 export const deviceSessions = pgTable("device_sessions", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   fingerprint: varchar("fingerprint", { length: 128 }).notNull(),
   userAgent: text("user_agent"),
   ipAddress: varchar("ip_address", { length: 64 }),
@@ -712,7 +712,7 @@ export type DeviceSession = typeof deviceSessions.$inferSelect;
 // Withdrawal velocity limit configuration
 export const velocityLimitConfig = pgTable("velocity_limit_config", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id"),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
   windowHours: integer("window_hours").default(24).notNull(),
   maxAmount: numeric("max_amount", { precision: 20, scale: 2 }).notNull(),
   currency: varchar("currency", { length: 8 }).default("NGN").notNull(),
@@ -726,7 +726,7 @@ export type VelocityLimitConfig = typeof velocityLimitConfig.$inferSelect;
 // Withdrawal velocity ledger (rolling window entries)
 export const velocityLedger = pgTable("velocity_ledger", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   amount: numeric("amount", { precision: 20, scale: 2 }).notNull(),
   currency: varchar("currency", { length: 8 }).default("NGN").notNull(),
   reference: varchar("reference", { length: 128 }),
@@ -756,7 +756,7 @@ export type AmlRule = typeof amlRules.$inferSelect;
 // AML transaction flags (suspicious activity alerts)
 export const amlFlags = pgTable("aml_flags", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   ruleId: bigint("rule_id", { mode: "number" }),
   transactionRef: varchar("transaction_ref", { length: 128 }),
   transactionType: varchar("transaction_type", { length: 64 }).notNull(),
@@ -777,7 +777,7 @@ export type AmlFlag = typeof amlFlags.$inferSelect;
 export const sarReports = pgTable("sar_reports", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   flagId: bigint("flag_id", { mode: "number" }),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   reportNumber: varchar("report_number", { length: 64 }).notNull().unique(),
   subjectName: varchar("subject_name", { length: 256 }),
   subjectId: varchar("subject_id", { length: 128 }),
@@ -839,7 +839,7 @@ export type SettlementCycle = typeof settlementCycles.$inferSelect;
 export const settlementPositions = pgTable("settlement_positions", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   cycleId: bigint("cycle_id", { mode: "number" }).notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   instrument: varchar("instrument", { length: 64 }).notNull(),
   grossBuyQty: numeric("gross_buy_qty", { precision: 20, scale: 6 }).default("0"),
   grossSellQty: numeric("gross_sell_qty", { precision: 20, scale: 6 }).default("0"),
@@ -938,7 +938,7 @@ export type RegulatoryReportSchedule = typeof regulatoryReportSchedules.$inferSe
 // ─── Phase 37: Market Maker Obligations Engine ───────────────────────────────
 export const marketMakerProfiles = pgTable("market_maker_profiles", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   firmName: varchar("firm_name", { length: 128 }).notNull(),
   licenseNumber: varchar("license_number", { length: 64 }),
   assetClasses: text("asset_classes").notNull(), // JSON array: ["COMMODITY","EQUITY","FOREX","BOND"]
@@ -1021,7 +1021,7 @@ export const autoLiquidationStatusEnum = pgEnum("auto_liquidation_status", ["PEN
 
 export const clearingAccounts = pgTable("clearing_accounts", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   accountRef: varchar("account_ref", { length: 32 }).notNull().unique(),
   status: clearingAccountStatusEnum("status").default("ACTIVE").notNull(),
   initialMarginPct: numeric("initial_margin_pct", { precision: 6, scale: 4 }).default("0.10").notNull(),
@@ -1041,7 +1041,7 @@ export type ClearingAccount = typeof clearingAccounts.$inferSelect;
 export const marginCalls = pgTable("margin_calls", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   clearingAccountId: bigint("clearing_account_id", { mode: "number" }).notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   callRef: varchar("call_ref", { length: 32 }).notNull().unique(),
   status: marginCallStatusEnum("status").default("OPEN").notNull(),
   equityRatioAtCall: numeric("equity_ratio_at_call", { precision: 8, scale: 6 }).notNull(),
@@ -1074,7 +1074,7 @@ export const autoLiquidationOrders = pgTable("auto_liquidation_orders", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   marginCallId: bigint("margin_call_id", { mode: "number" }).notNull(),
   clearingAccountId: bigint("clearing_account_id", { mode: "number" }).notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   status: autoLiquidationStatusEnum("status").default("PENDING").notNull(),
   instrument: varchar("instrument", { length: 64 }).notNull(),
   quantity: numeric("quantity", { precision: 20, scale: 8 }).notNull(),
@@ -1157,7 +1157,7 @@ export type IrDocument = typeof irDocuments.$inferSelect;
 export const shareholderRegistry = pgTable("shareholder_registry", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   companySymbol: varchar("company_symbol", { length: 16 }).notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   shareholderName: varchar("shareholder_name", { length: 128 }).notNull(),
   shareholderType: varchar("shareholder_type", { length: 32 }).default("INDIVIDUAL").notNull(), // INDIVIDUAL, INSTITUTIONAL, INSIDER, GOVERNMENT
   sharesHeld: numeric("shares_held", { precision: 20, scale: 0 }).notNull(),
@@ -1171,7 +1171,7 @@ export type ShareholderRecord = typeof shareholderRegistry.$inferSelect;
 
 export const irSubscriptions = pgTable("ir_subscriptions", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   companySymbol: varchar("company_symbol", { length: 16 }).notNull(),
   notifyEarnings: boolean("notify_earnings").default(true).notNull(),
   notifyDividends: boolean("notify_dividends").default(true).notNull(),
@@ -1220,7 +1220,7 @@ export type CircuitBreakerEvent = typeof circuitBreakerEvents.$inferSelect;
 
 export const washTradeFlags = pgTable("wash_trade_flags", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   instrument: varchar("instrument", { length: 32 }).notNull(),
   assetClass: varchar("asset_class", { length: 32 }).notNull(),
   buyOrderId: bigint("buy_order_id", { mode: "number" }),
@@ -1265,7 +1265,7 @@ export type FuturesContract = typeof futuresContracts.$inferSelect;
 
 export const futuresPositions = pgTable("futures_positions", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   contractId: integer("contract_id").notNull(),
   side: varchar("side", { length: 8 }).notNull(), // LONG, SHORT
   quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
@@ -1338,7 +1338,7 @@ export type OptionsContract = typeof optionsContracts.$inferSelect;
 
 export const optionsPositions = pgTable("options_positions", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   contractId: integer("contract_id").notNull(), // references optionsContracts
   optionType: optionTypeEnum("option_type").notNull(),
   quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
@@ -1357,7 +1357,7 @@ export type OptionsPosition = typeof optionsPositions.$inferSelect;
 // ─── Phase 43: Portfolio Equity Curve Snapshots ──────────────────────────────
 export const portfolioEquitySnapshots = pgTable("portfolio_equity_snapshots", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   snapshotDate: timestamp("snapshot_date").notNull(),
   spotPnl: numeric("spot_pnl", { precision: 20, scale: 8 }).default("0").notNull(),
   futuresPnl: numeric("futures_pnl", { precision: 20, scale: 8 }).default("0").notNull(),
@@ -1375,7 +1375,7 @@ export const cropStatusEnum = pgEnum("crop_status_v2", ["ACTIVE", "SOLD", "EXPIR
 
 export const farmerProfiles = pgTable("farmer_profiles", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   fullName: varchar("full_name", { length: 200 }).notNull(),
   phone: varchar("phone", { length: 20 }).notNull(),
   nin: varchar("nin", { length: 30 }),
@@ -1404,7 +1404,7 @@ export type FarmerProfile = typeof farmerProfiles.$inferSelect;
 // ─── Farmer Onboarding Drafts (offline-first PWA support) ────────────────────
 export const farmerOnboardingDrafts = pgTable("farmer_onboarding_drafts", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   step: integer("step").default(1).notNull(),
   payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1414,7 +1414,7 @@ export type FarmerOnboardingDraft = typeof farmerOnboardingDrafts.$inferSelect;
 
 export const farmProfiles = pgTable("farm_profiles", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   farmName: varchar("farm_name", { length: 200 }).notNull(),
   sizeHectares: numeric("size_hectares", { precision: 10, scale: 2 }).notNull(),
   latitude: numeric("latitude", { precision: 10, scale: 7 }),
@@ -1435,7 +1435,7 @@ export type FarmProfile = typeof farmProfiles.$inferSelect;
 
 export const cropListings = pgTable("crop_listings", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   farmId: integer("farm_id").notNull(),
   cropType: varchar("crop_type", { length: 100 }).notNull(),
   variety: varchar("variety", { length: 100 }),
@@ -1465,7 +1465,7 @@ export type ListingMessage = typeof listingMessages.$inferSelect;
 // ─── Farmer Earnings (settled crop sale records) ─────────────────────────────
 export const farmerEarnings = pgTable("farmer_earnings", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   listingId: integer("listing_id"),
   cropType: varchar("crop_type", { length: 100 }).notNull(),
   quantityKg: numeric("quantity_kg", { precision: 14, scale: 2 }).notNull(),
@@ -1487,7 +1487,7 @@ export const traderExperienceEnum = pgEnum("trader_experience", ["BEGINNER", "IN
 
 export const traderProfiles = pgTable("trader_profiles", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   fullName: varchar("full_name", { length: 200 }).notNull(),
   phone: varchar("phone", { length: 30 }).notNull(),
   nin: varchar("nin", { length: 50 }),
@@ -1519,7 +1519,7 @@ export const brokerAccountStatusEnum = pgEnum("broker_account_status", ["INACTIV
 
 export const brokerProfiles = pgTable("broker_profiles", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   firmName: varchar("firm_name", { length: 200 }).notNull(),
   rcNumber: varchar("rc_number", { length: 50 }),
   secLicenseNumber: varchar("sec_license_number", { length: 100 }),
@@ -1549,7 +1549,7 @@ export const warehouseOpAccountStatusEnum = pgEnum("warehouse_op_account_status"
 
 export const warehouseOperatorProfiles = pgTable("warehouse_operator_profiles", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   facilityName: varchar("facility_name", { length: 200 }).notNull(),
   facilityAddress: text("facility_address").notNull(),
   state: varchar("state", { length: 100 }).notNull(),
@@ -1579,7 +1579,7 @@ export const mmOnboardingAccountStatusEnum = pgEnum("mm_onboarding_account_statu
 
 export const marketMakerOnboardingProfiles = pgTable("market_maker_onboarding_profiles", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   firmName: varchar("firm_name", { length: 200 }).notNull(),
   tradingDesk: varchar("trading_desk", { length: 200 }),
   contactPhone: varchar("contact_phone", { length: 30 }),
@@ -1628,7 +1628,7 @@ export const kycRiskLevelEnum = pgEnum("kyc_risk_level", ["LOW", "MEDIUM", "HIGH
 
 export const kycAnalysisResults = pgTable("kyc_analysis_results", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   stakeholderType: text("stakeholder_type").notNull(),
   documentUrl: text("document_url").notNull(),
   selfieUrl: text("selfie_url"),
@@ -1717,7 +1717,7 @@ export const reKycStakeholderTypeEnum = pgEnum("re_kyc_stakeholder_type", [
 
 export const reKycFlags = pgTable("re_kyc_flags", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   stakeholderType: reKycStakeholderTypeEnum("stakeholder_type").notNull(),
   profileId: integer("profile_id").notNull(),
   reason: text("reason").notNull(),
@@ -1752,7 +1752,7 @@ export type InsertLivePrice = typeof livePrices.$inferInsert;
 // ─── Broker / Market Maker Performance Metrics ───────────────────────────────
 export const participantPerformanceMetrics = pgTable("participant_performance_metrics", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   participantType: varchar("participant_type", { length: 32 }).notNull(),
   periodYear: integer("period_year").notNull(),
   periodMonth: integer("period_month").notNull(),
@@ -1848,7 +1848,7 @@ export type InsertOrderBookLevel = typeof orderBookLevels.$inferInsert;
 export const preTradRiskChecks = pgTable("pre_trade_risk_checks", {
   id:               serial("id").primaryKey(),
   orderId:          bigint("order_id", { mode: "number" }).notNull(),
-  userId:           integer("user_id").notNull(),
+  userId:           integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol:           varchar("symbol", { length: 32 }).notNull(),
   checkType:        varchar("check_type", { length: 32 }).notNull(),
   passed:           boolean("passed").notNull(),
@@ -2101,7 +2101,7 @@ export const mfaMethodEnum = pgEnum("mfa_method", [
 // Stores registered FIDO2/WebAuthn authenticators (passkeys) per user.
 export const webauthnCredentials = pgTable("webauthn_credentials", {
   id:             bigserial("id", { mode: "number" }).primaryKey(),
-  userId:         integer("user_id").notNull(),
+  userId:         integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   credentialId:   text("credential_id").notNull().unique(),
   publicKey:      text("public_key").notNull(),
   signCount:      integer("sign_count").notNull().default(0),
@@ -2119,7 +2119,7 @@ export type InsertWebauthnCredential = typeof webauthnCredentials.$inferInsert;
 // Ephemeral challenge records for WebAuthn registration and authentication.
 export const webauthnChallenges = pgTable("webauthn_challenges", {
   id:        bigserial("id", { mode: "number" }).primaryKey(),
-  userId:    integer("user_id"),
+  userId:    integer("user_id").references(() => users.id, { onDelete: "set null" }),
   challenge: text("challenge").notNull(),
   type:      varchar("type", { length: 16 }).notNull(),
   expiresAt: timestamp("expires_at").notNull(),
@@ -2130,7 +2130,7 @@ export type WebauthnChallenge = typeof webauthnChallenges.$inferSelect;
 // Per-user MFA policy.
 export const userMfaSettings = pgTable("user_mfa_settings", {
   id:              bigserial("id", { mode: "number" }).primaryKey(),
-  userId:          integer("user_id").notNull().unique(),
+  userId:          integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   mfaRequired:     boolean("mfa_required").notNull().default(false),
   primaryMethod:   mfaMethodEnum("primary_method"),
   totpEnabled:     boolean("totp_enabled").notNull().default(false),
@@ -2145,7 +2145,7 @@ export type UserMfaSettings = typeof userMfaSettings.$inferSelect;
 // Short-lived OTP codes for SMS and email-based MFA.
 export const mfaOtpCodes = pgTable("mfa_otp_codes", {
   id:        bigserial("id", { mode: "number" }).primaryKey(),
-  userId:    integer("user_id").notNull(),
+  userId:    integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   method:    mfaMethodEnum("method").notNull(),
   codeHash:  varchar("code_hash", { length: 64 }).notNull(),
   expiresAt: timestamp("expires_at").notNull(),
@@ -2201,7 +2201,7 @@ export type BrokerCommission = typeof brokerCommissions.$inferSelect;
 // price alerts, trade fills, and system notifications to subscribed devices.
 export const pushSubscriptions = pgTable("push_subscriptions", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   // The endpoint URL provided by the browser's push service
   endpoint: text("endpoint").notNull().unique(),
   // VAPID keys — p256dh and auth are base64url-encoded strings from the browser
@@ -2228,7 +2228,7 @@ export const warehouseMessageStatusEnum = pgEnum("warehouse_message_status", [
 
 export const warehouseMessages = pgTable("warehouse_messages", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   warehouseId: varchar("warehouse_id", { length: 50 }).notNull(),
   warehouseName: varchar("warehouse_name", { length: 200 }).notNull(),
   subject: varchar("subject", { length: 300 }).notNull(),
@@ -2333,7 +2333,7 @@ export const workbenchFarmStatusEnum = pgEnum("workbench_farm_status", [
 
 export const workbenchFarms = pgTable("workbench_farms", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   farmName: varchar("farm_name", { length: 200 }).notNull(),
   locationState: varchar("location_state", { length: 100 }),
   locationLga: varchar("location_lga", { length: 100 }),
@@ -2356,7 +2356,7 @@ export const workbenchCropSeasonEnum = pgEnum("workbench_crop_season", [
 export const workbenchCropPlans = pgTable("workbench_crop_plans", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   farmId: integer("farm_id").notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   cropSymbol: varchar("crop_symbol", { length: 20 }).notNull(),
   cropName: varchar("crop_name", { length: 100 }).notNull(),
   season: workbenchCropSeasonEnum("season").notNull(),
@@ -2378,7 +2378,7 @@ export type WorkbenchCropPlan = typeof workbenchCropPlans.$inferSelect;
 export const workbenchSoilTests = pgTable("workbench_soil_tests", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   farmId: integer("farm_id").notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   testDate: timestamp("test_date").defaultNow().notNull(),
   phLevel: numeric("ph_level", { precision: 4, scale: 2 }),
   nitrogenPpm: numeric("nitrogen_ppm", { precision: 8, scale: 2 }),
@@ -2401,7 +2401,7 @@ export const bankFinancingStatusEnum = pgEnum("bank_financing_status", [
 
 export const bankFinancingApplications = pgTable("bank_financing_applications", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   bankName: varchar("bank_name", { length: 200 }).notNull(),
   bankCode: varchar("bank_code", { length: 20 }),
   loanPurpose: varchar("loan_purpose", { length: 100 }).notNull(),
@@ -2545,7 +2545,7 @@ export const fieldAgentStatusEnum = pgEnum("field_agent_status", [
 
 export const fieldAgents = pgTable("field_agents", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   agentCode: varchar("agent_code", { length: 20 }).notNull().unique(),
   fullName: varchar("full_name", { length: 200 }).notNull(),
   phone: varchar("phone", { length: 20 }).notNull(),
@@ -2601,7 +2601,7 @@ export const pushPlatformEnum = pgEnum("push_platform", ["ios", "android", "web"
 
 export const pushTokens = pgTable("push_tokens", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   token: varchar("token", { length: 512 }).notNull().unique(),
   platform: pushPlatformEnum("platform").notNull(),
   deviceName: varchar("device_name", { length: 128 }).default("Unknown").notNull(),
@@ -2622,7 +2622,7 @@ export const ussdSessions = pgTable("ussd_sessions", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   sessionId: varchar("session_id", { length: 128 }).notNull().unique(),
   phoneNumber: varchar("phone_number", { length: 20 }).notNull(),
-  userId: integer("user_id"),            // resolved after PIN auth
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),            // resolved after PIN auth
   serviceCode: varchar("service_code", { length: 20 }).default("*347*99#"),
   networkCode: varchar("network_code", { length: 20 }),
   menuPath: text("menu_path").default(""),   // e.g. "1>2>1" breadcrumb
@@ -2639,7 +2639,7 @@ export type UssdSession = typeof ussdSessions.$inferSelect;
 
 export const ussdPins = pgTable("ussd_pins", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
   pinHash: varchar("pin_hash", { length: 256 }).notNull(),
   failedAttempts: integer("failed_attempts").default(0).notNull(),
   lockedUntil: timestamp("locked_until"),
@@ -2654,7 +2654,7 @@ export const channelContactStatusEnum = pgEnum("channel_contact_status", [
 
 export const whatsappContacts = pgTable("whatsapp_contacts", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id"),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
   phoneNumber: varchar("phone_number", { length: 20 }).notNull().unique(),
   waId: varchar("wa_id", { length: 30 }).notNull().unique(),   // WhatsApp ID (usually phone without +)
   displayName: varchar("display_name", { length: 200 }),
@@ -2693,7 +2693,7 @@ export const telegramContactStatusEnum = pgEnum("telegram_contact_status", [
 ]);
 export const telegramContacts = pgTable("telegram_contacts", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id"),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
   telegramId: varchar("telegram_id", { length: 30 }).notNull().unique(),
   username: varchar("username", { length: 100 }),
   firstName: varchar("first_name", { length: 100 }),
@@ -2736,7 +2736,7 @@ export const bankAccountStatusEnum = pgEnum("bank_account_status", [
 ]);
 export const bankAccounts = pgTable("bank_accounts", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   accountRef: varchar("account_ref", { length: 50 }).notNull().unique(),
   type: bankAccountTypeEnum("type").notNull().default("ESCROW"),
   label: varchar("label", { length: 100 }).notNull(),
@@ -2756,12 +2756,14 @@ export const bankTransactionTypeEnum = pgEnum("bank_transaction_type", [
 export const bankTransactions = pgTable("bank_transactions", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   accountId: bigint("account_id", { mode: "number" }).notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   type: bankTransactionTypeEnum("type").notNull(),
   amountKobo: bigint("amount_kobo", { mode: "number" }).notNull(),
   balanceAfterKobo: bigint("balance_after_kobo", { mode: "number" }).notNull(),
   currency: varchar("currency", { length: 10 }).notNull().default("NGN"),
   narrative: text("narrative"),
+  // P1-C: idempotency key — unique per transaction to prevent double-spend on withdrawals
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).unique(),
   reference: varchar("reference", { length: 100 }),
   valueDate: timestamp("value_date").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -2780,7 +2782,7 @@ export const stripePaymentTypeEnum = pgEnum("stripe_payment_type", [
 
 export const stripePayments = pgTable("stripe_payments", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 128 }).unique(),
   stripeCheckoutSessionId: varchar("stripe_checkout_session_id", { length: 128 }).unique(),
   type: stripePaymentTypeEnum("type").notNull().default("DEPOSIT"),
@@ -2800,7 +2802,7 @@ export const creditScoreModelEnum = pgEnum("credit_score_model", [
 ]);
 export const creditScores = pgTable("credit_scores", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   farmerId: integer("farmer_id"),
   model: creditScoreModelEnum("model").notNull().default("NEXCOM_AGRI_V1"),
   score: integer("score").notNull(),
@@ -2873,7 +2875,7 @@ export const insuranceCoverageTypeEnum = pgEnum("insurance_coverage_type", [
 export const cropInsurancePolicies = pgTable("crop_insurance_policies", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   farmerId: integer("farmer_id").notNull(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   policyRef: varchar("policy_ref", { length: 50 }).notNull().unique(),
   coverageType: insuranceCoverageTypeEnum("coverage_type").notNull(),
   status: insurancePolicyStatusEnum("status").notNull().default("DRAFT"),

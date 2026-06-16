@@ -612,7 +612,7 @@ export const brokerRouter = router({
         .from(brokerCommissions)
         .where(and(
           eq(brokerCommissions.brokerProfileId, profile.id),
-          sql`created_at >= NOW() - INTERVAL '${sql.raw(String(input.months))} months'`,
+          sql`created_at >= NOW() - (${input.months} * INTERVAL '1 month')`,
         ))
         .groupBy(sql`TO_CHAR(created_at, 'YYYY-MM')`)
         .orderBy(sql`TO_CHAR(created_at, 'YYYY-MM')`);

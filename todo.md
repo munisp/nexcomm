@@ -937,3 +937,39 @@
 - [ ] Admin KYC bulk action — select all / deselect all checkbox on AdminKycDocumentReview
 - [ ] Market price page empty state — improve empty state when no prices are available
 - [x] Farmer onboarding progress bar — visual step indicator on FarmerOnboarding multi-step form
+
+## Audit Remediation — P0 to P4 (June 2026)
+
+### P0 — Must Fix Before Live Money
+- [ ] P0-A1: Add FK .references(() => users.id) to all 74 userId tables in schema.ts
+- [ ] P0-A2: Add onDelete cascade/set-null policies to FK constraints
+- [ ] P0-A3: Run pnpm db:push to apply FK migrations
+- [ ] P0-B1: Wrap bankingRouter loan mutations in db.transaction()
+- [ ] P0-B2: Wrap orders fill updates + notification inserts in db.transaction()
+- [ ] P0-B3: Wrap settlementJob in db.transaction()
+- [ ] P0-C1: Replace sql.raw(String(input.months)) with parameterised interval in brokerRouter
+- [ ] P0-C2: Replace Math.random() with crypto.randomUUID() in pbac.ts
+
+### P1 — Must Fix Before Public Launch
+- [ ] P1-A1: Reduce session token expiry from 1 year to 24 hours
+- [ ] P1-A2: Add USSD PIN brute-force lockout (5 attempts, 30min lock)
+- [ ] P1-B1: Replace CSP unsafe-inline/unsafe-eval with nonce-based CSP
+- [ ] P1-C1: Add unique constraint on settlements(orderId, status)
+- [ ] P1-C2: Add idempotency key to withdrawal requests
+
+### P2 — Must Fix Before Scale
+- [ ] P2-A1: Add ARIA labels to icon-only buttons across critical pages
+- [ ] P2-A2: Add aria-live regions for real-time price updates on Trade page
+- [ ] P2-A3: Add keyboard navigation to order book and watchlist
+- [ ] P2-B1: Define Temporal workflow activities for margin call processing
+- [ ] P2-B2: Add Temporal worker bootstrap in server startup
+
+### P3 — Enterprise Readiness
+- [ ] P3-A1: Add Keycloak OIDC token introspection endpoint
+- [ ] P3-A2: Add Fluvio topic publish/subscribe helpers
+- [ ] P3-B1: Add end-to-end integration test for order -> fill -> settlement lifecycle
+
+### P4 — Nice to Have
+- [ ] P4-1: Add pnpm audit to CI pipeline
+- [ ] P4-2: Replace CORS default localhost:5432 with empty string
+- [ ] P4-3: Add i18n framework (i18next) skeleton

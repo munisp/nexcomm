@@ -237,10 +237,10 @@ export default function FarmerKYC() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto">
+    <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto" role="main" aria-label="KYC Verification">
       {/* Header */}
       <div className="p-4 flex items-center gap-3 border-b border-slate-800">
-        <button onClick={() => navigate("/farmer-dashboard")} className="text-slate-400 hover:text-white">
+        <button onClick={() => navigate("/farmer-dashboard")} className="text-slate-400 hover:text-white" aria-label="Back to dashboard" type="button">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div>
@@ -253,7 +253,7 @@ export default function FarmerKYC() {
       </div>
 
       {/* Progress bar */}
-      <div className="w-full h-1 bg-slate-800">
+      <div className="w-full h-1 bg-slate-800" role="progressbar" aria-label="Document upload progress" aria-valuenow={Object.keys(allDocs).length} aria-valuemin={0} aria-valuemax={KYC_DOCS.filter(d => d.required).length}>
         <div
           className="h-full bg-green-500 transition-all"
           style={{ width: `${(Object.keys(allDocs).length / KYC_DOCS.filter(d => d.required).length) * 100}%` }}
@@ -298,6 +298,8 @@ export default function FarmerKYC() {
                   type="file"
                   accept={doc.accept}
                   className="hidden"
+                  aria-label={`Upload ${doc.label}`}
+                  id={`file-input-${doc.id}`}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) handleFileChange(doc.id, file);
@@ -330,8 +332,10 @@ export default function FarmerKYC() {
                     <button
                       onClick={() => setUploadedDocs((prev) => { const n = { ...prev }; delete n[doc.id]; return n; })}
                       className="text-slate-500 hover:text-red-400 shrink-0"
+                      aria-label={`Remove ${doc.label}`}
+                      type="button"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-4 h-4" aria-hidden="true" />
                     </button>
                   )}
                 </div>

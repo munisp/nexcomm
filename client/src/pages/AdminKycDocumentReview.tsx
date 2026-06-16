@@ -201,38 +201,50 @@ function DecisionDialog({ record, onClose, onDecide, isPending }: DecisionDialog
         {/* Decision */}
         <div className="space-y-3">
           <p className="text-sm font-medium">Decision</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="KYC decision">
             <button
               onClick={() => setDecision("APPROVED")}
+              type="button"
+              role="radio"
+              aria-checked={decision === "APPROVED"}
+              aria-label="Approve KYC application"
               className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all ${
                 decision === "APPROVED"
                   ? "border-emerald-500 bg-emerald-50 text-emerald-700"
                   : "border-border hover:border-emerald-300"
               }`}
             >
-              <CheckCircle2 className="h-5 w-5" />
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
               Approve
             </button>
             <button
               onClick={() => setDecision("UNDER_REVIEW")}
+              type="button"
+              role="radio"
+              aria-checked={decision === "UNDER_REVIEW"}
+              aria-label="Request more information"
               className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all ${
                 decision === "UNDER_REVIEW"
                   ? "border-blue-500 bg-blue-50 text-blue-700"
                   : "border-border hover:border-blue-300"
               }`}
             >
-              <MessageSquareWarning className="h-5 w-5" />
+              <MessageSquareWarning className="h-5 w-5" aria-hidden="true" />
               Request Info
             </button>
             <button
               onClick={() => setDecision("REJECTED")}
+              type="button"
+              role="radio"
+              aria-checked={decision === "REJECTED"}
+              aria-label="Reject KYC application"
               className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-xs font-medium transition-all ${
                 decision === "REJECTED"
                   ? "border-red-500 bg-red-50 text-red-700"
                   : "border-border hover:border-red-300"
               }`}
             >
-              <XCircle className="h-5 w-5" />
+              <XCircle className="h-5 w-5" aria-hidden="true" />
               Reject
             </button>
           </div>

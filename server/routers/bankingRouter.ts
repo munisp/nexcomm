@@ -579,29 +579,32 @@ export const bankingRouter = router({
         .where(eq(farmerProfiles.userId, ctx.user.id))
         .limit(1);
       const farmerId = farmerRow.length > 0 ? farmerRow[0].id : ctx.user.id;
-      const [loan] = await db
-        .insert(inputFinancingLoans)
-        .values({
-          farmerId,
-          inputType: input.inputType,
-          inputDescription: input.inputDescription,
-          requestedValueNgn: String(input.requestedValueNgn),
-          tenorMonths: input.tenorMonths,
-          repaymentMethod: input.repaymentMethod,
-          collateralEwrId: input.collateralEwrId,
-          notes: input.notes,
-          status: "APPLIED",
-        })
-        .returning();
-      await db.insert(notifications).values({
-        userId: ctx.user.id,
-        type: "SYSTEM",
-        title: "Loan Application Submitted",
-        message: `Your ${input.inputType} loan application for ₦${input.requestedValueNgn.toLocaleString()} has been received and is under review.`,
-        metadata: { loanId: loan.id, inputType: input.inputType },
-        read: false,
+      const result = await db.transaction(async (tx) => {
+        const [loan] = await tx
+          .insert(inputFinancingLoans)
+          .values({
+            farmerId,
+            inputType: input.inputType,
+            inputDescription: input.inputDescription,
+            requestedValueNgn: String(input.requestedValueNgn),
+            tenorMonths: input.tenorMonths,
+            repaymentMethod: input.repaymentMethod,
+            collateralEwrId: input.collateralEwrId,
+            notes: input.notes,
+            status: "APPLIED",
+          })
+          .returning();
+        await tx.insert(notifications).values({
+          userId: ctx.user.id,
+          type: "SYSTEM",
+          title: "Loan Application Submitted",
+          message: `Your ${input.inputType} loan application for ₦${input.requestedValueNgn.toLocaleString()} has been received and is under review.`,
+          metadata: { loanId: loan.id, inputType: input.inputType },
+          read: false,
+        });
+        return { loanId: loan.id };
       });
-      return { success: true, loanId: loan.id, status: "APPLIED" };
+      return { success: true, loanId: result.loanId, status: "APPLIED" };
     }),
 
   // ─── Submit Insurance Claim ────────────────────────────────────────────────
@@ -687,24 +690,26 @@ export const bankingRouter = router({
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
             if (!db) return { success: true };
-      await db.update(inputFinancingLoans)
-        .set({
-          status: "APPROVED",
-          approvedValueNgn: String(input.approvedValueNgn),
-          interestRatePct: String(input.interestRatePct),
-          updatedAt: new Date(),
-        })
-        .where(eq(inputFinancingLoans.id, input.loanId));
-      const [loan] = await db.select().from(inputFinancingLoans).where(eq(inputFinancingLoans.id, input.loanId));
-      if (loan) {
-        await db.insert(notifications).values({
-          userId: loan.farmerId,
-          title: "Loan Approved! 🎉",
-          message: `Your loan application has been approved for ₦${Number(input.approvedValueNgn).toLocaleString()} at ${input.interestRatePct}% p.a.`,
-          type: "SYSTEM",
-          read: false,
-        });
-      }
+      await db.transaction(async (tx) => {
+        await tx.update(inputFinancingLoans)
+          .set({
+            status: "APPROVED",
+            approvedValueNgn: String(input.approvedValueNgn),
+            interestRatePct: String(input.interestRatePct),
+            updatedAt: new Date(),
+          })
+          .where(eq(inputFinancingLoans.id, input.loanId));
+        const [loan] = await tx.select().from(inputFinancingLoans).where(eq(inputFinancingLoans.id, input.loanId));
+        if (loan) {
+          await tx.insert(notifications).values({
+            userId: loan.farmerId,
+            title: "Loan Approved! 🎉",
+            message: `Your loan application has been approved for ₦${Number(input.approvedValueNgn).toLocaleString()} at ${input.interestRatePct}% p.a.`,
+            type: "SYSTEM",
+            read: false,
+          });
+        }
+      });
       return { success: true };
     }),
 
@@ -718,25 +723,27 @@ export const bankingRouter = router({
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
             if (!db) return { success: true };
-      const repaymentDueDate = new Date();
       const [loan] = await db.select().from(inputFinancingLoans).where(eq(inputFinancingLoans.id, input.loanId));
       if (!loan) throw new Error("Loan not found");
+      const repaymentDueDate = new Date();
       repaymentDueDate.setMonth(repaymentDueDate.getMonth() + (loan.tenorMonths ?? 6));
-      await db.update(inputFinancingLoans)
-        .set({
-          status: "DISBURSED",
-          disbursedValueNgn: String(input.disbursedValueNgn),
-          disbursedAt: new Date(),
-          repaymentDueDate,
-          updatedAt: new Date(),
-        })
-        .where(eq(inputFinancingLoans.id, input.loanId));
-      await db.insert(notifications).values({
-        userId: loan.farmerId,
-        title: "Loan Disbursed 💰",
-        message: `₦${Number(input.disbursedValueNgn).toLocaleString()} has been disbursed. Repayment due: ${repaymentDueDate.toLocaleDateString()}.`,
-        type: "SYSTEM",
-        read: false,
+      await db.transaction(async (tx) => {
+        await tx.update(inputFinancingLoans)
+          .set({
+            status: "DISBURSED",
+            disbursedValueNgn: String(input.disbursedValueNgn),
+            disbursedAt: new Date(),
+            repaymentDueDate,
+            updatedAt: new Date(),
+          })
+          .where(eq(inputFinancingLoans.id, input.loanId));
+        await tx.insert(notifications).values({
+          userId: loan.farmerId,
+          title: "Loan Disbursed 💰",
+          message: `₦${Number(input.disbursedValueNgn).toLocaleString()} has been disbursed. Repayment due: ${repaymentDueDate.toLocaleDateString()}.`,
+          type: "SYSTEM",
+          read: false,
+        });
       });
       return { success: true };
     }),
@@ -752,15 +759,17 @@ export const bankingRouter = router({
             if (!db) return { success: true };
       const [loan] = await db.select().from(inputFinancingLoans).where(eq(inputFinancingLoans.id, input.loanId));
       if (!loan) throw new Error("Loan not found");
-      await db.update(inputFinancingLoans)
-        .set({ status: "WRITTEN_OFF", notes: `REJECTED: ${input.reason}`, updatedAt: new Date() })
-        .where(eq(inputFinancingLoans.id, input.loanId));
-      await db.insert(notifications).values({
-        userId: loan.farmerId,
-        title: "Loan Application Declined",
-        message: `Your loan application has been declined. Reason: ${input.reason}`,
-        type: "SYSTEM",
-        read: false,
+      await db.transaction(async (tx) => {
+        await tx.update(inputFinancingLoans)
+          .set({ status: "WRITTEN_OFF", notes: `REJECTED: ${input.reason}`, updatedAt: new Date() })
+          .where(eq(inputFinancingLoans.id, input.loanId));
+        await tx.insert(notifications).values({
+          userId: loan.farmerId,
+          title: "Loan Application Declined",
+          message: `Your loan application has been declined. Reason: ${input.reason}`,
+          type: "SYSTEM",
+          read: false,
+        });
       });
       return { success: true };
     }),

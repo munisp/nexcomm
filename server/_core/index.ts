@@ -84,29 +84,49 @@ async function startServer() {
     },
   }));
 
-  // ── Security headers (Helmet) ───────────────────────────────────────────────
-  // Applied before all other middleware so every response gets security headers.
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://js.stripe.com"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "blob:", "https:"],
-        connectSrc: ["'self'", "wss:", "ws:", "https:"],
-        frameSrc: ["https://js.stripe.com"],
-        objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
+  // ── Security headers (Helmet with nonce-based CSP) ────────────────────────
+  // P1-B: Replaced unsafe-inline/unsafe-eval with per-request nonces.
+  // The nonce is generated per request and injected into the HTML via Vite.
+  app.use((req, res, next) => {
+    // Generate a cryptographically random nonce per request
+    const nonce = randomUUID().replace(/-/g, '');
+    res.locals.cspNonce = nonce;
+    next();
+  });
+
+  app.use((req, res, next) => {
+    const nonce = res.locals.cspNonce as string;
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          // Nonce-based script policy — eliminates unsafe-inline/unsafe-eval
+          scriptSrc: [
+            "'self'",
+            `'nonce-${nonce}'`,
+            "https://js.stripe.com",
+            // Vite HMR in dev only
+            ...(process.env.NODE_ENV !== 'production' ? ["'unsafe-eval'"] : []),
+          ],
+          styleSrc: ["'self'", `'nonce-${nonce}'`, "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          imgSrc: ["'self'", "data:", "blob:", "https:"],
+          connectSrc: ["'self'", "wss:", "ws:", "https:"],
+          frameSrc: ["https://js.stripe.com"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          upgradeInsecureRequests: [],
+        },
       },
-    },
-    crossOriginEmbedderPolicy: false, // Required for Stripe.js
-    hsts: {
-      maxAge: 31536000,
-      includeSubDomains: true,
-      preload: true,
-    },
-  }));
+      crossOriginEmbedderPolicy: false, // Required for Stripe.js
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+    })(req, res, next);
+  });
 
   // ── CORS policy ─────────────────────────────────────────────────────────────
   const allowedOrigins = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://localhost:5432")

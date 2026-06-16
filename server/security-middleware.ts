@@ -93,7 +93,15 @@ const AUTH_LOCKOUT_MS = 900_000; // 15 minutes
 
 export function bruteForceProtection(req: Request, res: Response, next: NextFunction) {
   // Only apply to auth-related endpoints
-  const authPaths = ["/api/oauth", "/api/trpc/auth.login", "/api/trpc/auth.register"];
+  const authPaths = [
+    "/api/oauth",
+    "/api/trpc/auth.login",
+    "/api/trpc/auth.register",
+    "/api/trpc/ussd.verifyPin",
+    "/api/trpc/ussd.setPin",
+    "/api/trpc/auth.verifyTotp",
+    "/api/trpc/auth.verifyPasskey",
+  ];
   const isAuthPath = authPaths.some(p => req.path.startsWith(p));
   if (!isAuthPath) return next();
 

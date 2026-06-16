@@ -546,7 +546,7 @@ export function evaluate(request: AccessRequest): AccessDecision {
 
     // Audit log
     const auditEntry: AuditEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      id: `${Date.now()}-${require('crypto').randomBytes(4).toString('hex')}`,
       timestamp: new Date(),
       request,
       decision,
@@ -566,7 +566,7 @@ export function evaluate(request: AccessRequest): AccessDecision {
   };
 
   policyStore.addAuditEntry({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    id: `${Date.now()}-${require('crypto').randomBytes(4).toString('hex')}`,
     timestamp: new Date(),
     request,
     decision: defaultDecision,
