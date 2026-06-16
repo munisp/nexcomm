@@ -1,0 +1,4 @@
+schema-diff/target/
+*.tar.gz
+*.zip
+schema-diff-bin
