@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { profiles, users, auditLog, orders, kycQueue, notifications } from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
+import { profiles, users, auditLog, orders, kycQueue, notifications, positions, tradeFills, priceAlerts, watchlist } from "../../drizzle/schema";
+import { eq, desc, and, gte, lte, count, sum, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
 
@@ -197,6 +197,124 @@ export const profileRouter = router({
         details: { reason: input.reason ?? "Admin action" },
       });
       return { success: true };
+    }),
+
+  // GET full dashboard summary for current user
+  dashboard: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return null;
+
+    const [profile, user, orderStats, recentOrders, openPositions, recentFills, alertCount, watchlistCount] =
+      await Promise.all([
+        db.select().from(profiles).where(eq(profiles.userId, ctx.user.id)).limit(1),
+        db.select().from(users).where(eq(users.id, ctx.user.id)).limit(1),
+        // Order stats: total, open, filled, cancelled
+        db
+          .select({
+            status: orders.status,
+            cnt: count(),
+          })
+          .from(orders)
+          .where(eq(orders.userId, ctx.user.id))
+          .groupBy(orders.status),
+        // Recent 5 orders
+        db
+          .select()
+          .from(orders)
+          .where(eq(orders.userId, ctx.user.id))
+          .orderBy(desc(orders.createdAt))
+          .limit(5),
+        // Open positions
+        db
+          .select()
+          .from(positions)
+          .where(eq(positions.userId, ctx.user.id))
+          .orderBy(desc(positions.updatedAt))
+          .limit(10),
+        // Recent fills (as buyer or seller)
+        db
+          .select()
+          .from(tradeFills)
+          .where(
+            sql`${tradeFills.buyerUserId} = ${ctx.user.id} OR ${tradeFills.sellerUserId} = ${ctx.user.id}`
+          )
+          .orderBy(desc(tradeFills.createdAt))
+          .limit(5),
+        // Active price alerts count
+        db.select({ cnt: count() }).from(priceAlerts).where(
+          and(eq(priceAlerts.userId, ctx.user.id), eq(priceAlerts.triggered, false))
+        ),
+        // Watchlist count
+        db.select({ cnt: count() }).from(watchlist).where(eq(watchlist.userId, ctx.user.id)),
+      ]);
+
+    const statsByStatus = Object.fromEntries(
+      orderStats.map((s) => [s.status, Number(s.cnt)])
+    );
+
+    return {
+      user: user[0] ?? null,
+      profile: profile[0] ?? null,
+      orderStats: {
+        total: Object.values(statsByStatus).reduce((a, b) => a + b, 0),
+        open: statsByStatus["OPEN"] ?? 0,
+        partiallyFilled: statsByStatus["PARTIALLY_FILLED"] ?? 0,
+        filled: statsByStatus["FILLED"] ?? 0,
+        cancelled: statsByStatus["CANCELLED"] ?? 0,
+        rejected: statsByStatus["REJECTED"] ?? 0,
+      },
+      recentOrders,
+      openPositions,
+      recentFills,
+      activeAlerts: Number(alertCount[0]?.cnt ?? 0),
+      watchlistCount: Number(watchlistCount[0]?.cnt ?? 0),
+    };
+  }),
+
+  // GET paginated order history with filters
+  orderHistory: protectedProcedure
+    .input(
+      z.object({
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(1).max(100).default(20),
+        status: z.enum(["OPEN", "PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED", "EXPIRED"]).optional(),
+        assetClass: z.enum(["COMMODITY", "FOREX", "EQUITY", "DIGITAL_ASSET", "INDEX"]).optional(),
+        symbol: z.string().max(32).optional(),
+        from: z.date().optional(),
+        to: z.date().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { items: [], total: 0, page: input.page, pageSize: input.pageSize };
+
+      const conditions = [eq(orders.userId, ctx.user.id)];
+      if (input.status) conditions.push(eq(orders.status, input.status));
+      if (input.assetClass) conditions.push(eq(orders.assetClass, input.assetClass));
+      if (input.symbol) conditions.push(eq(orders.symbol, input.symbol));
+      if (input.from) conditions.push(gte(orders.createdAt, input.from));
+      if (input.to) conditions.push(lte(orders.createdAt, input.to));
+
+      const where = and(...conditions);
+      const offset = (input.page - 1) * input.pageSize;
+
+      const [items, totalResult] = await Promise.all([
+        db
+          .select()
+          .from(orders)
+          .where(where)
+          .orderBy(desc(orders.createdAt))
+          .limit(input.pageSize)
+          .offset(offset),
+        db.select({ cnt: count() }).from(orders).where(where),
+      ]);
+
+      return {
+        items,
+        total: Number(totalResult[0]?.cnt ?? 0),
+        page: input.page,
+        pageSize: input.pageSize,
+      };
     }),
 
   // PROMOTE user to admin

@@ -434,10 +434,14 @@ export default function Trade() {
 
   // tRPC mutation
   const createOrder = trpc.orders.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       setConfirmSubmitted(true);
       setOrderQty("");
       playOrderSound("success");
+      toast.success(`${vars.side} order placed`, {
+        description: `${vars.quantity} × ${vars.symbol} submitted to the matching engine`,
+        duration: 4000,
+      });
     },
     onError: async (err) => {
       if (!navigator.onLine) {
