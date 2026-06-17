@@ -150,6 +150,7 @@ const Ledger                     = lazy(() => import("./pages/Ledger"));
 const PolicyManagement           = lazy(() => import("./pages/PolicyManagement"));
 const CreditScore                = lazy(() => import("./pages/CreditScore"));
 const MicroservicesHealth        = lazy(() => import("./pages/MicroservicesHealth"));
+const UserProfileDashboard       = lazy(() => import("./pages/UserProfileDashboard"));
 
 function PageLoader() {
   return (
@@ -197,6 +198,7 @@ function Router() {
 
         {/* Analytics & account */}
         <Route path="/analytics"         component={Analytics} />
+        <Route path="/profile"           component={UserProfileDashboard} />
         <Route path="/account"           component={Account} />
         <Route path="/notifications"     component={Notifications} />
         <Route path="/alerts"            component={PriceAlerts} />

@@ -249,6 +249,7 @@ const menuSections: MenuSection[] = [
   {
     title: "Account & Security",
     items: [
+      { icon: User,            label: "My Profile",     path: "/profile" },
       { icon: User,            label: "My Account",     path: "/account" },
       { icon: AlertCircle,     label: "Disputes",        path: "/disputes" },
       { icon: ShieldAlert,     label: "Security Log",    path: "/security",    adminOnly: true },

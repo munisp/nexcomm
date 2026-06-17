@@ -973,3 +973,29 @@
 - [x] P4-1: Add pnpm audit CI script (pnpm run ci)
 - [x] P4-2: Replace CORS default localhost:5432 with empty string (CORS uses env var)
 - [x] P4-3: Add i18n skeleton (i18next) with EN/HA/YO/IG locales + LanguageSwitcher component
+
+## UX Enhancements (Jun 2026)
+
+- [ ] Backend: profileRouter.dashboard — user account details, order stats, positions, recent fills from PostgreSQL
+- [ ] Backend: profileRouter.orderHistory — paginated order history with filters (status, asset class, date range)
+- [ ] Backend: searchRouter.aiSearch — LLM natural language query → structured filters → PostgreSQL results
+- [ ] Frontend: UserProfileDashboard page — account card, order history table, positions, activity stats
+- [ ] Frontend: Add /profile route to App.tsx and DashboardLayout sidebar
+- [ ] Frontend: AISearchBar component — natural language input, result cards with entity type badges
+- [ ] Frontend: Global search modal (Cmd+K) wired to AISearchBar
+- [ ] Frontend: Loading skeletons for Orders, Portfolio, Markets, Trade pages
+- [ ] Frontend: Toast notifications for order create/cancel/amend, deposit, withdrawal, alert set/delete
+- [ ] Frontend: Optimistic updates for watchlist add/remove and price alert toggle
+
+## Round N — UX Enhancements (Jun 2026)
+- [x] User Profile Dashboard page (/profile) with account details, order stats, open positions, recent fills, watchlist count
+- [x] profile.dashboard tRPC procedure — aggregates user data from PostgreSQL (orders, positions, fills, alerts, watchlist)
+- [x] profile.orderHistory tRPC procedure — paginated, filterable order history with status/assetClass/side filters
+- [x] search.aiSearch tRPC procedure — LLM-powered NL search over orders, listings, users with parsed intent chips
+- [x] AISearchBar component — debounced NL input, intent chips, grouped result cards with entity icons
+- [x] CommandPalette AI mode toggle (Brain icon) — switches to AISearchBar inside Cmd+K palette
+- [x] useExchangeToasts hook — typed toast helpers for order placed/filled/cancelled/rejected, profile save, search errors
+- [x] Trade.tsx createOrder success toast — confirms order side, quantity, symbol on placement
+- [x] My Profile nav item in DashboardLayout sidebar (Account section)
+- [x] /profile route registered in App.tsx
+- [x] Vitest tests for profile.dashboard, profile.orderHistory, search.aiSearch (1052 tests passing)

@@ -8,8 +8,9 @@ import { z } from "zod";
 import { writeAuditLog } from "../audit";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, orders, warehouseReceipts, depositRequests } from "../../drizzle/schema";
-import { ilike, or, desc, sql } from "drizzle-orm";
+import { users, orders, warehouseReceipts, depositRequests, cropListings } from "../../drizzle/schema";
+import { ilike, or, desc, sql, and, gte, lte, eq } from "drizzle-orm";
+import { invokeLLM } from "../_core/llm";
 
 // ── OpenSearch client (optional — gracefully degrades) ────────────────────────
 let opensearchClient: import("@opensearch-project/opensearch").Client | null = null;
@@ -393,5 +394,177 @@ export const searchRouter = router({
     .mutation(async ({ ctx, input }) => {
       await writeAuditLog({ userId: ctx.user.id, action: "search.delete", details: { indexName: input.indexName, docId: input.docId } });
       return { success: true };
+    }),
+
+  // AI-powered natural language search
+  aiSearch: protectedProcedure
+    .input(z.object({ query: z.string().min(1).max(500) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { results: [] as SearchResultItem[], parsedIntent: {} };
+
+      // Parse natural language query into structured filters using LLM
+      type ParsedIntent = {
+        symbol?: string;
+        assetClass?: string;
+        side?: string;
+        minPrice?: number;
+        maxPrice?: number;
+        fromDate?: string;
+        toDate?: string;
+        entityType?: "order" | "listing" | "user" | "all";
+        cropType?: string;
+        status?: string;
+      };
+
+      let parsedIntent: ParsedIntent = { entityType: "all" };
+
+      try {
+        const llmResponse = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a financial exchange search assistant for NEXCOM, a Nigerian agricultural commodity exchange. Extract structured search filters from the user's natural language query. Return ONLY valid JSON with these optional fields: symbol (string, e.g. "MAIZE/NGN"), assetClass (one of COMMODITY/FOREX/EQUITY/DIGITAL_ASSET/INDEX), side (BUY or SELL), minPrice (number), maxPrice (number), fromDate (ISO date YYYY-MM-DD), toDate (ISO date YYYY-MM-DD), entityType (order/listing/user/all), cropType (e.g. maize/soybean/cassava), status (e.g. OPEN/FILLED/ACTIVE). Omit fields that cannot be determined. Default entityType to "all".`,
+            },
+            { role: "user", content: input.query },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "search_filters",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  symbol: { type: "string" },
+                  assetClass: { type: "string" },
+                  side: { type: "string" },
+                  minPrice: { type: "number" },
+                  maxPrice: { type: "number" },
+                  fromDate: { type: "string" },
+                  toDate: { type: "string" },
+                  entityType: { type: "string" },
+                  cropType: { type: "string" },
+                  status: { type: "string" },
+                },
+                required: [],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const content = llmResponse?.choices?.[0]?.message?.content;
+        if (content) {
+          parsedIntent = JSON.parse(typeof content === "string" ? content : JSON.stringify(content)) as ParsedIntent;
+        }
+      } catch {
+        // LLM unavailable — fall back to keyword search only
+      }
+
+      const results: SearchResultItem[] = [];
+      const entityType = parsedIntent.entityType ?? "all";
+
+      // Search orders
+      if (entityType === "all" || entityType === "order") {
+        const conditions: ReturnType<typeof eq>[] = [eq(orders.userId, ctx.user.id) as any];
+        if (parsedIntent.symbol) conditions.push(ilike(orders.symbol, `%${parsedIntent.symbol}%`) as any);
+        if (parsedIntent.assetClass) conditions.push(eq(orders.assetClass, parsedIntent.assetClass as any) as any);
+        if (parsedIntent.side) conditions.push(eq(orders.side, parsedIntent.side as any) as any);
+        if (parsedIntent.status) conditions.push(eq(orders.status, parsedIntent.status as any) as any);
+        if (parsedIntent.minPrice) conditions.push(gte(orders.price, String(parsedIntent.minPrice)) as any);
+        if (parsedIntent.maxPrice) conditions.push(lte(orders.price, String(parsedIntent.maxPrice)) as any);
+        if (parsedIntent.fromDate) conditions.push(gte(orders.createdAt, new Date(parsedIntent.fromDate)) as any);
+        if (parsedIntent.toDate) conditions.push(lte(orders.createdAt, new Date(parsedIntent.toDate)) as any);
+
+        // If only user filter, add keyword search on symbol
+        if (conditions.length === 1) {
+          conditions.push(ilike(orders.symbol, `%${input.query}%`) as any);
+        }
+
+        const orderRows = await db
+          .select()
+          .from(orders)
+          .where(and(...conditions))
+          .orderBy(desc(orders.createdAt))
+          .limit(10);
+
+        for (const row of orderRows) {
+          results.push({
+            id: String(row.id),
+            type: "order",
+            title: `${row.side} ${row.quantity} ${row.symbol}`,
+            subtitle: `${row.orderType} @ ${row.price ?? "market"} — ${row.status}`,
+            badge: row.status,
+            href: `/orders`,
+            score: 2,
+          });
+        }
+      }
+
+      // Search crop listings
+      if (entityType === "all" || entityType === "listing") {
+        const listingConditions: ReturnType<typeof eq>[] = [];
+        if (parsedIntent.cropType) {
+          listingConditions.push(ilike(cropListings.cropType, `%${parsedIntent.cropType}%`) as any);
+        } else {
+          listingConditions.push(
+            or(
+              ilike(cropListings.cropType, `%${input.query}%`),
+              ilike(cropListings.variety, `%${input.query}%`)
+            ) as any
+          );
+        }
+        if (parsedIntent.minPrice) listingConditions.push(gte(cropListings.askingPricePerKg, String(parsedIntent.minPrice)) as any);
+        if (parsedIntent.maxPrice) listingConditions.push(lte(cropListings.askingPricePerKg, String(parsedIntent.maxPrice)) as any);
+        if (parsedIntent.status) listingConditions.push(eq(cropListings.status, parsedIntent.status as any) as any);
+
+        const listingRows = await db
+          .select()
+          .from(cropListings)
+          .where(and(...listingConditions))
+          .orderBy(desc(cropListings.createdAt))
+          .limit(10);
+
+        for (const row of listingRows) {
+          results.push({
+            id: String(row.id),
+            type: "instrument",
+            title: `${row.cropType}${row.variety ? ` (${row.variety})` : ""} — ${row.quantityKg} kg`,
+            subtitle: `₦${row.askingPricePerKg}/kg — ${row.status}`,
+            badge: row.status,
+            href: `/marketplace`,
+            score: 1,
+          });
+        }
+      }
+
+      // Search users (admin only)
+      if ((entityType === "all" || entityType === "user") && ctx.user.role === "admin") {
+        const userRows = await db
+          .select({ id: users.id, email: users.email, name: users.name, role: users.role })
+          .from(users)
+          .where(
+            or(
+              ilike(users.email, `%${input.query}%`),
+              ilike(users.name, `%${input.query}%`)
+            )
+          )
+          .limit(5);
+
+        for (const row of userRows) {
+          results.push({
+            id: String(row.id),
+            type: "user",
+            title: row.name ?? row.email ?? "Unknown",
+            subtitle: row.email ?? "",
+            badge: row.role ?? "user",
+            href: `/admin/users/${row.id}`,
+            score: 3,
+          });
+        }
+      }
+
+      results.sort((a, b) => b.score - a.score);
+      return { results, parsedIntent };
     }),
 });
