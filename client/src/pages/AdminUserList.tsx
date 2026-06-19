@@ -63,7 +63,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string; icon: Re
 
 const ROLE_CONFIG: Record<string, { label: string; className: string }> = {
   admin: { label: "Admin", className: "bg-purple-500/10 text-purple-400 border-purple-500/30" },
-  user:  { label: "User",  className: "bg-slate-500/10 text-slate-400 border-slate-500/30" },
+  user:  { label: "User",  className: "bg-slate-500/10 text-muted-foreground border-slate-500/30" },
 };
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -182,7 +182,7 @@ export default function AdminUserList() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6 bg-slate-950 min-h-screen">
+      <div className="p-6 space-y-6 bg-background min-h-screen">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -191,33 +191,33 @@ export default function AdminUserList() {
               <Users className="h-6 w-6 text-blue-400" />
               User Management
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               {total > 0 ? `${total.toLocaleString()} registered users` : "Loading…"}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}
-            className="border-slate-600 text-slate-300 hover:bg-slate-800">
+            className="border-border text-muted-foreground hover:bg-secondary">
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
 
         {/* Filters */}
-        <Card className="bg-slate-900 border-slate-700">
+        <Card className="bg-card border-border">
           <CardContent className="pt-4 pb-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by name or email…" value={search} onChange={e => handleSearch(e.target.value)}
-                  className="pl-9 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                  className="pl-9 bg-secondary border-border text-white placeholder:text-muted-foreground"
                 />
               </div>
               <Select value={statusFilter} onValueChange={handleStatusFilter}>
-                <SelectTrigger className="w-40 bg-slate-800 border-slate-600 text-white">
+                <SelectTrigger className="w-40 bg-secondary border-border text-white">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600">
+                <SelectContent className="bg-secondary border-border">
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="suspended">Suspended</SelectItem>
@@ -230,7 +230,7 @@ export default function AdminUserList() {
         </Card>
 
         {/* User Table */}
-        <Card className="bg-slate-900 border-slate-700">
+        <Card className="bg-card border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-white text-sm">
               {isLoading ? "Loading…" : `Showing ${users.length} of ${total} users`}
@@ -239,10 +239,10 @@ export default function AdminUserList() {
           <CardContent className="p-0">
             {isLoading ? (
               <div className="flex items-center justify-center py-16">
-                <RefreshCw className="h-6 w-6 animate-spin text-slate-400" />
+                <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : users.length === 0 ? (
-              <div className="text-center py-16 text-slate-500">
+              <div className="text-center py-16 text-muted-foreground">
                 <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
                 <p>No users found</p>
               </div>
@@ -250,7 +250,7 @@ export default function AdminUserList() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wide">
+                    <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wide">
                       <th className="text-left px-4 py-3">User</th>
                       <th className="text-left px-4 py-3 hidden md:table-cell">Email</th>
                       <th className="text-left px-4 py-3">Role</th>
@@ -271,12 +271,12 @@ export default function AdminUserList() {
   if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
                       return (
                         <tr key={u.id}
-                          className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
+                          className="border-b border-border hover:bg-secondary/50 transition-colors">
                           {/* Avatar + Name */}
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center
-                                text-xs font-bold text-slate-300 flex-shrink-0">
+                              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center
+                                text-xs font-bold text-muted-foreground flex-shrink-0">
                                 {initials(u.name, u.email)}
                               </div>
                               <div>
@@ -284,12 +284,12 @@ export default function AdminUserList() {
                                   {u.name ?? "—"}
                                   {isSelf && <span className="ml-1 text-xs text-blue-400">(you)</span>}
                                 </p>
-                                <p className="text-slate-500 text-xs">ID #{u.id}</p>
+                                <p className="text-muted-foreground text-xs">ID #{u.id}</p>
                               </div>
                             </div>
                           </td>
                           {/* Email */}
-                          <td className="px-4 py-3 hidden md:table-cell text-slate-300">
+                          <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
                             {u.email ?? "—"}
                           </td>
                           {/* Role */}
@@ -307,11 +307,11 @@ export default function AdminUserList() {
                             </Badge>
                           </td>
                           {/* Joined */}
-                          <td className="px-4 py-3 hidden lg:table-cell text-slate-400 text-xs">
+                          <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">
                             {formatDate(u.createdAt)}
                           </td>
                           {/* Last sign-in */}
-                          <td className="px-4 py-3 hidden xl:table-cell text-slate-400 text-xs">
+                          <td className="px-4 py-3 hidden xl:table-cell text-muted-foreground text-xs">
                             {formatDate(u.lastSignedIn)}
                           </td>
                           {/* Actions */}
@@ -319,24 +319,24 @@ export default function AdminUserList() {
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon"
-                                  className="h-7 w-7 text-slate-400 hover:text-white hover:bg-slate-700">
+                                  className="h-7 w-7 text-muted-foreground hover:text-white hover:bg-muted">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end"
-                                className="bg-slate-800 border-slate-600 text-slate-200">
+                                className="bg-secondary border-border text-foreground">
                                 <DropdownMenuItem
                                   onClick={() => navigate(`/admin/users/${u.id}`)}
-                                  className="cursor-pointer hover:bg-slate-700">
+                                  className="cursor-pointer hover:bg-muted">
                                   <Eye className="h-4 w-4 mr-2 text-blue-400" />
                                   View Detail
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator className="bg-slate-700" />
+                                <DropdownMenuSeparator className="bg-muted" />
                                 {/* Role actions */}
                                 {!isSelf && u.role !== "admin" && (
                                   <DropdownMenuItem
                                     onClick={() => { setActionUser(u); setActionType("promote"); }}
-                                    className="cursor-pointer hover:bg-slate-700">
+                                    className="cursor-pointer hover:bg-muted">
                                     <Crown className="h-4 w-4 mr-2 text-purple-400" />
                                     Promote to Admin
                                   </DropdownMenuItem>
@@ -344,17 +344,17 @@ export default function AdminUserList() {
                                 {!isSelf && u.role === "admin" && (
                                   <DropdownMenuItem
                                     onClick={() => { setActionUser(u); setActionType("demote"); }}
-                                    className="cursor-pointer hover:bg-slate-700 text-amber-400">
+                                    className="cursor-pointer hover:bg-muted text-amber-400">
                                     <ShieldOff className="h-4 w-4 mr-2" />
                                     Remove Admin Role
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuSeparator className="bg-slate-700" />
+                                <DropdownMenuSeparator className="bg-muted" />
                                 {/* Status actions */}
                                 {!isSelf && statusKey !== "active" && (
                                   <DropdownMenuItem
                                     onClick={() => { setActionUser(u); setActionType("activate"); }}
-                                    className="cursor-pointer hover:bg-slate-700 text-emerald-400">
+                                    className="cursor-pointer hover:bg-muted text-emerald-400">
                                     <UserCheck className="h-4 w-4 mr-2" />
                                     Activate Account
                                   </DropdownMenuItem>
@@ -362,7 +362,7 @@ export default function AdminUserList() {
                                 {!isSelf && statusKey === "active" && (
                                   <DropdownMenuItem
                                     onClick={() => { setActionUser(u); setActionType("suspend"); }}
-                                    className="cursor-pointer hover:bg-slate-700 text-amber-400">
+                                    className="cursor-pointer hover:bg-muted text-amber-400">
                                     <AlertTriangle className="h-4 w-4 mr-2" />
                                     Suspend Account
                                   </DropdownMenuItem>
@@ -370,7 +370,7 @@ export default function AdminUserList() {
                                 {!isSelf && statusKey !== "deactivated" && (
                                   <DropdownMenuItem
                                     onClick={() => { setActionUser(u); setActionType("deactivate"); }}
-                                    className="cursor-pointer hover:bg-slate-700 text-red-400">
+                                    className="cursor-pointer hover:bg-muted text-red-400">
                                     <UserX className="h-4 w-4 mr-2" />
                                     Deactivate Account
                                   </DropdownMenuItem>
@@ -391,18 +391,18 @@ export default function AdminUserList() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between">
-            <p className="text-slate-400 text-sm">
+            <p className="text-muted-foreground text-sm">
               Page {page} of {totalPages}
             </p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="border-slate-600 text-slate-300 hover:bg-slate-800">
+                className="border-border text-muted-foreground hover:bg-secondary">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="border-slate-600 text-slate-300 hover:bg-slate-800">
+                className="border-border text-muted-foreground hover:bg-secondary">
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -412,7 +412,7 @@ export default function AdminUserList() {
 
       {/* Confirmation Dialog */}
       <Dialog open={!!actionUser && !!actionType} onOpenChange={() => { setActionUser(null); setActionType(null); setActionReason(""); }}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-white">
+        <DialogContent className="bg-card border-border text-white">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {actionType === "promote" && <><Crown className="h-5 w-5 text-purple-400" /> Promote to Admin</>}
@@ -421,7 +421,7 @@ export default function AdminUserList() {
               {actionType === "activate" && <><UserCheck className="h-5 w-5 text-emerald-400" /> Activate Account</>}
               {actionType === "deactivate" && <><UserX className="h-5 w-5 text-red-400" /> Deactivate Account</>}
             </DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription className="text-muted-foreground">
               {actionType === "promote" && `Grant admin privileges to ${actionUser?.name ?? actionUser?.email}?`}
               {actionType === "demote" && `Remove admin privileges from ${actionUser?.name ?? actionUser?.email}?`}
               {actionType === "suspend" && `Temporarily suspend ${actionUser?.name ?? actionUser?.email}?`}
@@ -431,18 +431,18 @@ export default function AdminUserList() {
           </DialogHeader>
           {(actionType === "suspend" || actionType === "deactivate") && (
             <div className="mt-2">
-              <label className="text-xs text-slate-400 mb-1 block">Reason (optional)</label>
+              <label className="text-xs text-muted-foreground mb-1 block">Reason (optional)</label>
               <Input
                 value={actionReason}
                 onChange={e => setActionReason(e.target.value)}
                 placeholder="Enter reason for this action…"
-                className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                className="bg-secondary border-border text-white placeholder:text-muted-foreground"
               />
             </div>
           )}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setActionUser(null); setActionType(null); setActionReason(""); }}
-              className="border-slate-600 text-slate-300 hover:bg-slate-800">
+              className="border-border text-muted-foreground hover:bg-secondary">
               Cancel
             </Button>
             <Button

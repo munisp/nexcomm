@@ -251,7 +251,7 @@ export function LivePriceTicker({
             <span
               className={cn(
                 "text-xs font-medium",
-                changePct > 0 ? "text-emerald-400" : changePct < 0 ? "text-red-400" : "text-slate-400",
+                changePct > 0 ? "text-emerald-400" : changePct < 0 ? "text-red-400" : "text-muted-foreground",
               )}
             >
               {changePct > 0 ? "▲" : changePct < 0 ? "▼" : "—"}
@@ -259,7 +259,7 @@ export function LivePriceTicker({
             </span>
           </>
         ) : (
-          <span className="text-slate-500 text-xs font-mono">—</span>
+          <span className="text-muted-foreground text-xs font-mono">—</span>
         )}
         <span className="text-blue-800 ml-2">|</span>
       </span>

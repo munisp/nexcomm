@@ -27,7 +27,7 @@ function statusBadge(status: MarginCallStatus) {
     PARTIALLY_MET: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
     MET: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     DEFAULTED: "bg-red-900/40 text-red-300 border-red-700/50",
-    CANCELLED: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+    CANCELLED: "bg-zinc-500/20 text-muted-foreground border-zinc-500/30",
   };
   return <Badge className={`text-xs border ${map[status] ?? ""}`}>{status.replace("_", " ")}</Badge>;
 }
@@ -124,7 +124,7 @@ export default function MarginCallDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Clearing House</h1>
-          <p className="text-zinc-400 text-sm mt-1">Margin health monitoring, margin calls, and auto-liquidation</p>
+          <p className="text-muted-foreground text-sm mt-1">Margin health monitoring, margin calls, and auto-liquidation</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => { statsQuery.refetch(); accountsQuery.refetch(); callsQuery.refetch(); }}>
@@ -138,38 +138,38 @@ export default function MarginCallDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-zinc-900 border-zinc-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <div className="text-zinc-400 text-xs mb-1">Total Accounts</div>
+            <div className="text-muted-foreground text-xs mb-1">Total Accounts</div>
             <div className="text-2xl font-bold text-white">{stats?.accounts.total ?? "—"}</div>
-            <div className="text-zinc-500 text-xs">{stats?.accounts.active ?? 0} active</div>
+            <div className="text-muted-foreground text-xs">{stats?.accounts.active ?? 0} active</div>
           </CardContent>
         </Card>
-        <Card className="bg-zinc-900 border-zinc-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <div className="text-zinc-400 text-xs mb-1">At-Risk Accounts</div>
+            <div className="text-muted-foreground text-xs mb-1">At-Risk Accounts</div>
             <div className="text-2xl font-bold text-red-400">{stats?.accounts.atRisk ?? "—"}</div>
-            <div className="text-zinc-500 text-xs">equity ratio &lt; 8%</div>
+            <div className="text-muted-foreground text-xs">equity ratio &lt; 8%</div>
           </CardContent>
         </Card>
-        <Card className="bg-zinc-900 border-zinc-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <div className="text-zinc-400 text-xs mb-1">Open Margin Calls</div>
+            <div className="text-muted-foreground text-xs mb-1">Open Margin Calls</div>
             <div className="text-2xl font-bold text-yellow-400">{stats?.marginCalls.open ?? "—"}</div>
-            <div className="text-zinc-500 text-xs">{stats?.marginCalls.defaulted ?? 0} defaulted</div>
+            <div className="text-muted-foreground text-xs">{stats?.marginCalls.defaulted ?? 0} defaulted</div>
           </CardContent>
         </Card>
-        <Card className="bg-zinc-900 border-zinc-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <div className="text-zinc-400 text-xs mb-1">Liquidations</div>
+            <div className="text-muted-foreground text-xs mb-1">Liquidations</div>
             <div className="text-2xl font-bold text-orange-400">{stats?.liquidations.total ?? "—"}</div>
-            <div className="text-zinc-500 text-xs">{stats?.liquidations.pending ?? 0} pending</div>
+            <div className="text-muted-foreground text-xs">{stats?.liquidations.pending ?? 0} pending</div>
           </CardContent>
         </Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-zinc-900 border border-zinc-800">
+        <TabsList className="bg-card border border-border">
           <TabsTrigger value="overview">At-Risk Accounts</TabsTrigger>
           <TabsTrigger value="accounts">All Accounts</TabsTrigger>
           <TabsTrigger value="calls">Margin Calls</TabsTrigger>
@@ -178,7 +178,7 @@ export default function MarginCallDashboard() {
 
         {/* At-Risk Accounts */}
         <TabsContent value="overview" className="mt-4">
-          <Card className="bg-zinc-900 border-zinc-800">
+          <Card className="bg-card border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-base text-white flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-red-400" />
@@ -187,14 +187,14 @@ export default function MarginCallDashboard() {
             </CardHeader>
             <CardContent>
               {atRiskQuery.isLoading ? (
-                <div className="text-zinc-500 text-sm">Loading...</div>
+                <div className="text-muted-foreground text-sm">Loading...</div>
               ) : (atRiskQuery.data?.accounts.length ?? 0) === 0 ? (
-                <div className="text-zinc-500 text-sm text-center py-8">No at-risk accounts</div>
+                <div className="text-muted-foreground text-sm text-center py-8">No at-risk accounts</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-zinc-800 text-zinc-400">
+                      <tr className="border-b border-border text-muted-foreground">
                         <th className="text-left py-2 pr-4">Account Ref</th>
                         <th className="text-left py-2 pr-4">User ID</th>
                         <th className="text-right py-2 pr-4">Portfolio Value</th>
@@ -206,11 +206,11 @@ export default function MarginCallDashboard() {
                     </thead>
                     <tbody>
                       {atRiskQuery.data?.accounts.map(acc => (
-                        <tr key={acc.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                          <td className="py-2 pr-4 font-mono text-xs text-zinc-300">{acc.accountRef}</td>
-                          <td className="py-2 pr-4 text-zinc-300">{acc.userId}</td>
-                          <td className="py-2 pr-4 text-right text-zinc-300">₦{parseFloat(acc.portfolioValue).toLocaleString()}</td>
-                          <td className="py-2 pr-4 text-right text-zinc-300">₦{parseFloat(acc.cashBalance).toLocaleString()}</td>
+                        <tr key={acc.id} className="border-b border-border/50 hover:bg-secondary/30">
+                          <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{acc.accountRef}</td>
+                          <td className="py-2 pr-4 text-muted-foreground">{acc.userId}</td>
+                          <td className="py-2 pr-4 text-right text-muted-foreground">₦{parseFloat(acc.portfolioValue).toLocaleString()}</td>
+                          <td className="py-2 pr-4 text-right text-muted-foreground">₦{parseFloat(acc.cashBalance).toLocaleString()}</td>
                           <td className="py-2 pr-4 text-right text-red-400 font-medium">{(parseFloat(acc.equityRatio) * 100).toFixed(2)}%</td>
                           <td className="py-2 pr-4">{healthBadge(parseFloat(acc.equityRatio))}</td>
                           <td className="py-2 text-right">
@@ -235,7 +235,7 @@ export default function MarginCallDashboard() {
 
         {/* All Accounts */}
         <TabsContent value="accounts" className="mt-4">
-          <Card className="bg-zinc-900 border-zinc-800">
+          <Card className="bg-card border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-base text-white flex items-center gap-2">
                 <Shield className="w-4 h-4 text-emerald-400" />
@@ -244,14 +244,14 @@ export default function MarginCallDashboard() {
             </CardHeader>
             <CardContent>
               {accountsQuery.isLoading ? (
-                <div className="text-zinc-500 text-sm">Loading...</div>
+                <div className="text-muted-foreground text-sm">Loading...</div>
               ) : (accountsQuery.data?.accounts.length ?? 0) === 0 ? (
-                <div className="text-zinc-500 text-sm text-center py-8">No clearing accounts</div>
+                <div className="text-muted-foreground text-sm text-center py-8">No clearing accounts</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-zinc-800 text-zinc-400">
+                      <tr className="border-b border-border text-muted-foreground">
                         <th className="text-left py-2 pr-4">Account Ref</th>
                         <th className="text-left py-2 pr-4">User ID</th>
                         <th className="text-right py-2 pr-4">Portfolio</th>
@@ -264,17 +264,17 @@ export default function MarginCallDashboard() {
                     </thead>
                     <tbody>
                       {accountsQuery.data?.accounts.map(acc => (
-                        <tr key={acc.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                          <td className="py-2 pr-4 font-mono text-xs text-zinc-300">{acc.accountRef}</td>
-                          <td className="py-2 pr-4 text-zinc-300">{acc.userId}</td>
-                          <td className="py-2 pr-4 text-right text-zinc-300">₦{parseFloat(acc.portfolioValue).toLocaleString()}</td>
-                          <td className="py-2 pr-4 text-right text-zinc-300">₦{parseFloat(acc.cashBalance).toLocaleString()}</td>
-                          <td className="py-2 pr-4 text-right text-zinc-300">₦{parseFloat(acc.totalMarginRequired).toLocaleString()}</td>
+                        <tr key={acc.id} className="border-b border-border/50 hover:bg-secondary/30">
+                          <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{acc.accountRef}</td>
+                          <td className="py-2 pr-4 text-muted-foreground">{acc.userId}</td>
+                          <td className="py-2 pr-4 text-right text-muted-foreground">₦{parseFloat(acc.portfolioValue).toLocaleString()}</td>
+                          <td className="py-2 pr-4 text-right text-muted-foreground">₦{parseFloat(acc.cashBalance).toLocaleString()}</td>
+                          <td className="py-2 pr-4 text-right text-muted-foreground">₦{parseFloat(acc.totalMarginRequired).toLocaleString()}</td>
                           <td className="py-2 pr-4 text-right font-medium" style={{ color: parseFloat(acc.equityRatio) < 0.08 ? "#f87171" : "#a3e635" }}>
                             {(parseFloat(acc.equityRatio) * 100).toFixed(2)}%
                           </td>
                           <td className="py-2 pr-4">
-                            <Badge className={`text-xs border ${acc.status === "ACTIVE" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-zinc-500/20 text-zinc-400 border-zinc-500/30"}`}>
+                            <Badge className={`text-xs border ${acc.status === "ACTIVE" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-zinc-500/20 text-muted-foreground border-zinc-500/30"}`}>
                               {acc.status}
                             </Badge>
                           </td>
@@ -291,7 +291,7 @@ export default function MarginCallDashboard() {
 
         {/* Margin Calls */}
         <TabsContent value="calls" className="mt-4">
-          <Card className="bg-zinc-900 border-zinc-800">
+          <Card className="bg-card border-border">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base text-white flex items-center gap-2">
@@ -299,10 +299,10 @@ export default function MarginCallDashboard() {
                   Margin Calls
                 </CardTitle>
                 <Select value={callStatusFilter} onValueChange={(v) => setCallStatusFilter(v as MarginCallStatus | "ALL")}>
-                  <SelectTrigger className="w-40 h-8 bg-zinc-800 border-zinc-700 text-xs">
+                  <SelectTrigger className="w-40 h-8 bg-secondary border-border text-xs">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-800 border-zinc-700">
+                  <SelectContent className="bg-secondary border-border">
                     <SelectItem value="ALL">All Statuses</SelectItem>
                     <SelectItem value="OPEN">Open</SelectItem>
                     <SelectItem value="PARTIALLY_MET">Partially Met</SelectItem>
@@ -315,14 +315,14 @@ export default function MarginCallDashboard() {
             </CardHeader>
             <CardContent>
               {callsQuery.isLoading ? (
-                <div className="text-zinc-500 text-sm">Loading...</div>
+                <div className="text-muted-foreground text-sm">Loading...</div>
               ) : (callsQuery.data?.length ?? 0) === 0 ? (
-                <div className="text-zinc-500 text-sm text-center py-8">No margin calls found</div>
+                <div className="text-muted-foreground text-sm text-center py-8">No margin calls found</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-zinc-800 text-zinc-400">
+                      <tr className="border-b border-border text-muted-foreground">
                         <th className="text-left py-2 pr-4">Call Ref</th>
                         <th className="text-left py-2 pr-4">User ID</th>
                         <th className="text-right py-2 pr-4">Required</th>
@@ -334,12 +334,12 @@ export default function MarginCallDashboard() {
                     </thead>
                     <tbody>
                       {callsQuery.data?.map(call => (
-                        <tr key={call.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                          <td className="py-2 pr-4 font-mono text-xs text-zinc-300">{call.callRef}</td>
-                          <td className="py-2 pr-4 text-zinc-300">{call.userId}</td>
+                        <tr key={call.id} className="border-b border-border/50 hover:bg-secondary/30">
+                          <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{call.callRef}</td>
+                          <td className="py-2 pr-4 text-muted-foreground">{call.userId}</td>
                           <td className="py-2 pr-4 text-right text-red-400">₦{parseFloat(call.amountRequired).toLocaleString()}</td>
                           <td className="py-2 pr-4 text-right text-emerald-400">₦{parseFloat(call.amountReceived).toLocaleString()}</td>
-                          <td className="py-2 pr-4 text-zinc-400 text-xs">{new Date(call.dueAt).toLocaleDateString()}</td>
+                          <td className="py-2 pr-4 text-muted-foreground text-xs">{new Date(call.dueAt).toLocaleDateString()}</td>
                           <td className="py-2 pr-4">{statusBadge(call.status as MarginCallStatus)}</td>
                           <td className="py-2 text-right">
                             {(call.status === "OPEN" || call.status === "PARTIALLY_MET") && (
@@ -355,7 +355,7 @@ export default function MarginCallDashboard() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="text-xs h-7 border-zinc-600 text-zinc-400"
+                                  className="text-xs h-7 border-border text-muted-foreground"
                                   onClick={() => resolveMutation.mutate({ marginCallId: call.id, resolution: "CANCELLED" })}
                                 >
                                   Cancel
@@ -375,7 +375,7 @@ export default function MarginCallDashboard() {
 
         {/* Liquidations */}
         <TabsContent value="liquidations" className="mt-4">
-          <Card className="bg-zinc-900 border-zinc-800">
+          <Card className="bg-card border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-base text-white flex items-center gap-2">
                 <Zap className="w-4 h-4 text-orange-400" />
@@ -384,14 +384,14 @@ export default function MarginCallDashboard() {
             </CardHeader>
             <CardContent>
               {liquidationsQuery.isLoading ? (
-                <div className="text-zinc-500 text-sm">Loading...</div>
+                <div className="text-muted-foreground text-sm">Loading...</div>
               ) : (liquidationsQuery.data?.length ?? 0) === 0 ? (
-                <div className="text-zinc-500 text-sm text-center py-8">No liquidation orders</div>
+                <div className="text-muted-foreground text-sm text-center py-8">No liquidation orders</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-zinc-800 text-zinc-400">
+                      <tr className="border-b border-border text-muted-foreground">
                         <th className="text-left py-2 pr-4">User ID</th>
                         <th className="text-left py-2 pr-4">Instrument</th>
                         <th className="text-right py-2 pr-4">Quantity</th>
@@ -403,20 +403,20 @@ export default function MarginCallDashboard() {
                     </thead>
                     <tbody>
                       {liquidationsQuery.data?.map(order => (
-                        <tr key={order.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                          <td className="py-2 pr-4 text-zinc-300">{order.userId}</td>
-                          <td className="py-2 pr-4 text-zinc-300 font-medium">{order.instrument}</td>
-                          <td className="py-2 pr-4 text-right text-zinc-300">{parseFloat(order.quantity).toLocaleString()}</td>
-                          <td className="py-2 pr-4 text-right text-zinc-300">₦{parseFloat(order.estimatedValue).toLocaleString()}</td>
+                        <tr key={order.id} className="border-b border-border/50 hover:bg-secondary/30">
+                          <td className="py-2 pr-4 text-muted-foreground">{order.userId}</td>
+                          <td className="py-2 pr-4 text-muted-foreground font-medium">{order.instrument}</td>
+                          <td className="py-2 pr-4 text-right text-muted-foreground">{parseFloat(order.quantity).toLocaleString()}</td>
+                          <td className="py-2 pr-4 text-right text-muted-foreground">₦{parseFloat(order.estimatedValue).toLocaleString()}</td>
                           <td className="py-2 pr-4 text-right text-emerald-400">
                             {order.actualProceeds ? `₦${parseFloat(order.actualProceeds).toLocaleString()}` : "—"}
                           </td>
-                          <td className="py-2 pr-4 text-zinc-400 text-xs">{new Date(order.initiatedAt).toLocaleString()}</td>
+                          <td className="py-2 pr-4 text-muted-foreground text-xs">{new Date(order.initiatedAt).toLocaleString()}</td>
                           <td className="py-2">
                             <Badge className={`text-xs border ${
                               order.status === "COMPLETED" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" :
                               order.status === "PENDING" ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" :
-                              "bg-zinc-500/20 text-zinc-400 border-zinc-500/30"
+                              "bg-zinc-500/20 text-muted-foreground border-zinc-500/30"
                             }`}>{order.status}</Badge>
                           </td>
                         </tr>
@@ -432,33 +432,33 @@ export default function MarginCallDashboard() {
 
       {/* Create Account Modal */}
       <Dialog open={showCreateAccountModal} onOpenChange={setShowCreateAccountModal}>
-        <DialogContent className="bg-zinc-900 border-zinc-700 text-white max-w-md">
+        <DialogContent className="bg-card border-border text-white max-w-md">
           <DialogHeader>
             <DialogTitle>Create Clearing Account</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label className="text-zinc-300 text-sm">User ID</Label>
-              <Input value={newUserId} onChange={e => setNewUserId(e.target.value)} placeholder="e.g. 42" className="bg-zinc-800 border-zinc-700 text-white mt-1" />
+              <Label className="text-muted-foreground text-sm">User ID</Label>
+              <Input value={newUserId} onChange={e => setNewUserId(e.target.value)} placeholder="e.g. 42" className="bg-secondary border-border text-white mt-1" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-zinc-300 text-sm">Initial Margin %</Label>
-                <Input value={newInitPct} onChange={e => setNewInitPct(e.target.value)} placeholder="0.10" className="bg-zinc-800 border-zinc-700 text-white mt-1" />
+                <Label className="text-muted-foreground text-sm">Initial Margin %</Label>
+                <Input value={newInitPct} onChange={e => setNewInitPct(e.target.value)} placeholder="0.10" className="bg-secondary border-border text-white mt-1" />
               </div>
               <div>
-                <Label className="text-zinc-300 text-sm">Maintenance Margin %</Label>
-                <Input value={newMaintPct} onChange={e => setNewMaintPct(e.target.value)} placeholder="0.07" className="bg-zinc-800 border-zinc-700 text-white mt-1" />
+                <Label className="text-muted-foreground text-sm">Maintenance Margin %</Label>
+                <Input value={newMaintPct} onChange={e => setNewMaintPct(e.target.value)} placeholder="0.07" className="bg-secondary border-border text-white mt-1" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-zinc-300 text-sm">Portfolio Value (₦)</Label>
-                <Input value={newPortfolioValue} onChange={e => setNewPortfolioValue(e.target.value)} placeholder="0" className="bg-zinc-800 border-zinc-700 text-white mt-1" />
+                <Label className="text-muted-foreground text-sm">Portfolio Value (₦)</Label>
+                <Input value={newPortfolioValue} onChange={e => setNewPortfolioValue(e.target.value)} placeholder="0" className="bg-secondary border-border text-white mt-1" />
               </div>
               <div>
-                <Label className="text-zinc-300 text-sm">Cash Balance (₦)</Label>
-                <Input value={newCashBalance} onChange={e => setNewCashBalance(e.target.value)} placeholder="0" className="bg-zinc-800 border-zinc-700 text-white mt-1" />
+                <Label className="text-muted-foreground text-sm">Cash Balance (₦)</Label>
+                <Input value={newCashBalance} onChange={e => setNewCashBalance(e.target.value)} placeholder="0" className="bg-secondary border-border text-white mt-1" />
               </div>
             </div>
           </div>
@@ -482,18 +482,18 @@ export default function MarginCallDashboard() {
 
       {/* Trigger Margin Call Modal */}
       <Dialog open={showTriggerCallModal} onOpenChange={setShowTriggerCallModal}>
-        <DialogContent className="bg-zinc-900 border-zinc-700 text-white max-w-md">
+        <DialogContent className="bg-card border-border text-white max-w-md">
           <DialogHeader>
             <DialogTitle>Issue Margin Call</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label className="text-zinc-300 text-sm">Grace Period (hours)</Label>
-              <Input value={gracePeriodHours} onChange={e => setGracePeriodHours(e.target.value)} placeholder="24" className="bg-zinc-800 border-zinc-700 text-white mt-1" />
+              <Label className="text-muted-foreground text-sm">Grace Period (hours)</Label>
+              <Input value={gracePeriodHours} onChange={e => setGracePeriodHours(e.target.value)} placeholder="24" className="bg-secondary border-border text-white mt-1" />
             </div>
             <div>
-              <Label className="text-zinc-300 text-sm">Notes (optional)</Label>
-              <Input value={callNotes} onChange={e => setCallNotes(e.target.value)} placeholder="Reason for margin call..." className="bg-zinc-800 border-zinc-700 text-white mt-1" />
+              <Label className="text-muted-foreground text-sm">Notes (optional)</Label>
+              <Input value={callNotes} onChange={e => setCallNotes(e.target.value)} placeholder="Reason for margin call..." className="bg-secondary border-border text-white mt-1" />
             </div>
           </div>
           <DialogFooter>
@@ -515,18 +515,18 @@ export default function MarginCallDashboard() {
 
       {/* Record Deposit Modal */}
       <Dialog open={showDepositModal} onOpenChange={setShowDepositModal}>
-        <DialogContent className="bg-zinc-900 border-zinc-700 text-white max-w-md">
+        <DialogContent className="bg-card border-border text-white max-w-md">
           <DialogHeader>
             <DialogTitle>Record Margin Deposit</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label className="text-zinc-300 text-sm">Amount (₦)</Label>
-              <Input value={depositAmount} onChange={e => setDepositAmount(e.target.value)} placeholder="e.g. 500000" className="bg-zinc-800 border-zinc-700 text-white mt-1" />
+              <Label className="text-muted-foreground text-sm">Amount (₦)</Label>
+              <Input value={depositAmount} onChange={e => setDepositAmount(e.target.value)} placeholder="e.g. 500000" className="bg-secondary border-border text-white mt-1" />
             </div>
             <div>
-              <Label className="text-zinc-300 text-sm">Notes (optional)</Label>
-              <Input value={depositNotes} onChange={e => setDepositNotes(e.target.value)} placeholder="Reference or notes..." className="bg-zinc-800 border-zinc-700 text-white mt-1" />
+              <Label className="text-muted-foreground text-sm">Notes (optional)</Label>
+              <Input value={depositNotes} onChange={e => setDepositNotes(e.target.value)} placeholder="Reference or notes..." className="bg-secondary border-border text-white mt-1" />
             </div>
           </div>
           <DialogFooter>

@@ -400,15 +400,15 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
     "Disconnected";
 
   return (
-    <div className="bg-gray-900/80 border border-gray-700/50 rounded-lg p-3 space-y-2">
+    <div className="bg-card/80 border border-border/50 rounded-lg p-3 space-y-2">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             {symbol} — OHLCV
           </span>
           {/* Live stream indicator */}
-          <span className="flex items-center gap-1 text-xs text-gray-400">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <span className={`inline-block w-1.5 h-1.5 rounded-full ${statusColor} ${streamStatus === "live" ? "animate-pulse" : ""}`} />
             {statusLabel}
           </span>
@@ -422,7 +422,7 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
               className={`px-2 py-0.5 rounded text-xs font-mono transition-colors ${
                 interval === iv
                   ? "bg-emerald-600 text-white"
-                  : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                  : "bg-secondary text-muted-foreground hover:bg-muted"
               }`}
             >
               {iv}
@@ -434,7 +434,7 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
       {/* Chart body — taller to accommodate volume bars */}
       <div style={{ height: 260 }}>
         {loading ? (
-          <div className="h-full flex items-center justify-center text-xs text-gray-500 animate-pulse">
+          <div className="h-full flex items-center justify-center text-xs text-muted-foreground animate-pulse">
             Loading candles…
           </div>
         ) : error ? (
@@ -442,7 +442,7 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
             {error}
           </div>
         ) : candles.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-xs text-gray-500">
+          <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
             No candle data available yet.
           </div>
         ) : (
@@ -452,7 +452,7 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
 
       {/* Volume legend hint */}
       {!loading && !error && candles.length > 0 && (
-        <div className="flex items-center gap-3 text-xs text-gray-500 pt-0.5 flex-wrap">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground pt-0.5 flex-wrap">
           <span className="flex items-center gap-1">
             <span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-400/35 border border-emerald-400/60" />
             Bull vol

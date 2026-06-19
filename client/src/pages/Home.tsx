@@ -24,7 +24,7 @@ const QUICK_LINKS = [
   { icon: Warehouse,   label: "Warehouses",   href: "/warehouses",    color: "text-orange-400", bg: "bg-orange-400/10" },
   { icon: FileText,    label: "Deposits",     href: "/deposits",      color: "text-teal-400",   bg: "bg-teal-400/10" },
   { icon: Bell,        label: "Alerts",       href: "/alerts",        color: "text-red-400",    bg: "bg-red-400/10" },
-  { icon: Settings,    label: "Settings",     href: "/settings",      color: "text-gray-400",   bg: "bg-gray-400/10" },
+  { icon: Settings,    label: "Settings",     href: "/settings",      color: "text-muted-foreground",   bg: "bg-gray-400/10" },
 ];
 
 const FEATURES = [

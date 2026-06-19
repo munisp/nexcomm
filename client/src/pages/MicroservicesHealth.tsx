@@ -412,7 +412,7 @@ function CircuitBreakerControls() {
                     <p className="text-sm font-medium text-foreground">{rule.name}</p>
                     <p className="text-xs text-muted-foreground">{rule.threshold} req / {rule.windowSeconds}s window</p>
                   </div>
-                  <Badge className={rule.enabled ? "bg-emerald-500/20 text-emerald-300" : "bg-gray-500/20 text-gray-300"}>
+                  <Badge className={rule.enabled ? "bg-emerald-500/20 text-emerald-300" : "bg-gray-500/20 text-muted-foreground"}>
                     {rule.enabled ? "Active" : "Disabled"}
                   </Badge>
                 </div>

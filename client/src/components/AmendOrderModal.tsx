@@ -156,13 +156,13 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-md bg-gray-950 border-gray-800 text-white">
+      <DialogContent className="max-w-md bg-background border-border text-white">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
             <Edit3 className="w-4 h-4 text-amber-400" />
             Amend Order #{order.id}
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-muted-foreground">
             <span className={order.side === "BUY" ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
               {order.side}
             </span>
@@ -172,11 +172,11 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
 
         {/* ── Step indicator ── */}
         <div className="flex items-center gap-2 text-xs mb-4">
-          <span className={step === "entry" ? "text-amber-400 font-semibold" : "text-gray-500"}>
+          <span className={step === "entry" ? "text-amber-400 font-semibold" : "text-muted-foreground"}>
             1. Edit
           </span>
           <ArrowRight className="w-3 h-3 text-gray-600" />
-          <span className={step === "confirm" ? "text-amber-400 font-semibold" : "text-gray-500"}>
+          <span className={step === "confirm" ? "text-amber-400 font-semibold" : "text-muted-foreground"}>
             2. Confirm
           </span>
         </div>
@@ -186,7 +186,7 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
           <div className="space-y-4">
             {/* Quantity */}
             <div className="space-y-1.5">
-              <Label className="text-gray-300 text-sm">
+              <Label className="text-muted-foreground text-sm">
                 Quantity
                 {filledQty > 0 && (
                   <span className="ml-2 text-xs text-amber-400">
@@ -200,7 +200,7 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
                 step="any"
                 value={newQty}
                 onChange={(e) => setNewQty(e.target.value)}
-                className="bg-gray-900 border-gray-700 text-white"
+                className="bg-card border-border text-white"
                 placeholder={String(order.quantity)}
               />
               {qtyError && (
@@ -213,14 +213,14 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
             {/* Price (limit orders only) */}
             {isLimitOrder && (
               <div className="space-y-1.5">
-                <Label className="text-gray-300 text-sm">Limit Price (₦)</Label>
+                <Label className="text-muted-foreground text-sm">Limit Price (₦)</Label>
                 <Input
                   type="number"
                   min={0.0001}
                   step="any"
                   value={newPrice}
                   onChange={(e) => setNewPrice(e.target.value)}
-                  className="bg-gray-900 border-gray-700 text-white"
+                  className="bg-card border-border text-white"
                   placeholder={order.price != null ? String(order.price) : "Market"}
                 />
                 {priceError && (
@@ -233,13 +233,13 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
 
             {/* Live notional preview */}
             {parsedQty > 0 && execPrice > 0 && (
-              <div className="bg-gray-900/60 border border-gray-800 rounded-lg p-3 text-sm">
-                <div className="flex justify-between text-gray-400">
+              <div className="bg-card/60 border border-border rounded-lg p-3 text-sm">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Notional value</span>
                   <span className="text-white font-mono">{fmtNGN(notional)}</span>
                 </div>
                 {hasChange && (
-                  <div className="flex justify-between text-gray-400 mt-1">
+                  <div className="flex justify-between text-muted-foreground mt-1">
                     <span>Change vs. current</span>
                     <span className={notionalDelta >= 0 ? "text-emerald-400 font-mono" : "text-red-400 font-mono"}>
                       {notionalDelta >= 0 ? "+" : ""}{fmtNGN(notionalDelta)}
@@ -251,14 +251,14 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
 
             {/* Reason — required for audit trail */}
             <div className="space-y-1.5">
-              <Label className="text-gray-300 text-sm">
+              <Label className="text-muted-foreground text-sm">
                 Reason <span className="text-red-400">*</span>
-                <span className="text-gray-500 font-normal ml-1">(required for audit trail)</span>
+                <span className="text-muted-foreground font-normal ml-1">(required for audit trail)</span>
               </Label>
               <Input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className={`bg-gray-900 border-gray-700 text-white ${
+                className={`bg-card border-border text-white ${
                   reason.length > 0 && !hasReason ? "border-red-500/60" : ""
                 }`}
                 placeholder="e.g. Adjusting for market conditions"
@@ -268,13 +268,13 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
                 <p className="text-[11px] text-red-400">Reason must be at least 3 characters.</p>
               )}
               {!reason.length && (
-                <p className="text-[11px] text-gray-500">A reason is required to proceed.</p>
+                <p className="text-[11px] text-muted-foreground">A reason is required to proceed.</p>
               )}
             </div>
 
             {/* Changes summary */}
             {hasChange && (
-              <div className="space-y-1 text-xs text-gray-400">
+              <div className="space-y-1 text-xs text-muted-foreground">
                 {qtyChanged && (
                   <div className="flex items-center gap-1">
                     <Info className="w-3 h-3 text-amber-400" />
@@ -293,7 +293,7 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
             <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
-                className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800 bg-transparent"
+                className="flex-1 border-border text-muted-foreground hover:bg-secondary bg-transparent"
                 onClick={onClose}
               >
                 Cancel
@@ -313,11 +313,11 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
         {step === "confirm" && (
           <div className="space-y-4">
             {/* Order summary */}
-            <div className="bg-gray-900/60 border border-gray-800 rounded-lg overflow-hidden">
-              <div className="px-3 py-2 bg-gray-800/50 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+            <div className="bg-card/60 border border-border rounded-lg overflow-hidden">
+              <div className="px-3 py-2 bg-secondary/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Amendment Summary
               </div>
-              <div className="divide-y divide-gray-800">
+              <div className="divide-y divide-border">
                 {[
                   ["Order ID",   `#${order.id}`],
                   ["Symbol",     order.symbol],
@@ -327,7 +327,7 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
                   ...(priceChanged ? [["Limit Price", `${fmtNGN(prevPrice)} → ${fmtNGN(parsedPrice)}`]]              : []),
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between px-3 py-2 text-sm">
-                    <span className="text-gray-400">{label}</span>
+                    <span className="text-muted-foreground">{label}</span>
                     <span className="text-white font-mono">{value}</span>
                   </div>
                 ))}
@@ -335,23 +335,23 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
             </div>
 
             {/* Cost breakdown */}
-            <div className="bg-gray-900/60 border border-gray-800 rounded-lg overflow-hidden">
-              <div className="px-3 py-2 bg-gray-800/50 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+            <div className="bg-card/60 border border-border rounded-lg overflow-hidden">
+              <div className="px-3 py-2 bg-secondary/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Cost Impact
               </div>
-              <div className="divide-y divide-gray-800">
+              <div className="divide-y divide-border">
                 <div className="flex justify-between px-3 py-2 text-sm">
-                  <span className="text-gray-400">New notional</span>
+                  <span className="text-muted-foreground">New notional</span>
                   <span className="text-white font-mono">{fmtNGN(notional)}</span>
                 </div>
                 <div className="flex justify-between px-3 py-2 text-sm">
-                  <span className="text-gray-400">
+                  <span className="text-muted-foreground">
                     Est. fee ({(feeRate * 100).toFixed(2)}% taker)
                   </span>
                   <span className="text-amber-400 font-mono">{fmtNGN(feeAmount)}</span>
                 </div>
                 <div className="flex justify-between px-3 py-2 text-sm">
-                  <span className="text-gray-400">Fee change vs. current</span>
+                  <span className="text-muted-foreground">Fee change vs. current</span>
                   <span className={feeDelta >= 0 ? "text-red-400 font-mono" : "text-emerald-400 font-mono"}>
                     {feeDelta >= 0 ? "+" : ""}{fmtNGN(feeDelta)}
                   </span>
@@ -360,30 +360,30 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
             </div>
 
             {/* Margin impact */}
-            <div className="bg-gray-900/60 border border-gray-800 rounded-lg overflow-hidden">
-              <div className="px-3 py-2 bg-gray-800/50 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+            <div className="bg-card/60 border border-border rounded-lg overflow-hidden">
+              <div className="px-3 py-2 bg-secondary/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Margin Impact
               </div>
-              <div className="divide-y divide-gray-800">
+              <div className="divide-y divide-border">
                 <div className="flex justify-between px-3 py-2 text-sm">
-                  <span className="text-gray-400">Available margin</span>
+                  <span className="text-muted-foreground">Available margin</span>
                   <span className="text-white font-mono">
                     {marginData ? fmtNGN(availableMargin) : "Loading…"}
                   </span>
                 </div>
                 <div className="flex justify-between px-3 py-2 text-sm">
-                  <span className="text-gray-400">Margin required (10%)</span>
+                  <span className="text-muted-foreground">Margin required (10%)</span>
                   <span className="text-white font-mono">{fmtNGN(marginRequired)}</span>
                 </div>
                 <div className="flex justify-between px-3 py-2 text-sm">
-                  <span className="text-gray-400">Margin change</span>
+                  <span className="text-muted-foreground">Margin change</span>
                   <span className={marginDelta >= 0 ? "text-amber-400 font-mono" : "text-emerald-400 font-mono"}>
                     {marginDelta >= 0 ? "+" : ""}{fmtNGN(marginDelta)}
                   </span>
                 </div>
                 {marginData && (
                   <div className="flex justify-between px-3 py-2 text-sm">
-                    <span className="text-gray-400">Projected margin after</span>
+                    <span className="text-muted-foreground">Projected margin after</span>
                     <span className={marginInsufficient ? "text-red-400 font-mono" : "text-emerald-400 font-mono"}>
                       {fmtNGN(availableMargin - marginDelta)}
                     </span>
@@ -403,12 +403,12 @@ export default function AmendOrderModal({ order, open, onClose, onAmended }: Pro
               </div>
             )}
 
-            <Separator className="bg-gray-800" />
+            <Separator className="bg-secondary" />
 
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800 bg-transparent"
+                className="flex-1 border-border text-muted-foreground hover:bg-secondary bg-transparent"
                 onClick={() => setStep("entry")}
                 disabled={amendMutation.isPending}
               >

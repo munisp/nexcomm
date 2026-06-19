@@ -104,13 +104,13 @@ function MarginHealthIndicator({ onNavigate }: { onNavigate: (path: string) => v
           <AlertCircle className={`w-5 h-5 ${cfg.iconColor} flex-shrink-0 mt-0.5`} />
           <div className="flex-1 min-w-0">
             <p className={`text-sm font-semibold ${cfg.titleColor}`}>{cfg.title}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{cfg.desc}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{cfg.desc}</p>
             <div className="mt-2">
-              <div className="flex justify-between text-xs text-gray-400 mb-1">
+              <div className="flex justify-between text-xs text-muted-foreground mb-1">
                 <span>Margin Utilisation</span>
                 <span>{utilisationPct.toFixed(1)}%</span>
               </div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
+              <div className="w-full bg-muted rounded-full h-2">
                 <div
                   className={`h-2 rounded-full transition-all ${cfg.barColor}`}
                   style={{ width: `${Math.min(100, utilisationPct)}%` }}
@@ -120,13 +120,13 @@ function MarginHealthIndicator({ onNavigate }: { onNavigate: (path: string) => v
             {marginSummary && (
               <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
                 <div>
-                  <p className="text-gray-400">Available Margin</p>
+                  <p className="text-muted-foreground">Available Margin</p>
                   <p className="text-white font-medium">
                     {Number(marginSummary.availableMargin).toLocaleString("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 })}
                   </p>
                 </div>
                 <div>
-                  <p className="text-gray-400">Total Collateral</p>
+                  <p className="text-muted-foreground">Total Collateral</p>
                   <p className="text-white font-medium">
                     {Number(marginSummary.totalCollateral).toLocaleString("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 })}
                   </p>
@@ -138,7 +138,7 @@ function MarginHealthIndicator({ onNavigate }: { onNavigate: (path: string) => v
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-xs border-gray-600 text-gray-300 flex-1 bg-transparent"
+                  className="text-xs border-border text-muted-foreground flex-1 bg-transparent"
                   onClick={() => triggerMarginCall.mutate({ reason: "Acknowledged from Trader Dashboard", deadlineMinutes: 60 })}
                   disabled={triggerMarginCall.isPending}
                 >
@@ -161,7 +161,7 @@ function MarginHealthIndicator({ onNavigate }: { onNavigate: (path: string) => v
 }
 
 const KYC_BADGE: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  PENDING: { label: "Pending", color: "bg-gray-700 text-gray-200", icon: Clock },
+  PENDING: { label: "Pending", color: "bg-muted text-foreground", icon: Clock },
   UNDER_REVIEW: { label: "Under Review", color: "bg-yellow-700 text-yellow-200", icon: Clock },
   APPROVED: { label: "Approved", color: "bg-green-700 text-green-200", icon: CheckCircle2 },
   REJECTED: { label: "Rejected", color: "bg-red-700 text-red-200", icon: XCircle },
@@ -443,7 +443,7 @@ export default function TraderDashboard() {
                 <p className="text-xs text-blue-400">Account Status</p>
                 <p
                   className={`text-sm font-medium ${
-                    profile.accountStatus === "ACTIVE" ? "text-green-400" : "text-gray-400"
+                    profile.accountStatus === "ACTIVE" ? "text-green-400" : "text-muted-foreground"
                   }`}
                 >
                   {profile.accountStatus}
@@ -488,7 +488,7 @@ export default function TraderDashboard() {
                       View
                     </a>
                   ) : (
-                    <span className="text-xs text-gray-500">Not uploaded</span>
+                    <span className="text-xs text-muted-foreground">Not uploaded</span>
                   )}
                 </div>
               ))}
@@ -742,7 +742,7 @@ export default function TraderDashboard() {
                           <CheckCircle2 className="w-3 h-3" /> Uploaded
                         </span>
                       ) : (
-                        <span className="text-xs text-gray-500">No file chosen</span>
+                        <span className="text-xs text-muted-foreground">No file chosen</span>
                       )}
                     </div>
                   </div>

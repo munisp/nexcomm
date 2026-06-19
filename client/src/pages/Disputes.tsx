@@ -278,7 +278,7 @@ export default function Disputes() {
                         <td className="py-3 pr-4 text-muted-foreground text-xs">
                           <div>{new Date(d.createdAt).toLocaleDateString()}</div>
                           {(d as { slaDeadline?: string | Date | null }).slaDeadline && (
-                            <div className="text-xs text-slate-500 mt-0.5">
+                            <div className="text-xs text-muted-foreground mt-0.5">
                               SLA: {new Date((d as { slaDeadline: string | Date }).slaDeadline).toLocaleDateString()}
                             </div>
                           )}

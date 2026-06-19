@@ -89,32 +89,32 @@ export default function NigeriaChoropleth({ data, height = 260 }: NigeriaChoropl
 
       {/* Legend */}
       <div className="flex items-center gap-2 px-1">
-        <span className="text-xs text-slate-500">0 farms</span>
+        <span className="text-xs text-muted-foreground">0 farms</span>
         <div
           className="flex-1 h-2 rounded-full"
           style={{
             background: "linear-gradient(to right, #d1fae5, #065f46)",
           }}
         />
-        <span className="text-xs text-slate-500">{maxCount} farms</span>
+        <span className="text-xs text-muted-foreground">{maxCount} farms</span>
       </div>
 
       {/* Selected state detail */}
       {selectedState && (
-        <div className="bg-slate-700/60 rounded-lg px-3 py-2 flex items-center justify-between">
+        <div className="bg-muted/60 rounded-lg px-3 py-2 flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-white">{selectedState}</p>
             {selectedData ? (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 {selectedData.farmCount} farms · {selectedData.totalHectares.toFixed(0)} ha total · avg {selectedData.avgSize.toFixed(1)} ha
               </p>
             ) : (
-              <p className="text-xs text-slate-500">No farm data recorded</p>
+              <p className="text-xs text-muted-foreground">No farm data recorded</p>
             )}
           </div>
           <button
             onClick={() => setSelectedState(null)}
-            className="text-slate-500 hover:text-slate-300 text-xs ml-2"
+            className="text-muted-foreground hover:text-muted-foreground text-xs ml-2"
           >
             ✕
           </button>
@@ -128,12 +128,12 @@ export default function NigeriaChoropleth({ data, height = 260 }: NigeriaChoropl
             .sort((a, b) => b.farmCount - a.farmCount)
             .slice(0, 3)
             .map((row, i) => (
-              <div key={row.state} className="bg-slate-700/40 rounded px-2 py-1.5 text-center">
+              <div key={row.state} className="bg-muted/40 rounded px-2 py-1.5 text-center">
                 <div className="flex items-center justify-center gap-1 mb-0.5">
                   <span className="text-xs font-bold text-green-400">#{i + 1}</span>
                 </div>
                 <p className="text-xs text-white font-semibold truncate">{normalizeStateName(row.state)}</p>
-                <p className="text-xs text-slate-400">{row.farmCount} farms</p>
+                <p className="text-xs text-muted-foreground">{row.farmCount} farms</p>
               </div>
             ))}
         </div>

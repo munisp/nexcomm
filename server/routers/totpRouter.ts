@@ -56,20 +56,12 @@ interface TotpRecord {
   confirmedAt: Date | null;
   backupCodes: string | null; // JSON array of hashed codes
 }
-const _memStore = new Map<number, TotpRecord>();
 
 export const totpRouter = router({
   // Get current TOTP status for the logged-in user
   getStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) {
-      const record = _memStore.get(ctx.user.id);
-      return {
-        isEnabled: record?.isEnabled ?? false,
-        isSetup: !!record,
-        confirmedAt: record?.confirmedAt ?? null,
-      };
-    }
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
     const [record] = await db
       .select({
@@ -94,16 +86,7 @@ export const totpRouter = router({
     const qrDataUrl = await qrcode.toDataURL(otpauthUrl);
 
     const db = await getDb();
-    if (!db) {
-      // Use in-memory store
-      _memStore.set(ctx.user.id, {
-        secret,
-        isEnabled: false,
-        confirmedAt: null,
-        backupCodes: null,
-      });
-      return { secret, qrDataUrl, otpauthUrl, manualEntryKey: secret };
-    }
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
     // Upsert the secret (not yet enabled)
     const existing = await db
@@ -133,21 +116,7 @@ export const totpRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
 
-      if (!db) {
-        const record = _memStore.get(ctx.user.id);
-        if (!record) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "No TOTP secret found. Generate one first." });
-        }
-        const isValid = await verifyTotp(input.code, record.secret);
-        if (!isValid) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid TOTP code. Please try again." });
-        }
-        const backupCodes = generateBackupCodes();
-        record.isEnabled = true;
-        record.confirmedAt = new Date();
-        record.backupCodes = JSON.stringify(backupCodes.map(hashBackupCode));
-        return { success: true, backupCodes };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [record] = await db
         .select()
@@ -192,27 +161,7 @@ export const totpRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
 
-      if (!db) {
-        const record = _memStore.get(ctx.user.id);
-        if (!record || !record.isEnabled) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "TOTP is not enabled for this account." });
-        }
-        // Check backup codes first
-        if (input.code.length === 8 && record.backupCodes) {
-          const hashed = hashBackupCode(input.code.toUpperCase());
-          const stored: string[] = JSON.parse(record.backupCodes);
-          const idx = stored.indexOf(hashed);
-          if (idx !== -1) {
-            stored.splice(idx, 1);
-            record.backupCodes = JSON.stringify(stored);
-            return { success: true, method: "backup" as const, remaining: stored.length };
-          }
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid backup code." });
-        }
-        const isValidTotp = await verifyTotp(input.code, record.secret);
-        if (isValidTotp) return { success: true, method: "totp" as const };
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid TOTP code." });
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [record] = await db
         .select()
@@ -259,20 +208,7 @@ export const totpRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
 
-      if (!db) {
-        const record = _memStore.get(ctx.user.id);
-        if (!record || !record.isEnabled) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "TOTP is not enabled." });
-        }
-        const isValid = await verifyTotp(input.code, record.secret);
-        if (!isValid) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid TOTP code." });
-        }
-        record.isEnabled = false;
-        record.confirmedAt = null;
-        record.backupCodes = null;
-        return { success: true };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [record] = await db
         .select()
@@ -309,19 +245,7 @@ export const totpRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
 
-      if (!db) {
-        const record = _memStore.get(ctx.user.id);
-        if (!record || !record.isEnabled) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "TOTP is not enabled." });
-        }
-        const isValid = await verifyTotp(input.code, record.secret);
-        if (!isValid) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid TOTP code." });
-        }
-        const backupCodes = generateBackupCodes();
-        record.backupCodes = JSON.stringify(backupCodes.map(hashBackupCode));
-        return { success: true, backupCodes };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [record] = await db
         .select()
@@ -354,10 +278,7 @@ export const totpRouter = router({
         throw new TRPCError({ code: "FORBIDDEN" });
       }
       const db = await getDb();
-      if (!db) {
-        const record = _memStore.get(input.userId);
-        return { isEnabled: record?.isEnabled ?? false, confirmedAt: record?.confirmedAt ?? null };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [record] = await db
         .select({ isEnabled: totpSecrets.isEnabled, confirmedAt: totpSecrets.confirmedAt })

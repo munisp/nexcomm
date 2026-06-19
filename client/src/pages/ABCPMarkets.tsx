@@ -30,7 +30,7 @@ function formatNgn(v: string | number | null | undefined) {
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "bg-green-500/15 text-green-400 border-green-500/30",
-  MATURED: "bg-gray-500/15 text-gray-400 border-gray-500/30",
+  MATURED: "bg-gray-500/15 text-muted-foreground border-gray-500/30",
   PENDING_APPROVAL: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   DEFAULTED: "bg-red-500/15 text-red-400 border-red-500/30",
 };
@@ -57,7 +57,7 @@ export default function ABCPMarkets() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">ABCP Capital Markets</h1>
-            <p className="text-sm text-gray-400">Asset-Backed Commercial Paper — warehouse receipt securitisation</p>
+            <p className="text-sm text-muted-foreground">Asset-Backed Commercial Paper — warehouse receipt securitisation</p>
           </div>
         </div>
         <Badge variant="outline" className="border-amber-500/30 text-amber-400 bg-amber-500/10">
@@ -73,11 +73,11 @@ export default function ABCPMarkets() {
           { label: "Avg Yield", value: `${stats?.avgYieldPct ?? "14.8"}%`, icon: TrendingUp, color: "text-blue-400" },
           { label: "Coverage Ratio", value: `${stats?.avgCoverageRatioPct ?? "142"}%`, icon: Shield, color: "text-purple-400" },
         ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label} className="bg-[#111827] border-gray-700/50">
+          <Card key={label} className="bg-[#111827] border-border/50">
             <CardContent className="p-4 flex items-center gap-3">
               <Icon className={`w-8 h-8 ${color}`} />
               <div>
-                <p className="text-xs text-gray-400">{label}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
                 <p className="text-xl font-bold text-white">{value}</p>
               </div>
             </CardContent>
@@ -102,7 +102,7 @@ export default function ABCPMarkets() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-[#111827] border border-gray-700/50 mb-6">
+        <TabsList className="bg-[#111827] border border-border/50 mb-6">
           <TabsTrigger value="programs">Active Programs</TabsTrigger>
           <TabsTrigger value="trend">Issuance Trend</TabsTrigger>
         </TabsList>
@@ -110,8 +110,8 @@ export default function ABCPMarkets() {
         <TabsContent value="programs">
           <div className="space-y-4">
             {isLoading ? (
-              <Card className="bg-[#111827] border-gray-700/50">
-                <CardContent className="p-8 text-center text-gray-500">Loading programs…</CardContent>
+              <Card className="bg-[#111827] border-border/50">
+                <CardContent className="p-8 text-center text-muted-foreground">Loading programs…</CardContent>
               </Card>
             ) : programs.map((prog: any) => {
               const subscribed = parseFloat(prog.subscribedNgn ?? "0");
@@ -119,7 +119,7 @@ export default function ABCPMarkets() {
               const pct = Math.min(100, (subscribed / total) * 100);
   if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
               return (
-                <Card key={prog.id} className="bg-[#111827] border-gray-700/50 hover:border-amber-500/30 transition-colors">
+                <Card key={prog.id} className="bg-[#111827] border-border/50 hover:border-amber-500/30 transition-colors">
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between mb-4">
                       <div>
@@ -129,8 +129,8 @@ export default function ABCPMarkets() {
                             {prog.status}
                           </Badge>
                         </div>
-                        <p className="text-xs text-gray-400">{prog.spvName} · ISIN: {prog.isin}</p>
-                        <p className="text-xs text-gray-500 mt-1">{prog.collateralDescription}</p>
+                        <p className="text-xs text-muted-foreground">{prog.spvName} · ISIN: {prog.isin}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{prog.collateralDescription}</p>
                       </div>
                       <Dialog open={investDialog?.id === prog.id} onOpenChange={(o) => !o && setInvestDialog(null)}>
                         <DialogTrigger asChild>
@@ -139,21 +139,21 @@ export default function ABCPMarkets() {
                             Invest <ChevronRight className="w-3 h-3 ml-1" />
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="bg-[#111827] border-gray-700 text-white">
+                        <DialogContent className="bg-[#111827] border-border text-white">
                           <DialogHeader><DialogTitle>Invest in {prog.programName}</DialogTitle></DialogHeader>
                           <div className="space-y-4 mt-2">
                             <div className="bg-[#0a0e1a] rounded-lg p-3 space-y-1 text-sm">
-                              <div className="flex justify-between"><span className="text-gray-400">SPV</span><span>{prog.spvName}</span></div>
-                              <div className="flex justify-between"><span className="text-gray-400">Yield</span><span className="text-green-400 font-bold">{prog.yieldPct}% p.a.</span></div>
-                              <div className="flex justify-between"><span className="text-gray-400">Maturity</span><span>{prog.maturityDate ? new Date(prog.maturityDate).toLocaleDateString() : "—"}</span></div>
-                              <div className="flex justify-between"><span className="text-gray-400">LTV</span><span>{prog.ltvPct}%</span></div>
-                              <div className="flex justify-between"><span className="text-gray-400">Rating</span><span className="text-blue-300">{prog.creditRating} ({prog.ratingAgency})</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">SPV</span><span>{prog.spvName}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Yield</span><span className="text-green-400 font-bold">{prog.yieldPct}% p.a.</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Maturity</span><span>{prog.maturityDate ? new Date(prog.maturityDate).toLocaleDateString() : "—"}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">LTV</span><span>{prog.ltvPct}%</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Rating</span><span className="text-blue-300">{prog.creditRating} ({prog.ratingAgency})</span></div>
                             </div>
                             <div>
-                              <Label className="text-gray-300">Investment Amount (₦)</Label>
+                              <Label className="text-muted-foreground">Investment Amount (₦)</Label>
                               <Input value={investAmount} onChange={e => setInvestAmount(e.target.value)}
-                                className="bg-[#0a0e1a] border-gray-600 text-white mt-1" />
-                              <p className="text-xs text-gray-500 mt-1">Min: ₦{parseInt(prog.minInvestmentNgn ?? "5000000").toLocaleString()}</p>
+                                className="bg-[#0a0e1a] border-border text-white mt-1" />
+                              <p className="text-xs text-muted-foreground mt-1">Min: ₦{parseInt(prog.minInvestmentNgn ?? "5000000").toLocaleString()}</p>
                             </div>
                             <Button className="w-full bg-amber-600 hover:bg-amber-700" disabled={investMutation.isPending}
                               onClick={() => investMutation.mutate({ programName: prog.programName, sponsorName: prog.spvName ?? "NEXCOM SPV", programSizeNgn: investAmount, collateralType: "WAREHOUSE_RECEIPT", tenorDays: 90 })}>
@@ -165,28 +165,28 @@ export default function ABCPMarkets() {
                     </div>
                     <div className="grid grid-cols-4 gap-3 mb-4">
                       <div className="bg-[#0a0e1a] rounded p-2 text-center">
-                        <p className="text-xs text-gray-500">Total Issuance</p>
+                        <p className="text-xs text-muted-foreground">Total Issuance</p>
                         <p className="text-sm font-bold text-white">{formatNgn(prog.totalIssuanceNgn)}</p>
                       </div>
                       <div className="bg-[#0a0e1a] rounded p-2 text-center">
-                        <p className="text-xs text-gray-500">Subscribed</p>
+                        <p className="text-xs text-muted-foreground">Subscribed</p>
                         <p className="text-sm font-bold text-green-400">{formatNgn(prog.subscribedNgn)}</p>
                       </div>
                       <div className="bg-[#0a0e1a] rounded p-2 text-center">
-                        <p className="text-xs text-gray-500">Yield</p>
+                        <p className="text-xs text-muted-foreground">Yield</p>
                         <p className="text-sm font-bold text-amber-400">{prog.yieldPct}%</p>
                       </div>
                       <div className="bg-[#0a0e1a] rounded p-2 text-center">
-                        <p className="text-xs text-gray-500">LTV</p>
+                        <p className="text-xs text-muted-foreground">LTV</p>
                         <p className="text-sm font-bold text-blue-400">{prog.ltvPct}%</p>
                       </div>
                     </div>
                     <div>
-                      <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
                         <span>Subscription Progress</span>
                         <span>{pct.toFixed(1)}%</span>
                       </div>
-                      <Progress value={pct} className="h-2 bg-gray-700" />
+                      <Progress value={pct} className="h-2 bg-muted" />
                     </div>
                   </CardContent>
                 </Card>
@@ -196,7 +196,7 @@ export default function ABCPMarkets() {
         </TabsContent>
 
         <TabsContent value="trend">
-          <Card className="bg-[#111827] border-gray-700/50">
+          <Card className="bg-[#111827] border-border/50">
             <CardHeader><CardTitle className="text-white text-base">Monthly ABCP Issuance (₦B)</CardTitle></CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={320}>

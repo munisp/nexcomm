@@ -142,10 +142,10 @@ function AmendmentTimeline({ orderId }: { orderId: number }) {
     return (
       <div className="mt-6">
         <div className="flex items-center gap-2 mb-3">
-          <History className="w-4 h-4 text-slate-400" />
-          <span className="text-sm font-semibold text-slate-300">Amendment History</span>
+          <History className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-semibold text-muted-foreground">Amendment History</span>
         </div>
-        <div className="text-xs text-slate-500 animate-pulse">Loading history…</div>
+        <div className="text-xs text-muted-foreground animate-pulse">Loading history…</div>
       </div>
     );
   }
@@ -191,12 +191,12 @@ function AmendmentTimeline({ orderId }: { orderId: number }) {
     <div className="mt-6">
       <div className="flex items-center gap-2 mb-3">
         <History className="w-4 h-4 text-amber-400" />
-        <span className="text-sm font-semibold text-slate-300">Amendment History</span>
-        <span className="text-xs text-slate-500">({filtered.length}/{amendments.length})</span>
+        <span className="text-sm font-semibold text-muted-foreground">Amendment History</span>
+        <span className="text-xs text-muted-foreground">({filtered.length}/{amendments.length})</span>
         <button
           onClick={handleExportCsv}
           title="Export amendment history as CSV"
-          className="ml-auto flex items-center gap-1 text-[10px] text-slate-400 hover:text-amber-400 transition-colors px-2 py-0.5 rounded border border-slate-700 hover:border-amber-500/40"
+          className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground hover:text-amber-400 transition-colors px-2 py-0.5 rounded border border-border hover:border-amber-500/40"
         >
           <Download className="w-3 h-3" />
           Export CSV
@@ -204,30 +204,30 @@ function AmendmentTimeline({ orderId }: { orderId: number }) {
       </div>
       {/* Reason search */}
       <div className="relative mb-3">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
         <input
           type="text"
           placeholder="Search by reason…" value={reasonSearch} onChange={e => setReasonSearch(e.target.value)}
-          className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-800/60 border border-slate-700 rounded-md text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50"
+          className="w-full pl-8 pr-3 py-1.5 text-xs bg-secondary/60 border border-border rounded-md text-muted-foreground placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50"
         />
         {reasonSearch && (
           <button
             onClick={() => setReasonSearch("")}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
           >
             ×
           </button>
         )}
       </div>
       {filtered.length === 0 && (
-        <div className="text-xs text-slate-500 italic py-2">No amendments match your search.</div>
+        <div className="text-xs text-muted-foreground italic py-2">No amendments match your search.</div>
       )}
-      <div className="relative pl-4 border-l border-slate-700 space-y-4">
+      <div className="relative pl-4 border-l border-border space-y-4">
         {filtered.map((a, i) => (
           <div key={a.id} className="relative">
             {/* Timeline dot */}
             <div className="absolute -left-[1.35rem] top-1 w-2.5 h-2.5 rounded-full bg-amber-500/70 border border-amber-400" />
-            <div className="bg-slate-800/60 rounded-lg p-3 space-y-1.5">
+            <div className="bg-secondary/60 rounded-lg p-3 space-y-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wide">
@@ -239,27 +239,27 @@ function AmendmentTimeline({ orderId }: { orderId: number }) {
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[10px] text-muted-foreground">
                   {new Date(a.amendedAt).toLocaleString()}
                 </span>
               </div>
               {/* Qty change */}
               {a.oldQty !== a.newQty && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-400">Qty:</span>
+                  <span className="text-muted-foreground">Qty:</span>
                   <span className="font-mono text-red-400 line-through">{parseFloat(a.oldQty).toLocaleString()}</span>
-                  <span className="text-slate-500">→</span>
+                  <span className="text-muted-foreground">→</span>
                   <span className="font-mono text-emerald-400">{parseFloat(a.newQty).toLocaleString()}</span>
                 </div>
               )}
               {/* Price change */}
               {a.oldPrice !== a.newPrice && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-400">Price:</span>
+                  <span className="text-muted-foreground">Price:</span>
                   <span className="font-mono text-red-400 line-through">
                     {a.oldPrice != null ? parseFloat(a.oldPrice).toLocaleString(undefined, { maximumFractionDigits: 6 }) : "Market"}
                   </span>
-                  <span className="text-slate-500">→</span>
+                  <span className="text-muted-foreground">→</span>
                   <span className="font-mono text-emerald-400">
                     {a.newPrice != null ? parseFloat(a.newPrice).toLocaleString(undefined, { maximumFractionDigits: 6 }) : "Market"}
                   </span>
@@ -267,7 +267,7 @@ function AmendmentTimeline({ orderId }: { orderId: number }) {
               )}
               {/* Reason */}
               {a.reason && (
-                <div className="text-xs text-slate-400 italic">"{a.reason}"</div>
+                <div className="text-xs text-muted-foreground italic">"{a.reason}"</div>
               )}
             </div>
           </div>
@@ -419,7 +419,7 @@ function FillsLedger() {
                     className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                       isActive
                         ? "bg-emerald-600 text-white"
-                        : "bg-secondary text-slate-400 hover:bg-secondary/80 hover:text-white"
+                        : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-white"
                     }`}
                   >
                     {label}
@@ -429,7 +429,7 @@ function FillsLedger() {
             </div>
             {/* Date range pickers */}
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-slate-500 whitespace-nowrap">From</label>
+              <label className="text-xs text-muted-foreground whitespace-nowrap">From</label>
               <Input
                 type="date"
                 value={fromDate}
@@ -438,7 +438,7 @@ function FillsLedger() {
               />
             </div>
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-slate-500 whitespace-nowrap">To</label>
+              <label className="text-xs text-muted-foreground whitespace-nowrap">To</label>
               <Input
                 type="date"
                 value={toDate}
@@ -447,13 +447,13 @@ function FillsLedger() {
               />
             </div>
             {hasFilters && (
-              <Button variant="ghost" size="sm" className="h-9 text-xs text-slate-400 hover:text-white" onClick={clearFilters}>
+              <Button variant="ghost" size="sm" className="h-9 text-xs text-muted-foreground hover:text-white" onClick={clearFilters}>
                 Clear filters
               </Button>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">{total.toLocaleString()} fills</span>
+            <span className="text-xs text-muted-foreground">{total.toLocaleString()} fills</span>
             <Button
               variant="outline"
               size="sm"
@@ -491,9 +491,9 @@ function FillsLedger() {
         </div>
 
         {isLoading ? (
-          <div className="py-12 text-center text-sm text-slate-500 animate-pulse">Loading fills…</div>
+          <div className="py-12 text-center text-sm text-muted-foreground animate-pulse">Loading fills…</div>
         ) : fills.length === 0 ? (
-          <div className="py-12 text-center text-sm text-slate-500">
+          <div className="py-12 text-center text-sm text-muted-foreground">
             {symbolFilter ? `No fills found for "${symbolFilter}"` : "No trade fills yet."}
           </div>
         ) : (
@@ -503,15 +503,15 @@ function FillsLedger() {
               className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_80px_100px_100px_100px_80px_120px] gap-3 px-4 py-3 border-b border-border/50 hover:bg-secondary/30 transition-colors text-sm"
             >
               <span className="font-mono font-semibold text-white">{f.symbol}</span>
-              <span className="text-slate-400 text-xs">{f.assetClass}</span>
+              <span className="text-muted-foreground text-xs">{f.assetClass}</span>
               <span className={f.side === "BUY" ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>{f.side}</span>
               <span className="text-right font-mono">{parseFloat(String(f.filledQty)).toLocaleString()}</span>
               <span className="text-right font-mono">{parseFloat(String(f.fillPrice)).toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
-              <span className="text-right font-mono text-slate-300">{parseFloat(String(f.grossValue)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span className="text-right font-mono text-muted-foreground">{parseFloat(String(f.grossValue)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
               <span className="text-right font-mono text-amber-400 text-xs">
                 {parseFloat(String(f.side === "BUY" ? f.buyerFee : f.sellerFee)).toLocaleString(undefined, { maximumFractionDigits: 4 })}
               </span>
-              <span className="text-right text-xs text-slate-500">
+              <span className="text-right text-xs text-muted-foreground">
                 {new Date(f.createdAt).toLocaleString()}
               </span>
             </div>
@@ -525,7 +525,7 @@ function FillsLedger() {
           <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
             ← Prev
           </Button>
-          <span className="text-xs text-slate-500">Page {page + 1} of {totalPages}</span>
+          <span className="text-xs text-muted-foreground">Page {page + 1} of {totalPages}</span>
           <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
             Next →
           </Button>
@@ -998,7 +998,7 @@ export default function Orders() {
 
       {/* Order Detail Drawer */}
       <Sheet open={!!detailOrder} onOpenChange={(open) => !open && setDetailOrder(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-md bg-slate-900 border-slate-700 text-white overflow-y-auto">
+        <SheetContent side="right" className="w-full sm:max-w-md bg-card border-border text-white overflow-y-auto">
           {detailOrder && (() => {
             const sc = STATUS_CONFIG[detailOrder.status];
             const ac = ASSET_CLASS_CONFIG[detailOrder.assetClass];
@@ -1011,7 +1011,7 @@ export default function Orders() {
                     <span className={detailOrder.side === "BUY" ? "text-emerald-400" : "text-red-400"}>{detailOrder.side}</span>
                     <span>{detailOrder.symbol}</span>
                   </SheetTitle>
-                  <SheetDescription className="text-slate-400">Order #{detailOrder.id} · {ac.label}</SheetDescription>
+                  <SheetDescription className="text-muted-foreground">Order #{detailOrder.id} · {ac.label}</SheetDescription>
                 </SheetHeader>
 
                 {/* Status badge */}
@@ -1020,18 +1020,18 @@ export default function Orders() {
                     <StatusIcon className="w-4 h-4" />{sc.label}
                   </Badge>
                   {detailOrder.status === "PARTIALLY_FILLED" && (
-                    <span className="text-xs text-slate-400">{fillPct.toFixed(1)}% filled</span>
+                    <span className="text-xs text-muted-foreground">{fillPct.toFixed(1)}% filled</span>
                   )}
                 </div>
 
                 {/* Fill progress bar */}
                 {(detailOrder.status === "PARTIALLY_FILLED" || detailOrder.status === "FILLED") && (
                   <div className="mb-6">
-                    <div className="flex justify-between text-xs text-slate-400 mb-1">
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
                       <span>Fill progress</span>
                       <span>{detailOrder.filledQty} / {detailOrder.quantity}</span>
                     </div>
-                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full bg-emerald-500 rounded-full transition-all"
                         style={{ width: `${Math.min(fillPct, 100)}%` }}
@@ -1055,8 +1055,8 @@ export default function Orders() {
                     ["Avg Fill Price", detailOrder.avgFillPrice != null ? detailOrder.avgFillPrice.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—"],
                     ["Created At", detailOrder.createdAt],
                   ] as [string, string][]).map(([label, value]) => (
-                    <div key={label} className="flex justify-between items-center py-2 border-b border-slate-800">
-                      <span className="text-sm text-slate-400">{label}</span>
+                    <div key={label} className="flex justify-between items-center py-2 border-b border-border">
+                      <span className="text-sm text-muted-foreground">{label}</span>
                       <span className="text-sm font-mono text-white text-right">{value}</span>
                     </div>
                   ))}

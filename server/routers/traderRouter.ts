@@ -23,8 +23,6 @@ import {
 
 // ─── in-memory fallback stores (used when DB is unavailable, e.g. in tests) ─
 export const _memTraderProfiles = new Map<number, Record<string, unknown>>();
-let _memTraderIdSeq = 1;
-
 export const traderRouter = router({
   // ── registerTrader ──────────────────────────────────────────────────────────
   registerTrader: protectedProcedure
@@ -44,15 +42,7 @@ export const traderRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-                  if (!db) {
-        const existing = Array.from(_memTraderProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id);
-        if (existing) throw new TRPCError({ code: "CONFLICT", message: "Trader profile already exists for this user" });
-        const now = new Date();
-        const id = _memTraderIdSeq++;
-        const profile = { id, userId: ctx.user.id, fullName: input.fullName, phone: input.phone, nin: input.nin ?? null, bvn: input.bvn ?? null, tradingExperience: input.tradingExperience ?? null, riskProfile: input.riskProfile ?? null, capitalRange: input.capitalRange ?? null, preferredMarkets: input.preferredMarkets ?? null, kycStatus: "PENDING", accountStatus: "INACTIVE", kycDocuments: null, kycNotes: null, kycReviewedAt: null, kycReviewedBy: null, isActive: false, createdAt: now, updatedAt: now };
-        _memTraderProfiles.set(id, profile);
-        return profile;
-      }
+                  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       // Check if already registered
       const [existing] = await db
         .select({ id: traderProfiles.id })
@@ -85,10 +75,7 @@ export const traderRouter = router({
   getMyTraderProfile: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = Array.from(_memTraderProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id);
-        return profile ?? null;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db
         .select()
         .from(traderProfiles)
@@ -108,14 +95,7 @@ export const traderRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = Array.from(_memTraderProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id) as Record<string, unknown> | undefined;
-        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Trader profile not found. Please register first." });
-        profile.kycStatus = "UNDER_REVIEW";
-        profile.kycDocuments = JSON.stringify(input);
-        profile.updatedAt = new Date();
-        return { kycStatus: profile.kycStatus };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db
         .select()
         .from(traderProfiles)
@@ -391,18 +371,7 @@ export const traderRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = _memTraderProfiles.get(input.traderId) as Record<string, unknown> | undefined;
-        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Trader profile not found" });
-        profile.kycStatus = input.decision;
-        profile.accountStatus = input.decision === "APPROVED" ? "ACTIVE" : "INACTIVE";
-        profile.isActive = input.decision === "APPROVED";
-        profile.kycNotes = input.notes ?? null;
-        profile.kycReviewedAt = new Date();
-        profile.kycReviewedBy = ctx.user.id;
-        profile.updatedAt = new Date();
-        return { kycStatus: profile.kycStatus, accountStatus: profile.accountStatus };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db
         .select()
         .from(traderProfiles)
@@ -448,7 +417,7 @@ export const traderRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       let approved = 0, rejected = 0, failed = 0;
       const results: { id: number; status: string; error?: string }[] = [];
       for (const id of input.traderIds) {
@@ -487,17 +456,7 @@ export const traderRouter = router({
   adminGetTraderStats: adminProcedure
     .query(async () => {
       const db = await getDb();
-      if (!db) {
-        const all = Array.from(_memTraderProfiles.values()) as Record<string, unknown>[];
-        return {
-          total: all.length,
-          pending: all.filter(p => p.kycStatus === 'PENDING').length,
-          underReview: all.filter(p => p.kycStatus === 'UNDER_REVIEW').length,
-          approved: all.filter(p => p.kycStatus === 'APPROVED').length,
-          rejected: all.filter(p => p.kycStatus === 'REJECTED').length,
-          active: all.filter(p => p.accountStatus === 'ACTIVE').length,
-        };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [stats] = await db
         .select({
           total: sql<number>`COUNT(*)::int`,
@@ -556,15 +515,7 @@ export const traderRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = Array.from(_memTraderProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id) as Record<string, unknown> | undefined;
-        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Trader profile not found. Please register first." });
-        const kycSensitiveChanged =
-          (input.fullName !== undefined && input.fullName !== profile.fullName) ||
-          (input.phone !== undefined && input.phone !== profile.phone);
-        Object.assign(profile, input, { updatedAt: new Date() });
-        return { ...profile, kycResetDueToChange: kycSensitiveChanged && profile.kycStatus === "APPROVED" };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [existing] = await db
         .select()
         .from(traderProfiles)

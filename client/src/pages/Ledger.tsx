@@ -85,11 +85,11 @@ function AccountTypeBadge({ type }: { type: string }) {
     trading:   "bg-blue-500/15 text-blue-400 border-blue-500/30",
     settlement:"bg-purple-500/15 text-purple-400 border-purple-500/30",
     margin:    "bg-amber-500/15 text-amber-400 border-amber-500/30",
-    fee:       "bg-slate-500/15 text-slate-400 border-slate-500/30",
+    fee:       "bg-slate-500/15 text-muted-foreground border-slate-500/30",
     escrow:    "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
   };
   return (
-    <Badge className={`${colors[type] ?? "bg-slate-500/15 text-slate-400"} capitalize`}>
+    <Badge className={`${colors[type] ?? "bg-slate-500/15 text-muted-foreground"} capitalize`}>
       {type}
     </Badge>
   );

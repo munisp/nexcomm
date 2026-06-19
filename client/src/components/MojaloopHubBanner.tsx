@@ -64,10 +64,10 @@ export function MojaloopHubBanner() {
 
   // Banner config based on state
   let bannerConfig = {
-    bg: "bg-slate-800/80 border-slate-700",
-    icon: <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />,
+    bg: "bg-secondary/80 border-border",
+    icon: <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" />,
     label: "Checking Mojaloop Hub…",
-    labelColor: "text-slate-400",
+    labelColor: "text-muted-foreground",
     dot: "bg-slate-500",
   };
 
@@ -118,7 +118,7 @@ export function MojaloopHubBanner() {
 
         {/* Details — only when data is available */}
         {hub && !isLoading && (
-          <div className="hidden sm:flex items-center gap-3 text-slate-400 ml-2">
+          <div className="hidden sm:flex items-center gap-3 text-muted-foreground ml-2">
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {latencyMs}ms
@@ -153,7 +153,7 @@ export function MojaloopHubBanner() {
           size="sm"
           onClick={() => refetch()}
           disabled={isFetching}
-          className="h-6 w-6 p-0 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50"
           title="Refresh hub status"
         >
           <RefreshCw className={`w-3 h-3 ${isFetching ? "animate-spin" : ""}`} />
@@ -162,7 +162,7 @@ export function MojaloopHubBanner() {
           variant="ghost"
           size="sm"
           onClick={() => setDismissed(true)}
-          className="h-6 w-6 p-0 text-slate-500 hover:text-slate-200 hover:bg-slate-700/50"
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50"
           title="Dismiss"
         >
           <X className="w-3 h-3" />

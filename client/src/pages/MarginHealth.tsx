@@ -262,7 +262,7 @@ function StatusBadge({ status }: { status: MarginCallStatus }) {
     PARTIALLY_MET: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
     MET: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     DEFAULTED: "bg-red-900/40 text-red-300 border-red-700/50",
-    CANCELLED: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+    CANCELLED: "bg-zinc-500/20 text-muted-foreground border-zinc-500/30",
   };
   return (
     <Badge className={`text-xs border ${map[status] ?? ""}`}>

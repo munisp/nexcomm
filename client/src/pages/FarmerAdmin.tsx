@@ -28,7 +28,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { PageSkeleton } from "@/components/PageSkeleton";
 
 const KYC_COLORS: Record<string, string> = {
-  PENDING: "bg-slate-700 text-slate-300",
+  PENDING: "bg-muted text-muted-foreground",
   SUBMITTED: "bg-amber-900/60 text-amber-300 border-amber-700",
   UNDER_REVIEW: "bg-amber-900/60 text-amber-300 border-amber-700",
   APPROVED: "bg-green-900/60 text-green-300 border-green-700",
@@ -156,7 +156,7 @@ export default function FarmerAdmin() {
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Farmer Administration</h1>
-          <p className="text-slate-400 text-sm mt-1">Manage farmer onboarding, KYC approvals, and crop listings</p>
+          <p className="text-muted-foreground text-sm mt-1">Manage farmer onboarding, KYC approvals, and crop listings</p>
         </div>
 
         {/* Stats Row */}
@@ -167,11 +167,11 @@ export default function FarmerAdmin() {
             { label: "Total Farms", value: stats?.totalFarms, icon: MapPin, color: "text-green-400" },
             { label: "Active Listings", value: stats?.activeListings, icon: Wheat, color: "text-purple-400" },
           ].map(({ label, value, icon: Icon, color }) => (
-            <Card key={label} className="bg-slate-800 border-slate-700">
+            <Card key={label} className="bg-secondary border-border">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-1">
                   <Icon className={`w-4 h-4 ${color}`} />
-                  <p className="text-slate-400 text-xs">{label}</p>
+                  <p className="text-muted-foreground text-xs">{label}</p>
                 </div>
                 <p className="text-2xl font-bold text-white">{value ?? "—"}</p>
               </CardContent>
@@ -196,13 +196,13 @@ export default function FarmerAdmin() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-slate-800 rounded-lg p-1 w-fit">
+        <div className="flex gap-1 bg-secondary rounded-lg p-1 w-fit">
           {(["farmers", "listings"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${
-                activeTab === tab ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white"
+                activeTab === tab ? "bg-muted text-white" : "text-muted-foreground hover:text-white"
               }`}
             >
               {tab === "farmers" ? "Farmer KYC" : "Crop Listings"}
@@ -215,10 +215,10 @@ export default function FarmerAdmin() {
           <div className="space-y-4">
             <div className="flex gap-3 flex-wrap items-center">
               <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search by name or phone..." value={search} onChange={(e) => setSearch(e.target.value)}
-                  className="bg-slate-800 border-slate-700 text-white pl-9 h-9 text-sm w-64"
+                  className="bg-secondary border-border text-white pl-9 h-9 text-sm w-64"
                 />
               </div>
               <div className="flex gap-1 flex-wrap">
@@ -227,7 +227,7 @@ export default function FarmerAdmin() {
                     key={s ?? "ALL"}
                     onClick={() => { setKycFilter(s); setSelectedIds(new Set()); }}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      kycFilter === s ? "bg-green-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      kycFilter === s ? "bg-green-600 text-white" : "bg-secondary text-muted-foreground hover:bg-muted"
                     }`}
                   >
                     {s ?? "All"}
@@ -238,9 +238,9 @@ export default function FarmerAdmin() {
 
             {/* Bulk action bar */}
             {reviewableFarmers.length > 0 && (
-              <div className="flex items-center gap-3 p-3 bg-slate-800/60 border border-slate-700 rounded-lg">
+              <div className="flex items-center gap-3 p-3 bg-secondary/60 border border-border rounded-lg">
                 {/* Select all toggle */}
-                <button onClick={toggleAll} className="text-slate-400 hover:text-white transition-colors">
+                <button onClick={toggleAll} className="text-muted-foreground hover:text-white transition-colors">
                   {allSelected ? (
                     <CheckSquare className="w-4 h-4 text-green-400" />
                   ) : someSelected ? (
@@ -249,7 +249,7 @@ export default function FarmerAdmin() {
                     <Square className="w-4 h-4" />
                   )}
                 </button>
-                <span className="text-slate-400 text-xs flex-1">
+                <span className="text-muted-foreground text-xs flex-1">
                   {selectedIds.size > 0
                     ? `${selectedIds.size} selected`
                     : `${reviewableFarmers.length} reviewable`}
@@ -280,14 +280,14 @@ export default function FarmerAdmin() {
               </div>
             )}
 
-            <Card className="bg-slate-800 border-slate-700">
+            <Card className="bg-secondary border-border">
               <CardContent className="p-0">
                 {farmersQ.isLoading ? (
                   <div className="p-8 text-center">
-                    <RefreshCw className="w-6 h-6 text-slate-400 animate-spin mx-auto" />
+                    <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin mx-auto" />
                   </div>
                 ) : farmers.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-sm">No farmers found</div>
+                  <div className="p-8 text-center text-muted-foreground text-sm">No farmers found</div>
                 ) : (
                   <div className="divide-y divide-slate-700">
                     {farmers.map((farmer) => {
@@ -308,7 +308,7 @@ export default function FarmerAdmin() {
                             {isSelected ? (
                               <CheckSquare className="w-4 h-4 text-green-400" />
                             ) : (
-                              <Square className="w-4 h-4 text-slate-500" />
+                              <Square className="w-4 h-4 text-muted-foreground" />
                             )}
                           </button>
 
@@ -317,8 +317,8 @@ export default function FarmerAdmin() {
                             onClick={() => setExpandedFarmerId(prev => prev === farmer.id ? null : farmer.id)}
                           >
                             <p className="text-white font-medium truncate">{farmer.fullName}</p>
-                            <p className="text-slate-400 text-xs">{farmer.phone} · {farmer.lga}, {farmer.state}</p>
-                            {farmer.nin && <p className="text-slate-500 text-xs">NIN: {farmer.nin}</p>}
+                            <p className="text-muted-foreground text-xs">{farmer.phone} · {farmer.lga}, {farmer.state}</p>
+                            {farmer.nin && <p className="text-muted-foreground text-xs">NIN: {farmer.nin}</p>}
                           </div>
                           <Badge className={`${KYC_COLORS[farmer.kycStatus] ?? KYC_COLORS.PENDING} text-xs shrink-0`}>
                             {farmer.kycStatus}
@@ -352,23 +352,23 @@ export default function FarmerAdmin() {
                           )}
                           {/* Expandable Farm Locations Panel */}
                           {expandedFarmerId === farmer.id && (
-                            <div className="col-span-full mt-3 pt-3 border-t border-slate-700">
+                            <div className="col-span-full mt-3 pt-3 border-t border-border">
                               {farmerDetailQ.isLoading ? (
-                                <div className="flex items-center gap-2 text-slate-400 text-xs">
+                                <div className="flex items-center gap-2 text-muted-foreground text-xs">
                                   <RefreshCw className="w-3 h-3 animate-spin" />
                                   Loading farm data...
                                 </div>
                               ) : farmerDetailQ.data?.farms.length === 0 ? (
-                                <p className="text-slate-500 text-xs italic">No farms registered yet</p>
+                                <p className="text-muted-foreground text-xs italic">No farms registered yet</p>
                               ) : (
                                 <div className="space-y-3">
-                                  <p className="text-slate-300 text-xs font-semibold uppercase tracking-wide">
+                                  <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
                                     Registered Farms ({farmerDetailQ.data?.farms.length})
                                   </p>
                                   {farmerDetailQ.data?.farms.map(farm => {
                                     const nearbyCount = nearbyCountMap[farm.id];
                                     return (
-                                    <div key={farm.id} className="bg-slate-900/60 rounded-lg p-3 space-y-2">
+                                    <div key={farm.id} className="bg-card/60 rounded-lg p-3 space-y-2">
                                       <div className="flex items-center justify-between">
                                         <p className="text-white text-sm font-medium">{farm.farmName}</p>
                                         <div className="flex items-center gap-2">
@@ -376,15 +376,15 @@ export default function FarmerAdmin() {
                                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                                               nearbyCount > 3 ? 'bg-red-900/60 text-red-300 border border-red-700' :
                                               nearbyCount > 0 ? 'bg-amber-900/60 text-amber-300 border border-amber-700' :
-                                              'bg-slate-700 text-slate-400'
+                                              'bg-muted text-muted-foreground'
                                             }`}>
                                               {nearbyCount} nearby farm{nearbyCount !== 1 ? 's' : ''} (5 km)
                                             </span>
                                           )}
-                                          <span className="text-slate-400 text-xs">{parseFloat(farm.sizeHectares).toFixed(1)} ha · {farm.soilType}</span>
+                                          <span className="text-muted-foreground text-xs">{parseFloat(farm.sizeHectares).toFixed(1)} ha · {farm.soilType}</span>
                                         </div>
                                       </div>
-                                      <div className="flex items-center gap-1 text-xs text-slate-400">
+                                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                         <MapPin className="w-3 h-3 text-green-400" />
                                         <span>{farm.lga}, {farm.state}</span>
                                         {farm.latitude && farm.longitude && (
@@ -426,7 +426,7 @@ export default function FarmerAdmin() {
                   key={s ?? "ALL"}
                   onClick={() => setListingFilter(s)}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                    listingFilter === s ? "bg-green-600 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                    listingFilter === s ? "bg-green-600 text-white" : "bg-secondary text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   {s ?? "All"}
@@ -434,28 +434,28 @@ export default function FarmerAdmin() {
               ))}
             </div>
 
-            <Card className="bg-slate-800 border-slate-700">
+            <Card className="bg-secondary border-border">
               <CardContent className="p-0">
                 {listingsQ.isLoading ? (
                   <div className="p-8 text-center">
-                    <RefreshCw className="w-6 h-6 text-slate-400 animate-spin mx-auto" />
+                    <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin mx-auto" />
                   </div>
                 ) : listings.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-sm">No listings found</div>
+                  <div className="p-8 text-center text-muted-foreground text-sm">No listings found</div>
                 ) : (
                   <div className="divide-y divide-slate-700">
                     {listings.map((listing) => (
                       <div key={listing.id} className="p-4 flex items-center gap-4">
                         <div className="flex-1 min-w-0">
                           <p className="text-white font-medium">{listing.cropType.replace(/_/g, " ")}</p>
-                          <p className="text-slate-400 text-xs">
+                          <p className="text-muted-foreground text-xs">
                             {parseFloat(listing.quantityKg).toLocaleString()} kg · ₦{parseFloat(listing.askingPricePerKg).toLocaleString()}/kg
                           </p>
                         </div>
                         <Badge className={
                           listing.status === "ACTIVE"
                             ? "bg-green-900/60 text-green-300 border-green-700 text-xs"
-                            : "bg-slate-700 text-slate-400 text-xs"
+                            : "bg-muted text-muted-foreground text-xs"
                         }>
                           {listing.status}
                         </Badge>
@@ -471,20 +471,20 @@ export default function FarmerAdmin() {
 
             {stats && (
               <div className="grid grid-cols-2 gap-4">
-                <Card className="bg-slate-800 border-slate-700">
+                <Card className="bg-secondary border-border">
                   <CardContent className="p-4 text-center">
                     <p className="text-2xl font-bold text-amber-400">
                       {(stats.totalQuantityKg / 1000).toFixed(1)}t
                     </p>
-                    <p className="text-slate-400 text-xs mt-1">Total Volume</p>
+                    <p className="text-muted-foreground text-xs mt-1">Total Volume</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-slate-800 border-slate-700">
+                <Card className="bg-secondary border-border">
                   <CardContent className="p-4 text-center">
                     <p className="text-2xl font-bold text-green-400">
                       ₦{(stats.totalValueNGN / 1_000_000).toFixed(1)}M
                     </p>
-                    <p className="text-slate-400 text-xs mt-1">Total Value</p>
+                    <p className="text-muted-foreground text-xs mt-1">Total Value</p>
                   </CardContent>
                 </Card>
               </div>

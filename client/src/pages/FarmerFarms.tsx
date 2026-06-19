@@ -227,13 +227,13 @@ export default function FarmerFarms() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto">
       {/* Header */}
-      <div className="p-4 flex items-center gap-3 border-b border-slate-800">
-        <button onClick={() => navigate("/farmer-dashboard")} className="text-slate-400 hover:text-white">
+      <div className="p-4 flex items-center gap-3 border-b border-border">
+        <button onClick={() => navigate("/farmer-dashboard")} className="text-muted-foreground hover:text-white">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="flex-1">
           <h2 className="text-white font-semibold">My Farms</h2>
-          <p className="text-slate-400 text-xs">{farms.length} farm{farms.length !== 1 ? "s" : ""} registered</p>
+          <p className="text-muted-foreground text-xs">{farms.length} farm{farms.length !== 1 ? "s" : ""} registered</p>
         </div>
         <Button
           size="sm"
@@ -247,47 +247,47 @@ export default function FarmerFarms() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
         {/* Add Farm Form */}
         {showForm && (
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-secondary border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-white text-sm">New Farm Details</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleAdd} className="space-y-3">
                 <div className="space-y-1">
-                  <Label className="text-slate-300 text-xs">Farm Name *</Label>
+                  <Label className="text-muted-foreground text-xs">Farm Name *</Label>
                   <Input
                     placeholder="e.g. Musa's Maize Farm"
                     value={addForm.farmName}
                     onChange={(e) => setAddForm((f) => ({ ...f, farmName: e.target.value }))}
-                    className="bg-slate-700 border-slate-600 text-white h-9 text-sm"
+                    className="bg-muted border-border text-white h-9 text-sm"
                     required
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-slate-300 text-xs">State *</Label>
+                    <Label className="text-muted-foreground text-xs">State *</Label>
                     <Input
                       placeholder="e.g. Kano"
                       value={addForm.state}
                       onChange={(e) => setAddForm((f) => ({ ...f, state: e.target.value }))}
-                      className="bg-slate-700 border-slate-600 text-white h-9 text-sm"
+                      className="bg-muted border-border text-white h-9 text-sm"
                       required
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-slate-300 text-xs">LGA *</Label>
+                    <Label className="text-muted-foreground text-xs">LGA *</Label>
                     <Input
                       placeholder="e.g. Kano Municipal"
                       value={addForm.lga}
                       onChange={(e) => setAddForm((f) => ({ ...f, lga: e.target.value }))}
-                      className="bg-slate-700 border-slate-600 text-white h-9 text-sm"
+                      className="bg-muted border-border text-white h-9 text-sm"
                       required
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-slate-300 text-xs">Size (hectares) *</Label>
+                    <Label className="text-muted-foreground text-xs">Size (hectares) *</Label>
                     <Input
                       type="number"
                       step="0.1"
@@ -295,51 +295,51 @@ export default function FarmerFarms() {
                       placeholder="e.g. 5.5"
                       value={addForm.sizeHectares}
                       onChange={(e) => setAddForm((f) => ({ ...f, sizeHectares: e.target.value }))}
-                      className="bg-slate-700 border-slate-600 text-white h-9 text-sm"
+                      className="bg-muted border-border text-white h-9 text-sm"
                       required
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-slate-300 text-xs">Soil Type</Label>
+                    <Label className="text-muted-foreground text-xs">Soil Type</Label>
                     <select
                       value={addForm.soilType}
                       onChange={(e) => setAddForm((f) => ({ ...f, soilType: e.target.value as SoilType }))}
-                      className="w-full h-9 bg-slate-700 border border-slate-600 text-white rounded-md px-2 text-sm"
+                      className="w-full h-9 bg-muted border border-border text-white rounded-md px-2 text-sm"
                     >
                       {SOIL_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-slate-300 text-xs">Description (optional)</Label>
+                  <Label className="text-muted-foreground text-xs">Description (optional)</Label>
                   <Input
                     placeholder="e.g. Along Hadejia Road, irrigated"
                     value={addForm.description}
                     onChange={(e) => setAddForm((f) => ({ ...f, description: e.target.value }))}
-                    className="bg-slate-700 border-slate-600 text-white h-9 text-sm"
+                    className="bg-muted border-border text-white h-9 text-sm"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-slate-300 text-xs">Latitude (optional)</Label>
+                    <Label className="text-muted-foreground text-xs">Latitude (optional)</Label>
                     <Input
                       type="number"
                       step="0.000001"
                       placeholder="e.g. 11.9964"
                       value={addForm.latitude}
                       onChange={(e) => setAddForm((f) => ({ ...f, latitude: e.target.value }))}
-                      className="bg-slate-700 border-slate-600 text-white h-9 text-sm"
+                      className="bg-muted border-border text-white h-9 text-sm"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-slate-300 text-xs">Longitude (optional)</Label>
+                    <Label className="text-muted-foreground text-xs">Longitude (optional)</Label>
                     <Input
                       type="number"
                       step="0.000001"
                       placeholder="e.g. 8.5167"
                       value={addForm.longitude}
                       onChange={(e) => setAddForm((f) => ({ ...f, longitude: e.target.value }))}
-                      className="bg-slate-700 border-slate-600 text-white h-9 text-sm"
+                      className="bg-muted border-border text-white h-9 text-sm"
                     />
                   </div>
                 </div>
@@ -361,11 +361,11 @@ export default function FarmerFarms() {
             <Sprout className="w-8 h-8 text-green-400 animate-pulse mx-auto" />
           </div>
         ) : farms.length === 0 && !showForm ? (
-          <Card className="bg-slate-800/50 border-slate-700 border-dashed">
+          <Card className="bg-secondary/50 border-border border-dashed">
             <CardContent className="p-8 text-center">
-              <MapPin className="w-10 h-10 text-slate-500 mx-auto mb-3" />
+              <MapPin className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
               <p className="text-white font-medium mb-1">No farms added yet</p>
-              <p className="text-slate-400 text-sm mb-4">Add your first farm to start listing crops</p>
+              <p className="text-muted-foreground text-sm mb-4">Add your first farm to start listing crops</p>
               <Button
                 onClick={() => setShowForm(true)}
                 className="bg-green-600 hover:bg-green-700 text-white"
@@ -378,14 +378,14 @@ export default function FarmerFarms() {
         ) : (
           <div className="space-y-3">
             {farms.map((farm) => (
-              <Card key={farm.id} className="bg-slate-800 border-slate-700">
+              <Card key={farm.id} className="bg-secondary border-border">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-semibold truncate">{farm.farmName}</p>
                       <div className="flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                        <p className="text-slate-400 text-xs truncate">{farm.lga}, {farm.state}</p>
+                        <MapPin className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                        <p className="text-muted-foreground text-xs truncate">{farm.lga}, {farm.state}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 ml-2">
@@ -395,14 +395,14 @@ export default function FarmerFarms() {
                       </Badge>
                       <button
                         onClick={() => openEdit(farm)}
-                        className="text-slate-400 hover:text-white transition-colors p-1 rounded"
+                        className="text-muted-foreground hover:text-white transition-colors p-1 rounded"
                         title="Edit farm"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => setDeleteFarmId(farm.id)}
-                        className="text-slate-400 hover:text-red-400 transition-colors p-1 rounded"
+                        className="text-muted-foreground hover:text-red-400 transition-colors p-1 rounded"
                         title="Delete farm"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -410,23 +410,23 @@ export default function FarmerFarms() {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+                    <div className="bg-muted/50 rounded-lg p-2 text-center">
                       <Ruler className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
                       <p className="text-white text-xs font-semibold">{parseFloat(farm.sizeHectares).toFixed(1)} ha</p>
-                      <p className="text-slate-500 text-xs">Size</p>
+                      <p className="text-muted-foreground text-xs">Size</p>
                     </div>
-                    <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+                    <div className="bg-muted/50 rounded-lg p-2 text-center">
                       <Sprout className="w-3.5 h-3.5 text-green-400 mx-auto mb-0.5" />
                       <p className="text-white text-xs font-semibold">{farm.soilType}</p>
-                      <p className="text-slate-500 text-xs">Soil</p>
+                      <p className="text-muted-foreground text-xs">Soil</p>
                     </div>
                   </div>
                   {farm.description && (
-                    <p className="text-slate-400 text-xs mt-2">{farm.description}</p>
+                    <p className="text-muted-foreground text-xs mt-2">{farm.description}</p>
                   )}
                   {farm.latitude && farm.longitude && (
                     <div className="mt-3 space-y-1">
-                      <div className="flex items-center gap-1 text-xs text-slate-400">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <MapPin className="w-3 h-3 text-green-400" />
                         <span className="font-mono text-green-400">
                           {Number(farm.latitude).toFixed(5)}, {Number(farm.longitude).toFixed(5)}
@@ -455,7 +455,7 @@ export default function FarmerFarms() {
         )}
 
         {/* ── Sedona Spatial Analytics Panel ───────────────────────────────── */}
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="bg-secondary border-border">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm text-green-400 flex items-center gap-2">
@@ -465,7 +465,7 @@ export default function FarmerFarms() {
               <button
                 onClick={() => fetchSpatialData(spatialTab)}
                 disabled={spatialLoading}
-                className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-white transition-colors"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${spatialLoading ? "animate-spin" : ""}`} />
               </button>
@@ -479,7 +479,7 @@ export default function FarmerFarms() {
                   className={`flex-1 py-1 text-xs rounded transition-colors capitalize ${
                     spatialTab === tab
                       ? "bg-green-700 text-white"
-                      : "bg-slate-700 text-slate-400 hover:text-white"
+                      : "bg-muted text-muted-foreground hover:text-white"
                   }`}
                 >
                   {tab === "heatmap" ? "State Heatmap" : tab === "clusters" ? "Farm Clusters" : "Nearby Farms"}
@@ -500,7 +500,7 @@ export default function FarmerFarms() {
             ) : spatialTab === "heatmap" ? (
               <div>
                 {heatmapData.length === 0 ? (
-                  <p className="text-xs text-slate-500 py-3 text-center">No farm data available — add farms to see the map</p>
+                  <p className="text-xs text-muted-foreground py-3 text-center">No farm data available — add farms to see the map</p>
                 ) : (
                   <NigeriaChoropleth data={heatmapData} height={240} />
                 )}
@@ -508,15 +508,15 @@ export default function FarmerFarms() {
             ) : spatialTab === "clusters" ? (
               <div className="space-y-2">
                 {clusterData.length === 0 ? (
-                  <p className="text-xs text-slate-500 py-3 text-center">No cluster data available</p>
+                  <p className="text-xs text-muted-foreground py-3 text-center">No cluster data available</p>
                 ) : (
                   clusterData.map(cluster => (
-                    <div key={cluster.clusterId} className="flex items-center justify-between bg-slate-700/50 rounded px-2.5 py-1.5">
+                    <div key={cluster.clusterId} className="flex items-center justify-between bg-muted/50 rounded px-2.5 py-1.5">
                       <div className="flex items-center gap-2">
                         <span className="w-5 h-5 rounded-full bg-green-600 flex items-center justify-center text-xs text-white font-bold">{cluster.clusterId}</span>
                         <div>
                           <p className="text-xs text-white font-mono">{cluster.centerLat.toFixed(2)}°N, {cluster.centerLng.toFixed(2)}°E</p>
-                          <p className="text-xs text-slate-400">{cluster.farmCount} farms · {cluster.totalHectares.toFixed(0)} ha</p>
+                          <p className="text-xs text-muted-foreground">{cluster.farmCount} farms · {cluster.totalHectares.toFixed(0)} ha</p>
                         </div>
                       </div>
                       <TrendingUp className="w-3.5 h-3.5 text-green-400" />
@@ -527,17 +527,17 @@ export default function FarmerFarms() {
             ) : (
               <div className="space-y-2">
                 {nearbyFarms.length === 0 ? (
-                  <p className="text-xs text-slate-500 py-3 text-center">No nearby farms found within 50 km</p>
+                  <p className="text-xs text-muted-foreground py-3 text-center">No nearby farms found within 50 km</p>
                 ) : (
                   nearbyFarms.map(farm => (
-                    <div key={farm.farmId} className="flex items-center justify-between bg-slate-700/50 rounded px-2.5 py-1.5">
+                    <div key={farm.farmId} className="flex items-center justify-between bg-muted/50 rounded px-2.5 py-1.5">
                       <div>
                         <p className="text-xs text-white font-semibold">{farm.farmName}</p>
-                        <p className="text-xs text-slate-400">{farm.ownerName} · {farm.state}</p>
+                        <p className="text-xs text-muted-foreground">{farm.ownerName} · {farm.state}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-green-400 font-mono">{farm.distanceKm.toFixed(1)} km</p>
-                        <p className="text-xs text-slate-400">{farm.sizeHectares} ha</p>
+                        <p className="text-xs text-muted-foreground">{farm.sizeHectares} ha</p>
                       </div>
                     </div>
                   ))
@@ -549,7 +549,7 @@ export default function FarmerFarms() {
       </div>
 
       {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-slate-900 border-t border-slate-800 flex">
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card border-t border-border flex">
         {[
           { icon: Sprout, label: "Home", path: "/farmer-dashboard" },
           { icon: MapPin, label: "Farms", path: "/farmer-farms", active: true },
@@ -561,7 +561,7 @@ export default function FarmerFarms() {
             key={label}
             onClick={() => navigate(path)}
             className={`flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors ${
-              active ? "text-green-400" : "text-slate-400 hover:text-white"
+              active ? "text-green-400" : "text-muted-foreground hover:text-white"
             }`}
           >
             <Icon className="w-5 h-5" />

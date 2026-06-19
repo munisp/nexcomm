@@ -2,13 +2,14 @@
  * AISearchBar — natural language search powered by LLM + PostgreSQL
  * Accepts a free-text query, calls trpc.search.aiSearch, renders result cards
  * grouped by entity type (Orders, Listings, Users).
+ * Shows persisted search history chips when the input is empty.
  */
 import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, X, TrendingUp, ShoppingCart, User, Package } from "lucide-react";
+import { Search, X, TrendingUp, ShoppingCart, User, Package, Clock } from "lucide-react";
 import { useLocation } from "wouter";
 
 // ── Entity type icon ──────────────────────────────────────────────────────────
@@ -64,10 +65,13 @@ export function AISearchBar({
 
   const { data, isFetching } = trpc.search.aiSearch.useQuery(
     { query: debouncedQuery },
-    {
-      enabled: debouncedQuery.trim().length >= 2,
-    }
+    { enabled: debouncedQuery.trim().length >= 2 }
   );
+
+  // Fetch persisted search history (shown when input is empty)
+  const { data: historyRows } = trpc.search.searchHistory.useQuery(undefined, {
+    staleTime: 30_000,
+  });
 
   const results = data?.results ?? [];
   const parsedIntent = data?.parsedIntent;
@@ -90,6 +94,18 @@ export function AISearchBar({
       onClose?.();
     }
   };
+
+  const applyHistoryQuery = (q: string) => {
+    setQuery(q);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setDebouncedQuery(q);
+  };
+
+  const showHistory =
+    !isFetching &&
+    debouncedQuery.trim().length < 2 &&
+    query.trim().length === 0 &&
+    (historyRows?.length ?? 0) > 0;
 
   return (
     <div className="flex flex-col gap-3 w-full">
@@ -192,8 +208,30 @@ export function AISearchBar({
         </div>
       )}
 
-      {/* Empty state — before typing */}
-      {!isFetching && debouncedQuery.trim().length < 2 && query.trim().length === 0 && (
+      {/* Recent search history chips */}
+      {showHistory && (
+        <div className="px-1">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <Clock className="h-3 w-3" />
+            Recent searches
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {historyRows!.map((row) => (
+              <button
+                key={row.id}
+                onClick={() => applyHistoryQuery(row.query)}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              >
+                <Clock className="h-3 w-3 shrink-0" />
+                <span className="max-w-[180px] truncate">{row.query}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state — before typing, no history */}
+      {!isFetching && debouncedQuery.trim().length < 2 && query.trim().length === 0 && !showHistory && (
         <div className="px-1 py-4 text-center text-xs text-muted-foreground">
           Try: &ldquo;my open maize orders&rdquo;, &ldquo;soybean listings under ₦500&rdquo;, &ldquo;BUY orders this week&rdquo;
         </div>

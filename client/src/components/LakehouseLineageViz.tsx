@@ -50,7 +50,7 @@ const LAYER_STYLE: Record<string, { bg: string; border: string; text: string; ba
     bg: "rgba(51,65,85,0.45)",
     border: "#475569",
     text: "#cbd5e1",
-    badge: "bg-slate-600/40 text-slate-200 border-slate-500/50",
+    badge: "bg-slate-600/40 text-foreground border-slate-500/50",
   },
   gold: {
     bg: "rgba(113,63,18,0.35)",

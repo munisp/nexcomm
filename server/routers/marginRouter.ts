@@ -22,6 +22,7 @@ import {
   warehouseReceipts,
 } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { users } from "../../drizzle/schema";
 import { writeAuditLog } from "../audit";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -289,6 +290,23 @@ export const marginRouter = router({
   getSummary: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return {
+      account: null,
+      totalCollateral: 0,
+      usedMargin: 0,
+      availableMargin: 0,
+      utilisationPct: 0,
+      marginCallLevel: 20,
+      isMarginCall: false,
+      cashBalance: 0,
+    };
+
+    // Guard: if user doesn't exist in DB (e.g. test cleanup), return zero defaults
+    const [userRow] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, ctx.user.id))
+      .limit(1);
+    if (!userRow) return {
       account: null,
       totalCollateral: 0,
       usedMargin: 0,

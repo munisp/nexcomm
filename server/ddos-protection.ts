@@ -12,7 +12,7 @@
  */
 
 import type { Request, Response, NextFunction, Application } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import slowDown from "express-slow-down";
 // @ts-ignore
 import hpp from "hpp";
@@ -26,7 +26,7 @@ export const publicReadLimiter = rateLimit({
   max: 120,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip ?? "unknown",
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
   message: { error: "Rate limit exceeded on public endpoints.", code: "RATE_LIMIT_PUBLIC" },
   skip: (req) => req.path === "/api/health" || req.path === "/api/trpc/health.check",
 });
@@ -40,7 +40,7 @@ export const authenticatedLimiter = rateLimit({
   keyGenerator: (req) => {
     // Key by session cookie if available, else IP
     const sessionId = (req.cookies as Record<string, string>)?.["app_session_id"];
-    return sessionId ? `sess:${sessionId}` : `ip:${req.ip ?? "unknown"}`;
+    return sessionId ? `sess:${sessionId}` : `ip:${ipKeyGenerator(req.ip ?? "")}`;
   },
   message: { error: "Rate limit exceeded. Please slow down.", code: "RATE_LIMIT_AUTH" },
 });
@@ -53,7 +53,7 @@ export const tradingLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const sessionId = (req.cookies as Record<string, string>)?.["app_session_id"];
-    return `trade:${sessionId ?? req.ip ?? "unknown"}`;
+    return `trade:${sessionId ?? ipKeyGenerator(req.ip ?? "")}`;
   },
   message: { error: "Trading rate limit exceeded. Maximum 60 orders per minute.", code: "RATE_LIMIT_TRADING" },
 });
@@ -66,7 +66,7 @@ export const transferLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const sessionId = (req.cookies as Record<string, string>)?.["app_session_id"];
-    return `transfer:${sessionId ?? req.ip ?? "unknown"}`;
+    return `transfer:${sessionId ?? ipKeyGenerator(req.ip ?? "")}`;
   },
   message: { error: "Transfer rate limit exceeded. Maximum 10 transfers per minute.", code: "RATE_LIMIT_TRANSFER" },
 });
@@ -79,7 +79,7 @@ export const uploadLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const sessionId = (req.cookies as Record<string, string>)?.["app_session_id"];
-    return `upload:${sessionId ?? req.ip ?? "unknown"}`;
+    return `upload:${sessionId ?? ipKeyGenerator(req.ip ?? "")}`;
   },
   message: { error: "Upload rate limit exceeded. Maximum 5 uploads per hour.", code: "RATE_LIMIT_UPLOAD" },
 });
@@ -92,7 +92,7 @@ export const progressiveSlowdown = slowDown({
   delayAfter: 100,
   delayMs: (used) => (used - 100) * 500, // 500ms per request above 100
   maxDelayMs: 10000, // max 10s delay
-  keyGenerator: (req) => req.ip ?? "unknown",
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
 });
 
 // ── 3. Slow Loris / Connection Timeout Enforcement ───────────────────────────
@@ -153,7 +153,7 @@ const TRACKER_TTL_MS = 60 * 60 * 1000; // 1 hour TTL
 
 export function botDetectionMiddleware(req: Request, res: Response, next: NextFunction): void {
   const ua = req.headers["user-agent"] ?? "";
-  const ip = req.ip ?? "unknown";
+  const ip = ipKeyGenerator(req.ip ?? "");
 
   // Check if IP is already blocked
   const tracker = suspiciousIpTracker.get(ip);
@@ -226,7 +226,7 @@ export function orderVelocityGuard(req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  const sessionId = (req.cookies as Record<string, string>)?.["app_session_id"] ?? req.ip ?? "unknown";
+  const sessionId = (req.cookies as Record<string, string>)?.["app_session_id"] ?? ipKeyGenerator(req.ip ?? "");
   const now = Date.now();
   const tracker = orderVelocityTracker.get(sessionId);
 

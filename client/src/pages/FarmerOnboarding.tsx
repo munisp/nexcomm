@@ -164,43 +164,43 @@ function StepPersonal({ data, onChange }: { data: PersonalInfo; onChange: (d: Pe
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label htmlFor="fullName" className="text-slate-300">Full Legal Name <span className="text-red-400">*</span></Label>
+          <Label htmlFor="fullName" className="text-muted-foreground">Full Legal Name <span className="text-red-400">*</span></Label>
           <Input id="fullName" placeholder="As on NIN card" value={data.fullName} onChange={set("fullName")}
-            className="bg-slate-800 border-slate-600 text-white h-11" />
+            className="bg-secondary border-border text-white h-11" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="phone" className="text-slate-300">Phone Number <span className="text-red-400">*</span></Label>
+          <Label htmlFor="phone" className="text-muted-foreground">Phone Number <span className="text-red-400">*</span></Label>
           <Input id="phone" type="tel" placeholder="08012345678" value={data.phone} onChange={set("phone")}
-            className="bg-slate-800 border-slate-600 text-white h-11" />
+            className="bg-secondary border-border text-white h-11" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="nin" className="text-slate-300">NIN (optional)</Label>
+          <Label htmlFor="nin" className="text-muted-foreground">NIN (optional)</Label>
           <Input id="nin" placeholder="11-digit NIN" maxLength={11} value={data.nin} onChange={set("nin")}
-            className="bg-slate-800 border-slate-600 text-white h-11" />
+            className="bg-secondary border-border text-white h-11" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="bvn" className="text-slate-300">BVN (optional)</Label>
+          <Label htmlFor="bvn" className="text-muted-foreground">BVN (optional)</Label>
           <Input id="bvn" placeholder="11-digit BVN" maxLength={11} value={data.bvn} onChange={set("bvn")}
-            className="bg-slate-800 border-slate-600 text-white h-11" />
+            className="bg-secondary border-border text-white h-11" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="state" className="text-slate-300">State <span className="text-red-400">*</span></Label>
+          <Label htmlFor="state" className="text-muted-foreground">State <span className="text-red-400">*</span></Label>
           <Select value={data.state} onValueChange={v => onChange({ ...data, state: v })}>
-            <SelectTrigger id="state" className="bg-slate-800 border-slate-600 text-white h-11">
+            <SelectTrigger id="state" className="bg-secondary border-border text-white h-11">
               <SelectValue placeholder="Select state" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
+            <SelectContent className="bg-secondary border-border">
               {NIGERIAN_STATES.map(s => <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="lga" className="text-slate-300">LGA <span className="text-red-400">*</span></Label>
+          <Label htmlFor="lga" className="text-muted-foreground">LGA <span className="text-red-400">*</span></Label>
           <Input id="lga" placeholder="Local Government Area" value={data.lga} onChange={set("lga")}
-            className="bg-slate-800 border-slate-600 text-white h-11" />
+            className="bg-secondary border-border text-white h-11" />
         </div>
       </div>
-      <p className="text-xs text-slate-500 flex items-center gap-1.5 pt-1">
+      <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
         <Shield className="h-3.5 w-3.5 text-green-500 shrink-0" />
         NIN and BVN are encrypted at rest and used only for KYC verification.
       </p>
@@ -217,53 +217,53 @@ function StepBank({ data, onChange }: { data: BankDetails; onChange: (d: BankDet
     <div className="space-y-5">
       <div className="flex gap-3">
         <button type="button" onClick={() => onChange({ ...data, paymentMethod: "bank" })}
-          className={`flex-1 flex items-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${data.paymentMethod === "bank" ? "border-green-500 bg-green-500/10 text-green-400" : "border-slate-600 text-slate-400 hover:border-slate-500"}`}>
+          className={`flex-1 flex items-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${data.paymentMethod === "bank" ? "border-green-500 bg-green-500/10 text-green-400" : "border-border text-muted-foreground hover:border-slate-500"}`}>
           <Landmark className="h-4 w-4 shrink-0" /> Bank Account
         </button>
         <button type="button" onClick={() => onChange({ ...data, paymentMethod: "mobile_money" })}
-          className={`flex-1 flex items-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${data.paymentMethod === "mobile_money" ? "border-green-500 bg-green-500/10 text-green-400" : "border-slate-600 text-slate-400 hover:border-slate-500"}`}>
+          className={`flex-1 flex items-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${data.paymentMethod === "mobile_money" ? "border-green-500 bg-green-500/10 text-green-400" : "border-border text-muted-foreground hover:border-slate-500"}`}>
           <Smartphone className="h-4 w-4 shrink-0" /> Mobile Money
         </button>
       </div>
       {data.paymentMethod === "bank" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label className="text-slate-300">Bank Name <span className="text-red-400">*</span></Label>
+            <Label className="text-muted-foreground">Bank Name <span className="text-red-400">*</span></Label>
             <Input placeholder="e.g. First Bank Nigeria" value={data.bankName} onChange={set("bankName")}
-              className="bg-slate-800 border-slate-600 text-white h-11" />
+              className="bg-secondary border-border text-white h-11" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-slate-300">Account Number <span className="text-red-400">*</span></Label>
+            <Label className="text-muted-foreground">Account Number <span className="text-red-400">*</span></Label>
             <Input placeholder="10-digit NUBAN" maxLength={10} value={data.bankAccountNumber} onChange={set("bankAccountNumber")}
-              className="bg-slate-800 border-slate-600 text-white h-11" />
+              className="bg-secondary border-border text-white h-11" />
           </div>
           <div className="sm:col-span-2 space-y-1.5">
-            <Label className="text-slate-300">Account Name <span className="text-red-400">*</span></Label>
+            <Label className="text-muted-foreground">Account Name <span className="text-red-400">*</span></Label>
             <Input placeholder="As registered with your bank" value={data.bankAccountName} onChange={set("bankAccountName")}
-              className="bg-slate-800 border-slate-600 text-white h-11" />
+              className="bg-secondary border-border text-white h-11" />
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label className="text-slate-300">Provider <span className="text-red-400">*</span></Label>
+            <Label className="text-muted-foreground">Provider <span className="text-red-400">*</span></Label>
             <Select value={data.mobileMoneyProvider} onValueChange={v => onChange({ ...data, mobileMoneyProvider: v })}>
-              <SelectTrigger className="bg-slate-800 border-slate-600 text-white h-11">
+              <SelectTrigger className="bg-secondary border-border text-white h-11">
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-600">
+              <SelectContent className="bg-secondary border-border">
                 {MOBILE_MONEY_PROVIDERS.map(p => <SelectItem key={p} value={p} className="text-white">{p}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-slate-300">Mobile Number <span className="text-red-400">*</span></Label>
+            <Label className="text-muted-foreground">Mobile Number <span className="text-red-400">*</span></Label>
             <Input type="tel" placeholder="08012345678" value={data.mobileMoneyNumber} onChange={set("mobileMoneyNumber")}
-              className="bg-slate-800 border-slate-600 text-white h-11" />
+              className="bg-secondary border-border text-white h-11" />
           </div>
         </div>
       )}
-      <p className="text-xs text-slate-500 flex items-center gap-1.5">
+      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
         <Shield className="h-3.5 w-3.5 text-green-500 shrink-0" />
         Payment details are used to credit commodity sale proceeds to your account.
       </p>
@@ -282,7 +282,7 @@ function StepDocuments({ docs, onUpload, onRemove, uploading }: {
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-muted-foreground">
         Upload clear, legible copies. Accepted: PDF, JPEG, PNG, WEBP (max 10 MB each).
       </p>
       {DOCUMENT_TYPES.map(({ value, label, required }) => {
@@ -290,23 +290,23 @@ function StepDocuments({ docs, onUpload, onRemove, uploading }: {
         const isUploading = uploading === value;
         return (
           <div key={value}
-            className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${uploaded ? "border-green-500/40 bg-green-500/5" : "border-slate-700 bg-slate-800/40"}`}>
+            className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${uploaded ? "border-green-500/40 bg-green-500/5" : "border-border bg-secondary/40"}`}>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-white">{label}</span>
-                {required && <Badge className="text-[10px] px-1.5 py-0 bg-slate-700 text-slate-300 border-0">Required</Badge>}
+                {required && <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground border-0">Required</Badge>}
               </div>
               {uploaded ? (
-                <p className="text-xs text-slate-400 truncate mt-0.5">{uploaded.fileName} · {formatBytes(uploaded.fileSize)}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{uploaded.fileName} · {formatBytes(uploaded.fileSize)}</p>
               ) : (
-                <p className="text-xs text-slate-500 mt-0.5">No file selected</p>
+                <p className="text-xs text-muted-foreground mt-0.5">No file selected</p>
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {uploaded && (
                 <>
                   <a href={uploaded.fileUrl} target="_blank" rel="noopener noreferrer">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-white" aria-label="Preview">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-white" aria-label="Preview">
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                   </a>
@@ -318,7 +318,7 @@ function StepDocuments({ docs, onUpload, onRemove, uploading }: {
               <Button
                 variant={uploaded ? "outline" : "default"}
                 size="sm"
-                className={`h-7 text-xs ${!uploaded ? "bg-green-600 hover:bg-green-700 text-white border-0" : "border-slate-600 text-slate-300"}`}
+                className={`h-7 text-xs ${!uploaded ? "bg-green-600 hover:bg-green-700 text-white border-0" : "border-border text-muted-foreground"}`}
                 disabled={isUploading}
                 onClick={() => fileInputRefs.current[value]?.click()}
               >
@@ -349,14 +349,14 @@ function StepDocuments({ docs, onUpload, onRemove, uploading }: {
 function StepReview({ personal, bank, docs }: { personal: PersonalInfo; bank: BankDetails; docs: UploadedDoc[] }) {
   const Row = ({ label, value }: { label: string; value: string }) => (
     <div className="flex justify-between items-center px-3 py-2 text-sm">
-      <span className="text-slate-400">{label}</span>
+      <span className="text-muted-foreground">{label}</span>
       <span className="font-medium text-white text-right max-w-[60%] truncate">{value || "—"}</span>
     </div>
   );
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <div className="space-y-1">
       <h3 className="text-xs font-semibold text-green-400 uppercase tracking-wider px-1">{title}</h3>
-      <div className="rounded-lg border border-slate-700 divide-y divide-slate-700/60 bg-slate-800/40">
+      <div className="rounded-lg border border-border divide-y divide-slate-700/60 bg-secondary/40">
         {children}
       </div>
     </div>
@@ -402,13 +402,13 @@ function StepReview({ personal, bank, docs }: { personal: PersonalInfo; bank: Ba
           const uploaded = docs.find(d => d.documentType === dt.value);
           return (
             <div key={dt.value} className="flex items-center justify-between px-3 py-2 text-sm">
-              <span className="text-slate-400">{dt.label}</span>
+              <span className="text-muted-foreground">{dt.label}</span>
               {uploaded ? (
                 <span className="flex items-center gap-1 text-green-400 text-xs font-medium">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Uploaded
                 </span>
               ) : (
-                <span className={`text-xs font-medium ${dt.required ? "text-red-400" : "text-slate-500"}`}>
+                <span className={`text-xs font-medium ${dt.required ? "text-red-400" : "text-muted-foreground"}`}>
                   {dt.required ? "Missing" : "Optional"}
                 </span>
               )}
@@ -417,16 +417,16 @@ function StepReview({ personal, bank, docs }: { personal: PersonalInfo; bank: Ba
         })}
       </Section>
       {/* Step 6 preview — locked until KYC approved */}
-      <div className="rounded-lg border border-slate-700/60 bg-slate-800/20 p-4">
+      <div className="rounded-lg border border-border/60 bg-secondary/20 p-4">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-slate-700/60 border border-slate-600/40 flex items-center justify-center shrink-0">
-            <Lock className="h-4 w-4 text-slate-400" />
+          <div className="h-9 w-9 rounded-full bg-muted/60 border border-border/40 flex items-center justify-center shrink-0">
+            <Lock className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium text-slate-300">Step 5: Add Your Farm</p>
-            <p className="text-xs text-slate-500 mt-0.5">Unlocks after KYC approval (1–2 business days)</p>
+            <p className="text-sm font-medium text-muted-foreground">Step 5: Add Your Farm</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Unlocks after KYC approval (1–2 business days)</p>
           </div>
-          <Badge className="bg-slate-700/60 text-slate-400 border-slate-600/40 text-[10px]">Locked</Badge>
+          <Badge className="bg-muted/60 text-muted-foreground border-border/40 text-[10px]">Locked</Badge>
         </div>
       </div>
     </div>
@@ -466,13 +466,13 @@ function StepAddFarm({ data, onChange, kycStatus, farmPin, onPinChange, farmBoun
         </div>
         <div className="space-y-2">
           <h3 className="text-lg font-bold text-white">KYC Approval Required</h3>
-          <p className="text-slate-400 text-sm max-w-xs mx-auto">
+          <p className="text-muted-foreground text-sm max-w-xs mx-auto">
             This step unlocks once our compliance team approves your KYC documents.
             You'll receive a notification when it's ready.
           </p>
         </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4 text-sm text-left space-y-2 max-w-xs mx-auto">
-          <p className="font-medium text-slate-300 text-center">Current KYC Status</p>
+        <div className="rounded-xl border border-border bg-secondary/40 p-4 text-sm text-left space-y-2 max-w-xs mx-auto">
+          <p className="font-medium text-muted-foreground text-center">Current KYC Status</p>
           <div className="flex items-center justify-center gap-2 pt-1">
             {kycStatus === "SUBMITTED" || kycStatus === "UNDER_REVIEW" ? (
               <Badge className="bg-amber-900/60 text-amber-300 border-amber-700">
@@ -484,7 +484,7 @@ function StepAddFarm({ data, onChange, kycStatus, farmPin, onPinChange, farmBoun
                 <X className="h-3 w-3 mr-1" /> Rejected
               </Badge>
             ) : (
-              <Badge className="bg-slate-700/60 text-slate-400 border-slate-600">
+              <Badge className="bg-muted/60 text-muted-foreground border-border">
                 <AlertCircle className="h-3 w-3 mr-1" /> Pending
               </Badge>
             )}
@@ -502,60 +502,60 @@ function StepAddFarm({ data, onChange, kycStatus, farmPin, onPinChange, farmBoun
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2 space-y-1.5">
-          <Label className="text-slate-300">Farm Name <span className="text-red-400">*</span></Label>
+          <Label className="text-muted-foreground">Farm Name <span className="text-red-400">*</span></Label>
           <Input placeholder="e.g. Adeyemi Green Farms" value={data.farmName} onChange={set("farmName")}
-            className="bg-slate-800 border-slate-600 text-white h-11" />
+            className="bg-secondary border-border text-white h-11" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-slate-300">Farm Size (hectares) <span className="text-red-400">*</span></Label>
+          <Label className="text-muted-foreground">Farm Size (hectares) <span className="text-red-400">*</span></Label>
           <Input type="number" min="0.1" step="0.1" placeholder="e.g. 5.5" value={String((data as any).sizeHectares ?? "")} onChange={set("sizeHectares")}
-            className="bg-slate-800 border-slate-600 text-white h-11" />
+            className="bg-secondary border-border text-white h-11" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-slate-300">Soil Type</Label>
+          <Label className="text-muted-foreground">Soil Type</Label>
           <Select value={data.soilType} onValueChange={v => onChange({ ...data, soilType: v })}>
-            <SelectTrigger className="bg-slate-800 border-slate-600 text-white h-11">
+            <SelectTrigger className="bg-secondary border-border text-white h-11">
               <SelectValue placeholder="Select soil type" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
+            <SelectContent className="bg-secondary border-border">
               {SOIL_TYPES.map(st => <SelectItem key={st.value} value={st.value} className="text-white">{st.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-slate-300">Farm State <span className="text-red-400">*</span></Label>
+          <Label className="text-muted-foreground">Farm State <span className="text-red-400">*</span></Label>
           <Select value={data.state} onValueChange={v => onChange({ ...data, state: v })}>
-            <SelectTrigger className="bg-slate-800 border-slate-600 text-white h-11">
+            <SelectTrigger className="bg-secondary border-border text-white h-11">
               <SelectValue placeholder="Select state" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
+            <SelectContent className="bg-secondary border-border">
               {NIGERIAN_STATES.map(s => <SelectItem key={s} value={s} className="text-white">{s}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-slate-300">Farm LGA <span className="text-red-400">*</span></Label>
+          <Label className="text-muted-foreground">Farm LGA <span className="text-red-400">*</span></Label>
           <Input placeholder="Local Government Area" value={data.lga} onChange={set("lga")}
-            className="bg-slate-800 border-slate-600 text-white h-11" />
+            className="bg-secondary border-border text-white h-11" />
         </div>
         <div className="sm:col-span-2 space-y-1.5">
-          <Label className="text-slate-300">Description (optional)</Label>
+          <Label className="text-muted-foreground">Description (optional)</Label>
           <textarea
             placeholder="Describe your farm — crops grown, irrigation, certifications…"
             value={data.description}
             onChange={set("description")}
             rows={3}
-            className="w-full rounded-md border border-slate-600 bg-slate-800 text-white text-sm px-3 py-2 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500/40 resize-none"
+            className="w-full rounded-md border border-border bg-secondary text-white text-sm px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-green-500/40 resize-none"
           />
         </div>
       </div>
 
       {/* GPS Pin + Polygon Boundary — MapLibre GL + OpenStreetMap + Terra Draw */}
       <div className="space-y-2">
-        <Label className="text-slate-300 flex items-center gap-1.5">
+        <Label className="text-muted-foreground flex items-center gap-1.5">
           <MapPin className="h-3.5 w-3.5 text-green-400" />
           Farm Location & Boundary
-          <span className="text-slate-500 font-normal text-xs">(tap to pin · draw boundary polygon)</span>
+          <span className="text-muted-foreground font-normal text-xs">(tap to pin · draw boundary polygon)</span>
         </Label>
         <OSMMapDraw
           onPinChange={onPinChange}
@@ -567,7 +567,7 @@ function StepAddFarm({ data, onChange, kycStatus, farmPin, onPinChange, farmBoun
           showDrawTools={true}
         />
         {farmPin && (
-          <div className="flex items-center gap-2 text-xs text-slate-400">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="font-mono text-green-400">
               {farmPin.lat.toFixed(5)}, {farmPin.lng.toFixed(5)}
             </span>
@@ -843,13 +843,13 @@ export default function FarmerOnboarding() {
           </div>
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-white">Farm Registered!</h1>
-            <p className="text-slate-400 text-sm">
+            <p className="text-muted-foreground text-sm">
               <span className="text-green-400 font-medium">{farm.farmName}</span> has been added to your profile.
               You can now list your crops on the exchange.
             </p>
           </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 text-sm text-left space-y-2">
-            <p className="font-medium text-slate-300">What's next?</p>
+          <div className="rounded-xl border border-border bg-secondary/60 p-4 text-sm text-left space-y-2">
+            <p className="font-medium text-muted-foreground">What's next?</p>
             {[
               "Go to your Farmer Dashboard to manage your farm",
               "List your first crop for sale on the exchange",
@@ -857,7 +857,7 @@ export default function FarmerOnboarding() {
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />
-                <p className="text-slate-400 text-xs">{item}</p>
+                <p className="text-muted-foreground text-xs">{item}</p>
               </div>
             ))}
           </div>
@@ -865,7 +865,7 @@ export default function FarmerOnboarding() {
             <Button className="w-full h-11 bg-green-600 hover:bg-green-700 text-white" onClick={() => navigate("/farmer-dashboard")}>
               Go to Farmer Dashboard <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
-            <Button variant="outline" className="w-full h-11 border-slate-600 text-slate-300 hover:bg-slate-800"
+            <Button variant="outline" className="w-full h-11 border-border text-muted-foreground hover:bg-secondary"
               onClick={() => { setFarmAdded(false); setFarm({ farmName: "", sizeHectares: "", state: "", lga: "", soilType: "LOAMY", description: "" }); }}>
               Add Another Farm
             </Button>
@@ -887,12 +887,12 @@ export default function FarmerOnboarding() {
           </div>
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-white">Registration Submitted!</h1>
-            <p className="text-slate-400 text-sm">
+            <p className="text-muted-foreground text-sm">
               Your profile and KYC documents are under review. You'll be notified within 1–2 business days.
             </p>
           </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 text-sm text-left space-y-2">
-            <p className="font-medium text-slate-300">What happens next?</p>
+          <div className="rounded-xl border border-border bg-secondary/60 p-4 text-sm text-left space-y-2">
+            <p className="font-medium text-muted-foreground">What happens next?</p>
             {[
               "Compliance team reviews your KYC documents",
               "You receive an SMS/push notification on approval",
@@ -900,7 +900,7 @@ export default function FarmerOnboarding() {
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />
-                <p className="text-slate-400 text-xs">{item}</p>
+                <p className="text-muted-foreground text-xs">{item}</p>
               </div>
             ))}
           </div>
@@ -941,7 +941,7 @@ export default function FarmerOnboarding() {
           <h1 className="text-3xl font-bold text-white mb-3 leading-tight">
             Sell Your Crops at<br /><span className="text-green-400">Market Price</span>
           </h1>
-          <p className="text-slate-400 text-sm max-w-xs mb-8">
+          <p className="text-muted-foreground text-sm max-w-xs mb-8">
             Register your farm, list your crops, and connect directly with buyers on Nigeria's leading commodity exchange.
           </p>
           <div className="grid grid-cols-2 gap-3 w-full max-w-sm mb-8">
@@ -951,10 +951,10 @@ export default function FarmerOnboarding() {
               { icon: Wheat, label: "Crop Listings", desc: "List any commodity" },
               { icon: Users, label: "Cooperative", desc: "Join farmer groups" },
             ].map(({ icon: Icon, label, desc }) => (
-              <div key={label} className="bg-slate-800/60 rounded-xl p-3 text-left border border-slate-700/50">
+              <div key={label} className="bg-secondary/60 rounded-xl p-3 text-left border border-border/50">
                 <Icon className="w-5 h-5 text-green-400 mb-1" />
                 <p className="text-white text-xs font-semibold">{label}</p>
-                <p className="text-slate-400 text-xs">{desc}</p>
+                <p className="text-muted-foreground text-xs">{desc}</p>
               </div>
             ))}
           </div>
@@ -969,7 +969,7 @@ export default function FarmerOnboarding() {
               Sign In to Register <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           )}
-          <button onClick={() => navigate("/farmer-dashboard")} className="mt-3 text-slate-400 text-sm underline underline-offset-2">
+          <button onClick={() => navigate("/farmer-dashboard")} className="mt-3 text-muted-foreground text-sm underline underline-offset-2">
             Already registered? Go to Dashboard
           </button>
         </div>
@@ -978,12 +978,12 @@ export default function FarmerOnboarding() {
           <div className="flex items-center justify-center gap-2 mb-2">
             {["Register","KYC","Bank","Submit","Farm"].map((s, i) => (
               <div key={s} className="flex items-center gap-1">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-green-500 text-white" : i === 4 ? "bg-amber-700/60 text-amber-300" : "bg-slate-700 text-slate-400"}`}>{i + 1}</div>
-                {i < 4 && <div className="w-5 h-px bg-slate-700" />}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "bg-green-500 text-white" : i === 4 ? "bg-amber-700/60 text-amber-300" : "bg-muted text-muted-foreground"}`}>{i + 1}</div>
+                {i < 4 && <div className="w-5 h-px bg-muted" />}
               </div>
             ))}
           </div>
-          <p className="text-center text-slate-500 text-xs">Complete 4 steps · Step 5 unlocks after KYC approval</p>
+          <p className="text-center text-muted-foreground text-xs">Complete 4 steps · Step 5 unlocks after KYC approval</p>
         </div>
       </div>
     );
@@ -1000,7 +1000,7 @@ export default function FarmerOnboarding() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950">
       {/* Top bar */}
-      <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+      <div className="sticky top-0 z-10 bg-card/95 backdrop-blur border-b border-border">
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-2">
@@ -1013,7 +1013,7 @@ export default function FarmerOnboarding() {
                 {online ? "Online" : "Offline — draft saved"}
               </span>
               {installPrompt && (
-                <Button variant="outline" size="sm" className="h-7 text-xs gap-1 border-slate-600 text-slate-300"
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1 border-border text-muted-foreground"
                   onClick={() => { installPrompt.prompt(); setInstallPrompt(null); }}>
                   <Download className="h-3 w-3" /> Install
                 </Button>
@@ -1021,7 +1021,7 @@ export default function FarmerOnboarding() {
             </div>
           </div>
           {/* Progress bar */}
-          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
             <div className="h-full bg-green-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
         </div>
@@ -1038,7 +1038,7 @@ export default function FarmerOnboarding() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-white">{STEP_TITLES[step - 1]}</h1>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted-foreground">
               {isStep6Locked ? "Locked — awaiting KYC approval" : `Step ${step - 1} of ${totalWizardSteps}`}
             </p>
           </div>
@@ -1052,7 +1052,7 @@ export default function FarmerOnboarding() {
                     ? "bg-amber-700/50 cursor-not-allowed"
                     : s < step ? "bg-green-500 cursor-pointer"
                     : s === step ? "bg-green-400"
-                    : "bg-slate-700 cursor-not-allowed"
+                    : "bg-muted cursor-not-allowed"
                 }`}
                 aria-label={`Step ${s - 1}`}
               />
@@ -1062,11 +1062,11 @@ export default function FarmerOnboarding() {
 
         {/* Progress bar */}
         <div className="mt-3 mb-1">
-          <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+          <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
             <span>Progress</span>
             <span>{Math.round(((step - 1) / totalWizardSteps) * 100)}%</span>
           </div>
-          <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
             <div
               className="h-full bg-green-500 rounded-full transition-all duration-300"
               style={{ width: `${Math.round(((step - 1) / totalWizardSteps) * 100)}%` }}
@@ -1086,7 +1086,7 @@ export default function FarmerOnboarding() {
         {/* Navigation */}
         <div className="flex gap-3 pt-2">
           <Button variant="outline" onClick={handleBack}
-            className="flex-1 sm:flex-none sm:w-32 border-slate-600 text-slate-300 hover:bg-slate-800">
+            className="flex-1 sm:flex-none sm:w-32 border-border text-muted-foreground hover:bg-secondary">
             <ChevronLeft className="h-4 w-4 mr-1" /> Back
           </Button>
           {step < 5 ? (
@@ -1101,14 +1101,14 @@ export default function FarmerOnboarding() {
           ) : (
             /* Step 6 — Add Farm */
             <Button onClick={handleAddFarm} disabled={submitting || isStep6Locked}
-              className={`flex-1 font-semibold ${isStep6Locked ? "bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 text-white"}`}>
+              className={`flex-1 font-semibold ${isStep6Locked ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-green-600 hover:bg-green-700 text-white"}`}>
               {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Adding Farm…</> : isStep6Locked ? <><Lock className="h-4 w-4 mr-2" /> Locked</> : <><Tractor className="h-4 w-4 mr-2" /> Add Farm</>}
             </Button>
           )}
         </div>
 
         {saveDraftMutation.isPending && (
-          <p className="text-xs text-slate-500 text-center flex items-center justify-center gap-1">
+          <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
             <Loader2 className="h-3 w-3 animate-spin" /> Saving draft…
           </p>
         )}

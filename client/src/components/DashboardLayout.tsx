@@ -91,6 +91,7 @@ import {
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+import { useOrderFillSSE } from "@/hooks/useOrderFillSSE";
 import { PasskeyUpgradeBanner } from "./PasskeyUpgradeBanner";
 import { PasskeyLoginButton } from "./PasskeyLoginButton";
 import { Button } from "./ui/button";
@@ -292,6 +293,7 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+  useOrderFillSSE(); // Real-time order fill toast notifications via SSE
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());

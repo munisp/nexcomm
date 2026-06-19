@@ -4,6 +4,11 @@
  * open positions, recent fills, active alerts count, watchlist count.
  */
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { Pencil, Save, X as XIcon } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +39,19 @@ import {
   TrendingUp,
   User,
 } from "lucide-react";
+
+// ── Profile edit form type ────────────────────────────────────────────────────
+type ProfileEditForm = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  state: string;
+  country: string;
+  companyName: string;
+  bankName: string;
+  bankAccount: string;
+};
 
 // ── Status badge colours ──────────────────────────────────────────────────────
 function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
@@ -128,6 +146,39 @@ export default function UserProfileDashboard() {
   const profile = dash?.profile;
   const stats = dash?.orderStats;
 
+  // Edit mode state
+  const [editMode, setEditMode] = useState(false);
+  const utils = trpc.useUtils();
+
+  const form = useForm<ProfileEditForm>({
+    values: {
+      firstName: profile?.firstName ?? "",
+      lastName: profile?.lastName ?? "",
+      phone: profile?.phone ?? "",
+      address: profile?.address ?? "",
+      state: profile?.state ?? "",
+      country: profile?.country ?? "",
+      companyName: profile?.companyName ?? "",
+      bankName: profile?.bankName ?? "",
+      bankAccount: profile?.bankAccount ?? "",
+    },
+  });
+
+  const updateProfile = trpc.profile.update.useMutation({
+    onSuccess: () => {
+      toast.success("Profile saved — your account details have been updated.");
+      setEditMode(false);
+      utils.profile.dashboard.invalidate();
+    },
+    onError: (err) => {
+      toast.error(`Save failed: ${err.message}`);
+    },
+  });
+
+  const handleSave = form.handleSubmit((data) => {
+    updateProfile.mutate(data);
+  });
+
   return (
     <div className="space-y-6 p-6 max-w-7xl mx-auto">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -145,8 +196,26 @@ export default function UserProfileDashboard() {
 
       {/* ── Account Details ─────────────────────────────────────────────────── */}
       <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-base">Account Details</CardTitle>
+          {!dashLoading && !editMode && (
+            <Button variant="ghost" size="sm" onClick={() => setEditMode(true)} className="gap-1.5">
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+          )}
+          {editMode && (
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => { setEditMode(false); form.reset(); }} className="gap-1.5">
+                <XIcon className="h-3.5 w-3.5" />
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={updateProfile.isPending} className="gap-1.5">
+                <Save className="h-3.5 w-3.5" />
+                {updateProfile.isPending ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {dashLoading ? (
@@ -155,7 +224,32 @@ export default function UserProfileDashboard() {
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
+          ) : editMode ? (
+            /* ── Edit form ── */
+            <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {([
+                ["firstName", "First Name"],
+                ["lastName", "Last Name"],
+                ["phone", "Phone"],
+                ["address", "Address"],
+                ["state", "State"],
+                ["country", "Country"],
+                ["companyName", "Company Name"],
+                ["bankName", "Bank Name"],
+                ["bankAccount", "Bank Account Number"],
+              ] as [keyof ProfileEditForm, string][]).map(([field, label]) => (
+                <div key={field} className="space-y-1.5">
+                  <Label htmlFor={field} className="text-xs">{label}</Label>
+                  <Input
+                    id={field}
+                    {...form.register(field)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              ))}
+            </form>
           ) : (
+            /* ── Read-only view ── */
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-3 text-sm">
               <div>
                 <span className="text-muted-foreground block text-xs mb-0.5">Name</span>

@@ -71,10 +71,6 @@ function timeToExpiryYears(expiryDate: Date): number {
 
 // ─── In-Memory Fallback Stores ────────────────────────────────────────────────
 
-let _ocSeq = 1;
-let _opSeq = 1;
-const _memOContracts = new Map<number, any>();
-const _memOPositions = new Map<number, any>();
 const _memOClearingAccounts = new Map<number, any>(); // userId -> account
 
 // ─── Router ──────────────────────────────────────────────────────────────────
@@ -99,20 +95,7 @@ export const optionsRouter = router({
       if (expiry <= new Date()) throw new TRPCError({ code: "BAD_REQUEST", message: "Expiry must be in the future" });
 
       const db = await getDb();
-      if (!db) {
-        const id = _ocSeq++;
-        const now = new Date();
-        const contract = {
-          id, symbol: input.symbol.toUpperCase(), underlyingContractId: input.underlyingContractId ?? null,
-          optionType: input.optionType, strikePrice: String(input.strikePrice),
-          expiryDate: expiry, contractSize: String(input.contractSize),
-          riskFreeRate: String(input.riskFreeRate), impliedVolatility: String(input.impliedVolatility),
-          status: "ACTIVE", openInterest: 0, lastPrice: null,
-          createdBy: ctx.user.id, createdAt: now, updatedAt: now,
-        };
-        _memOContracts.set(id, contract);
-        return contract;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [contract] = await db.insert(optionsContracts).values({
         symbol: input.symbol.toUpperCase(),
@@ -138,13 +121,7 @@ export const optionsRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        let contracts = Array.from(_memOContracts.values());
-        if (input.status !== "ALL") contracts = contracts.filter(c => c.status === input.status);
-        if (input.optionType !== "ALL") contracts = contracts.filter(c => c.optionType === input.optionType);
-        const offset = (input.page - 1) * input.limit;
-        return { contracts: contracts.slice(offset, offset + input.limit), total: contracts.length };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const conditions = [];
       if (input.status !== "ALL") conditions.push(eq(optionsContracts.status, input.status));
@@ -171,15 +148,7 @@ export const optionsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const contract = _memOContracts.get(input.contractId);
-        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
-        if (input.impliedVolatility !== undefined) contract.impliedVolatility = String(input.impliedVolatility);
-        if (input.riskFreeRate !== undefined) contract.riskFreeRate = String(input.riskFreeRate);
-        if (input.lastPrice !== undefined) contract.lastPrice = String(input.lastPrice);
-        contract.updatedAt = new Date();
-        return contract;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.impliedVolatility !== undefined) updates.impliedVolatility = String(input.impliedVolatility);
@@ -195,14 +164,7 @@ export const optionsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const contract = _memOContracts.get(input.contractId);
-        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
-        if (contract.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: `Contract is already ${contract.status}` });
-        contract.status = "EXPIRED";
-        contract.updatedAt = new Date();
-        return contract;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [contract] = await db.select().from(optionsContracts).where(eq(optionsContracts.id, input.contractId)).limit(1);
       if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
@@ -218,17 +180,7 @@ export const optionsRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const contract = _memOContracts.get(input.contractId);
-        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
-        const T = timeToExpiryYears(contract.expiryDate);
-        const K = parseFloat(contract.strikePrice);
-        const r = parseFloat(contract.riskFreeRate);
-        const sigma = parseFloat(contract.impliedVolatility);
-        const greeks = blackScholes(input.spotPrice, K, T, r, sigma, contract.optionType);
-        const moneyness = input.spotPrice > K ? (contract.optionType === "CALL" ? "ITM" : "OTM") : input.spotPrice < K ? (contract.optionType === "CALL" ? "OTM" : "ITM") : "ATM";
-        return { contract, spotPrice: input.spotPrice, ...greeks, moneyness };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [contract] = await db.select().from(optionsContracts).where(eq(optionsContracts.id, input.contractId)).limit(1);
       if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
@@ -249,21 +201,7 @@ export const optionsRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        let contracts = Array.from(_memOContracts.values()).filter(c => c.status === "ACTIVE");
-        if (input.underlyingContractId) contracts = contracts.filter(c => c.underlyingContractId === input.underlyingContractId);
-        if (input.optionType !== "ALL") contracts = contracts.filter(c => c.optionType === input.optionType);
-        if (!input.spotPrice) return contracts.map(c => ({ contract: c, greeks: null }));
-        return contracts.map(c => {
-          const T = timeToExpiryYears(c.expiryDate);
-          const K = parseFloat(c.strikePrice);
-          const r = parseFloat(c.riskFreeRate);
-          const sigma = parseFloat(c.impliedVolatility);
-          const greeks = blackScholes(input.spotPrice!, K, T, r, sigma, c.optionType);
-          const moneyness = input.spotPrice! > K ? (c.optionType === "CALL" ? "ITM" : "OTM") : input.spotPrice! < K ? (c.optionType === "CALL" ? "OTM" : "ITM") : "ATM";
-          return { contract: c, greeks, moneyness };
-        });
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const conditions = [eq(optionsContracts.status, "ACTIVE")];
       if (input.underlyingContractId) conditions.push(eq(optionsContracts.underlyingContractId, input.underlyingContractId));
@@ -289,43 +227,7 @@ export const optionsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const contract = _memOContracts.get(input.contractId);
-        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
-        if (contract.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: `Contract is ${contract.status}` });
-        const T = timeToExpiryYears(contract.expiryDate);
-        if (T <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Contract has expired" });
-        const K = parseFloat(contract.strikePrice);
-        const r = parseFloat(contract.riskFreeRate);
-        const sigma = parseFloat(contract.impliedVolatility);
-        const contractSize = parseFloat(contract.contractSize);
-        const { premium } = blackScholes(input.spotPrice, K, T, r, sigma, contract.optionType);
-        const totalCost = premium * input.quantity * contractSize;
-
-        let clearingAccount = _memOClearingAccounts.get(ctx.user.id);
-        if (!clearingAccount) {
-          clearingAccount = { id: ctx.user.id, userId: ctx.user.id, cashBalance: "50000000", portfolioValue: "50000000", status: "ACTIVE" };
-          _memOClearingAccounts.set(ctx.user.id, clearingAccount);
-        }
-        const balance = parseFloat(clearingAccount.cashBalance);
-        if (balance < totalCost) throw new TRPCError({ code: "BAD_REQUEST", message: `Insufficient funds. Required: ${totalCost.toFixed(2)}, Available: ${balance.toFixed(2)}` });
-        clearingAccount.cashBalance = String(balance - totalCost);
-
-        const id = _opSeq++;
-        const now = new Date();
-        const position = {
-          id, userId: ctx.user.id, contractId: input.contractId,
-          optionType: contract.optionType, quantity: String(input.quantity),
-          premiumPaid: String(premium), totalCost: String(totalCost),
-          strikePrice: contract.strikePrice, expiryDate: contract.expiryDate,
-          status: "OPEN", exercisedAt: null, settlementPnl: null, closedAt: null,
-          openedAt: now, updatedAt: now,
-        };
-        _memOPositions.set(id, position);
-        contract.openInterest = (contract.openInterest || 0) + Math.round(input.quantity);
-        contract.lastPrice = String(premium);
-        return { position, premium, totalCost };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [contract] = await db.select().from(optionsContracts).where(eq(optionsContracts.id, input.contractId)).limit(1);
       if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
@@ -357,11 +259,7 @@ export const optionsRouter = router({
     .input(z.object({ status: z.enum(["OPEN", "EXERCISED", "EXPIRED", "CLOSED", "ALL"]).default("OPEN") }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        let positions = Array.from(_memOPositions.values()).filter(p => p.userId === ctx.user.id);
-        if (input.status !== "ALL") positions = positions.filter(p => p.status === input.status);
-        return positions.map(p => ({ position: p, contract: _memOContracts.get(p.contractId) ?? null }));
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const conditions = [eq(optionsPositions.userId, ctx.user.id)];
       if (input.status !== "ALL") conditions.push(eq(optionsPositions.status, input.status));
@@ -378,34 +276,7 @@ export const optionsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const pos = _memOPositions.get(input.positionId);
-        if (!pos || pos.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "Position not found" });
-        if (pos.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: `Position is already ${pos.status}` });
-        const T = timeToExpiryYears(pos.expiryDate);
-        if (T > 0.01) {
-          const strike = parseFloat(pos.strikePrice);
-          const isITM = pos.optionType === "CALL" ? input.spotPrice > strike : input.spotPrice < strike;
-          if (!isITM) throw new TRPCError({ code: "BAD_REQUEST", message: "Option is not in-the-money — exercise rejected" });
-        }
-        const qty = parseFloat(pos.quantity);
-        const strike = parseFloat(pos.strikePrice);
-        const contract = _memOContracts.get(pos.contractId);
-        const contractSize = contract ? parseFloat(contract.contractSize) : 1;
-        const intrinsicValue = pos.optionType === "CALL" ? Math.max(0, input.spotPrice - strike) : Math.max(0, strike - input.spotPrice);
-        const settlementPnl = intrinsicValue * qty * contractSize;
-        if (settlementPnl > 0) {
-          let ca = _memOClearingAccounts.get(ctx.user.id);
-          if (!ca) { ca = { id: ctx.user.id, userId: ctx.user.id, cashBalance: "0", portfolioValue: "0", status: "ACTIVE" }; _memOClearingAccounts.set(ctx.user.id, ca); }
-          ca.cashBalance = String(parseFloat(ca.cashBalance) + settlementPnl);
-        }
-        pos.status = "EXERCISED";
-        pos.exercisedAt = new Date();
-        pos.settlementPnl = String(settlementPnl);
-        pos.closedAt = new Date();
-        pos.updatedAt = new Date();
-        return { position: pos, settlementPnl, intrinsicValue };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [pos] = await db.select().from(optionsPositions).where(and(eq(optionsPositions.id, input.positionId), eq(optionsPositions.userId, ctx.user.id))).limit(1);
       if (!pos) throw new TRPCError({ code: "NOT_FOUND", message: "Position not found" });
@@ -435,25 +306,7 @@ export const optionsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const contract = _memOContracts.get(input.contractId);
-        if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
-        const positions = Array.from(_memOPositions.values()).filter(p => p.contractId === input.contractId && p.status === "OPEN");
-        const contractSize = parseFloat(contract.contractSize);
-        let totalSettled = 0, totalPayout = 0;
-        for (const pos of positions) {
-          const qty = parseFloat(pos.quantity);
-          const strike = parseFloat(pos.strikePrice);
-          const intrinsicValue = pos.optionType === "CALL" ? Math.max(0, input.settlementPrice - strike) : Math.max(0, strike - input.settlementPrice);
-          const payout = intrinsicValue * qty * contractSize;
-          pos.status = intrinsicValue > 0 ? "EXERCISED" : "EXPIRED";
-          pos.settlementPnl = String(payout);
-          pos.closedAt = new Date();
-          totalSettled++; totalPayout += payout;
-        }
-        contract.status = "SETTLED";
-        return { positionsSettled: totalSettled, totalPayout, settlementPrice: input.settlementPrice };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [contract] = await db.select().from(optionsContracts).where(eq(optionsContracts.id, input.contractId)).limit(1);
       if (!contract) throw new TRPCError({ code: "NOT_FOUND", message: "Contract not found" });
@@ -481,22 +334,7 @@ export const optionsRouter = router({
     .query(async ({ ctx }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const contracts = Array.from(_memOContracts.values());
-        const positions = Array.from(_memOPositions.values());
-        return {
-          totalContracts: contracts.length,
-          activeContracts: contracts.filter(c => c.status === "ACTIVE").length,
-          expiredContracts: contracts.filter(c => c.status === "EXPIRED").length,
-          settledContracts: contracts.filter(c => c.status === "SETTLED").length,
-          totalOpenInterest: contracts.reduce((s, c) => s + (c.openInterest || 0), 0),
-          callContracts: contracts.filter(c => c.optionType === "CALL").length,
-          putContracts: contracts.filter(c => c.optionType === "PUT").length,
-          totalPositions: positions.length,
-          openPositions: positions.filter(p => p.status === "OPEN").length,
-          totalPremiumCollected: positions.reduce((s, p) => s + parseFloat(p.totalCost || "0"), 0),
-        };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [contractStats] = await db.select({
         totalContracts: sql<number>`COUNT(*)::int`,
@@ -531,12 +369,7 @@ export const optionsRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const positions = Array.from(_memOPositions.values()).filter(p => p.status === "OPEN");
-        const offset = (input.page - 1) * input.limit;
-        const paged = positions.slice(offset, offset + input.limit).map(p => ({ position: p, contract: _memOContracts.get(p.contractId) ?? null }));
-        return { positions: paged, total: positions.length };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const offset = (input.page - 1) * input.limit;
       const [positions, countRow] = await Promise.all([

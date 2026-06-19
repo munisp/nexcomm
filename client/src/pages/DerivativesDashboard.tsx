@@ -18,10 +18,10 @@ function StatusBadge({ status }: { status: string }) {
   const variants: Record<string, string> = {
     ACTIVE: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     EXPIRED: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-    SETTLED: "bg-slate-500/20 text-slate-400 border-slate-500/30",
+    SETTLED: "bg-slate-500/20 text-muted-foreground border-slate-500/30",
   };
   return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${variants[status] ?? "bg-slate-500/20 text-slate-400 border-slate-500/30"}`}>
+    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${variants[status] ?? "bg-slate-500/20 text-muted-foreground border-slate-500/30"}`}>
       {status}
     </span>
   );

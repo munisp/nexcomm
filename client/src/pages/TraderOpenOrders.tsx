@@ -278,7 +278,7 @@ export default function TraderOpenOrders() {
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={`text-xs px-1.5 py-0.5 ${STATUS_COLORS[order.status] ?? "bg-gray-900/50 text-gray-400 border-gray-600"}`}
+                            className={`text-xs px-1.5 py-0.5 ${STATUS_COLORS[order.status] ?? "bg-card/50 text-muted-foreground border-border"}`}
                           >
                             {order.status}
                           </Badge>

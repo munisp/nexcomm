@@ -118,8 +118,6 @@ const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 // ─── in-memory fallback stores (used when DB is unavailable, e.g. in tests) ─
 const _memWaSettings = new Map<number, Record<string, unknown>>();
-const _memWaChallenges = new Map<number, { challenge: string; type: string; expiresAt: Date }>();
-const _memOtpCodes = new Map<number, { codeHash: string; expiresAt: Date; usedAt: Date | null }>();
 
 export const webauthnRouter = router({
   // ── MFA settings ────────────────────────────────────────────────────────────
@@ -127,11 +125,7 @@ export const webauthnRouter = router({
   /** Get the current user's MFA settings and enrolled credential list. */
   getMfaStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) {
-      const uid = ctx.user.id;
-      const settings = _memWaSettings.get(uid) ?? null;
-      return { settings, credentials: [] };
-    }
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
     const uid = ctx.user.id;
 
     const [settings] = await db
@@ -169,21 +163,7 @@ export const webauthnRouter = router({
     .input(z.object({ deviceName: z.string().min(1).max(128).optional() }))
     .mutation(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) {
-        const uid = ctx.user.id;
-        const challenge = generateChallenge();
-        _memWaChallenges.set(uid, { challenge, type: "registration", expiresAt: new Date(Date.now() + 5 * 60 * 1000) });
-        return {
-          challenge,
-          rp: { name: "NEXCOM Exchange", id: "nexcom.exchange" },
-          user: { id: toBase64url(Buffer.from(String(uid))), name: "NEXCOM User", displayName: "NEXCOM User" },
-          pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-          timeout: 300_000,
-          excludeCredentials: [],
-          authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
-          attestation: "none",
-        };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const uid = ctx.user.id;
 
       // Clean up expired challenges for this user
@@ -258,7 +238,7 @@ export const webauthnRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const uid = ctx.user.id;
 
       // Retrieve and validate challenge
@@ -338,7 +318,7 @@ export const webauthnRouter = router({
   /** Step 1 of authentication: generate a challenge. */
   authenticationOptions: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
     const uid = ctx.user.id;
 
     const challenge = generateChallenge();
@@ -382,7 +362,7 @@ export const webauthnRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const uid = ctx.user.id;
 
       // Retrieve challenge
@@ -502,15 +482,7 @@ export const webauthnRouter = router({
   /** Send a 6-digit OTP to the user's registered email. */
   sendEmailOtp: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) {
-      const uid = ctx.user.id;
-      const email = ctx.user.email ?? 'user@nexcom.ng';
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const codeHash = sha256(code);
-      _memOtpCodes.set(uid, { codeHash, expiresAt: new Date(Date.now() + 10 * 60 * 1000), usedAt: null });
-      const maskedEmail = email.replace(/(.{2}).+(@.+)/, '$1***$2');
-      return { sent: true, maskedEmail };
-    }
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
     const uid = ctx.user.id;
 
     const code = String(crypto.randomInt(100_000, 1_000_000));
@@ -581,17 +553,7 @@ export const webauthnRouter = router({
     .input(z.object({ code: z.string().trim().length(6) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const uid = ctx.user.id;
-        const stored = _memOtpCodes.get(uid);
-        if (!stored) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Invalid OTP code' });
-        if (stored.expiresAt < new Date()) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'OTP expired' });
-        if (stored.usedAt) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'OTP already used' });
-        const inputHash = sha256(input.code);
-        if (inputHash !== stored.codeHash) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Invalid OTP code' });
-        stored.usedAt = new Date();
-        return { verified: true };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const uid = ctx.user.id;
 
       const [record] = await db
@@ -631,17 +593,7 @@ export const webauthnRouter = router({
     .input(z.object({ required: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const uid = ctx.user.id;
-        const existing = _memWaSettings.get(uid) as Record<string, unknown> | undefined;
-        if (existing) {
-          existing.mfaRequired = input.required;
-          existing.updatedAt = new Date();
-        } else {
-          _memWaSettings.set(uid, { userId: uid, mfaRequired: input.required, emailOtpEnabled: false, createdAt: new Date(), updatedAt: new Date() });
-        }
-        return { success: true };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       await db
         .insert(userMfaSettings)
         .values({ userId: ctx.user.id, mfaRequired: input.required, updatedAt: new Date() })
@@ -662,7 +614,7 @@ export const webauthnRouter = router({
     .input(z.object({ email: z.string().email().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const challenge = generateChallenge();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
       let allowCredentials: { type: "public-key"; id: string; transports: string[] }[] = [];
@@ -711,7 +663,7 @@ export const webauthnRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       // Find the stored challenge (may be keyed to userId=0 for discoverable flow)
       const [storedChallenge] = await db
         .select()

@@ -135,7 +135,7 @@ const STEPS = ["Stakeholder Type", "Personal Info", "Business Info", "Specific D
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-gray-400">{label}{required && <span className="text-red-400 ml-0.5">*</span>}</Label>
+      <Label className="text-xs text-muted-foreground">{label}{required && <span className="text-red-400 ml-0.5">*</span>}</Label>
       {children}
     </div>
   );
@@ -310,7 +310,7 @@ export default function Onboarding() {
         <div className="text-center max-w-md">
           <Shield className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-white mb-2">Sign In Required</h2>
-          <p className="text-gray-400 mb-6">You must be signed in to complete onboarding.</p>
+          <p className="text-muted-foreground mb-6">You must be signed in to complete onboarding.</p>
           <a href={getLoginUrl()}
             className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
             Sign In to Continue <ChevronRight className="w-4 h-4" />
@@ -327,7 +327,7 @@ export default function Onboarding() {
       PENDING: { color: "text-yellow-400", icon: Clock, label: "Under Review", desc: "Your application is being reviewed by our compliance team. This typically takes 2-3 business days." },
       VERIFIED: { color: "text-emerald-400", icon: CheckCircle2, label: "Approved", desc: "Your account has been verified. You now have full access to all platform features." },
       REJECTED: { color: "text-red-400", icon: AlertCircle, label: "Rejected", desc: "Your application was not approved. Please contact support for more information." },
-      NOT_STARTED: { color: "text-gray-400", icon: User, label: "Not Started", desc: "" },
+      NOT_STARTED: { color: "text-muted-foreground", icon: User, label: "Not Started", desc: "" },
     }[status] ?? { color: "text-yellow-400", icon: Clock, label: "Pending", desc: "" };
     const StatusIcon = statusConfig.icon;
 
@@ -336,9 +336,9 @@ export default function Onboarding() {
         <div className="text-center max-w-lg bg-white/5 border border-white/10 rounded-2xl p-10">
           <StatusIcon className={`w-16 h-16 mx-auto mb-4 ${statusConfig.color}`} />
           <h2 className="text-2xl font-bold text-white mb-2">Application {statusConfig.label}</h2>
-          <p className="text-gray-400 mb-6">{statusConfig.desc}</p>
+          <p className="text-muted-foreground mb-6">{statusConfig.desc}</p>
           {statusData?.application && (
-            <div className="text-xs text-gray-500 bg-white/5 rounded-lg px-4 py-3 text-left space-y-1">
+            <div className="text-xs text-muted-foreground bg-white/5 rounded-lg px-4 py-3 text-left space-y-1">
               <div className="flex justify-between"><span>Application ID</span><span className="text-white font-mono">#{statusData.application.id}</span></div>
               <div className="flex justify-between"><span>Submitted</span><span className="text-white">{new Date(statusData.application.submittedAt).toLocaleDateString()}</span></div>
               <div className="flex justify-between"><span>Status</span><span className={statusConfig.color}>{statusConfig.label}</span></div>
@@ -408,10 +408,10 @@ export default function Onboarding() {
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-white">NEXCOM Exchange Onboarding</h1>
-            <p className="text-sm text-gray-400">Complete your registration to access the platform</p>
+            <p className="text-sm text-muted-foreground">Complete your registration to access the platform</p>
           </div>
           {user && (
-            <div className="text-right text-xs text-gray-500">
+            <div className="text-right text-xs text-muted-foreground">
               <div className="text-white">{user.name}</div>
               <div>{user.email}</div>
             </div>
@@ -428,7 +428,7 @@ export default function Onboarding() {
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                   i < step ? "bg-emerald-600 text-white" :
                   i === step ? "bg-emerald-500 text-white ring-2 ring-emerald-500/30" :
-                  "bg-white/10 text-gray-500"
+                  "bg-white/10 text-muted-foreground"
                 }`}>
                   {i < step ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
                 </div>
@@ -439,7 +439,7 @@ export default function Onboarding() {
               </div>
             ))}
           </div>
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
             <span>{STEPS[step]}</span>
             <span>Step {step + 1} of {STEPS.length}</span>
           </div>
@@ -452,7 +452,7 @@ export default function Onboarding() {
           {step === 0 && (
             <div>
               <h2 className="text-lg font-bold mb-1">Who are you on the NEXCOM Exchange?</h2>
-              <p className="text-sm text-gray-400 mb-6">Select the role that best describes your participation on the platform.</p>
+              <p className="text-sm text-muted-foreground mb-6">Select the role that best describes your participation on the platform.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {STAKEHOLDERS.map(({ type, label, icon: Icon, description, color }) => (
                   <button key={type} onClick={() => setStakeholderType(type)}
@@ -462,11 +462,11 @@ export default function Onboarding() {
                         : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
                     }`}>
                     <div className="flex items-center gap-3 mb-2">
-                      <Icon className={`w-5 h-5 ${stakeholderType === type ? "" : "text-gray-400"}`} />
+                      <Icon className={`w-5 h-5 ${stakeholderType === type ? "" : "text-muted-foreground"}`} />
                       <span className="font-semibold text-sm">{label}</span>
                       {stakeholderType === type && <CheckCircle2 className="w-4 h-4 ml-auto" />}
                     </div>
-                    <p className="text-xs text-gray-400 leading-relaxed">{description}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
                   </button>
                 ))}
               </div>
@@ -480,7 +480,7 @@ export default function Onboarding() {
                 <User className="w-5 h-5 text-emerald-400" />
                 <h2 className="text-lg font-bold">Personal Information</h2>
               </div>
-              <p className="text-sm text-gray-400 mb-6">Your personal details for identity verification.</p>
+              <p className="text-sm text-muted-foreground mb-6">Your personal details for identity verification.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="First Name" required><TextInput value={personal.firstName} onChange={updatePersonal("firstName")} placeholder="Emeka" /></Field>
                 <Field label="Last Name" required><TextInput value={personal.lastName} onChange={updatePersonal("lastName")} placeholder="Okafor" /></Field>
@@ -506,7 +506,7 @@ export default function Onboarding() {
                 <Building2 className="w-5 h-5 text-emerald-400" />
                 <h2 className="text-lg font-bold">Business / Entity Information</h2>
               </div>
-              <p className="text-sm text-gray-400 mb-6">
+              <p className="text-sm text-muted-foreground mb-6">
                 {stakeholderType === "FARMER" ? "Optional for individual farmers. Required for cooperatives." : "Required for all registered entities."}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -527,7 +527,7 @@ export default function Onboarding() {
                 {selectedConfig && <selectedConfig.icon className="w-5 h-5 text-emerald-400" />}
                 <h2 className="text-lg font-bold">{selectedConfig?.label} Details</h2>
               </div>
-              <p className="text-sm text-gray-400 mb-6">Specific information required for your stakeholder category.</p>
+              <p className="text-sm text-muted-foreground mb-6">Specific information required for your stakeholder category.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {stakeholderType === "FARMER" && <>
                   <Field label="Farm Size (hectares)"><TextInput value={specific.farmSize} onChange={updateSpecific("farmSize")} placeholder="e.g. 50 ha" /></Field>
@@ -589,7 +589,7 @@ export default function Onboarding() {
                 <Upload className="w-5 h-5 text-emerald-400" />
                 <h2 className="text-lg font-bold">Document Upload</h2>
               </div>
-              <p className="text-sm text-gray-400 mb-6">Upload the required documents for KYC verification. Accepted formats: PDF, JPG, PNG (max 5MB each).</p>
+              <p className="text-sm text-muted-foreground mb-6">Upload the required documents for KYC verification. Accepted formats: PDF, JPG, PNG (max 5MB each).</p>
               <div className="space-y-3">
                 {([
                   { id: "government_id", label: "Government-issued ID (NIN slip, International Passport, or Driver's License)", required: true },
@@ -619,13 +619,13 @@ export default function Onboarding() {
                     <div key={doc.id} className={`flex items-center gap-3 p-3 border rounded-lg transition-colors ${uploaded ? "bg-emerald-900/20 border-emerald-500/30" : "bg-white/5 border-white/10 hover:bg-white/10"}`}>
                       {uploaded
                         ? <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                        : <FileText className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                        : <FileText className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       }
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white truncate">{doc.label}</p>
                         {uploaded
                           ? <p className="text-xs text-emerald-400 truncate">{uploaded.fileName}</p>
-                          : <p className="text-xs text-gray-500">{doc.required ? "Required" : "Optional"}</p>
+                          : <p className="text-xs text-muted-foreground">{doc.required ? "Required" : "Optional"}</p>
                         }
                       </div>
                       <input
@@ -640,7 +640,7 @@ export default function Onboarding() {
                         variant="outline"
                         disabled={isUploading}
                         onClick={() => docInputRefs.current[doc.id]?.click()}
-                        className={`text-xs border-white/20 bg-transparent ${uploaded ? "text-emerald-400 border-emerald-500/40" : "text-gray-300 hover:text-white"}`}
+                        className={`text-xs border-white/20 bg-transparent ${uploaded ? "text-emerald-400 border-emerald-500/40" : "text-muted-foreground hover:text-white"}`}
                       >
                         {isUploading
                           ? <><RefreshCw className="w-3 h-3 mr-1 animate-spin" /> Uploading...</>
@@ -653,7 +653,7 @@ export default function Onboarding() {
                   );
                 })}
               </div>
-              <p className="text-xs text-gray-500 mt-4 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
                 Files are uploaded securely to encrypted S3 storage. Accepted: PDF, JPG, PNG (max 5 MB each).
               </p>
@@ -667,7 +667,7 @@ export default function Onboarding() {
                 <Eye className="w-5 h-5 text-emerald-400" />
                 <h2 className="text-lg font-bold">Review & Submit</h2>
               </div>
-              <p className="text-sm text-gray-400 mb-6">Please review your information before submitting.</p>
+              <p className="text-sm text-muted-foreground mb-6">Please review your information before submitting.</p>
 
               <div className="space-y-4 text-sm">
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4">
@@ -676,11 +676,11 @@ export default function Onboarding() {
                     <span className="font-semibold text-emerald-400">{selectedConfig?.label}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div><span className="text-gray-500">Name</span><div className="text-white">{personal.firstName} {personal.lastName}</div></div>
-                    <div><span className="text-gray-500">Email</span><div className="text-white truncate">{personal.email}</div></div>
-                    <div><span className="text-gray-500">Phone</span><div className="text-white">{personal.phone}</div></div>
-                    <div><span className="text-gray-500">State</span><div className="text-white">{personal.state}, {personal.country}</div></div>
-                    {business.companyName && <><div><span className="text-gray-500">Company</span><div className="text-white">{business.companyName}</div></div><div><span className="text-gray-500">RC Number</span><div className="text-white">{business.rcNumber || "—"}</div></div></>}
+                    <div><span className="text-muted-foreground">Name</span><div className="text-white">{personal.firstName} {personal.lastName}</div></div>
+                    <div><span className="text-muted-foreground">Email</span><div className="text-white truncate">{personal.email}</div></div>
+                    <div><span className="text-muted-foreground">Phone</span><div className="text-white">{personal.phone}</div></div>
+                    <div><span className="text-muted-foreground">State</span><div className="text-white">{personal.state}, {personal.country}</div></div>
+                    {business.companyName && <><div><span className="text-muted-foreground">Company</span><div className="text-white">{business.companyName}</div></div><div><span className="text-muted-foreground">RC Number</span><div className="text-white">{business.rcNumber || "—"}</div></div></>}
                   </div>
                 </div>
 
@@ -688,14 +688,14 @@ export default function Onboarding() {
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input type="checkbox" checked={agreedToTerms} onChange={e => setAgreedToTerms(e.target.checked)}
                       className="mt-0.5 w-4 h-4 accent-emerald-500" />
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       I agree to the <span className="text-emerald-400 underline cursor-pointer">NEXCOM Exchange Terms of Service</span> and <span className="text-emerald-400 underline cursor-pointer">Trading Rules</span>. I confirm that all information provided is accurate and complete.
                     </span>
                   </label>
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input type="checkbox" checked={agreedToKyc} onChange={e => setAgreedToKyc(e.target.checked)}
                       className="mt-0.5 w-4 h-4 accent-emerald-500" />
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       I consent to the collection and processing of my personal data for KYC/AML compliance purposes in accordance with the <span className="text-emerald-400 underline cursor-pointer">Privacy Policy</span>.
                     </span>
                   </label>
@@ -714,7 +714,7 @@ export default function Onboarding() {
         {/* Navigation buttons */}
         <div className="flex items-center justify-between mt-6">
           <Button variant="outline" onClick={() => setStep(s => s - 1)} disabled={step === 0}
-            className="border-white/20 text-gray-300 hover:text-white bg-transparent gap-2">
+            className="border-white/20 text-muted-foreground hover:text-white bg-transparent gap-2">
             <ChevronLeft className="w-4 h-4" /> Back
           </Button>
 
@@ -748,20 +748,20 @@ export default function Onboarding() {
             </div>
             <div className="text-left">
               <div className="text-sm font-semibold text-white">Cooperative Bulk KYC Upload</div>
-              <div className="text-xs text-gray-400">Fast-track KYC for multiple farmers via CSV upload</div>
+              <div className="text-xs text-muted-foreground">Fast-track KYC for multiple farmers via CSV upload</div>
             </div>
           </div>
-          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${showBulkPanel ? "rotate-90" : ""}`} />
+          <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${showBulkPanel ? "rotate-90" : ""}`} />
         </button>
 
         {showBulkPanel && (
           <div className="mt-3 bg-white/5 border border-white/10 rounded-xl p-6 space-y-5">
             <div>
               <h3 className="text-base font-bold text-white mb-1">Bulk KYC — Cooperative Administrator</h3>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Upload a CSV file with your cooperative members' details. Each row creates a pending KYC application.
                 Required columns: <span className="text-amber-300 font-mono">firstName, lastName, phone, state, address</span>.
-                Optional: <span className="font-mono text-gray-300">bvn, nin, email</span>.
+                Optional: <span className="font-mono text-muted-foreground">bvn, nin, email</span>.
               </p>
             </div>
 
@@ -781,7 +781,7 @@ export default function Onboarding() {
 
             {/* Cooperative name */}
             <div className="space-y-1.5">
-              <Label className="text-xs text-gray-400">Cooperative Name <span className="text-red-400">*</span></Label>
+              <Label className="text-xs text-muted-foreground">Cooperative Name <span className="text-red-400">*</span></Label>
               <Input
                 value={bulkCoopName}
                 onChange={e => setBulkCoopName(e.target.value)}
@@ -792,15 +792,15 @@ export default function Onboarding() {
 
             {/* File upload */}
             <div className="space-y-1.5">
-              <Label className="text-xs text-gray-400">CSV File <span className="text-red-400">*</span></Label>
+              <Label className="text-xs text-muted-foreground">CSV File <span className="text-red-400">*</span></Label>
               <div
                 onClick={() => fileInputRef.current?.click()}
                 className="border-2 border-dashed border-white/10 rounded-lg p-6 text-center cursor-pointer hover:border-amber-500/40 transition-colors"
               >
-                <Upload className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+                <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                 {bulkFileName
                   ? <p className="text-sm text-amber-300 font-medium">{bulkFileName}</p>
-                  : <p className="text-sm text-gray-400">Click to select a CSV file</p>
+                  : <p className="text-sm text-muted-foreground">Click to select a CSV file</p>
                 }
                 <p className="text-xs text-gray-600 mt-1">Max 500 rows per upload</p>
               </div>
@@ -818,7 +818,7 @@ export default function Onboarding() {
             {bulkPreview.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-400">{bulkPreview.length} member{bulkPreview.length !== 1 ? "s" : ""} detected</span>
+                  <span className="text-xs text-muted-foreground">{bulkPreview.length} member{bulkPreview.length !== 1 ? "s" : ""} detected</span>
                   <Badge variant="outline" className="text-amber-400 border-amber-400/30 text-xs">{bulkPreview.length} rows</Badge>
                 </div>
                 <div className="overflow-x-auto rounded-lg border border-white/10">
@@ -826,7 +826,7 @@ export default function Onboarding() {
                     <thead className="bg-white/5">
                       <tr>
                         {Object.keys(bulkPreview[0]).slice(0, 6).map(h => (
-                          <th key={h} className="px-3 py-2 text-left text-gray-400 font-medium capitalize">{h}</th>
+                          <th key={h} className="px-3 py-2 text-left text-muted-foreground font-medium capitalize">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -834,13 +834,13 @@ export default function Onboarding() {
                       {bulkPreview.slice(0, 5).map((row, i) => (
                         <tr key={i} className="border-t border-white/5 hover:bg-white/3">
                           {Object.values(row).slice(0, 6).map((val, j) => (
-                            <td key={j} className="px-3 py-2 text-gray-300 truncate max-w-[120px]">{val || "—"}</td>
+                            <td key={j} className="px-3 py-2 text-muted-foreground truncate max-w-[120px]">{val || "—"}</td>
                           ))}
                         </tr>
                       ))}
                       {bulkPreview.length > 5 && (
                         <tr className="border-t border-white/5">
-                          <td colSpan={6} className="px-3 py-2 text-center text-gray-500 text-xs">…and {bulkPreview.length - 5} more rows</td>
+                          <td colSpan={6} className="px-3 py-2 text-center text-muted-foreground text-xs">…and {bulkPreview.length - 5} more rows</td>
                         </tr>
                       )}
                     </tbody>

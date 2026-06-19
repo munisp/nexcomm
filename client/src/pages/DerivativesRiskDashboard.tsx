@@ -70,7 +70,7 @@ export default function DerivativesRiskDashboard() {
   const forceLiquidate = trpc.derivatives.adminForceLiquidatePosition.useMutation({
     onSuccess: (data) => {
       toast.success("Position force-liquidated", {
-        description: `Realized P&L: ${data.realizedPnl >= 0 ? "+" : ""}${fmt(data.realizedPnl)} NGN`,
+        description: `Realized P&L: ${Number(data.realizedPnl) >= 0 ? "+" : ""}${fmt(data.realizedPnl)} NGN`,
       });
       setLiqDialog(null);
       setLiqPrice("");

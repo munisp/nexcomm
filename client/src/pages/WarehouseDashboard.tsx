@@ -70,7 +70,7 @@ type DashStats = {
 };
 
 const KYC_BADGE: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  PENDING: { label: "Pending", color: "bg-gray-700 text-gray-200", icon: Clock },
+  PENDING: { label: "Pending", color: "bg-muted text-foreground", icon: Clock },
   UNDER_REVIEW: { label: "Under Review", color: "bg-yellow-700 text-yellow-200", icon: Clock },
   APPROVED: { label: "Approved", color: "bg-green-700 text-green-200", icon: CheckCircle2 },
   REJECTED: { label: "Rejected", color: "bg-red-700 text-red-200", icon: XCircle },
@@ -267,7 +267,7 @@ export default function WarehouseDashboard() {
               </div>
               <div>
                 <p className="text-xs text-amber-400">Account Status</p>
-                <p className={`text-sm font-medium ${profile.accountStatus === "ACTIVE" ? "text-green-400" : "text-gray-400"}`}>
+                <p className={`text-sm font-medium ${profile.accountStatus === "ACTIVE" ? "text-green-400" : "text-muted-foreground"}`}>
                   {profile.accountStatus as string}
                 </p>
               </div>

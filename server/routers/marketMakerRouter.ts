@@ -53,53 +53,6 @@ function evaluateQuoteCompliance(
   return { isCompliant: true, breachType: null, spreadBps };
 }
 
-// ─── In-memory fallback stores ────────────────────────────────────────────────
-type MemProfile = {
-  id: number; userId: number; firmName: string; licenseNumber: string | null;
-  assetClasses: string; instruments: string; status: string;
-  approvedBy: number | null; approvedAt: Date | null;
-  suspendedAt: Date | null; suspensionReason: string | null;
-  createdAt: Date; updatedAt: Date;
-};
-type MemObligation = {
-  id: number; marketMakerId: number; instrument: string; assetClass: string;
-  minBidSize: string; minAskSize: string; maxSpreadBps: number; minUptimePct: string;
-  penaltyPerBreachNgn: string; effectiveFrom: Date; effectiveTo: Date | null;
-  isActive: boolean; createdBy: number | null; createdAt: Date; updatedAt: Date;
-};
-type MemSnapshot = {
-  id: number; marketMakerId: number; obligationId: number; instrument: string;
-  bidPrice: string | null; askPrice: string | null; bidSize: string | null; askSize: string | null;
-  spreadBps: number | null; isCompliant: boolean; breachType: string | null;
-  tradingSessionDate: string; snapshotAt: Date;
-};
-type MemPerfReport = {
-  id: number; marketMakerId: number; obligationId: number; instrument: string;
-  reportDate: string; totalSnapshots: number; compliantSnapshots: number;
-  uptimePct: string; avgSpreadBps: number; maxSpreadBps: number;
-  spreadBreaches: number; sizeBreaches: number; absenceBreaches: number;
-  totalBreaches: number; penaltyAmount: string; penaltyStatus: string;
-  notes: string | null; reviewedBy: number | null; reviewedAt: Date | null;
-  generatedAt: Date;
-};
-
-const _memProfiles = new Map<number, MemProfile>();
-const _memObligations = new Map<number, MemObligation>();
-const _memSnapshots = new Map<number, MemSnapshot>();
-const _memPerfReports = new Map<number, MemPerfReport>();
-let _profSeq = 1;
-let _oblSeq = 1;
-let _snapSeq = 1;
-let _repSeq = 1;
-
-function parseProfile(p: MemProfile) {
-  return {
-    ...p,
-    assetClasses: JSON.parse(p.assetClasses) as string[],
-    instruments: JSON.parse(p.instruments) as string[],
-  };
-}
-
 export const marketMakerRouter = router({
   // ─── Admin: Profile Management ─────────────────────────────────────────────
   adminCreateProfile: adminProcedure
@@ -112,20 +65,7 @@ export const marketMakerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const id = _profSeq++;
-        const now = new Date();
-        const profile: MemProfile = {
-          id, userId: input.userId, firmName: input.firmName,
-          licenseNumber: input.licenseNumber ?? null,
-          assetClasses: JSON.stringify(input.assetClasses),
-          instruments: JSON.stringify(input.instruments),
-          status: "ACTIVE", approvedBy: ctx.user.id, approvedAt: now,
-          suspendedAt: null, suspensionReason: null, createdAt: now, updatedAt: now,
-        };
-        _memProfiles.set(id, profile);
-        return parseProfile(profile);
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db.insert(marketMakerProfiles).values({
         userId: input.userId,
         firmName: input.firmName,
@@ -149,12 +89,7 @@ export const marketMakerRouter = router({
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const status = input?.status ?? "ALL";
-        let results = Array.from(_memProfiles.values());
-        if (status !== "ALL") results = results.filter(p => p.status === status);
-        return results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(parseProfile);
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const status = input?.status ?? "ALL";
       const rows = await db.select().from(marketMakerProfiles)
         .where(status !== "ALL" ? eq(marketMakerProfiles.status, status) : undefined)
@@ -170,11 +105,7 @@ export const marketMakerRouter = router({
     .input(z.object({ profileId: z.number().int().positive() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const p = _memProfiles.get(input.profileId);
-        if (!p) throw new TRPCError({ code: "NOT_FOUND", message: "Profile not found" });
-        return parseProfile(p);
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db.select().from(marketMakerProfiles)
         .where(eq(marketMakerProfiles.id, input.profileId));
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Profile not found" });
@@ -193,17 +124,7 @@ export const marketMakerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const p = _memProfiles.get(input.profileId);
-        if (!p) throw new TRPCError({ code: "NOT_FOUND", message: "Profile not found" });
-        p.status = input.status;
-        p.updatedAt = new Date();
-        if (input.status === "SUSPENDED") {
-          p.suspendedAt = new Date();
-          p.suspensionReason = input.reason ?? null;
-        }
-        return parseProfile(p);
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const updates: Record<string, unknown> = {
         status: input.status,
         updatedAt: new Date(),
@@ -242,21 +163,7 @@ export const marketMakerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const id = _oblSeq++;
-        const now = new Date();
-        const obl: MemObligation = {
-          id, marketMakerId: input.marketMakerId, instrument: input.instrument,
-          assetClass: input.assetClass, minBidSize: String(input.minBidSize),
-          minAskSize: String(input.minAskSize), maxSpreadBps: input.maxSpreadBps,
-          minUptimePct: String(input.minUptimePct),
-          penaltyPerBreachNgn: String(input.penaltyPerBreachNgn),
-          effectiveFrom: input.effectiveFrom, effectiveTo: input.effectiveTo ?? null,
-          isActive: true, createdBy: ctx.user.id, createdAt: now, updatedAt: now,
-        };
-        _memObligations.set(id, obl);
-        return obl;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [obligation] = await db.insert(marketMakerObligations).values({
         marketMakerId: input.marketMakerId,
         instrument: input.instrument,
@@ -280,12 +187,7 @@ export const marketMakerRouter = router({
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        let results = Array.from(_memObligations.values());
-        if (input?.marketMakerId) results = results.filter(o => o.marketMakerId === input.marketMakerId);
-        if (input?.activeOnly !== false) results = results.filter(o => o.isActive);
-        return results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const conditions = [];
       if (input?.marketMakerId) conditions.push(eq(marketMakerObligations.marketMakerId, input.marketMakerId));
       if (input?.activeOnly !== false) conditions.push(eq(marketMakerObligations.isActive, true));
@@ -298,14 +200,7 @@ export const marketMakerRouter = router({
     .input(z.object({ obligationId: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const o = _memObligations.get(input.obligationId);
-        if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "Obligation not found" });
-        o.isActive = false;
-        o.effectiveTo = new Date();
-        o.updatedAt = new Date();
-        return o;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [updated] = await db.update(marketMakerObligations)
         .set({ isActive: false, effectiveTo: new Date(), updatedAt: new Date() })
         .where(eq(marketMakerObligations.id, input.obligationId))
@@ -325,35 +220,7 @@ export const marketMakerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        // Find the user's active profile
-        const profile = Array.from(_memProfiles.values()).find(
-          p => p.userId === ctx.user.id && p.status === "ACTIVE"
-        );
-        if (!profile) throw new TRPCError({ code: "FORBIDDEN", message: "No active market maker profile" });
-        const obligation = _memObligations.get(input.obligationId);
-        if (!obligation || obligation.marketMakerId !== profile.id || !obligation.isActive) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Obligation not found" });
-        }
-        const { isCompliant, breachType, spreadBps } = evaluateQuoteCompliance(
-          input.bidPrice ?? null, input.askPrice ?? null,
-          input.bidSize ?? null, input.askSize ?? null, obligation
-        );
-        const id = _snapSeq++;
-        const today = new Date().toISOString().slice(0, 10);
-        const snap: MemSnapshot = {
-          id, marketMakerId: profile.id, obligationId: input.obligationId,
-          instrument: obligation.instrument,
-          bidPrice: input.bidPrice ? String(input.bidPrice) : null,
-          askPrice: input.askPrice ? String(input.askPrice) : null,
-          bidSize: input.bidSize ? String(input.bidSize) : null,
-          askSize: input.askSize ? String(input.askSize) : null,
-          spreadBps, isCompliant, breachType: breachType ?? null,
-          tradingSessionDate: today, snapshotAt: new Date(),
-        };
-        _memSnapshots.set(id, snap);
-        return snap;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       // Verify market maker profile exists for this user
       const [profile] = await db.select().from(marketMakerProfiles)
@@ -403,13 +270,7 @@ export const marketMakerRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        let results = Array.from(_memSnapshots.values());
-        if (input.marketMakerId) results = results.filter(s => s.marketMakerId === input.marketMakerId);
-        if (input.obligationId) results = results.filter(s => s.obligationId === input.obligationId);
-        if (input.date) results = results.filter(s => s.tradingSessionDate === input.date);
-        return results.sort((a, b) => b.snapshotAt.getTime() - a.snapshotAt.getTime()).slice(0, input.limit);
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const conditions = [];
       if (input.marketMakerId) conditions.push(eq(marketMakerQuoteSnapshots.marketMakerId, input.marketMakerId));
       if (input.obligationId) conditions.push(eq(marketMakerQuoteSnapshots.obligationId, input.obligationId));
@@ -429,39 +290,7 @@ export const marketMakerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const obligation = _memObligations.get(input.obligationId);
-        if (!obligation) throw new TRPCError({ code: "NOT_FOUND", message: "Obligation not found" });
-        const snapshots = Array.from(_memSnapshots.values()).filter(
-          s => s.marketMakerId === input.marketMakerId &&
-               s.obligationId === input.obligationId &&
-               s.tradingSessionDate === input.reportDate
-        );
-        const total = snapshots.length;
-        const compliant = snapshots.filter(s => s.isCompliant).length;
-        const spreadBreaches = snapshots.filter(s => s.breachType === "SPREAD_TOO_WIDE").length;
-        const sizeBreaches = snapshots.filter(s => s.breachType === "SIZE_TOO_SMALL").length;
-        const absenceBreaches = snapshots.filter(s => s.breachType === "ABSENT").length;
-        const totalBreaches = spreadBreaches + sizeBreaches + absenceBreaches;
-        const uptimePct = total > 0 ? (compliant / total) * 100 : 0;
-        const validSpreads = snapshots.filter(s => s.spreadBps !== null).map(s => s.spreadBps as number);
-        const avgSpreadBps = validSpreads.length > 0
-          ? Math.round(validSpreads.reduce((a, b) => a + b, 0) / validSpreads.length) : 0;
-        const maxSpreadBps = validSpreads.length > 0 ? Math.max(...validSpreads) : 0;
-        const penaltyAmount = totalBreaches * parseFloat(obligation.penaltyPerBreachNgn);
-        const id = _repSeq++;
-        const report: MemPerfReport = {
-          id, marketMakerId: input.marketMakerId, obligationId: input.obligationId,
-          instrument: obligation.instrument, reportDate: input.reportDate,
-          totalSnapshots: total, compliantSnapshots: compliant,
-          uptimePct: uptimePct.toFixed(2), avgSpreadBps, maxSpreadBps,
-          spreadBreaches, sizeBreaches, absenceBreaches, totalBreaches,
-          penaltyAmount: penaltyAmount.toFixed(2), penaltyStatus: "PENDING",
-          notes: null, reviewedBy: null, reviewedAt: null, generatedAt: new Date(),
-        };
-        _memPerfReports.set(id, report);
-        return report;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [obligation] = await db.select().from(marketMakerObligations)
         .where(eq(marketMakerObligations.id, input.obligationId));
@@ -524,13 +353,7 @@ export const marketMakerRouter = router({
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        let results = Array.from(_memPerfReports.values());
-        if (input?.marketMakerId) results = results.filter(r => r.marketMakerId === input.marketMakerId);
-        const ps = input?.penaltyStatus ?? "ALL";
-        if (ps !== "ALL") results = results.filter(r => r.penaltyStatus === ps);
-        return results.sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime()).slice(0, input?.limit ?? 50);
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const conditions = [];
       if (input?.marketMakerId) conditions.push(eq(marketMakerPerformanceReports.marketMakerId, input.marketMakerId));
       const ps = input?.penaltyStatus ?? "ALL";
@@ -549,15 +372,7 @@ export const marketMakerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const r = _memPerfReports.get(input.reportId);
-        if (!r) throw new TRPCError({ code: "NOT_FOUND", message: "Report not found" });
-        r.penaltyStatus = input.penaltyStatus;
-        r.notes = input.notes ?? null;
-        r.reviewedBy = ctx.user.id;
-        r.reviewedAt = new Date();
-        return r;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [updated] = await db.update(marketMakerPerformanceReports)
         .set({
           penaltyStatus: input.penaltyStatus,
@@ -574,28 +389,7 @@ export const marketMakerRouter = router({
   adminGetStats: adminProcedure
     .query(async () => {
       const db = await getDb();
-      if (!db) {
-        const profiles = Array.from(_memProfiles.values());
-        const obligations = Array.from(_memObligations.values());
-        const reports = Array.from(_memPerfReports.values());
-        return {
-          profiles: {
-            total: profiles.length,
-            active: profiles.filter(p => p.status === "ACTIVE").length,
-            suspended: profiles.filter(p => p.status === "SUSPENDED").length,
-          },
-          obligations: {
-            total: obligations.length,
-            active: obligations.filter(o => o.isActive).length,
-          },
-          penalties: {
-            totalPending: reports.filter(r => r.penaltyStatus === "PENDING").reduce((s, r) => s + parseFloat(r.penaltyAmount), 0),
-            totalInvoiced: reports.filter(r => r.penaltyStatus === "INVOICED").reduce((s, r) => s + parseFloat(r.penaltyAmount), 0),
-            totalPaid: reports.filter(r => r.penaltyStatus === "PAID").reduce((s, r) => s + parseFloat(r.penaltyAmount), 0),
-            reportsWithBreaches: reports.filter(r => r.totalBreaches > 0).length,
-          },
-        };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profileStats] = await db.select({
         total: sql<number>`COUNT(*)::int`,
         active: sql<number>`SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END)::int`,
@@ -622,11 +416,7 @@ export const marketMakerRouter = router({
   myProfile: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) {
-        const p = Array.from(_memProfiles.values()).find(p => p.userId === ctx.user.id);
-        if (!p) return null;
-        return parseProfile(p);
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db.select().from(marketMakerProfiles)
         .where(eq(marketMakerProfiles.userId, ctx.user.id));
       if (!profile) return null;
@@ -640,13 +430,7 @@ export const marketMakerRouter = router({
   myObligations: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = Array.from(_memProfiles.values()).find(p => p.userId === ctx.user.id);
-        if (!profile) return [];
-        return Array.from(_memObligations.values())
-          .filter(o => o.marketMakerId === profile.id && o.isActive)
-          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db.select().from(marketMakerProfiles)
         .where(eq(marketMakerProfiles.userId, ctx.user.id));
       if (!profile) return [];
@@ -662,14 +446,7 @@ export const marketMakerRouter = router({
     .input(z.object({ limit: z.number().int().min(1).max(100).default(30) }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = Array.from(_memProfiles.values()).find(p => p.userId === ctx.user.id);
-        if (!profile) return [];
-        return Array.from(_memPerfReports.values())
-          .filter(r => r.marketMakerId === profile.id)
-          .sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime())
-          .slice(0, input?.limit ?? 30);
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db.select().from(marketMakerProfiles)
         .where(eq(marketMakerProfiles.userId, ctx.user.id));
       if (!profile) return [];

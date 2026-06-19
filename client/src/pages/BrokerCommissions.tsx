@@ -219,12 +219,12 @@ export default function BrokerCommissions() {
       {/* Header */}
       <div className="border-b border-white/10 bg-[#0d1426] px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/broker/dashboard")} className="text-gray-400 hover:text-white">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/broker/dashboard")} className="text-muted-foreground hover:text-white">
             <ArrowLeft className="w-4 h-4 mr-1" /> Back
           </Button>
           <div>
             <h1 className="text-xl font-bold text-white">Commission Dashboard</h1>
-            <p className="text-xs text-gray-400">Manage clients, track earnings, and view trade history</p>
+            <p className="text-xs text-muted-foreground">Manage clients, track earnings, and view trade history</p>
           </div>
         </div>
       </div>
@@ -239,10 +239,10 @@ export default function BrokerCommissions() {
               { label: "Pending", value: `₦${Number(summary.totalPending).toLocaleString()}`, color: "text-amber-400" },
             ].map((card) => (
               <div key={card.label} className="bg-white/5 border border-white/10 rounded-xl p-4">
-                <p className="text-xs text-gray-400 mb-1">{card.label}</p>
+                <p className="text-xs text-muted-foreground mb-1">{card.label}</p>
                 <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
                 {card.label === "Total Earned" && summary.commissionRate && (
-                  <p className="text-xs text-gray-500 mt-1">Rate: {summary.commissionRate}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">Rate: {summary.commissionRate}%</p>
                 )}
               </div>
             ))}
@@ -256,7 +256,7 @@ export default function BrokerCommissions() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                activeTab === tab.id ? "bg-emerald-500 text-white" : "text-gray-400 hover:text-white"
+                activeTab === tab.id ? "bg-emerald-500 text-white" : "text-muted-foreground hover:text-white"
               }`}
             >
               {tab.icon} {tab.label}
@@ -280,7 +280,7 @@ export default function BrokerCommissions() {
                     <SelectItem value="SUSPENDED">Suspended</SelectItem>
                   </SelectContent>
                 </Select>
-                <span className="text-xs text-gray-400">{clientsQuery.data?.total ?? 0} clients</span>
+                <span className="text-xs text-muted-foreground">{clientsQuery.data?.total ?? 0} clients</span>
               </div>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
                 <DialogTrigger asChild>
@@ -319,32 +319,32 @@ export default function BrokerCommissions() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-white/10 hover:bg-transparent">
-                    <TableHead className="text-gray-400">Name</TableHead>
-                    <TableHead className="text-gray-400">Email</TableHead>
-                    <TableHead className="text-gray-400">Phone</TableHead>
-                    <TableHead className="text-gray-400">Type</TableHead>
-                    <TableHead className="text-gray-400">Status</TableHead>
-                    <TableHead className="text-gray-400">Added</TableHead>
-                    <TableHead className="text-gray-400">Actions</TableHead>
+                    <TableHead className="text-muted-foreground">Name</TableHead>
+                    <TableHead className="text-muted-foreground">Email</TableHead>
+                    <TableHead className="text-muted-foreground">Phone</TableHead>
+                    <TableHead className="text-muted-foreground">Type</TableHead>
+                    <TableHead className="text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-muted-foreground">Added</TableHead>
+                    <TableHead className="text-muted-foreground">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {clientsQuery.isLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center text-gray-400 py-8">Loading...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
                   ) : clientsQuery.data?.clients.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center text-gray-400 py-8">No clients yet. Add your first client above.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No clients yet. Add your first client above.</TableCell></TableRow>
                   ) : clientsQuery.data?.clients.map((c) => (
                     <TableRow key={c.id} className="border-white/10 hover:bg-white/5">
                       <TableCell className="font-medium text-white">{c.clientName}</TableCell>
-                      <TableCell className="text-gray-300 text-sm">{c.clientEmail ?? "—"}</TableCell>
-                      <TableCell className="text-gray-300 text-sm">{c.clientPhone ?? "—"}</TableCell>
-                      <TableCell className="text-gray-300 text-sm">{c.accountType ?? "INDIVIDUAL"}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{c.clientEmail ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{c.clientPhone ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{c.accountType ?? "INDIVIDUAL"}</TableCell>
                       <TableCell>
-                        <Badge className={c.status === "ACTIVE" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : c.status === "SUSPENDED" ? "bg-red-500/20 text-red-400 border-red-500/30" : "bg-gray-500/20 text-gray-400 border-gray-500/30"}>
+                        <Badge className={c.status === "ACTIVE" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : c.status === "SUSPENDED" ? "bg-red-500/20 text-red-400 border-red-500/30" : "bg-gray-500/20 text-muted-foreground border-gray-500/30"}>
                           {c.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-gray-400 text-xs">{new Date(c.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{new Date(c.createdAt).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 h-7 w-7 p-0"
@@ -366,7 +366,7 @@ export default function BrokerCommissions() {
             {/* Pagination */}
             {(clientsQuery.data?.total ?? 0) > 15 && (
               <div className="flex items-center justify-between mt-4">
-                <span className="text-xs text-gray-400">Page {clientPage} of {Math.ceil((clientsQuery.data?.total ?? 0) / 15)}</span>
+                <span className="text-xs text-muted-foreground">Page {clientPage} of {Math.ceil((clientsQuery.data?.total ?? 0) / 15)}</span>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" disabled={clientPage === 1} onClick={() => setClientPage(p => p - 1)} className="border-white/10 text-white"><ChevronLeft className="w-4 h-4" /></Button>
                   <Button variant="outline" size="sm" disabled={clientPage >= Math.ceil((clientsQuery.data?.total ?? 0) / 15)} onClick={() => setClientPage(p => p + 1)} className="border-white/10 text-white"><ChevronRight className="w-4 h-4" /></Button>
@@ -390,7 +390,7 @@ export default function BrokerCommissions() {
                     <SelectItem value="CANCELLED">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
-                <span className="text-xs text-gray-400">{commissionsQuery.data?.total ?? 0} records</span>
+                <span className="text-xs text-muted-foreground">{commissionsQuery.data?.total ?? 0} records</span>
               </div>
               <Button
                 size="sm"
@@ -427,31 +427,31 @@ export default function BrokerCommissions() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-white/10 hover:bg-transparent">
-                    <TableHead className="text-gray-400">Order ID</TableHead>
-                    <TableHead className="text-gray-400">Commodity</TableHead>
-                    <TableHead className="text-gray-400">Trade Value</TableHead>
-                    <TableHead className="text-gray-400">Commission</TableHead>
-                    <TableHead className="text-gray-400">Status</TableHead>
-                    <TableHead className="text-gray-400">Date</TableHead>
+                    <TableHead className="text-muted-foreground">Order ID</TableHead>
+                    <TableHead className="text-muted-foreground">Commodity</TableHead>
+                    <TableHead className="text-muted-foreground">Trade Value</TableHead>
+                    <TableHead className="text-muted-foreground">Commission</TableHead>
+                    <TableHead className="text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-muted-foreground">Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {commissionsQuery.isLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center text-gray-400 py-8">Loading...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
                   ) : commissionsQuery.data?.commissions.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center text-gray-400 py-8">No commission records yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No commission records yet.</TableCell></TableRow>
                   ) : commissionsQuery.data?.commissions.map((c) => (
                     <TableRow key={c.id} className="border-white/10 hover:bg-white/5">
-                      <TableCell className="text-gray-300 font-mono text-xs">{c.orderId}</TableCell>
+                      <TableCell className="text-muted-foreground font-mono text-xs">{c.orderId}</TableCell>
                       <TableCell className="text-white">{c.symbol ?? "—"}</TableCell>
-                      <TableCell className="text-gray-300">₦{Number(c.tradeValue ?? 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-muted-foreground">₦{Number(c.tradeValue ?? 0).toLocaleString()}</TableCell>
                       <TableCell className="text-emerald-400 font-semibold">₦{Number(c.commissionAmount ?? 0).toLocaleString()}</TableCell>
                       <TableCell>
                         <Badge className={c.status === "PAID" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : c.status === "PENDING" ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}>
                           {c.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-gray-400 text-xs">{new Date(c.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{new Date(c.createdAt).toLocaleDateString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -460,7 +460,7 @@ export default function BrokerCommissions() {
 
             {(commissionsQuery.data?.total ?? 0) > 15 && (
               <div className="flex items-center justify-between mt-4">
-                <span className="text-xs text-gray-400">Page {commPage} of {Math.ceil((commissionsQuery.data?.total ?? 0) / 15)}</span>
+                <span className="text-xs text-muted-foreground">Page {commPage} of {Math.ceil((commissionsQuery.data?.total ?? 0) / 15)}</span>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" disabled={commPage === 1} onClick={() => setCommPage(p => p - 1)} className="border-white/10 text-white"><ChevronLeft className="w-4 h-4" /></Button>
                   <Button variant="outline" size="sm" disabled={commPage >= Math.ceil((commissionsQuery.data?.total ?? 0) / 15)} onClick={() => setCommPage(p => p + 1)} className="border-white/10 text-white"><ChevronRight className="w-4 h-4" /></Button>
@@ -476,7 +476,7 @@ export default function BrokerCommissions() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-white font-semibold">Monthly Commission Earnings</h3>
-                <p className="text-gray-400 text-xs mt-0.5">Bars: total earned &amp; paid out &nbsp;·&nbsp; Line: pending</p>
+                <p className="text-muted-foreground text-xs mt-0.5">Bars: total earned &amp; paid out &nbsp;·&nbsp; Line: pending</p>
               </div>
               <Select value={String(chartMonths)} onValueChange={(v) => setChartMonths(Number(v))}>
                 <SelectTrigger className="w-32 bg-white/5 border-white/10 text-white text-sm">
@@ -505,10 +505,10 @@ export default function BrokerCommissions() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-white/10 hover:bg-transparent">
-                      <TableHead className="text-gray-400">Month</TableHead>
-                      <TableHead className="text-gray-400 text-right">Earned</TableHead>
-                      <TableHead className="text-gray-400 text-right">Paid</TableHead>
-                      <TableHead className="text-gray-400 text-right">Pending</TableHead>
+                      <TableHead className="text-muted-foreground">Month</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Earned</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Paid</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Pending</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -531,7 +531,7 @@ export default function BrokerCommissions() {
         {activeTab === "trades" && (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-gray-400">{tradesQuery.data?.total ?? 0} fills</span>
+              <span className="text-xs text-muted-foreground">{tradesQuery.data?.total ?? 0} fills</span>
               <Button
                 size="sm"
                 variant="outline"
@@ -568,36 +568,36 @@ export default function BrokerCommissions() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-white/10 hover:bg-transparent">
-                    <TableHead className="text-gray-400">Fill ID</TableHead>
-                    <TableHead className="text-gray-400">Symbol</TableHead>
-                    <TableHead className="text-gray-400">Side</TableHead>
-                    <TableHead className="text-gray-400">Qty</TableHead>
-                    <TableHead className="text-gray-400">Price</TableHead>
-                    <TableHead className="text-gray-400">Value</TableHead>
-                    <TableHead className="text-gray-400">Date</TableHead>
+                    <TableHead className="text-muted-foreground">Fill ID</TableHead>
+                    <TableHead className="text-muted-foreground">Symbol</TableHead>
+                    <TableHead className="text-muted-foreground">Side</TableHead>
+                    <TableHead className="text-muted-foreground">Qty</TableHead>
+                    <TableHead className="text-muted-foreground">Price</TableHead>
+                    <TableHead className="text-muted-foreground">Value</TableHead>
+                    <TableHead className="text-muted-foreground">Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {tradesQuery.isLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center text-gray-400 py-8">Loading...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
                   ) : tradesQuery.data?.trades.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center text-gray-400 py-8">No trade fills yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No trade fills yet.</TableCell></TableRow>
                   ) : tradesQuery.data?.trades.map((t) => {
                     const isBuyer = t.buyerUserId === user.id;
                     const value = Number(t.fillPrice ?? 0) * Number(t.filledQty ?? 0);
                     return (
                       <TableRow key={t.id} className="border-white/10 hover:bg-white/5">
-                        <TableCell className="text-gray-300 font-mono text-xs">#{t.id}</TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-xs">#{t.id}</TableCell>
                         <TableCell className="text-white font-medium">{t.symbol ?? "—"}</TableCell>
                         <TableCell>
                           <Badge className={isBuyer ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}>
                             {isBuyer ? "BUY" : "SELL"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-gray-300">{Number(t.filledQty ?? 0).toLocaleString()} MT</TableCell>
-                        <TableCell className="text-gray-300">₦{Number(t.fillPrice ?? 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-muted-foreground">{Number(t.filledQty ?? 0).toLocaleString()} MT</TableCell>
+                        <TableCell className="text-muted-foreground">₦{Number(t.fillPrice ?? 0).toLocaleString()}</TableCell>
                         <TableCell className="text-white font-semibold">₦{value.toLocaleString()}</TableCell>
-                        <TableCell className="text-gray-400 text-xs">{new Date(t.createdAt).toLocaleString()}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{new Date(t.createdAt).toLocaleString()}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -607,7 +607,7 @@ export default function BrokerCommissions() {
 
             {(tradesQuery.data?.total ?? 0) > 15 && (
               <div className="flex items-center justify-between mt-4">
-                <span className="text-xs text-gray-400">Page {tradePage} of {Math.ceil((tradesQuery.data?.total ?? 0) / 15)}</span>
+                <span className="text-xs text-muted-foreground">Page {tradePage} of {Math.ceil((tradesQuery.data?.total ?? 0) / 15)}</span>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" disabled={tradePage === 1} onClick={() => setTradePage(p => p - 1)} className="border-white/10 text-white"><ChevronLeft className="w-4 h-4" /></Button>
                   <Button variant="outline" size="sm" disabled={tradePage >= Math.ceil((tradesQuery.data?.total ?? 0) / 15)} onClick={() => setTradePage(p => p + 1)} className="border-white/10 text-white"><ChevronRight className="w-4 h-4" /></Button>

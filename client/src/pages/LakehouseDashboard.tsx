@@ -33,7 +33,7 @@ function StatusDot({ ok }: { ok: boolean }) {
 function LayerBadge({ layer }: { layer: string }) {
   const colors: Record<string, string> = {
     bronze: "bg-amber-800/30 text-amber-300 border-amber-700/50",
-    silver: "bg-slate-500/30 text-slate-200 border-slate-400/50",
+    silver: "bg-slate-500/30 text-foreground border-slate-400/50",
     gold: "bg-yellow-600/30 text-yellow-300 border-yellow-500/50",
   };
   return (
@@ -224,7 +224,7 @@ export default function LakehouseDashboard() {
           <Card className="bg-card border-border">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Database className="w-4 h-4 text-slate-400" />
+                <Database className="w-4 h-4 text-muted-foreground" />
                 Bronze → Silver Transformation Viewer
               </CardTitle>
               <CardDescription>

@@ -30,7 +30,7 @@ const STATE_PRODUCTION = [
 const SENTIMENT_COLORS: Record<string, string> = {
   BULLISH: "bg-green-500/15 text-green-400 border-green-500/30",
   BEARISH: "bg-red-500/15 text-red-400 border-red-500/30",
-  NEUTRAL: "bg-gray-500/15 text-gray-400 border-gray-500/30",
+  NEUTRAL: "bg-gray-500/15 text-muted-foreground border-gray-500/30",
 };
 
 type CropIndex = { id: number; indexName: string; cropSymbol: string; indexValue: string; changePercent: string; sentiment: string };
@@ -58,7 +58,7 @@ export default function CropReports() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">Crop Production Reports</h1>
-            <p className="text-sm text-gray-400">Nigeria agricultural production data, forecasts & commodity indices</p>
+            <p className="text-sm text-muted-foreground">Nigeria agricultural production data, forecasts & commodity indices</p>
           </div>
         </div>
         <Badge variant="outline" className="border-orange-500/30 text-orange-400 bg-orange-500/10">
@@ -72,10 +72,10 @@ export default function CropReports() {
           const SentIcon = SENTIMENT_ICONS[idx.sentiment ?? "NEUTRAL"] ?? Minus;
           const change = parseFloat(idx.changePercent ?? "0");
           return (
-            <Card key={idx.id} className="bg-[#111827] border-gray-700/50">
+            <Card key={idx.id} className="bg-[#111827] border-border/50">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-400 font-medium">{idx.indexName}</span>
+                  <span className="text-xs text-muted-foreground font-medium">{idx.indexName}</span>
                   <Badge variant="outline" className={`text-xs ${SENTIMENT_COLORS[idx.sentiment ?? "NEUTRAL"]}`}>
                     <SentIcon className="w-3 h-3 mr-1" />
                     {idx.sentiment}
@@ -85,7 +85,7 @@ export default function CropReports() {
                 <p className={`text-sm mt-1 ${change >= 0 ? "text-green-400" : "text-red-400"}`}>
                   {change >= 0 ? "+" : ""}{change.toFixed(2)}%
                 </p>
-                <p className="text-xs text-gray-500 mt-1">{idx.cropSymbol}</p>
+                <p className="text-xs text-muted-foreground mt-1">{idx.cropSymbol}</p>
               </CardContent>
             </Card>
           );
@@ -93,7 +93,7 @@ export default function CropReports() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-[#111827] border border-gray-700/50 mb-6">
+        <TabsList className="bg-[#111827] border border-border/50 mb-6">
           <TabsTrigger value="reports">Research Reports</TabsTrigger>
           <TabsTrigger value="production">Production Data</TabsTrigger>
           <TabsTrigger value="states">State Breakdown</TabsTrigger>
@@ -103,24 +103,24 @@ export default function CropReports() {
         <TabsContent value="reports">
           <div className="flex items-center gap-3 mb-4">
             <Select value={cropFilter} onValueChange={setCropFilter}>
-              <SelectTrigger className="bg-[#111827] border-gray-700 text-white w-40">
+              <SelectTrigger className="bg-[#111827] border-border text-white w-40">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#111827] border-gray-700 text-white">
+              <SelectContent className="bg-[#111827] border-border text-white">
                 {CROP_OPTIONS.map(c => <SelectItem key={c} value={c}>{c === "ALL" ? "All Crops" : c}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-4">
             {isLoading ? (
-              <Card className="bg-[#111827] border-gray-700/50">
-                <CardContent className="p-8 text-center text-gray-500">Loading reports…</CardContent>
+              <Card className="bg-[#111827] border-border/50">
+                <CardContent className="p-8 text-center text-muted-foreground">Loading reports…</CardContent>
               </Card>
             ) : reports.length === 0 ? (
-              <Card className="bg-[#111827] border-gray-700/50">
+              <Card className="bg-[#111827] border-border/50">
                 <CardContent className="p-12 text-center">
                   <FileText className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400">No reports available for this crop</p>
+                  <p className="text-muted-foreground">No reports available for this crop</p>
                 </CardContent>
               </Card>
             ) : (reports as CropReport[]).map(report => {
@@ -128,7 +128,7 @@ export default function CropReports() {
               const PriceIcon = priceChange >= 0 ? TrendingUp : TrendingDown;
   if (isLoading) return <PageSkeleton cards={2} tableRows={10} tableCols={5} />;
               return (
-                <Card key={report.id} className="bg-[#111827] border-gray-700/50 hover:border-orange-500/30 transition-colors">
+                <Card key={report.id} className="bg-[#111827] border-border/50 hover:border-orange-500/30 transition-colors">
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
@@ -140,35 +140,35 @@ export default function CropReports() {
                             <PriceIcon className="w-3 h-3 mr-1" />
                             {priceChange >= 0 ? "+" : ""}{priceChange.toFixed(1)}%
                           </Badge>
-                          <span className="text-xs text-gray-500">{report.reportType?.replace(/_/g, " ")}</span>
+                          <span className="text-xs text-muted-foreground">{report.reportType?.replace(/_/g, " ")}</span>
                         </div>
                         <h3 className="font-bold text-white">{report.cropName}</h3>
-                        <p className="text-sm text-gray-400 mt-1 line-clamp-2">{report.outlookSummary}</p>
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{report.outlookSummary}</p>
                       </div>
                       <div className="ml-4 text-right shrink-0">
-                        <p className="text-xs text-gray-500">{report.reportingPeriod}</p>
+                        <p className="text-xs text-muted-foreground">{report.reportingPeriod}</p>
                         <p className="text-xs text-gray-600 mt-1">{report.coverageRegion}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-3 mt-3">
                       <div className="bg-[#0a0e1a] rounded p-2">
-                        <p className="text-xs text-gray-500">Production</p>
+                        <p className="text-xs text-muted-foreground">Production</p>
                         <p className="text-sm font-bold text-white">{report.productionMt ? `${(parseFloat(report.productionMt)/1e6).toFixed(2)}M MT` : "—"}</p>
                       </div>
                       <div className="bg-[#0a0e1a] rounded p-2">
-                        <p className="text-xs text-gray-500">Price/MT</p>
+                        <p className="text-xs text-muted-foreground">Price/MT</p>
                         <p className="text-sm font-bold text-white">{report.priceNgnPerMt ? `₦${(parseFloat(report.priceNgnPerMt)/1000).toFixed(0)}K` : "—"}</p>
                       </div>
                       <div className="bg-[#0a0e1a] rounded p-2">
-                        <p className="text-xs text-gray-500">Published</p>
+                        <p className="text-xs text-muted-foreground">Published</p>
                         <p className="text-sm font-bold text-white">{new Date(report.publishedAt ?? report.createdAt).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" })}</p>
                       </div>
                     </div>
                     {report.stocksMt && (
                       <div className="mt-3 bg-[#0a0e1a] rounded p-3 flex gap-4 text-xs">
-                        <span className="text-gray-400">Stocks: <span className="text-white font-bold">{(parseFloat(report.stocksMt)/1000).toFixed(0)}K MT</span></span>
-                        {report.exportsMt && <span className="text-gray-400">Exports: <span className="text-white font-bold">{(parseFloat(report.exportsMt)/1000).toFixed(0)}K MT</span></span>}
-                        {report.yieldMtPerHa && <span className="text-gray-400">Yield: <span className="text-white font-bold">{parseFloat(report.yieldMtPerHa).toFixed(2)} MT/ha</span></span>}
+                        <span className="text-muted-foreground">Stocks: <span className="text-white font-bold">{(parseFloat(report.stocksMt)/1000).toFixed(0)}K MT</span></span>
+                        {report.exportsMt && <span className="text-muted-foreground">Exports: <span className="text-white font-bold">{(parseFloat(report.exportsMt)/1000).toFixed(0)}K MT</span></span>}
+                        {report.yieldMtPerHa && <span className="text-muted-foreground">Yield: <span className="text-white font-bold">{parseFloat(report.yieldMtPerHa).toFixed(2)} MT/ha</span></span>}
                       </div>
                     )}
                   </CardContent>
@@ -180,7 +180,7 @@ export default function CropReports() {
 
         {/* Production Trend */}
         <TabsContent value="production">
-          <Card className="bg-[#111827] border-gray-700/50">
+          <Card className="bg-[#111827] border-border/50">
             <CardHeader>
               <CardTitle className="text-white text-base">Nigeria Crop Production Trend (Million MT)</CardTitle>
             </CardHeader>
@@ -204,7 +204,7 @@ export default function CropReports() {
 
         {/* State Breakdown */}
         <TabsContent value="states">
-          <Card className="bg-[#111827] border-gray-700/50">
+          <Card className="bg-[#111827] border-border/50">
             <CardHeader>
               <CardTitle className="text-white text-base">Production by State (Million MT)</CardTitle>
             </CardHeader>

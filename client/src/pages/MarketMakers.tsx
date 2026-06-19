@@ -226,7 +226,7 @@ export default function MarketMakers() {
                 {sorted.map((mm, i) => (
                   <tr key={mm.id} className="hover:bg-secondary/30 transition-colors">
                     <td className="px-3 py-3">
-                      <span className={`font-bold text-sm ${i === 0 ? "text-yellow-400" : i === 1 ? "text-slate-400" : i === 2 ? "text-amber-600" : "text-muted-foreground"}`}>
+                      <span className={`font-bold text-sm ${i === 0 ? "text-yellow-400" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-amber-600" : "text-muted-foreground"}`}>
                         #{i + 1}
                       </span>
                     </td>

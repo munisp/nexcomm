@@ -305,7 +305,7 @@ export default function OrderBookDepthPanel({ symbol, maxLevels = 10, className 
   const statusColor: Record<ConnectionStatus, string> = {
     connecting:   "bg-amber-500/20 text-amber-400 border-amber-500/30",
     connected:    "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    disconnected: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+    disconnected: "bg-gray-500/20 text-muted-foreground border-gray-500/30",
     error:        "bg-red-500/20 text-red-400 border-red-500/30",
   };
 
@@ -317,14 +317,14 @@ export default function OrderBookDepthPanel({ symbol, maxLevels = 10, className 
   };
 
   return (
-    <div className={`bg-gray-950 border border-gray-800 rounded-xl overflow-hidden ${className}`}>
+    <div className={`bg-background border border-border rounded-xl overflow-hidden ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-gray-900/60 border-b border-gray-800">
+      <div className="flex items-center justify-between px-3 py-2 bg-card/60 border-b border-border">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Order Book
           </span>
-          <span className="text-xs text-gray-500">{symbol}</span>
+          <span className="text-xs text-muted-foreground">{symbol}</span>
         </div>
         <div className="flex items-center gap-2">
           {book?.source === "simulated" && (
@@ -369,16 +369,16 @@ export default function OrderBookDepthPanel({ symbol, maxLevels = 10, className 
                   style={{ width: `${level.depth}%` }}
                 />
                 <span className="text-red-400 font-mono z-10">{fmtPrice(level.price)}</span>
-                <span className="text-gray-400 font-mono text-center z-10">{fmtQty(level.qty)}</span>
-                <span className="text-gray-500 font-mono text-right z-10">{fmtQty(level.total)}</span>
+                <span className="text-muted-foreground font-mono text-center z-10">{fmtQty(level.qty)}</span>
+                <span className="text-muted-foreground font-mono text-right z-10">{fmtQty(level.total)}</span>
               </div>
             ))}
           </div>
 
           {/* ── Spread row ── */}
-          <div className="flex items-center justify-between px-3 py-1.5 bg-gray-900/40 border-y border-gray-800">
-            <span className="text-[10px] text-gray-500">Spread</span>
-            <span className="text-[10px] font-mono text-gray-400">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-card/40 border-y border-border">
+            <span className="text-[10px] text-muted-foreground">Spread</span>
+            <span className="text-[10px] font-mono text-muted-foreground">
               {fmtPrice(book.spread)} ({book.spreadPct.toFixed(3)}%)
             </span>
             {midPrice != null && (
@@ -398,14 +398,14 @@ export default function OrderBookDepthPanel({ symbol, maxLevels = 10, className 
                   style={{ width: `${level.depth}%` }}
                 />
                 <span className="text-emerald-400 font-mono z-10">{fmtPrice(level.price)}</span>
-                <span className="text-gray-400 font-mono text-center z-10">{fmtQty(level.qty)}</span>
-                <span className="text-gray-500 font-mono text-right z-10">{fmtQty(level.total)}</span>
+                <span className="text-muted-foreground font-mono text-center z-10">{fmtQty(level.qty)}</span>
+                <span className="text-muted-foreground font-mono text-right z-10">{fmtQty(level.total)}</span>
               </div>
             ))}
           </div>
 
           {/* ── D3 Cumulative Depth Curve ── */}
-          <div className="border-t border-gray-800 px-1 pt-1 pb-0.5 bg-gray-950">
+          <div className="border-t border-border px-1 pt-1 pb-0.5 bg-background">
             <div className="text-[9px] text-gray-600 uppercase tracking-wide px-2 mb-0.5">
               Depth
             </div>

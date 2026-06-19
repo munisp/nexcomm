@@ -151,8 +151,8 @@ function OrderBookSide({ levels, side, maxTotal }: {
           <span className={`relative flex-1 font-mono ${isAsk ? "text-red-400" : "text-emerald-400"}`}>
             {fmt(lvl.price, lvl.price > 100 ? 2 : 4)}
           </span>
-          <span className="relative text-gray-400 w-14 text-right">{fmt(lvl.qty, 0)}</span>
-          <span className="relative text-gray-500 w-16 text-right">{fmt(lvl.total, 0)}</span>
+          <span className="relative text-muted-foreground w-14 text-right">{fmt(lvl.qty, 0)}</span>
+          <span className="relative text-muted-foreground w-16 text-right">{fmt(lvl.total, 0)}</span>
         </div>
       ))}
     </div>
@@ -546,7 +546,7 @@ export default function Trade() {
         <div className="flex items-center gap-4 px-4 py-2 border-b border-white/10 bg-[#0d1410] flex-shrink-0 flex-wrap">
           {/* Symbol autocomplete combobox */}
           <div className="relative w-56">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none z-10" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
             <input
               ref={symbolInputRef}
               type="text"
@@ -575,9 +575,9 @@ export default function Trade() {
               placeholder="Symbol…"
               autoComplete="off"
               spellCheck={false}
-              className="w-full h-8 pl-8 pr-7 text-xs font-mono bg-white/5 border border-white/10 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30"
+              className="w-full h-8 pl-8 pr-7 text-xs font-mono bg-white/5 border border-white/10 rounded-md text-white placeholder-muted-foreground focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30"
             />
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               {symbolDropdownOpen && filteredSymbols.length > 0 && (
               <div className="absolute top-full left-0 z-50 mt-1 w-full rounded-md border border-white/10 bg-[#0d1410] shadow-xl max-h-56 overflow-y-auto">
                 {filteredSymbols.map((sym, idx) => (
@@ -591,7 +591,7 @@ export default function Trade() {
                         ? "bg-emerald-600/50 text-emerald-200"
                         : sym === selectedSymbol
                         ? "bg-emerald-600/20 text-emerald-300"
-                        : "text-gray-200 hover:bg-white/10"
+                        : "text-foreground hover:bg-white/10"
                     }`}
                   >
                     {sym}
@@ -612,9 +612,9 @@ export default function Trade() {
           </div>
 
           <div className="hidden md:flex items-center gap-4 text-xs">
-            <div><span className="text-gray-500 mr-1">Bid</span><span className="text-emerald-400 font-mono">{fmt(bid, bid > 100 ? 2 : 4)}</span></div>
-            <div><span className="text-gray-500 mr-1">Ask</span><span className="text-red-400 font-mono">{fmt(ask, ask > 100 ? 2 : 4)}</span></div>
-            <div><span className="text-gray-500 mr-1">Spread</span><span className="text-gray-300 font-mono">{fmt(spreadPct, 4)}%</span></div>
+            <div><span className="text-muted-foreground mr-1">Bid</span><span className="text-emerald-400 font-mono">{fmt(bid, bid > 100 ? 2 : 4)}</span></div>
+            <div><span className="text-muted-foreground mr-1">Ask</span><span className="text-red-400 font-mono">{fmt(ask, ask > 100 ? 2 : 4)}</span></div>
+            <div><span className="text-muted-foreground mr-1">Spread</span><span className="text-muted-foreground font-mono">{fmt(spreadPct, 4)}%</span></div>
           </div>
 
           <div className="ml-auto flex items-center gap-2 text-xs">
@@ -625,14 +625,14 @@ export default function Trade() {
             <button
               onClick={toggleSound}
               title={soundEnabled ? "Sound on (click to mute)" : "Sound off (click to enable)"}
-              className="ml-1 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-gray-200 transition-colors"
+              className="ml-1 p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
             >
               {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-gray-600" />}
             </button>
             <button
               onClick={() => setShowShortcuts(true)}
               title="Keyboard shortcuts (?)"
-              className="ml-1 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-gray-200 transition-colors"
+              className="ml-1 p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
             >
               <Keyboard className="w-3.5 h-3.5" />
             </button>
@@ -646,7 +646,7 @@ export default function Trade() {
               key={panel}
               onClick={() => setMobilePanel(panel)}
               className={`flex-1 py-2.5 text-xs font-semibold capitalize transition-colors ${
-                mobilePanel === panel ? "text-emerald-400 border-b-2 border-emerald-400" : "text-gray-400 hover:text-white"
+                mobilePanel === panel ? "text-emerald-400 border-b-2 border-emerald-400" : "text-muted-foreground hover:text-white"
               }`}
             >
               {panel === "chart" ? "Chart & Order" : panel === "book" ? "Order Book" : "Trades"}
@@ -661,11 +661,11 @@ export default function Trade() {
             <div className="flex items-center gap-1 px-3 py-1.5 border-b border-white/10 bg-[#0d1410]">
               {["1m","5m","15m","1h","4h","1D"].map(iv => (
                 <button key={iv} onClick={() => { setChartInterval(iv); localStorage.setItem("nexcom:chartInterval:commodity", iv); }}
-                  className={`px-2 py-0.5 text-xs rounded transition-colors ${chartInterval === iv ? "bg-emerald-600 text-white" : "text-gray-400 hover:text-white hover:bg-white/10"}`}>
+                  className={`px-2 py-0.5 text-xs rounded transition-colors ${chartInterval === iv ? "bg-emerald-600 text-white" : "text-muted-foreground hover:text-white hover:bg-white/10"}`}>
                   {iv}
                 </button>
               ))}
-              <span className="ml-auto text-xs text-gray-500">{selectedCommodity.name} · {selectedCommodity.unit}</span>
+              <span className="ml-auto text-xs text-muted-foreground">{selectedCommodity.name} · {selectedCommodity.unit}</span>
             </div>
 
             <div className="p-3 border-b border-white/10">
@@ -676,17 +676,17 @@ export default function Trade() {
               <div className="max-w-sm mx-auto space-y-4">
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => setOrderSide("BUY")}
-                    className={`py-2 rounded-lg text-sm font-semibold transition-all ${orderSide === "BUY" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/30" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}>
+                    className={`py-2 rounded-lg text-sm font-semibold transition-all ${orderSide === "BUY" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/30" : "bg-white/5 text-muted-foreground hover:bg-white/10"}`}>
                     Buy / Long
                   </button>
                   <button onClick={() => setOrderSide("SELL")}
-                    className={`py-2 rounded-lg text-sm font-semibold transition-all ${orderSide === "SELL" ? "bg-red-600 text-white shadow-lg shadow-red-900/30" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}>
+                    className={`py-2 rounded-lg text-sm font-semibold transition-all ${orderSide === "SELL" ? "bg-red-600 text-white shadow-lg shadow-red-900/30" : "bg-white/5 text-muted-foreground hover:bg-white/10"}`}>
                     Sell / Short
                   </button>
                 </div>
 
                 <div>
-                  <Label className="text-xs text-gray-400 mb-1 block">{t("label.type")}</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">{t("label.type")}</Label>
                   <Select value={orderType} onValueChange={v => setOrderType(v as typeof orderType)}>
                     <SelectTrigger className="bg-white/5 border-white/10 text-white h-9"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-[#0d1410] border-white/10 text-white">
@@ -699,7 +699,7 @@ export default function Trade() {
 
                 {orderType !== "MARKET" && (
                   <div>
-                    <Label className="text-xs text-gray-400 mb-1 block">{t("label.price")}</Label>
+                    <Label className="text-xs text-muted-foreground mb-1 block">{t("label.price")}</Label>
                     <div className="relative">
                       <Input type="number" value={orderPrice} onChange={e => setOrderPrice(e.target.value)}
                         className="bg-white/5 border-white/10 text-white h-9 pr-16" placeholder={fmt(price, 2)} />
@@ -712,13 +712,13 @@ export default function Trade() {
                 )}
 
                 <div>
-                  <Label className="text-xs text-gray-400 mb-1 block">{t("label.quantity")} ({selectedCommodity.unit})</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">{t("label.quantity")} ({selectedCommodity.unit})</Label>
                   <Input type="number" value={orderQty} onChange={e => setOrderQty(e.target.value)}
                     className="bg-white/5 border-white/10 text-white h-9" placeholder="0.00" />
                 </div>
 
                 {orderQty && (
-                  <div className="flex justify-between text-xs text-gray-400 bg-white/5 rounded-lg px-3 py-2">
+                  <div className="flex justify-between text-xs text-muted-foreground bg-white/5 rounded-lg px-3 py-2">
                     <span>{t("trade.estimatedValue")}</span>
                     <span className="text-white font-mono">${fmt(orderValue, 2)}</span>
                   </div>
@@ -736,11 +736,11 @@ export default function Trade() {
                 )}
                 {isAuthenticated && (
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1 text-xs border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
+                    <Button variant="outline" size="sm" className="flex-1 text-xs border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10"
                       onClick={() => setShowSaveDialog(true)}>
                       <BookmarkPlus className="w-3 h-3 mr-1" /> Save Template
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1 text-xs border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
+                    <Button variant="outline" size="sm" className="flex-1 text-xs border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10"
                       onClick={() => setShowTemplates(true)}>
                       <Bookmark className="w-3 h-3 mr-1" /> Load ({savedOrderTemplates?.length ?? 0})
                     </Button>
@@ -755,11 +755,11 @@ export default function Trade() {
               <DialogHeader><DialogTitle className="text-sm">Save Order Template</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <div>
-                  <Label className="text-xs text-gray-400 mb-1 block">Template Name</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Template Name</Label>
                   <Input value={saveTemplateName} onChange={e => setSaveTemplateName(e.target.value)}
                     placeholder="e.g. My Ginger Buy" className="bg-white/5 border-white/10 text-white h-9" />
                 </div>
-                <div className="text-xs text-gray-400 bg-white/5 rounded-lg p-3 space-y-1">
+                <div className="text-xs text-muted-foreground bg-white/5 rounded-lg p-3 space-y-1">
                   <div className="flex justify-between"><span>Symbol</span><span className="text-white">{selectedSymbol}</span></div>
                   <div className="flex justify-between"><span>Side</span><span className={orderSide === "BUY" ? "text-emerald-400" : "text-red-400"}>{orderSide}</span></div>
                   <div className="flex justify-between"><span>Type</span><span className="text-white">{orderType}</span></div>
@@ -777,14 +777,14 @@ export default function Trade() {
             <DialogContent className="bg-[#0d1410] border-white/10 text-white">
               <DialogHeader><DialogTitle className="text-sm">Order Templates</DialogTitle></DialogHeader>
               {(!savedOrderTemplates || savedOrderTemplates.length === 0) ? (
-                <p className="text-xs text-gray-400 text-center py-4">No saved templates yet.</p>
+                <p className="text-xs text-muted-foreground text-center py-4">No saved templates yet.</p>
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto">
                   {savedOrderTemplates.map(tmpl => (
                     <div key={tmpl.id} className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2">
                       <div>
                         <p className="text-xs font-medium text-white">{tmpl.name}</p>
-                        <p className="text-xs text-gray-400">{tmpl.symbol} · {tmpl.side} · {tmpl.orderType} · {tmpl.quantity}</p>
+                        <p className="text-xs text-muted-foreground">{tmpl.symbol} · {tmpl.side} · {tmpl.orderType} · {tmpl.quantity}</p>
                       </div>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-emerald-400 hover:text-emerald-300"
@@ -803,13 +803,13 @@ export default function Trade() {
           {/* Order Book */}
           <div className={`flex flex-col border-r border-white/10 overflow-hidden ${mobilePanel !== "book" ? "hidden lg:flex" : ""}`}>
             <div className="px-3 py-2 border-b border-white/10 bg-[#0d1410] flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-300">{t("trade.orderBook")}</span>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
+              <span className="text-xs font-semibold text-muted-foreground">{t("trade.orderBook")}</span>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Activity className="w-3 h-3" />
                 {wsConnected ? "WS" : "Polling"}
               </div>
             </div>
-            <div className="flex items-center text-xs text-gray-500 px-2 py-1 border-b border-white/5">
+            <div className="flex items-center text-xs text-muted-foreground px-2 py-1 border-b border-white/5">
               <span className="flex-1">Price</span>
               <span className="w-14 text-right">Qty</span>
               <span className="w-16 text-right">Total</span>
@@ -823,7 +823,7 @@ export default function Trade() {
                   {fmt(price, price > 100 ? 2 : 4)}
                 </span>
                 {isUp ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : <TrendingDown className="w-3 h-3 text-red-400" />}
-                <span className="text-xs text-gray-500">Spread {fmt(spreadPct, 4)}%</span>
+                <span className="text-xs text-muted-foreground">Spread {fmt(spreadPct, 4)}%</span>
               </div>
               <div className="pt-1">
                 <OrderBookSide levels={bids} side="bid" maxTotal={maxTotal} />
@@ -844,7 +844,7 @@ export default function Trade() {
               <button
                 onClick={() => setBottomTab("trades")}
                 className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                  bottomTab === "trades" ? "bg-emerald-500/20 text-emerald-300" : "text-gray-500 hover:text-gray-300"
+                  bottomTab === "trades" ? "bg-emerald-500/20 text-emerald-300" : "text-muted-foreground hover:text-muted-foreground"
                 }`}
               >
                 {t("trade.recentTrades")}
@@ -855,7 +855,7 @@ export default function Trade() {
               <button
                 onClick={() => setBottomTab("myorders")}
                 className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                  bottomTab === "myorders" ? "bg-blue-500/20 text-blue-300" : "text-gray-500 hover:text-gray-300"
+                  bottomTab === "myorders" ? "bg-blue-500/20 text-blue-300" : "text-muted-foreground hover:text-muted-foreground"
                 }`}
               >
                 My Orders
@@ -868,7 +868,7 @@ export default function Trade() {
             {/* Trades tab */}
             {bottomTab === "trades" && (
               <>
-                <div className="flex items-center text-xs text-gray-500 px-3 py-1 border-b border-white/5">
+                <div className="flex items-center text-xs text-muted-foreground px-3 py-1 border-b border-white/5">
                   <span className="flex-1">Price</span>
                   <span className="w-12 text-right">Qty</span>
                   <span className="w-16 text-right">Time</span>
@@ -880,8 +880,8 @@ export default function Trade() {
                           <span className={`flex-1 font-mono ${f.side === "BUY" ? "text-emerald-400" : "text-red-400"}`}>
                             {fmt(parseFloat(String(f.fillPrice)), parseFloat(String(f.fillPrice)) > 100 ? 2 : 4)}
                           </span>
-                          <span className="w-12 text-right text-gray-400">{parseFloat(String(f.filledQty)).toFixed(1)}</span>
-                          <span className="w-16 text-right text-gray-500">
+                          <span className="w-12 text-right text-muted-foreground">{parseFloat(String(f.filledQty)).toFixed(1)}</span>
+                          <span className="w-16 text-right text-muted-foreground">
                             {new Date(f.createdAt).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                           </span>
                         </div>
@@ -891,8 +891,8 @@ export default function Trade() {
                           <span className={`flex-1 font-mono ${t.side === "BUY" ? "text-emerald-400" : "text-red-400"}`}>
                             {fmt(t.price, t.price > 100 ? 2 : 4)}
                           </span>
-                          <span className="w-12 text-right text-gray-400">{t.qty}</span>
-                          <span className="w-16 text-right text-gray-500">{t.time}</span>
+                          <span className="w-12 text-right text-muted-foreground">{t.qty}</span>
+                          <span className="w-16 text-right text-muted-foreground">{t.time}</span>
                         </div>
                       ))
                   }
@@ -905,11 +905,11 @@ export default function Trade() {
               <div className="flex-1 overflow-y-auto">
                 {mySymbolOrders.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-24 gap-1">
-                    <span className="text-xs text-gray-500">No orders for {selectedSymbol}</span>
+                    <span className="text-xs text-muted-foreground">No orders for {selectedSymbol}</span>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center text-xs text-gray-500 px-3 py-1 border-b border-white/5">
+                    <div className="flex items-center text-xs text-muted-foreground px-3 py-1 border-b border-white/5">
                       <span className="w-10">Side</span>
                       <span className="flex-1">Type</span>
                       <span className="w-16 text-right">Qty</span>
@@ -920,14 +920,14 @@ export default function Trade() {
                     {mySymbolOrders.map(o => (
                       <div key={o.id} className="flex items-center text-xs px-3 py-1 hover:bg-white/5 transition-colors group">
                         <span className={`w-10 font-semibold ${o.side === "BUY" ? "text-emerald-400" : "text-red-400"}`}>{o.side}</span>
-                        <span className="flex-1 text-gray-400">{o.orderType}</span>
-                        <span className="w-16 text-right font-mono text-gray-300">{parseFloat(String(o.quantity)).toFixed(1)}</span>
-                        <span className="w-16 text-right font-mono text-gray-300">
+                        <span className="flex-1 text-muted-foreground">{o.orderType}</span>
+                        <span className="w-16 text-right font-mono text-muted-foreground">{parseFloat(String(o.quantity)).toFixed(1)}</span>
+                        <span className="w-16 text-right font-mono text-muted-foreground">
                           {o.price ? fmt(parseFloat(String(o.price)), parseFloat(String(o.price)) > 100 ? 2 : 4) : "—"}
                         </span>
                         <span className={`w-14 text-right text-[10px] font-medium ${
                           o.status === "FILLED" ? "text-emerald-400" :
-                          o.status === "CANCELLED" ? "text-gray-500" :
+                          o.status === "CANCELLED" ? "text-muted-foreground" :
                           o.status === "REJECTED" ? "text-red-400" :
                           "text-amber-400"
                         }`}>{o.status}</span>
@@ -973,7 +973,7 @@ export default function Trade() {
               </DialogHeader>
               <div className="space-y-3 pt-1">
                 <div>
-                  <Label className="text-xs text-gray-400 mb-1 block">New Price</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">New Price</Label>
                   <Input
                     type="number"
                     step="any"
@@ -984,7 +984,7 @@ export default function Trade() {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-400 mb-1 block">New Quantity</Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">New Quantity</Label>
                   <Input
                     type="number"
                     step="any"
@@ -995,7 +995,7 @@ export default function Trade() {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-400 mb-1 block">Reason <span className="text-gray-600">(optional)</span></Label>
+                  <Label className="text-xs text-muted-foreground mb-1 block">Reason <span className="text-gray-600">(optional)</span></Label>
                   <Input
                     type="text"
                     maxLength={512}
@@ -1009,7 +1009,7 @@ export default function Trade() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="flex-1 border-white/10 text-gray-300"
+                    className="flex-1 border-white/10 text-muted-foreground"
                     onClick={() => setAmendTarget(null)}
                   >
                     Cancel
@@ -1055,12 +1055,12 @@ export default function Trade() {
                   { key: "Esc",     desc: "Close symbol autocomplete dropdown" },
                 ] as const).map(({ key, desc }) => (
                   <div key={key + desc} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
-                    <span className="text-gray-400">{desc}</span>
+                    <span className="text-muted-foreground">{desc}</span>
                     <kbd className="px-2 py-0.5 rounded bg-white/10 border border-white/20 font-mono text-emerald-300 text-[11px]">{key}</kbd>
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-gray-500 pt-1">Shortcuts are disabled while typing in input fields.</p>
+              <p className="text-[10px] text-muted-foreground pt-1">Shortcuts are disabled while typing in input fields.</p>
             </DialogContent>
           </Dialog>
         </div>

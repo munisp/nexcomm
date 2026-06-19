@@ -65,7 +65,7 @@ export default function WorkBench() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">WorkBench</h1>
-            <p className="text-sm text-gray-400">Agri-SME farm management, crop planning & soil analytics</p>
+            <p className="text-sm text-muted-foreground">Agri-SME farm management, crop planning & soil analytics</p>
           </div>
         </div>
         <Badge variant="outline" className="border-green-500/30 text-green-400 bg-green-500/10">
@@ -81,11 +81,11 @@ export default function WorkBench() {
           { label: "Active Crop Plans", value: summary?.activePlans ?? 2, icon: Sprout, color: "text-amber-400" },
           { label: "Expected Yield", value: `${summary?.totalExpectedYieldMt ?? 90} MT`, icon: Wheat, color: "text-orange-400" },
         ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label} className="bg-[#111827] border-gray-700/50">
+          <Card key={label} className="bg-[#111827] border-border/50">
             <CardContent className="p-4 flex items-center gap-3">
               <Icon className={`w-8 h-8 ${color}`} />
               <div>
-                <p className="text-xs text-gray-400">{label}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
                 <p className="text-xl font-bold text-white">{value}</p>
               </div>
             </CardContent>
@@ -94,7 +94,7 @@ export default function WorkBench() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-[#111827] border border-gray-700/50 mb-6">
+        <TabsList className="bg-[#111827] border border-border/50 mb-6">
           <TabsTrigger value="farms">My Farms</TabsTrigger>
           <TabsTrigger value="plans">Crop Plans</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
@@ -109,17 +109,17 @@ export default function WorkBench() {
                   <Plus className="w-4 h-4 mr-2" /> Register Farm
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-[#111827] border-gray-700 text-white">
+              <DialogContent className="bg-[#111827] border-border text-white">
                 <DialogHeader><DialogTitle>Register New Farm</DialogTitle></DialogHeader>
                 <div className="space-y-3 mt-2">
-                  <div><Label>Farm Name *</Label><Input value={farmForm.farmName} onChange={e => setFarmForm(f => ({ ...f, farmName: e.target.value }))} className="bg-[#0a0e1a] border-gray-600 text-white mt-1" placeholder="e.g. Kano North Farm" /></div>
+                  <div><Label>Farm Name *</Label><Input value={farmForm.farmName} onChange={e => setFarmForm(f => ({ ...f, farmName: e.target.value }))} className="bg-[#0a0e1a] border-border text-white mt-1" placeholder="e.g. Kano North Farm" /></div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><Label>State</Label><Input value={farmForm.locationState} onChange={e => setFarmForm(f => ({ ...f, locationState: e.target.value }))} className="bg-[#0a0e1a] border-gray-600 text-white mt-1" placeholder="Kano" /></div>
-                    <div><Label>LGA</Label><Input value={farmForm.locationLga} onChange={e => setFarmForm(f => ({ ...f, locationLga: e.target.value }))} className="bg-[#0a0e1a] border-gray-600 text-white mt-1" placeholder="Kumbotso" /></div>
+                    <div><Label>State</Label><Input value={farmForm.locationState} onChange={e => setFarmForm(f => ({ ...f, locationState: e.target.value }))} className="bg-[#0a0e1a] border-border text-white mt-1" placeholder="Kano" /></div>
+                    <div><Label>LGA</Label><Input value={farmForm.locationLga} onChange={e => setFarmForm(f => ({ ...f, locationLga: e.target.value }))} className="bg-[#0a0e1a] border-border text-white mt-1" placeholder="Kumbotso" /></div>
                   </div>
-                  <div><Label>Total Hectares</Label><Input type="number" value={farmForm.totalHectares} onChange={e => setFarmForm(f => ({ ...f, totalHectares: e.target.value }))} className="bg-[#0a0e1a] border-gray-600 text-white mt-1" placeholder="45.5" /></div>
-                  <div><Label>Soil Type</Label><Input value={farmForm.soilType} onChange={e => setFarmForm(f => ({ ...f, soilType: e.target.value }))} className="bg-[#0a0e1a] border-gray-600 text-white mt-1" placeholder="Sandy Loam" /></div>
-                  <div><Label>Notes</Label><Textarea value={farmForm.notes} onChange={e => setFarmForm(f => ({ ...f, notes: e.target.value }))} className="bg-[#0a0e1a] border-gray-600 text-white mt-1" rows={2} /></div>
+                  <div><Label>Total Hectares</Label><Input type="number" value={farmForm.totalHectares} onChange={e => setFarmForm(f => ({ ...f, totalHectares: e.target.value }))} className="bg-[#0a0e1a] border-border text-white mt-1" placeholder="45.5" /></div>
+                  <div><Label>Soil Type</Label><Input value={farmForm.soilType} onChange={e => setFarmForm(f => ({ ...f, soilType: e.target.value }))} className="bg-[#0a0e1a] border-border text-white mt-1" placeholder="Sandy Loam" /></div>
+                  <div><Label>Notes</Label><Textarea value={farmForm.notes} onChange={e => setFarmForm(f => ({ ...f, notes: e.target.value }))} className="bg-[#0a0e1a] border-border text-white mt-1" rows={2} /></div>
                   <Button className="w-full bg-green-600 hover:bg-green-700" disabled={createFarm.isPending}
                     onClick={() => createFarm.mutate(farmForm)}>
                     {createFarm.isPending ? "Registering…" : "Register Farm"}
@@ -130,12 +130,12 @@ export default function WorkBench() {
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             {farms.map(farm => (
-              <Card key={farm.id} className="bg-[#111827] border-gray-700/50 hover:border-green-500/30 transition-colors">
+              <Card key={farm.id} className="bg-[#111827] border-border/50 hover:border-green-500/30 transition-colors">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <h3 className="font-bold text-white">{farm.farmName}</h3>
-                      <div className="flex items-center gap-1 text-sm text-gray-400 mt-1">
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
                         <MapPin className="w-3 h-3" />
                         {farm.locationLga}, {farm.locationState}
                       </div>
@@ -146,19 +146,19 @@ export default function WorkBench() {
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="bg-[#0a0e1a] rounded p-2">
-                      <p className="text-xs text-gray-500">Area</p>
+                      <p className="text-xs text-muted-foreground">Area</p>
                       <p className="text-sm font-bold text-white">{farm.totalHectares} ha</p>
                     </div>
                     <div className="bg-[#0a0e1a] rounded p-2">
-                      <p className="text-xs text-gray-500">Soil</p>
+                      <p className="text-xs text-muted-foreground">Soil</p>
                       <p className="text-sm font-bold text-white">{farm.soilType ?? "—"}</p>
                     </div>
                     <div className="bg-[#0a0e1a] rounded p-2">
-                      <p className="text-xs text-gray-500">Irrigation</p>
+                      <p className="text-xs text-muted-foreground">Irrigation</p>
                       <p className="text-sm font-bold text-white truncate">{farm.irrigationType ?? "—"}</p>
                     </div>
                   </div>
-                  {farm.notes && <p className="text-xs text-gray-500 mt-3 italic">{farm.notes}</p>}
+                  {farm.notes && <p className="text-xs text-muted-foreground mt-3 italic">{farm.notes}</p>}
                 </CardContent>
               </Card>
             ))}
@@ -174,16 +174,16 @@ export default function WorkBench() {
                   <Plus className="w-4 h-4 mr-2" /> New Crop Plan
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-[#111827] border-gray-700 text-white">
+              <DialogContent className="bg-[#111827] border-border text-white">
                 <DialogHeader><DialogTitle>Create Crop Plan</DialogTitle></DialogHeader>
                 <div className="space-y-3 mt-2">
                   <div>
                     <Label>Farm *</Label>
                     <Select value={planForm.farmId} onValueChange={v => setPlanForm(f => ({ ...f, farmId: v }))}>
-                      <SelectTrigger className="bg-[#0a0e1a] border-gray-600 text-white mt-1">
+                      <SelectTrigger className="bg-[#0a0e1a] border-border text-white mt-1">
                         <SelectValue placeholder="Select farm" />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#111827] border-gray-700 text-white">
+                      <SelectContent className="bg-[#111827] border-border text-white">
                         {farms.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.farmName}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -191,10 +191,10 @@ export default function WorkBench() {
                   <div>
                     <Label>Crop *</Label>
                     <Select value={planForm.cropSymbol} onValueChange={v => setPlanForm(f => ({ ...f, cropSymbol: v }))}>
-                      <SelectTrigger className="bg-[#0a0e1a] border-gray-600 text-white mt-1">
+                      <SelectTrigger className="bg-[#0a0e1a] border-border text-white mt-1">
                         <SelectValue placeholder="Select crop" />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#111827] border-gray-700 text-white">
+                      <SelectContent className="bg-[#111827] border-border text-white">
                         {CROP_OPTIONS.map(c => <SelectItem key={c.symbol} value={c.symbol}>{c.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -202,10 +202,10 @@ export default function WorkBench() {
                   <div>
                     <Label>Season</Label>
                     <Select value={planForm.season} onValueChange={v => setPlanForm(f => ({ ...f, season: v as any }))}>
-                      <SelectTrigger className="bg-[#0a0e1a] border-gray-600 text-white mt-1">
+                      <SelectTrigger className="bg-[#0a0e1a] border-border text-white mt-1">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#111827] border-gray-700 text-white">
+                      <SelectContent className="bg-[#111827] border-border text-white">
                         <SelectItem value="WET_SEASON">Wet Season</SelectItem>
                         <SelectItem value="DRY_SEASON">Dry Season</SelectItem>
                         <SelectItem value="YEAR_ROUND">Year Round</SelectItem>
@@ -213,10 +213,10 @@ export default function WorkBench() {
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><Label>Planned Hectares</Label><Input type="number" value={planForm.plannedHectares} onChange={e => setPlanForm(f => ({ ...f, plannedHectares: e.target.value }))} className="bg-[#0a0e1a] border-gray-600 text-white mt-1" /></div>
-                    <div><Label>Expected Yield (MT)</Label><Input type="number" value={planForm.expectedYieldMt} onChange={e => setPlanForm(f => ({ ...f, expectedYieldMt: e.target.value }))} className="bg-[#0a0e1a] border-gray-600 text-white mt-1" /></div>
+                    <div><Label>Planned Hectares</Label><Input type="number" value={planForm.plannedHectares} onChange={e => setPlanForm(f => ({ ...f, plannedHectares: e.target.value }))} className="bg-[#0a0e1a] border-border text-white mt-1" /></div>
+                    <div><Label>Expected Yield (MT)</Label><Input type="number" value={planForm.expectedYieldMt} onChange={e => setPlanForm(f => ({ ...f, expectedYieldMt: e.target.value }))} className="bg-[#0a0e1a] border-border text-white mt-1" /></div>
                   </div>
-                  <div><Label>Input Cost (₦)</Label><Input type="number" value={planForm.inputCostNgn} onChange={e => setPlanForm(f => ({ ...f, inputCostNgn: e.target.value }))} className="bg-[#0a0e1a] border-gray-600 text-white mt-1" /></div>
+                  <div><Label>Input Cost (₦)</Label><Input type="number" value={planForm.inputCostNgn} onChange={e => setPlanForm(f => ({ ...f, inputCostNgn: e.target.value }))} className="bg-[#0a0e1a] border-border text-white mt-1" /></div>
                   <Button className="w-full bg-amber-600 hover:bg-amber-700" disabled={createPlan.isPending || !planForm.farmId || !planForm.cropSymbol}
                     onClick={() => createPlan.mutate({ ...planForm, farmId: parseInt(planForm.farmId), cropName: CROP_OPTIONS.find(c => c.symbol === planForm.cropSymbol)?.name ?? planForm.cropSymbol })}>
                     {createPlan.isPending ? "Creating…" : "Create Plan"}
@@ -227,32 +227,32 @@ export default function WorkBench() {
           </div>
           <div className="grid md:grid-cols-2 gap-4">
             {plans.map(plan => (
-              <Card key={plan.id} className="bg-[#111827] border-gray-700/50 hover:border-amber-500/30 transition-colors">
+              <Card key={plan.id} className="bg-[#111827] border-border/50 hover:border-amber-500/30 transition-colors">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <h3 className="font-bold text-white">{plan.cropName}</h3>
-                      <p className="text-xs text-gray-400 mt-1">{plan.season?.replace("_", " ")}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{plan.season?.replace("_", " ")}</p>
                     </div>
-                    <Badge variant="outline" className={plan.actualHarvestDate ? "border-gray-500/30 text-gray-400" : "border-amber-500/30 text-amber-400 bg-amber-500/10"}>
+                    <Badge variant="outline" className={plan.actualHarvestDate ? "border-gray-500/30 text-muted-foreground" : "border-amber-500/30 text-amber-400 bg-amber-500/10"}>
                       {plan.actualHarvestDate ? "Harvested" : "Active"}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="bg-[#0a0e1a] rounded p-2">
-                      <p className="text-xs text-gray-500">Area</p>
+                      <p className="text-xs text-muted-foreground">Area</p>
                       <p className="text-sm font-bold text-white">{plan.plannedHectares} ha</p>
                     </div>
                     <div className="bg-[#0a0e1a] rounded p-2">
-                      <p className="text-xs text-gray-500">Expected</p>
+                      <p className="text-xs text-muted-foreground">Expected</p>
                       <p className="text-sm font-bold text-white">{plan.expectedYieldMt} MT</p>
                     </div>
                     <div className="bg-[#0a0e1a] rounded p-2">
-                      <p className="text-xs text-gray-500">Input Cost</p>
+                      <p className="text-xs text-muted-foreground">Input Cost</p>
                       <p className="text-sm font-bold text-white">₦{parseInt(plan.inputCostNgn ?? "0").toLocaleString()}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+                  <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Plant: {plan.plantingDate ? new Date(plan.plantingDate).toLocaleDateString() : "—"}</span>
                     <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Harvest: {plan.expectedHarvestDate ? new Date(plan.expectedHarvestDate).toLocaleDateString() : "—"}</span>
                   </div>
@@ -265,7 +265,7 @@ export default function WorkBench() {
         {/* Analytics */}
         <TabsContent value="analytics">
           <div className="grid md:grid-cols-2 gap-6">
-            <Card className="bg-[#111827] border-gray-700/50">
+            <Card className="bg-[#111827] border-border/50">
               <CardHeader><CardTitle className="text-white text-sm">Yield Forecast vs Actual (MT)</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={240}>
@@ -280,7 +280,7 @@ export default function WorkBench() {
                 </ResponsiveContainer>
               </CardContent>
             </Card>
-            <Card className="bg-[#111827] border-gray-700/50">
+            <Card className="bg-[#111827] border-border/50">
               <CardHeader><CardTitle className="text-white text-sm">Crop Portfolio Mix</CardTitle></CardHeader>
               <CardContent className="flex items-center justify-center">
                 <ResponsiveContainer width="100%" height={240}>

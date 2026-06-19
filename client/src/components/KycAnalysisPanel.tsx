@@ -100,9 +100,9 @@ const RISK_CONFIG: Record<
   },
   UNKNOWN: {
     label: "Unknown",
-    color: "text-slate-500",
+    color: "text-muted-foreground",
     bg: "bg-slate-50 border-slate-200",
-    icon: <Activity className="w-4 h-4 text-slate-500" />,
+    icon: <Activity className="w-4 h-4 text-muted-foreground" />,
   },
 };
 

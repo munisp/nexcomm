@@ -54,7 +54,7 @@ export default function FieldAgents() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">Field Agent Network</h1>
-            <p className="text-sm text-gray-400">NEXCOM Xpert Programme — Farmer onboarding &amp; last-mile support</p>
+            <p className="text-sm text-muted-foreground">NEXCOM Xpert Programme — Farmer onboarding &amp; last-mile support</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -65,19 +65,19 @@ export default function FieldAgents() {
                   <Calendar className="w-4 h-4 mr-2" /> Schedule Visit
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-[#111827] border-gray-700 text-white max-w-md">
+              <DialogContent className="bg-[#111827] border-border text-white max-w-md">
                 <DialogHeader><DialogTitle>Schedule Farm Visit</DialogTitle></DialogHeader>
                 <div className="space-y-4 mt-2">
                   <div>
                     <Label>Farmer ID *</Label>
                     <Input value={visitForm.farmerId} onChange={e => setVisitForm(f => ({ ...f, farmerId: e.target.value }))}
-                      className="bg-[#0a0e1a] border-gray-600 text-white mt-1" placeholder="Farmer user ID" />
+                      className="bg-[#0a0e1a] border-border text-white mt-1" placeholder="Farmer user ID" />
                   </div>
                   <div>
                     <Label>Visit Type *</Label>
                     <Select value={visitForm.visitType} onValueChange={v => setVisitForm(f => ({ ...f, visitType: v as typeof f.visitType }))}>
-                      <SelectTrigger className="bg-[#0a0e1a] border-gray-600 text-white mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-[#111827] border-gray-700 text-white">
+                      <SelectTrigger className="bg-[#0a0e1a] border-border text-white mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-[#111827] border-border text-white">
                         {VISIT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -85,7 +85,7 @@ export default function FieldAgents() {
                   <div>
                     <Label>Scheduled Date &amp; Time *</Label>
                     <Input type="datetime-local" value={visitForm.scheduledAt} onChange={e => setVisitForm(f => ({ ...f, scheduledAt: e.target.value }))}
-                      className="bg-[#0a0e1a] border-gray-600 text-white mt-1" />
+                      className="bg-[#0a0e1a] border-border text-white mt-1" />
                   </div>
                   <Button className="w-full bg-orange-600 hover:bg-orange-700"
                     disabled={scheduleMutation.isPending || !visitForm.farmerId || !visitForm.scheduledAt}
@@ -102,24 +102,24 @@ export default function FieldAgents() {
                   <Plus className="w-4 h-4 mr-2" /> Become an Xpert
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-[#111827] border-gray-700 text-white max-w-md">
+              <DialogContent className="bg-[#111827] border-border text-white max-w-md">
                 <DialogHeader><DialogTitle>Register as NEXCOM Xpert</DialogTitle></DialogHeader>
                 <div className="space-y-4 mt-2">
                   <div>
                     <Label>Full Name *</Label>
                     <Input value={form.fullName} onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))}
-                      className="bg-[#0a0e1a] border-gray-600 text-white mt-1" />
+                      className="bg-[#0a0e1a] border-border text-white mt-1" />
                   </div>
                   <div>
                     <Label>Phone Number *</Label>
                     <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                      className="bg-[#0a0e1a] border-gray-600 text-white mt-1" placeholder="+234 800 000 0000" />
+                      className="bg-[#0a0e1a] border-border text-white mt-1" placeholder="+234 800 000 0000" />
                   </div>
                   <div>
                     <Label>State of Operation *</Label>
                     <Select value={form.stateOfOperation} onValueChange={v => setForm(f => ({ ...f, stateOfOperation: v }))}>
-                      <SelectTrigger className="bg-[#0a0e1a] border-gray-600 text-white mt-1"><SelectValue placeholder="Select state" /></SelectTrigger>
-                      <SelectContent className="bg-[#111827] border-gray-700 text-white max-h-48 overflow-y-auto">
+                      <SelectTrigger className="bg-[#0a0e1a] border-border text-white mt-1"><SelectValue placeholder="Select state" /></SelectTrigger>
+                      <SelectContent className="bg-[#111827] border-border text-white max-h-48 overflow-y-auto">
                         {STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -127,7 +127,7 @@ export default function FieldAgents() {
                   <div>
                     <Label>LGA</Label>
                     <Input value={form.lgaOfOperation} onChange={e => setForm(f => ({ ...f, lgaOfOperation: e.target.value }))}
-                      className="bg-[#0a0e1a] border-gray-600 text-white mt-1" placeholder="Local Government Area" />
+                      className="bg-[#0a0e1a] border-border text-white mt-1" placeholder="Local Government Area" />
                   </div>
                   <Button className="w-full bg-orange-600 hover:bg-orange-700"
                     disabled={registerMutation.isPending || !form.fullName || !form.phone || !form.stateOfOperation}
@@ -151,11 +151,11 @@ export default function FieldAgents() {
           { label: "Visits Completed", value: (stats?.totalVisitsCompleted ?? 284750).toLocaleString(), icon: Calendar, color: "text-cyan-400" },
           { label: "Avg Farmers/Agent", value: stats?.avgFarmersPerAgent ?? 154, icon: Award, color: "text-amber-400" },
         ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label} className="bg-[#111827] border-gray-700/50">
+          <Card key={label} className="bg-[#111827] border-border/50">
             <CardContent className="p-4 flex items-center gap-3">
               <Icon className={`w-7 h-7 ${color}`} />
               <div>
-                <p className="text-xs text-gray-400">{label}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
                 <p className="text-xl font-bold text-white">{value}</p>
               </div>
             </CardContent>
@@ -165,7 +165,7 @@ export default function FieldAgents() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Leaderboard */}
-        <Card className="bg-[#111827] border-gray-700/50">
+        <Card className="bg-[#111827] border-border/50">
           <CardHeader>
             <CardTitle className="text-white text-base flex items-center gap-2">
               <Trophy className="w-4 h-4 text-amber-400" /> Top Xperts — Q2 2025
@@ -173,20 +173,20 @@ export default function FieldAgents() {
           </CardHeader>
           <CardContent className="space-y-3">
             {leaderboard.map((agent: { rank: number; agentCode: string; name: string; state: string; farmersOnboarded: number; loansOriginated: number; commissionNgn: number }) => (
-              <div key={agent.agentCode} className="flex items-center gap-3 bg-[#0a0e1a] rounded-lg p-3 border border-gray-700/30">
+              <div key={agent.agentCode} className="flex items-center gap-3 bg-[#0a0e1a] rounded-lg p-3 border border-border/30">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                   agent.rank === 1 ? "bg-amber-500/20 text-amber-400" :
-                  agent.rank === 2 ? "bg-gray-400/20 text-gray-300" :
+                  agent.rank === 2 ? "bg-gray-400/20 text-muted-foreground" :
                   agent.rank === 3 ? "bg-orange-600/20 text-orange-400" :
-                  "bg-gray-700/20 text-gray-400"
+                  "bg-muted/20 text-muted-foreground"
                 }`}>#{agent.rank}</div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-white text-sm truncate">{agent.name}</p>
-                  <p className="text-xs text-gray-400">{agent.agentCode} · {agent.state}</p>
+                  <p className="text-xs text-muted-foreground">{agent.agentCode} · {agent.state}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-green-400">₦{(agent.commissionNgn / 1e6).toFixed(2)}M</p>
-                  <p className="text-xs text-gray-400">{agent.farmersOnboarded} farmers</p>
+                  <p className="text-xs text-muted-foreground">{agent.farmersOnboarded} farmers</p>
                 </div>
               </div>
             ))}
@@ -194,7 +194,7 @@ export default function FieldAgents() {
         </Card>
 
         {/* My Profile / Programme Benefits */}
-        <Card className="bg-[#111827] border-gray-700/50">
+        <Card className="bg-[#111827] border-border/50">
           <CardHeader>
             <CardTitle className="text-white text-base flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-400" />
@@ -209,13 +209,13 @@ export default function FieldAgents() {
                     <Badge variant="outline" className="text-orange-400 border-orange-500/30 text-xs">{myProfile.agentCode}</Badge>
                     <Badge variant="outline" className={`text-xs ${myProfile.status === "ACTIVE" ? "text-green-400 border-green-500/30" : "text-amber-400 border-amber-500/30"}`}>{myProfile.status}</Badge>
                   </div>
-                  <p className="text-sm text-gray-300">{myProfile.stateOfOperation}{myProfile.lgaOfOperation ? ` · ${myProfile.lgaOfOperation}` : ""}</p>
+                  <p className="text-sm text-muted-foreground">{myProfile.stateOfOperation}{myProfile.lgaOfOperation ? ` · ${myProfile.lgaOfOperation}` : ""}</p>
                 </div>
                 {myVisits.slice(0, 4).map((visit: { id: number; visitType: string; status: string; scheduledAt: Date; farmerId: number }) => (
-                  <div key={visit.id} className="flex items-center justify-between bg-[#0a0e1a] rounded-lg p-3 border border-gray-700/30">
+                  <div key={visit.id} className="flex items-center justify-between bg-[#0a0e1a] rounded-lg p-3 border border-border/30">
                     <div>
                       <p className="text-sm font-medium text-white">{visit.visitType.replace(/_/g, " ")}</p>
-                      <p className="text-xs text-gray-400">Farmer #{visit.farmerId} · {new Date(visit.scheduledAt).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground">Farmer #{visit.farmerId} · {new Date(visit.scheduledAt).toLocaleDateString()}</p>
                     </div>
                     <Badge variant="outline" className={`text-xs ${visit.status === "COMPLETED" ? "text-green-400 border-green-500/30" : "text-amber-400 border-amber-500/30"}`}>
                       {visit.status}
@@ -233,11 +233,11 @@ export default function FieldAgents() {
                   { icon: "📊", title: "Portfolio Dashboard", desc: "Real-time view of all your farmers and loans" },
                   { icon: "🌍", title: "Coverage in 18 States", desc: "Join Nigeria's largest agri-agent network" },
                 ].map(b => (
-                  <div key={b.title} className="flex items-start gap-3 bg-[#0a0e1a] rounded-lg p-3 border border-gray-700/30">
+                  <div key={b.title} className="flex items-start gap-3 bg-[#0a0e1a] rounded-lg p-3 border border-border/30">
                     <span className="text-xl">{b.icon}</span>
                     <div>
                       <p className="text-sm font-medium text-white">{b.title}</p>
-                      <p className="text-xs text-gray-400">{b.desc}</p>
+                      <p className="text-xs text-muted-foreground">{b.desc}</p>
                     </div>
                   </div>
                 ))}

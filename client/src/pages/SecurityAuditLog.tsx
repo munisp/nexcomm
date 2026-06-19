@@ -70,7 +70,7 @@ const STATUS_COLORS: Record<EventStatus, string> = {
   OPEN:           "bg-red-500/10 text-red-400 border-red-500/30",
   INVESTIGATING:  "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
   RESOLVED:       "bg-green-500/10 text-green-400 border-green-500/30",
-  FALSE_POSITIVE: "bg-slate-500/10 text-slate-400 border-slate-500/30",
+  FALSE_POSITIVE: "bg-slate-500/10 text-muted-foreground border-slate-500/30",
 };
 
 const EVENT_TYPE_LABELS: Record<EventType, string> = {
@@ -109,38 +109,38 @@ function StatsCards() {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <Card className="bg-slate-900 border-slate-700">
+      <Card className="bg-card border-border">
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-1">
             <ShieldAlert className="w-4 h-4 text-red-400" />
-            <span className="text-xs text-slate-400">Open Events</span>
+            <span className="text-xs text-muted-foreground">Open Events</span>
           </div>
           <p className="text-2xl font-bold text-white">{stats?.openCount ?? 0}</p>
         </CardContent>
       </Card>
-      <Card className="bg-slate-900 border-slate-700">
+      <Card className="bg-card border-border">
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle className="w-4 h-4 text-red-500" />
-            <span className="text-xs text-slate-400">Critical</span>
+            <span className="text-xs text-muted-foreground">Critical</span>
           </div>
           <p className="text-2xl font-bold text-red-400">{bySeverity["CRITICAL"] ?? 0}</p>
         </CardContent>
       </Card>
-      <Card className="bg-slate-900 border-slate-700">
+      <Card className="bg-card border-border">
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-1">
             <Activity className="w-4 h-4 text-orange-400" />
-            <span className="text-xs text-slate-400">Anomalous Orders</span>
+            <span className="text-xs text-muted-foreground">Anomalous Orders</span>
           </div>
           <p className="text-2xl font-bold text-orange-400">{byType["ANOMALOUS_ORDER"] ?? 0}</p>
         </CardContent>
       </Card>
-      <Card className="bg-slate-900 border-slate-700">
+      <Card className="bg-card border-border">
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-1">
             <ShieldCheck className="w-4 h-4 text-green-400" />
-            <span className="text-xs text-slate-400">Rate Limit Breaches</span>
+            <span className="text-xs text-muted-foreground">Rate Limit Breaches</span>
           </div>
           <p className="text-2xl font-bold text-yellow-400">{byType["RATE_LIMIT_BREACH"] ?? 0}</p>
         </CardContent>
@@ -173,26 +173,26 @@ function ResolveDialog({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg">
+      <DialogContent className="bg-card border-border text-white max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-white">Update Security Event</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div>
-            <p className="text-sm font-medium text-slate-300 mb-1">{event.title}</p>
-            <p className="text-xs text-slate-400">{event.description}</p>
+            <p className="text-sm font-medium text-muted-foreground mb-1">{event.title}</p>
+            <p className="text-xs text-muted-foreground">{event.description}</p>
           </div>
           <div className="flex gap-2">
             <SeverityBadge severity={event.severity} />
             <StatusBadge status={event.status} />
           </div>
           <div className="space-y-2">
-            <Label className="text-slate-300">New Status</Label>
+            <Label className="text-muted-foreground">New Status</Label>
             <Select value={newStatus} onValueChange={(v) => setNewStatus(v as typeof newStatus)}>
-              <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+              <SelectTrigger className="bg-secondary border-border text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-600">
+              <SelectContent className="bg-secondary border-border">
                 <SelectItem value="INVESTIGATING">Investigating</SelectItem>
                 <SelectItem value="RESOLVED">Resolved</SelectItem>
                 <SelectItem value="FALSE_POSITIVE">False Positive</SelectItem>
@@ -200,17 +200,17 @@ function ResolveDialog({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label className="text-slate-300">Resolution Notes</Label>
+            <Label className="text-muted-foreground">Resolution Notes</Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Describe the investigation findings or resolution steps taken..."
-              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 min-h-[80px]"
+              className="bg-secondary border-border text-white placeholder:text-muted-foreground min-h-[80px]"
             />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} className="border-slate-600 text-slate-300">
+          <Button variant="outline" onClick={onClose} className="border-border text-muted-foreground">
             Cancel
           </Button>
           <Button
@@ -265,22 +265,22 @@ function CreateEventDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg">
+      <DialogContent className="bg-card border-border text-white max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-white">Create Security Event</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Manually log a security incident, such as a reported deepfake/social-engineering attempt or suspicious account activity.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-slate-300 text-xs">Event Type</Label>
+              <Label className="text-muted-foreground text-xs">Event Type</Label>
               <Select value={form.eventType} onValueChange={(v) => setForm(f => ({ ...f, eventType: v as EventType }))}>
-                <SelectTrigger className="bg-slate-800 border-slate-600 text-white text-xs">
+                <SelectTrigger className="bg-secondary border-border text-white text-xs">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600">
+                <SelectContent className="bg-secondary border-border">
                   {Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v}</SelectItem>
                   ))}
@@ -288,12 +288,12 @@ function CreateEventDialog({ onClose }: { onClose: () => void }) {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-slate-300 text-xs">Severity</Label>
+              <Label className="text-muted-foreground text-xs">Severity</Label>
               <Select value={form.severity} onValueChange={(v) => setForm(f => ({ ...f, severity: v as Severity }))}>
-                <SelectTrigger className="bg-slate-800 border-slate-600 text-white text-xs">
+                <SelectTrigger className="bg-secondary border-border text-white text-xs">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600">
+                <SelectContent className="bg-secondary border-border">
                   <SelectItem value="LOW">Low</SelectItem>
                   <SelectItem value="MEDIUM">Medium</SelectItem>
                   <SelectItem value="HIGH">High</SelectItem>
@@ -303,47 +303,47 @@ function CreateEventDialog({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-slate-300 text-xs">Title</Label>
+            <Label className="text-muted-foreground text-xs">Title</Label>
             <Input
               value={form.title}
               onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
               placeholder="e.g. Reported deepfake video impersonating CEO"
-              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 text-sm"
+              className="bg-secondary border-border text-white placeholder:text-muted-foreground text-sm"
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-slate-300 text-xs">Description</Label>
+            <Label className="text-muted-foreground text-xs">Description</Label>
             <Textarea
               value={form.description}
               onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
               placeholder="Describe the incident in detail..."
-              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 min-h-[80px] text-sm"
+              className="bg-secondary border-border text-white placeholder:text-muted-foreground min-h-[80px] text-sm"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-slate-300 text-xs">IP Address (optional)</Label>
+              <Label className="text-muted-foreground text-xs">IP Address (optional)</Label>
               <Input
                 value={form.ipAddress}
                 onChange={(e) => setForm(f => ({ ...f, ipAddress: e.target.value }))}
                 placeholder="192.168.1.1"
-                className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 text-sm"
+                className="bg-secondary border-border text-white placeholder:text-muted-foreground text-sm"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-slate-300 text-xs">User ID (optional)</Label>
+              <Label className="text-muted-foreground text-xs">User ID (optional)</Label>
               <Input
                 value={form.userId}
                 onChange={(e) => setForm(f => ({ ...f, userId: e.target.value }))}
                 placeholder="123"
                 type="number"
-                className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 text-sm"
+                className="bg-secondary border-border text-white placeholder:text-muted-foreground text-sm"
               />
             </div>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} className="border-slate-600 text-slate-300">
+          <Button variant="outline" onClick={onClose} className="border-border text-muted-foreground">
             Cancel
           </Button>
           <Button
@@ -387,7 +387,7 @@ export default function SecurityAuditLog() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <p className="text-slate-400">Access restricted to administrators.</p>
+          <p className="text-muted-foreground">Access restricted to administrators.</p>
         </div>
       </DashboardLayout>
     );
@@ -406,7 +406,7 @@ export default function SecurityAuditLog() {
               <ShieldAlert className="w-6 h-6 text-red-400" />
               Security Audit Log
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               Monitor anomalous activity, rate limit breaches, and social-engineering attempts
             </p>
           </div>
@@ -415,7 +415,7 @@ export default function SecurityAuditLog() {
               variant="outline"
               size="sm"
               onClick={() => refetch()}
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              className="border-border text-muted-foreground hover:bg-muted"
             >
               <RefreshCw className="w-4 h-4 mr-1" />
               Refresh
@@ -450,10 +450,10 @@ export default function SecurityAuditLog() {
         {/* Filters */}
         <div className="flex flex-wrap gap-3 mb-4">
           <Select value={severityFilter} onValueChange={(v) => { setSeverityFilter(v as typeof severityFilter); setOffset(0); }}>
-            <SelectTrigger className="w-36 bg-slate-800 border-slate-600 text-white text-sm">
+            <SelectTrigger className="w-36 bg-secondary border-border text-white text-sm">
               <SelectValue placeholder="Severity" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
+            <SelectContent className="bg-secondary border-border">
               <SelectItem value="ALL">All Severities</SelectItem>
               <SelectItem value="CRITICAL">Critical</SelectItem>
               <SelectItem value="HIGH">High</SelectItem>
@@ -463,10 +463,10 @@ export default function SecurityAuditLog() {
           </Select>
 
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as typeof statusFilter); setOffset(0); }}>
-            <SelectTrigger className="w-36 bg-slate-800 border-slate-600 text-white text-sm">
+            <SelectTrigger className="w-36 bg-secondary border-border text-white text-sm">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
+            <SelectContent className="bg-secondary border-border">
               <SelectItem value="ALL">All Statuses</SelectItem>
               <SelectItem value="OPEN">Open</SelectItem>
               <SelectItem value="INVESTIGATING">Investigating</SelectItem>
@@ -476,10 +476,10 @@ export default function SecurityAuditLog() {
           </Select>
 
           <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v as typeof typeFilter); setOffset(0); }}>
-            <SelectTrigger className="w-48 bg-slate-800 border-slate-600 text-white text-sm">
+            <SelectTrigger className="w-48 bg-secondary border-border text-white text-sm">
               <SelectValue placeholder="Event Type" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
+            <SelectContent className="bg-secondary border-border">
               <SelectItem value="ALL">All Types</SelectItem>
               {Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => (
                 <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -489,7 +489,7 @@ export default function SecurityAuditLog() {
         </div>
 
         {/* Events Table */}
-        <Card className="bg-slate-900 border-slate-700">
+        <Card className="bg-card border-border">
           <CardHeader className="pb-3">
             <CardTitle className="text-white text-base">
               Security Events ({total})
@@ -497,38 +497,38 @@ export default function SecurityAuditLog() {
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-8 text-center text-slate-400">Loading events...</div>
+              <div className="p-8 text-center text-muted-foreground">Loading events...</div>
             ) : events.length === 0 ? (
               <div className="p-8 text-center">
                 <ShieldCheck className="w-10 h-10 text-green-400 mx-auto mb-2" />
-                <p className="text-slate-400">No security events found for the selected filters.</p>
+                <p className="text-muted-foreground">No security events found for the selected filters.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Event</th>
-                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Type</th>
-                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Severity</th>
-                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Status</th>
-                      <th className="text-left py-3 px-4 text-slate-400 font-medium">User</th>
-                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Time</th>
-                      <th className="text-left py-3 px-4 text-slate-400 font-medium">Actions</th>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-4 text-muted-foreground font-medium">Event</th>
+                      <th className="text-left py-3 px-4 text-muted-foreground font-medium">Type</th>
+                      <th className="text-left py-3 px-4 text-muted-foreground font-medium">Severity</th>
+                      <th className="text-left py-3 px-4 text-muted-foreground font-medium">Status</th>
+                      <th className="text-left py-3 px-4 text-muted-foreground font-medium">User</th>
+                      <th className="text-left py-3 px-4 text-muted-foreground font-medium">Time</th>
+                      <th className="text-left py-3 px-4 text-muted-foreground font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {events.map((event) => (
-                      <tr key={event.id} className="border-b border-slate-800 hover:bg-slate-800/40 transition-colors">
+                      <tr key={event.id} className="border-b border-border hover:bg-secondary/40 transition-colors">
                         <td className="py-3 px-4">
                           <p className="text-white font-medium text-sm">{event.title}</p>
-                          <p className="text-slate-400 text-xs mt-0.5 line-clamp-1">{event.description}</p>
+                          <p className="text-muted-foreground text-xs mt-0.5 line-clamp-1">{event.description}</p>
                           {event.ipAddress && (
-                            <p className="text-slate-500 text-xs mt-0.5">IP: {event.ipAddress}</p>
+                            <p className="text-muted-foreground text-xs mt-0.5">IP: {event.ipAddress}</p>
                           )}
                         </td>
                         <td className="py-3 px-4">
-                          <span className="text-xs text-slate-300">{EVENT_TYPE_LABELS[event.eventType]}</span>
+                          <span className="text-xs text-muted-foreground">{EVENT_TYPE_LABELS[event.eventType]}</span>
                         </td>
                         <td className="py-3 px-4">
                           <SeverityBadge severity={event.severity} />
@@ -537,12 +537,12 @@ export default function SecurityAuditLog() {
                           <StatusBadge status={event.status} />
                         </td>
                         <td className="py-3 px-4">
-                          <span className="text-slate-400 text-xs">
+                          <span className="text-muted-foreground text-xs">
                             {event.userId ? `#${event.userId}` : "System"}
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <span className="text-slate-400 text-xs">
+                          <span className="text-muted-foreground text-xs">
                             {new Date(event.createdAt).toLocaleString()}
                           </span>
                         </td>
@@ -552,16 +552,16 @@ export default function SecurityAuditLog() {
                               size="sm"
                               variant="outline"
                               onClick={() => setSelectedEvent(event)}
-                              className="border-slate-600 text-slate-300 hover:bg-slate-700 text-xs h-7"
+                              className="border-border text-muted-foreground hover:bg-muted text-xs h-7"
                             >
                               <Eye className="w-3 h-3 mr-1" />
                               Review
                             </Button>
                           ) : (
-                            <div className="flex items-center gap-1 text-xs text-slate-500">
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               {event.status === "RESOLVED"
                                 ? <><CheckCircle className="w-3 h-3 text-green-400" /> Resolved</>
-                                : <><XCircle className="w-3 h-3 text-slate-400" /> False Positive</>
+                                : <><XCircle className="w-3 h-3 text-muted-foreground" /> False Positive</>
                               }
                             </div>
                           )}
@@ -575,8 +575,8 @@ export default function SecurityAuditLog() {
 
             {/* Pagination */}
             {total > PAGE_SIZE && (
-              <div className="flex items-center justify-between p-4 border-t border-slate-700">
-                <span className="text-xs text-slate-400">
+              <div className="flex items-center justify-between p-4 border-t border-border">
+                <span className="text-xs text-muted-foreground">
                   Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
                 </span>
                 <div className="flex gap-2">
@@ -585,7 +585,7 @@ export default function SecurityAuditLog() {
                     size="sm"
                     disabled={offset === 0}
                     onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                    className="border-slate-600 text-slate-300 text-xs"
+                    className="border-border text-muted-foreground text-xs"
                   >
                     Previous
                   </Button>
@@ -594,7 +594,7 @@ export default function SecurityAuditLog() {
                     size="sm"
                     disabled={offset + PAGE_SIZE >= total}
                     onClick={() => setOffset(offset + PAGE_SIZE)}
-                    className="border-slate-600 text-slate-300 text-xs"
+                    className="border-border text-muted-foreground text-xs"
                   >
                     Next
                   </Button>

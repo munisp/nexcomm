@@ -16,8 +16,6 @@ import { writeAuditLog } from "../audit";
 
 // ─── in-memory fallback stores (used when DB is unavailable, e.g. in tests) ─
 export const _memBrokerProfiles = new Map<number, Record<string, unknown>>();
-let _memBrokerIdSeq = 1;
-
 export const brokerRouter = router({
   // ── registerBroker ──────────────────────────────────────────────────────────
   registerBroker: protectedProcedure
@@ -34,15 +32,7 @@ export const brokerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-                  if (!db) {
-        const existing = Array.from(_memBrokerProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id);
-        if (existing) throw new TRPCError({ code: "CONFLICT", message: "Broker profile already exists for this user" });
-        const now = new Date();
-        const id = _memBrokerIdSeq++;
-        const profile = { id, userId: ctx.user.id, firmName: input.firmName, contactPhone: input.contactPhone, rcNumber: input.rcNumber ?? null, state: input.state ?? null, yearsInOperation: input.yearsInOperation ?? null, commissionRate: input.commissionRate ?? null, clientBookSize: input.clientBookSize ?? null, kycStatus: "PENDING", accountStatus: "INACTIVE", kycDocuments: null, kycNotes: null, kycReviewedAt: null, kycReviewedBy: null, isActive: false, createdAt: now, updatedAt: now };
-        _memBrokerProfiles.set(id, profile);
-        return profile;
-      }
+                  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [existing] = await db
         .select({ id: brokerProfiles.id })
         .from(brokerProfiles)
@@ -71,10 +61,7 @@ export const brokerRouter = router({
   getMyBrokerProfile: protectedProcedure
     .query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = Array.from(_memBrokerProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id);
-        return profile ?? null;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db
         .select()
         .from(brokerProfiles)
@@ -132,14 +119,7 @@ export const brokerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = Array.from(_memBrokerProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id) as Record<string, unknown> | undefined;
-        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Broker profile not found. Please register first." });
-        profile.kycStatus = "UNDER_REVIEW";
-        profile.kycDocuments = JSON.stringify(input);
-        profile.updatedAt = new Date();
-        return { kycStatus: profile.kycStatus };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db
         .select()
         .from(brokerProfiles)
@@ -200,18 +180,7 @@ export const brokerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = _memBrokerProfiles.get(input.brokerId) as Record<string, unknown> | undefined;
-        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Broker profile not found" });
-        profile.kycStatus = input.decision;
-        profile.accountStatus = input.decision === "APPROVED" ? "ACTIVE" : "INACTIVE";
-        profile.isActive = input.decision === "APPROVED";
-        profile.kycNotes = input.notes ?? null;
-        profile.kycReviewedAt = new Date();
-        profile.kycReviewedBy = ctx.user.id;
-        profile.updatedAt = new Date();
-        return { kycStatus: profile.kycStatus, accountStatus: profile.accountStatus };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db
         .select()
         .from(brokerProfiles)
@@ -269,7 +238,7 @@ export const brokerRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       let approved = 0, rejected = 0, failed = 0;
       const results: { id: number; status: string; error?: string }[] = [];
       for (const id of input.brokerIds) {
@@ -308,17 +277,7 @@ export const brokerRouter = router({
   adminGetBrokerStats: adminProcedure
     .query(async () => {
       const db = await getDb();
-      if (!db) {
-        const all = Array.from(_memBrokerProfiles.values()) as Record<string, unknown>[];
-        return {
-          total: all.length,
-          pending: all.filter(p => p.kycStatus === "PENDING").length,
-          underReview: all.filter(p => p.kycStatus === "UNDER_REVIEW").length,
-          approved: all.filter(p => p.kycStatus === "APPROVED").length,
-          rejected: all.filter(p => p.kycStatus === "REJECTED").length,
-          active: all.filter(p => p.accountStatus === "ACTIVE").length,
-        };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [stats] = await db
         .select({
           total: sql<number>`COUNT(*)::int`,
@@ -375,15 +334,7 @@ export const brokerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = Array.from(_memBrokerProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id) as Record<string, unknown> | undefined;
-        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Broker profile not found. Please register first." });
-        const kycSensitiveChanged =
-          (input.firmName !== undefined && input.firmName !== profile.firmName) ||
-          (input.rcNumber !== undefined && input.rcNumber !== profile.rcNumber);
-        Object.assign(profile, input, { updatedAt: new Date() });
-        return { ...profile, kycResetDueToChange: kycSensitiveChanged && profile.kycStatus === "APPROVED" };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [existing] = await db
         .select()
         .from(brokerProfiles)
@@ -443,7 +394,7 @@ export const brokerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db.select({ id: brokerProfiles.id }).from(brokerProfiles).where(eq(brokerProfiles.userId, ctx.user.id)).limit(1);
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Broker profile not found" });
       const [client] = await db.insert(brokerClients).values({
@@ -581,20 +532,7 @@ export const brokerRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        // Return demo data when DB is unavailable
-        const now = new Date();
-        return Array.from({ length: input.months }, (_, i) => {
-          const d = new Date(now.getFullYear(), now.getMonth() - (input.months - 1 - i), 1);
-          return {
-            month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-            label: d.toLocaleDateString("en-NG", { month: "short", year: "2-digit" }),
-            earned: 0,
-            paid: 0,
-            pending: 0,
-          };
-        });
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db
         .select({ id: brokerProfiles.id })
         .from(brokerProfiles)

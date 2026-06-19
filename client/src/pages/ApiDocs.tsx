@@ -22,7 +22,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-3 right-3 p-1.5 rounded bg-slate-700/60 hover:bg-slate-600/80 text-slate-400 hover:text-slate-200 transition-colors"
+      className="absolute top-3 right-3 p-1.5 rounded bg-muted/60 hover:bg-slate-600/80 text-muted-foreground hover:text-foreground transition-colors"
       title="Copy to clipboard"
     >
       {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -33,12 +33,12 @@ function CopyButton({ text }: { text: string }) {
 // ── Code block ────────────────────────────────────────────────────────────────
 function CodeBlock({ code, language = "bash" }: { code: string; language?: string }) {
   return (
-    <div className="relative rounded-lg bg-slate-900 border border-slate-700/60 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-800/80 border-b border-slate-700/60">
-        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{language}</span>
+    <div className="relative rounded-lg bg-card border border-border/60 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 bg-secondary/80 border-b border-border/60">
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{language}</span>
         <CopyButton text={code} />
       </div>
-      <pre className="p-4 text-sm text-slate-300 overflow-x-auto leading-relaxed font-mono whitespace-pre">{code}</pre>
+      <pre className="p-4 text-sm text-muted-foreground overflow-x-auto leading-relaxed font-mono whitespace-pre">{code}</pre>
     </div>
   );
 }
@@ -48,7 +48,7 @@ function SchemaField({
   name, type, description, required = false,
 }: { name: string; type: string; description: string; required?: boolean }) {
   return (
-    <tr className="border-b border-slate-800/60">
+    <tr className="border-b border-border/60">
       <td className="py-2.5 pr-4 align-top">
         <code className="text-emerald-400 text-xs font-mono">{name}</code>
         {required && <span className="ml-1.5 text-[9px] font-bold text-red-400 uppercase">required</span>}
@@ -56,7 +56,7 @@ function SchemaField({
       <td className="py-2.5 pr-4 align-top">
         <code className="text-amber-400 text-xs font-mono">{type}</code>
       </td>
-      <td className="py-2.5 text-xs text-slate-400 align-top">{description}</td>
+      <td className="py-2.5 text-xs text-muted-foreground align-top">{description}</td>
     </tr>
   );
 }
@@ -69,8 +69,8 @@ function SectionHeader({ icon: Icon, title, subtitle }: { icon: React.ElementTyp
         <Icon className="w-4 h-4 text-emerald-400" />
       </div>
       <div>
-        <h2 className="text-base font-semibold text-slate-100">{title}</h2>
-        {subtitle && <p className="text-sm text-slate-400 mt-0.5">{subtitle}</p>}
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
       </div>
     </div>
   );
@@ -208,19 +208,19 @@ export default function ApiDocs() {
   const currentVersion = API_VERSIONS.find((v) => v.id === selectedVersion)!;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-background text-foreground">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="border-b border-slate-800 bg-slate-900/60">
+      <div className="border-b border-border bg-card/60">
         <div className="max-w-5xl mx-auto px-6 py-8">
-          <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
             <span>NEXCOM Exchange</span>
             <ChevronRight className="w-3 h-3" />
             <span className="text-emerald-400">Developer API</span>
           </div>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-100 mb-2">Public Market Data API</h1>
-              <p className="text-slate-400 max-w-2xl">
+              <h1 className="text-2xl font-bold text-foreground mb-2">Public Market Data API</h1>
+              <p className="text-muted-foreground max-w-2xl">
                 Unauthenticated REST endpoints for external integrations — algorithmic trading bots,
                 price aggregators, and market data dashboards. No API key required.
               </p>
@@ -230,7 +230,7 @@ export default function ApiDocs() {
               <div className="relative">
                 <button
                   onClick={() => setVersionDropdownOpen((v) => !v)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600 text-sm text-slate-200 transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border hover:border-border text-sm text-foreground transition-colors"
                 >
                   <span className="font-semibold">{currentVersion.label}</span>
                   <Badge
@@ -242,20 +242,20 @@ export default function ApiDocs() {
                   >
                     {currentVersion.status}
                   </Badge>
-                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${versionDropdownOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${versionDropdownOpen ? "rotate-180" : ""}`} />
                 </button>
                 {versionDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-64 rounded-lg bg-slate-800 border border-slate-700 shadow-xl z-50 overflow-hidden">
+                  <div className="absolute right-0 top-full mt-1 w-64 rounded-lg bg-secondary border border-border shadow-xl z-50 overflow-hidden">
                     {API_VERSIONS.map((v) => (
                       <button
                         key={v.id}
                         onClick={() => { setSelectedVersion(v.id); setVersionDropdownOpen(false); }}
-                        className={`w-full text-left px-4 py-3 hover:bg-slate-700/60 transition-colors border-b border-slate-700/60 last:border-0 ${
-                          v.id === selectedVersion ? "bg-slate-700/40" : ""
+                        className={`w-full text-left px-4 py-3 hover:bg-muted/60 transition-colors border-b border-border/60 last:border-0 ${
+                          v.id === selectedVersion ? "bg-muted/40" : ""
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-semibold text-slate-100">{v.label}</span>
+                          <span className="text-sm font-semibold text-foreground">{v.label}</span>
                           <Badge
                             className={`text-[9px] px-1.5 py-0 ${
                               v.status === "stable"
@@ -269,13 +269,13 @@ export default function ApiDocs() {
                             <Check className="w-3 h-3 text-emerald-400 ml-auto" />
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-400 leading-relaxed">{v.description}</p>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">{v.description}</p>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Lock className="w-3 h-3" />
                 <span>No auth required</span>
               </div>
@@ -290,7 +290,7 @@ export default function ApiDocs() {
         <section>
           <SectionHeader icon={Globe} title="Base URL" subtitle="All endpoints are relative to the NEXCOM gateway base URL." />
           <CodeBlock code="https://YOUR_NEXCOM_GATEWAY/api/v1" language="text" />
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-muted-foreground">
             Replace <code className="text-amber-400">YOUR_NEXCOM_GATEWAY</code> with the hostname of your NEXCOM deployment.
             CORS is enabled for all origins on public endpoints.
           </p>
@@ -305,44 +305,44 @@ export default function ApiDocs() {
           />
 
           {/* Method + path pill */}
-          <div className="flex items-center gap-3 mb-6 p-4 rounded-lg bg-slate-900 border border-slate-700/60">
+          <div className="flex items-center gap-3 mb-6 p-4 rounded-lg bg-card border border-border/60">
             <span className="px-2.5 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">GET</span>
-            <code className="text-slate-200 text-sm font-mono">/api/v1/orderbook/<span className="text-amber-400">:symbol</span>/snapshot</code>
-            <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-500">
+            <code className="text-foreground text-sm font-mono">/api/v1/orderbook/<span className="text-amber-400">:symbol</span>/snapshot</code>
+            <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
               <Lock className="w-3 h-3" />
               <span>No authentication required</span>
             </div>
           </div>
 
           {/* Path parameters */}
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">Path Parameters</h3>
-          <div className="rounded-lg border border-slate-700/60 overflow-hidden mb-6">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3">Path Parameters</h3>
+          <div className="rounded-lg border border-border/60 overflow-hidden mb-6">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-800/60 border-b border-slate-700/60">
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Parameter</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Type</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Description</th>
+                <tr className="bg-secondary/60 border-b border-border/60">
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Parameter</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 bg-slate-900/40 px-4">
+              <tbody className="divide-y divide-slate-800/60 bg-card/40 px-4">
                 <SchemaField name="symbol" type="string" description="Instrument symbol (e.g. GINGER-NG-SPOT, EUR-USD, BTC-USD). Case-sensitive." required />
               </tbody>
             </table>
           </div>
 
           {/* Query parameters */}
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">Query Parameters</h3>
-          <div className="rounded-lg border border-slate-700/60 overflow-hidden mb-6">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3">Query Parameters</h3>
+          <div className="rounded-lg border border-border/60 overflow-hidden mb-6">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-800/60 border-b border-slate-700/60">
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Parameter</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Type</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Description</th>
+                <tr className="bg-secondary/60 border-b border-border/60">
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Parameter</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 bg-slate-900/40 px-4">
+              <tbody className="divide-y divide-slate-800/60 bg-card/40 px-4">
                 <SchemaField
                   name="depth"
                   type="integer"
@@ -353,17 +353,17 @@ export default function ApiDocs() {
           </div>
 
           {/* Response schema */}
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">Response Schema — <code className="text-emerald-400 text-xs">data</code> object</h3>
-          <div className="rounded-lg border border-slate-700/60 overflow-hidden mb-6">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3">Response Schema — <code className="text-emerald-400 text-xs">data</code> object</h3>
+          <div className="rounded-lg border border-border/60 overflow-hidden mb-6">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-800/60 border-b border-slate-700/60">
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Field</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Type</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Description</th>
+                <tr className="bg-secondary/60 border-b border-border/60">
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Field</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 bg-slate-900/40 px-4">
+              <tbody className="divide-y divide-slate-800/60 bg-card/40 px-4">
                 <SchemaField name="symbol"        type="string"  description="Instrument symbol echoed from the request." />
                 <SchemaField name="depth"         type="integer" description="Number of levels returned per side (may be less if the book is thin)." />
                 <SchemaField name="bids"          type="Level[]" description="Bid side price levels, sorted descending by price (best bid first)." />
@@ -376,17 +376,17 @@ export default function ApiDocs() {
           </div>
 
           {/* Level schema */}
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">Level Object</h3>
-          <div className="rounded-lg border border-slate-700/60 overflow-hidden mb-8">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3">Level Object</h3>
+          <div className="rounded-lg border border-border/60 overflow-hidden mb-8">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-800/60 border-b border-slate-700/60">
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Field</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Type</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Description</th>
+                <tr className="bg-secondary/60 border-b border-border/60">
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Field</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 bg-slate-900/40 px-4">
+              <tbody className="divide-y divide-slate-800/60 bg-card/40 px-4">
                 <SchemaField name="price"    type="number" description="Price level in the instrument's quote currency." />
                 <SchemaField name="quantity" type="number" description="Total quantity available at this price level." />
                 <SchemaField name="total"    type="number" description="Cumulative quantity from the best price up to and including this level." />
@@ -400,7 +400,7 @@ export default function ApiDocs() {
           <SectionHeader icon={Code2} title="Code Examples" />
 
           {/* Tab switcher */}
-          <div className="flex gap-1 mb-4 p-1 rounded-lg bg-slate-800/60 w-fit">
+          <div className="flex gap-1 mb-4 p-1 rounded-lg bg-secondary/60 w-fit">
             {(["curl", "python", "javascript"] as const).map((tab) => (
               <button
                 key={tab}
@@ -408,7 +408,7 @@ export default function ApiDocs() {
                 className={`px-4 py-1.5 rounded text-xs font-semibold transition-colors capitalize ${
                   activeTab === tab
                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                    : "text-slate-400 hover:text-slate-200"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {tab === "javascript" ? "JavaScript" : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -419,11 +419,11 @@ export default function ApiDocs() {
           {activeTab === "curl" && (
             <div className="space-y-4">
               <div>
-                <p className="text-xs text-slate-400 mb-2">Basic request (default 15 levels):</p>
+                <p className="text-xs text-muted-foreground mb-2">Basic request (default 15 levels):</p>
                 <CodeBlock code={CURL_BASIC} language="bash" />
               </div>
               <div>
-                <p className="text-xs text-slate-400 mb-2">With custom depth (5 levels):</p>
+                <p className="text-xs text-muted-foreground mb-2">With custom depth (5 levels):</p>
                 <CodeBlock code={CURL_WITH_DEPTH} language="bash" />
               </div>
             </div>
@@ -445,14 +445,14 @@ export default function ApiDocs() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30">400</span>
-                <span className="text-sm text-slate-300">Bad Request — invalid depth parameter</span>
+                <span className="text-sm text-muted-foreground">Bad Request — invalid depth parameter</span>
               </div>
               <CodeBlock code={ERROR_RESPONSE_400} language="json" />
             </div>
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">200</span>
-                <span className="text-sm text-slate-300">Unknown symbol — returns empty book (not a 404)</span>
+                <span className="text-sm text-muted-foreground">Unknown symbol — returns empty book (not a 404)</span>
               </div>
               <CodeBlock code={ERROR_RESPONSE_200_EMPTY} language="json" />
             </div>
@@ -464,12 +464,12 @@ export default function ApiDocs() {
           <SectionHeader icon={Globe} title="Supported Symbols (Examples)" subtitle="NEXCOM supports 200+ instruments across all asset classes." />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {EXAMPLE_SYMBOLS.map(({ symbol, label, class: cls }) => (
-              <div key={symbol} className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-700/60">
+              <div key={symbol} className="flex items-center justify-between p-3 rounded-lg bg-card border border-border/60">
                 <div>
                   <code className="text-emerald-400 text-xs font-mono">{symbol}</code>
-                  <p className="text-xs text-slate-400 mt-0.5">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
                 </div>
-                <Badge className="text-[10px] bg-slate-800 text-slate-400 border-slate-700">{cls}</Badge>
+                <Badge className="text-[10px] bg-secondary text-muted-foreground border-border">{cls}</Badge>
               </div>
             ))}
           </div>
@@ -484,14 +484,14 @@ export default function ApiDocs() {
               { label: "Max depth per request",  value: "50",   note: "price levels" },
               { label: "Snapshot freshness",      value: "~1s",  note: "refreshed on each tick" },
             ].map(({ label, value, note }) => (
-              <div key={label} className="p-4 rounded-lg bg-slate-900 border border-slate-700/60 text-center">
+              <div key={label} className="p-4 rounded-lg bg-card border border-border/60 text-center">
                 <div className="text-2xl font-bold text-emerald-400 mb-1">{value}</div>
-                <div className="text-xs font-semibold text-slate-300">{label}</div>
-                <div className="text-[10px] text-slate-500 mt-0.5">{note}</div>
+                <div className="text-xs font-semibold text-muted-foreground">{label}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{note}</div>
               </div>
             ))}
           </div>
-          <ul className="space-y-2 text-sm text-slate-400">
+          <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">•</span> Cache responses locally for at least 500 ms before re-fetching to avoid rate-limit errors.</li>
             <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">•</span> For real-time streaming, prefer the WebSocket order book feed at <code className="text-amber-400 text-xs">ws://YOUR_NEXCOM_GATEWAY/ws/orderbook</code> instead of polling this endpoint.</li>
             <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">•</span> The <code className="text-amber-400 text-xs">lastUpdate</code> field is a Unix millisecond timestamp — compare it to your previous snapshot to detect stale data.</li>
@@ -500,7 +500,7 @@ export default function ApiDocs() {
         </section>
 
         {/* ── Footer ───────────────────────────────────────────────────────── */}
-        <div className="border-t border-slate-800 pt-8 text-center text-xs text-slate-600">
+        <div className="border-t border-border pt-8 text-center text-xs text-slate-600">
           NEXCOM Exchange — Public API v1.0 · For authenticated trading APIs, contact your NEXCOM account manager.
         </div>
       </div>

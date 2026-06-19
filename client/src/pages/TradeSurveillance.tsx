@@ -77,10 +77,10 @@ function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     ACTIVE: "bg-red-500/20 text-red-400 border-red-500/30",
     LIFTED: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    EXPIRED: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+    EXPIRED: "bg-zinc-500/20 text-muted-foreground border-zinc-500/30",
     PENDING: "bg-amber-500/20 text-amber-400 border-amber-500/30",
     CONFIRMED: "bg-red-500/20 text-red-400 border-red-500/30",
-    DISMISSED: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+    DISMISSED: "bg-zinc-500/20 text-muted-foreground border-zinc-500/30",
   };
   return (
     <Badge variant="outline" className={`text-xs ${map[status] ?? ""}`}>
@@ -467,7 +467,7 @@ export default function TradeSurveillance() {
                           variant="outline"
                           className={rule.isActive
                             ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                            : "bg-zinc-500/20 text-zinc-400 border-zinc-500/30"}
+                            : "bg-zinc-500/20 text-muted-foreground border-zinc-500/30"}
                         >
                           {rule.isActive ? "Active" : "Inactive"}
                         </Badge>

@@ -85,7 +85,7 @@ const STATUS_COLORS: Record<string, string> = {
   UNAVAILABLE: "bg-red-500/15 text-red-400 border-red-500/30",
   RATE_LIMITED: "bg-red-600/15 text-red-500 border-red-600/30",
   REBUILDING: "bg-violet-500/15 text-violet-400 border-violet-500/30",
-  STOPPED: "bg-gray-500/15 text-gray-400 border-gray-500/30",
+  STOPPED: "bg-gray-500/15 text-muted-foreground border-gray-500/30",
 };
 
 function HAStatusBadge({ status }: { status: string }) {

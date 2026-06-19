@@ -44,7 +44,7 @@ function fmt(v: number, decimals = 2): string {
 function pnlColor(v: number): string {
   if (v > 0) return "text-emerald-400";
   if (v < 0) return "text-red-400";
-  return "text-slate-400";
+  return "text-muted-foreground";
 }
 
 export default function PortfolioAnalytics() {
@@ -108,7 +108,7 @@ export default function PortfolioAnalytics() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">Portfolio Analytics</h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               Combined P&amp;L across spot, futures, and options
             </p>
           </div>
@@ -117,7 +117,7 @@ export default function PortfolioAnalytics() {
             size="sm"
             onClick={() => recordSnapshotMut.mutate()}
             disabled={recordSnapshotMut.isPending}
-            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            className="border-border text-muted-foreground hover:bg-muted"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${recordSnapshotMut.isPending ? "animate-spin" : ""}`} />
             Snapshot Now
@@ -126,11 +126,11 @@ export default function PortfolioAnalytics() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-secondary border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign className="w-4 h-4 text-blue-400" />
-                <span className="text-slate-400 text-xs">Total Equity</span>
+                <span className="text-muted-foreground text-xs">Total Equity</span>
               </div>
               <p className="text-xl font-bold text-white">
                 {summaryQ.isLoading ? "..." : fmt(summary?.totalEquity ?? 0)}
@@ -138,11 +138,11 @@ export default function PortfolioAnalytics() {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-secondary border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Activity className="w-4 h-4 text-purple-400" />
-                <span className="text-slate-400 text-xs">Cash Balance</span>
+                <span className="text-muted-foreground text-xs">Cash Balance</span>
               </div>
               <p className="text-xl font-bold text-white">
                 {summaryQ.isLoading ? "..." : fmt(summary?.cashBalance ?? 0)}
@@ -150,11 +150,11 @@ export default function PortfolioAnalytics() {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-secondary border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <span className="text-slate-400 text-xs">Futures P&L</span>
+                <span className="text-muted-foreground text-xs">Futures P&L</span>
               </div>
               <p className={`text-xl font-bold ${pnlColor((summary?.futuresUnrealizedPnl ?? 0) + (summary?.futuresRealizedPnl ?? 0))}`}>
                 {summaryQ.isLoading ? "..." : fmt((summary?.futuresUnrealizedPnl ?? 0) + (summary?.futuresRealizedPnl ?? 0))}
@@ -162,11 +162,11 @@ export default function PortfolioAnalytics() {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-secondary border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Target className="w-4 h-4 text-amber-400" />
-                <span className="text-slate-400 text-xs">Options P&L</span>
+                <span className="text-muted-foreground text-xs">Options P&L</span>
               </div>
               <p className={`text-xl font-bold ${pnlColor(summary?.optionsPnl ?? 0)}`}>
                 {summaryQ.isLoading ? "..." : fmt(summary?.optionsPnl ?? 0)}
@@ -178,37 +178,37 @@ export default function PortfolioAnalytics() {
         {/* Stats Row */}
         {stats && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-slate-800/50 border-slate-700">
+            <Card className="bg-secondary/50 border-border">
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold text-white">{stats.totalFilledOrders}</p>
-                <p className="text-slate-400 text-xs mt-1">Filled Orders</p>
+                <p className="text-muted-foreground text-xs mt-1">Filled Orders</p>
               </CardContent>
             </Card>
-            <Card className="bg-slate-800/50 border-slate-700">
+            <Card className="bg-secondary/50 border-border">
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold text-white">{stats.openFuturesCount}</p>
-                <p className="text-slate-400 text-xs mt-1">Open Futures</p>
+                <p className="text-muted-foreground text-xs mt-1">Open Futures</p>
               </CardContent>
             </Card>
-            <Card className="bg-slate-800/50 border-slate-700">
+            <Card className="bg-secondary/50 border-border">
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold text-white">{stats.openOptionsCount}</p>
-                <p className="text-slate-400 text-xs mt-1">Open Options</p>
+                <p className="text-muted-foreground text-xs mt-1">Open Options</p>
               </CardContent>
             </Card>
-            <Card className="bg-slate-800/50 border-slate-700">
+            <Card className="bg-secondary/50 border-border">
               <CardContent className="p-4 text-center">
                 <p className={`text-2xl font-bold ${parseFloat(stats.winRate) >= 50 ? "text-emerald-400" : "text-red-400"}`}>
                   {stats.winRate}%
                 </p>
-                <p className="text-slate-400 text-xs mt-1">Win Rate (Futures)</p>
+                <p className="text-muted-foreground text-xs mt-1">Win Rate (Futures)</p>
               </CardContent>
             </Card>
           </div>
         )}
 
         {/* Equity Curve Chart */}
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="bg-secondary border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-white text-base flex items-center gap-2">
               <BarChart2 className="w-4 h-4 text-blue-400" />
@@ -220,7 +220,7 @@ export default function PortfolioAnalytics() {
                   key={d}
                   size="sm"
                   variant={days === d ? "default" : "outline"}
-                  className={days === d ? "bg-blue-600" : "border-slate-600 text-slate-400 hover:bg-slate-700"}
+                  className={days === d ? "bg-blue-600" : "border-border text-muted-foreground hover:bg-muted"}
                   onClick={() => setDays(d)}
                 >
                   {d}d
@@ -230,9 +230,9 @@ export default function PortfolioAnalytics() {
           </CardHeader>
           <CardContent>
             {curveQ.isLoading ? (
-              <div className="h-64 flex items-center justify-center text-slate-400">Loading chart...</div>
+              <div className="h-64 flex items-center justify-center text-muted-foreground">Loading chart...</div>
             ) : chartData.length === 0 ? (
-              <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-2">
+              <div className="h-64 flex flex-col items-center justify-center text-muted-foreground gap-2">
                 <BarChart2 className="w-8 h-8 opacity-40" />
                 <p className="text-sm">No equity snapshots yet. Click "Snapshot Now" to record your first data point.</p>
               </div>
@@ -265,7 +265,7 @@ export default function PortfolioAnalytics() {
         </Card>
 
         {/* Statement Download */}
-        <Card className="bg-slate-800 border-slate-700">
+        <Card className="bg-secondary border-border">
           <CardHeader>
             <CardTitle className="text-white text-base flex items-center gap-2">
               <Download className="w-4 h-4 text-green-400" />
@@ -275,21 +275,21 @@ export default function PortfolioAnalytics() {
           <CardContent>
             <div className="flex flex-wrap gap-4 items-end">
               <div className="space-y-1">
-                <Label className="text-slate-400 text-xs">From Date</Label>
+                <Label className="text-muted-foreground text-xs">From Date</Label>
                 <Input
                   type="date"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
-                  className="bg-slate-700 border-slate-600 text-white w-40"
+                  className="bg-muted border-border text-white w-40"
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-slate-400 text-xs">To Date</Label>
+                <Label className="text-muted-foreground text-xs">To Date</Label>
                 <Input
                   type="date"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
-                  className="bg-slate-700 border-slate-600 text-white w-40"
+                  className="bg-muted border-border text-white w-40"
                 />
               </div>
               <Button
@@ -301,7 +301,7 @@ export default function PortfolioAnalytics() {
                 {statementQ.isFetching ? "Generating..." : "Download CSV"}
               </Button>
             </div>
-            <p className="text-slate-500 text-xs mt-3">
+            <p className="text-muted-foreground text-xs mt-3">
               Includes all filled spot orders, futures positions, and options trades in the selected date range.
             </p>
           </CardContent>

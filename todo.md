@@ -999,3 +999,42 @@
 - [x] My Profile nav item in DashboardLayout sidebar (Account section)
 - [x] /profile route registered in App.tsx
 - [x] Vitest tests for profile.dashboard, profile.orderHistory, search.aiSearch (1052 tests passing)
+
+## Production Readiness Fixes (Jun 2026 Audit)
+
+### P0 — Critical: In-memory → PostgreSQL migrations
+- [x] Migrate farmerRouter._memFarmerProfiles → farmerProfiles table (DB already exists)
+- [x] Migrate brokerRouter._memBrokerProfiles → brokerProfiles table (DB already exists)
+- [x] Migrate traderRouter._memTraderProfiles → traderProfiles table (DB already exists)
+- [x] Migrate marketMakerRouter._memProfiles/_memObligations/_memSnapshots/_memPerfReports → DB tables
+- [x] Migrate amlRouter SAR/flag/rule Maps → amlFlags, sarReports, amlRules tables
+- [x] Migrate totpRouter._memStore → mfaOtpCodes table
+- [x] Migrate webauthnRouter._memOtpCodes/_memWaChallenges → mfaOtpCodes/webauthnChallenges tables
+- [x] Migrate investorRelationsRouter IR events/docs/shareholders/subs → DB tables
+- [x] Migrate regulatoryReportingRouter report/schedule Maps → DB tables
+- [x] Migrate derivativesRouter._memContracts/_memPositions → DB tables
+- [x] Migrate optionsRouter._memOContracts/_memOPositions → DB tables
+- [x] Migrate surveillanceRouter._cbRules/_cbEvents/_wtFlags → DB tables
+- [x] Migrate clearingHouseRouter._memAccounts/_memMarginCalls → DB tables
+- [x] Migrate webhookRouter._memWebhooks → webhooks table
+- [x] Migrate velocityLimitRouter._memLimits → velocityLimits table
+- [x] Migrate deviceSessionRouter._memSessions → deviceSessions table
+- [x] Migrate withdrawalVerificationRouter._memChallenges → DB table
+- [x] Migrate ipAllowlistRouter._memEntries → DB + enforce at middleware level
+- [x] Migrate marketMakerOnboardingRouter._memMmOnboardingProfiles → DB table
+- [x] Migrate warehouseOpRouter._memWarehouseOpProfiles → DB table
+
+### P1 — High: Security hardening
+- [x] Add Cache-Control: no-cache, no-store to index.html responses in serveStatic()
+- [x] Reduce JWT session maxAge from 1 year to 8 hours
+- [x] Fix IPv6 rate limiter keyGenerator to use ipKeyGenerator helper
+- [x] Add X-App-Version header to HTML responses for cache busting
+
+### P2 — Medium: UX completeness
+- [x] Real-time order fill notifications via SSE
+- [x] Profile page edit mode (inline form in UserProfileDashboard)
+- [x] AI search history persistence (last 10 queries per user in DB)
+- [x] Add loading states to 13 pages missing them
+- [x] Add error handling to 16 pages missing it
+- [x] Add toast notifications to 17 pages missing them
+- [x] Replace hardcoded color classes with design tokens (1,685 instances)

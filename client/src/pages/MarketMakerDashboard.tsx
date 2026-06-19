@@ -701,10 +701,10 @@ export default function MarketMakerDashboard() {
       </div>
 
       {/* ── Bottom Nav ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-gray-950/95 backdrop-blur border-t border-gray-800 px-4 py-2 flex gap-2">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur border-t border-border px-4 py-2 flex gap-2">
         <Button
           variant="outline"
-          className="flex-1 h-10 text-xs border-gray-700 text-gray-300 hover:bg-gray-800 bg-transparent"
+          className="flex-1 h-10 text-xs border-border text-muted-foreground hover:bg-secondary bg-transparent"
           onClick={() => navigate("/market-maker-dashboard")}
         >
           Dashboard
@@ -719,7 +719,7 @@ export default function MarketMakerDashboard() {
         </Button>
         <Button
           variant="outline"
-          className="flex-1 h-10 text-xs border-gray-700 text-gray-300 hover:bg-gray-800 bg-transparent"
+          className="flex-1 h-10 text-xs border-border text-muted-foreground hover:bg-secondary bg-transparent"
           onClick={() => navigate("/trade")}
         >
           Trade

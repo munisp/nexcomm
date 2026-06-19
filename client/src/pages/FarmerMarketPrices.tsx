@@ -93,14 +93,14 @@ export default function FarmerMarketPrices() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto">
       {/* Header */}
-      <div className="p-4 flex items-center justify-between border-b border-slate-800">
+      <div className="p-4 flex items-center justify-between border-b border-border">
         <div className="flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-green-400" />
           <div>
             <p className="text-white font-semibold text-sm">Market Prices</p>
             <div className="flex items-center gap-1">
               <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-green-400" : "bg-slate-500"}`} />
-              <p className="text-slate-400 text-xs">{connected ? "Live" : "Connecting..."}</p>
+              <p className="text-muted-foreground text-xs">{connected ? "Live" : "Connecting..."}</p>
             </div>
           </div>
         </div>
@@ -116,11 +116,11 @@ export default function FarmerMarketPrices() {
       <div className="flex-1 overflow-y-auto pb-24">
         {/* Filter Tabs */}
         <div className="p-4 space-y-3">
-          <div className="flex gap-1 bg-slate-800/60 rounded-lg p-1">
+          <div className="flex gap-1 bg-secondary/60 rounded-lg p-1">
             <button
               onClick={() => setFilter("ALL")}
               className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                filter === "ALL" ? "bg-green-700 text-white" : "text-slate-400 hover:text-white"
+                filter === "ALL" ? "bg-green-700 text-white" : "text-muted-foreground hover:text-white"
               }`}
             >
               All Commodities
@@ -128,7 +128,7 @@ export default function FarmerMarketPrices() {
             <button
               onClick={() => setFilter("MY_CROPS")}
               className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
-                filter === "MY_CROPS" ? "bg-green-700 text-white" : "text-slate-400 hover:text-white"
+                filter === "MY_CROPS" ? "bg-green-700 text-white" : "text-muted-foreground hover:text-white"
               }`}
             >
               <Sprout className="w-3 h-3" />
@@ -150,7 +150,7 @@ export default function FarmerMarketPrices() {
                 className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                   categoryFilter === cat
                     ? "bg-amber-600 text-white"
-                    : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                    : "bg-secondary text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {cat === "ALL" ? "All" : cat.replace(/_/g, " ")}
@@ -164,7 +164,7 @@ export default function FarmerMarketPrices() {
           <div className="mx-4 mb-4 p-3 bg-green-950/40 border border-green-800/40 rounded-xl flex items-center justify-between">
             <div>
               <p className="text-green-300 text-xs font-semibold">Your listed crops</p>
-              <p className="text-slate-400 text-xs mt-0.5">{myCropTypes.join(", ")}</p>
+              <p className="text-muted-foreground text-xs mt-0.5">{myCropTypes.join(", ")}</p>
             </div>
             <button
               onClick={() => navigate("/farmer-crops")}
@@ -177,10 +177,10 @@ export default function FarmerMarketPrices() {
 
         {/* No crops message for MY_CROPS filter */}
         {filter === "MY_CROPS" && myCropTypes.length === 0 && !myPricesQ.isLoading && (
-          <div className="mx-4 mb-4 p-6 bg-slate-800/50 border border-dashed border-slate-700 rounded-xl text-center">
-            <Wheat className="w-8 h-8 text-slate-500 mx-auto mb-2" />
-            <p className="text-slate-400 text-sm">No active crop listings</p>
-            <p className="text-slate-500 text-xs mt-1">Add a listing to see your crop prices here</p>
+          <div className="mx-4 mb-4 p-6 bg-secondary/50 border border-dashed border-border rounded-xl text-center">
+            <Wheat className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-muted-foreground text-sm">No active crop listings</p>
+            <p className="text-muted-foreground text-xs mt-1">Add a listing to see your crop prices here</p>
             <Button
               size="sm"
               onClick={() => navigate("/farmer-crops")}
@@ -194,12 +194,12 @@ export default function FarmerMarketPrices() {
         {/* Price Table */}
         {myPricesQ.isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <RefreshCw className="w-6 h-6 text-slate-400 animate-spin" />
+            <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" />
           </div>
         ) : (
           <div className="px-4 space-y-2">
             {displayCommodities.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-sm">
+              <div className="text-center py-8 text-muted-foreground text-sm">
                 No commodities match the current filter
               </div>
             ) : (
@@ -215,18 +215,18 @@ export default function FarmerMarketPrices() {
                     className={`border transition-colors ${
                       isMyCrop
                         ? "bg-green-950/30 border-green-800/40"
-                        : "bg-slate-800/60 border-slate-700/60"
+                        : "bg-secondary/60 border-border/60"
                     }`}
                   >
                     <CardContent className="p-3 flex items-center gap-3">
                       {/* Crop indicator */}
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                        isMyCrop ? "bg-green-700/40" : "bg-slate-700/60"
+                        isMyCrop ? "bg-green-700/40" : "bg-muted/60"
                       }`}>
                         {isMyCrop ? (
                           <Sprout className="w-4 h-4 text-green-400" />
                         ) : (
-                          <Wheat className="w-4 h-4 text-slate-400" />
+                          <Wheat className="w-4 h-4 text-muted-foreground" />
                         )}
                       </div>
 
@@ -240,7 +240,7 @@ export default function FarmerMarketPrices() {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-slate-500 text-xs">{commodity.category.replace(/_/g, " ")} · per {commodity.unit}</p>
+                        <p className="text-muted-foreground text-xs">{commodity.category.replace(/_/g, " ")} · per {commodity.unit}</p>
                       </div>
 
                       {/* Price + change */}
@@ -251,14 +251,14 @@ export default function FarmerMarketPrices() {
                               ${tick.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </p>
                             <div className={`flex items-center justify-end gap-0.5 text-xs ${
-                              isUp ? "text-green-400" : isDown ? "text-red-400" : "text-slate-400"
+                              isUp ? "text-green-400" : isDown ? "text-red-400" : "text-muted-foreground"
                             }`}>
                               {isUp ? <TrendingUp className="w-3 h-3" /> : isDown ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
                               {tick.changePct >= 0 ? "+" : ""}{tick.changePct.toFixed(2)}%
                             </div>
                           </>
                         ) : (
-                          <div className="flex items-center gap-1 text-slate-500 text-xs">
+                          <div className="flex items-center gap-1 text-muted-foreground text-xs">
                             <RefreshCw className="w-3 h-3 animate-spin" />
                             Loading
                           </div>
@@ -284,15 +284,15 @@ export default function FarmerMarketPrices() {
         )}
 
         {/* Market Summary */}
-        <div className="mx-4 mt-4 p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl">
-          <p className="text-slate-400 text-xs text-center">
+        <div className="mx-4 mt-4 p-3 bg-secondary/40 border border-border/40 rounded-xl">
+          <p className="text-muted-foreground text-xs text-center">
             Prices updated every 3 seconds · {displayCommodities.length} instruments shown
           </p>
         </div>
       </div>
 
       {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-slate-900 border-t border-slate-800 flex">
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card border-t border-border flex">
         {[
           { icon: Sprout, label: "Home", path: "/farmer-dashboard" },
           { icon: MapPin, label: "Farms", path: "/farmer-farms" },
@@ -304,7 +304,7 @@ export default function FarmerMarketPrices() {
             key={label}
             onClick={() => navigate(path)}
             className={`flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors ${
-              path === "/farmer-market" ? "text-green-400" : "text-slate-400 hover:text-white"
+              path === "/farmer-market" ? "text-green-400" : "text-muted-foreground hover:text-white"
             }`}
           >
             <Icon className="w-5 h-5" />

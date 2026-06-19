@@ -49,7 +49,7 @@ function SettlementCountdown({ settlementDate, status }: { settlementDate: Date 
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-muted-foreground">{new Date(settlementDate).toLocaleDateString()}</span>
       <span className={`text-xs font-mono font-semibold flex items-center gap-1 ${
-        isUrgent ? "text-amber-400" : "text-slate-300"
+        isUrgent ? "text-amber-400" : "text-muted-foreground"
       }`}>
         <Clock className="w-3 h-3" />
         {days > 0 ? `${days}d ${hours}h` : `${hours}h ${mins}m`}

@@ -111,22 +111,22 @@ export default function AdminFIXGateway() {
       <div className="border-b border-white/10 bg-[#0d1426] px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/admin")} className="text-gray-400 hover:text-white">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/admin")} className="text-muted-foreground hover:text-white">
               <ArrowLeft className="w-4 h-4 mr-1" /> Back
             </Button>
             <div>
               <h1 className="text-xl font-bold text-white">FIX 4.4 Gateway</h1>
-              <p className="text-xs text-gray-400">Institutional broker session monitoring</p>
+              <p className="text-xs text-muted-foreground">Institutional broker session monitoring</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setAutoRefresh(a => !a)}
-              className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all ${autoRefresh ? "border-emerald-500/50 text-emerald-400 bg-emerald-500/10" : "border-white/10 text-gray-400"}`}
+              className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-all ${autoRefresh ? "border-emerald-500/50 text-emerald-400 bg-emerald-500/10" : "border-white/10 text-muted-foreground"}`}
             >
               <Activity className="w-3 h-3" /> {autoRefresh ? "Live" : "Paused"}
             </button>
-            <Button variant="ghost" size="sm" onClick={() => sessionsQuery.refetch()} className="text-gray-400 hover:text-white">
+            <Button variant="ghost" size="sm" onClick={() => sessionsQuery.refetch()} className="text-muted-foreground hover:text-white">
               <RefreshCw className={`w-4 h-4 ${sessionsQuery.isFetching ? "animate-spin" : ""}`} />
             </Button>
           </div>
@@ -140,12 +140,12 @@ export default function AdminFIXGateway() {
             { label: "Total Sessions", value: sessions.length, icon: <Hash className="w-4 h-4" />, color: "text-white" },
             { label: "Connected", value: connectedCount, icon: <Wifi className="w-4 h-4" />, color: "text-emerald-400" },
             { label: "Disconnected", value: sessions.length - connectedCount, icon: <WifiOff className="w-4 h-4" />, color: "text-red-400" },
-            { label: "Last Refresh", value: new Date().toLocaleTimeString(), icon: <Clock className="w-4 h-4" />, color: "text-gray-400" },
+            { label: "Last Refresh", value: new Date().toLocaleTimeString(), icon: <Clock className="w-4 h-4" />, color: "text-muted-foreground" },
           ].map((card) => (
             <div key={card.label} className="bg-white/5 border border-white/10 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-1">
                 <span className={card.color}>{card.icon}</span>
-                <p className="text-xs text-gray-400">{card.label}</p>
+                <p className="text-xs text-muted-foreground">{card.label}</p>
               </div>
               <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
             </div>
@@ -164,7 +164,7 @@ export default function AdminFIXGateway() {
               <DialogHeader><DialogTitle>Send FIX Message</DialogTitle></DialogHeader>
               <div className="space-y-4 pt-2">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Session</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">Session</label>
                   <Select value={selectedSession} onValueChange={setSelectedSession}>
                     <SelectTrigger className="bg-white/5 border-white/10 text-white">
                       <SelectValue placeholder="Select session..." />
@@ -179,7 +179,7 @@ export default function AdminFIXGateway() {
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Message Type</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">Message Type</label>
                   <Select value={msgType} onValueChange={setMsgType}>
                     <SelectTrigger className="bg-white/5 border-white/10 text-white">
                       <SelectValue />
@@ -193,7 +193,7 @@ export default function AdminFIXGateway() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs text-gray-400">Fields (Tag=Value)</label>
+                    <label className="text-xs text-muted-foreground">Fields (Tag=Value)</label>
                     <Button variant="ghost" size="sm" onClick={addField} className="text-emerald-400 hover:text-emerald-300 h-6 text-xs">
                       <Plus className="w-3 h-3 mr-1" /> Add
                     </Button>
@@ -230,8 +230,8 @@ export default function AdminFIXGateway() {
         ) : sessions.length === 0 ? (
           <div className="bg-white/5 border border-white/10 rounded-xl p-12 text-center">
             <WifiOff className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400 font-medium">No FIX sessions active</p>
-            <p className="text-gray-500 text-sm mt-1">The matching engine FIX gateway is not running or has no connected clients.</p>
+            <p className="text-muted-foreground font-medium">No FIX sessions active</p>
+            <p className="text-muted-foreground text-sm mt-1">The matching engine FIX gateway is not running or has no connected clients.</p>
             <p className="text-gray-600 text-xs mt-3 font-mono">Endpoint: /api/v1/fix/sessions</p>
           </div>
         ) : (
@@ -245,7 +245,7 @@ export default function AdminFIXGateway() {
                       <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" : "bg-red-400"}`} />
                       <div>
                         <p className="font-mono text-sm text-white">{session.session_id}</p>
-                        <p className="text-xs text-gray-400">{session.sender_comp_id} → {session.target_comp_id}</p>
+                        <p className="text-xs text-muted-foreground">{session.sender_comp_id} → {session.target_comp_id}</p>
                       </div>
                     </div>
                     <Badge className={isConnected ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}>
@@ -254,24 +254,24 @@ export default function AdminFIXGateway() {
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                     <div>
-                      <p className="text-xs text-gray-500 mb-0.5">Seq Num</p>
+                      <p className="text-xs text-muted-foreground mb-0.5">Seq Num</p>
                       <p className="text-white font-mono">{session.msg_seq_num ?? "—"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-0.5">Msgs Sent</p>
+                      <p className="text-xs text-muted-foreground mb-0.5">Msgs Sent</p>
                       <p className="text-white">{session.messages_sent ?? 0}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-0.5">Msgs Received</p>
+                      <p className="text-xs text-muted-foreground mb-0.5">Msgs Received</p>
                       <p className="text-white">{session.messages_received ?? 0}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-0.5">Last Heartbeat</p>
-                      <p className="text-gray-300 text-xs">{session.last_heartbeat ? new Date(session.last_heartbeat).toLocaleTimeString() : "—"}</p>
+                      <p className="text-xs text-muted-foreground mb-0.5">Last Heartbeat</p>
+                      <p className="text-muted-foreground text-xs">{session.last_heartbeat ? new Date(session.last_heartbeat).toLocaleTimeString() : "—"}</p>
                     </div>
                   </div>
                   {session.connected_at && (
-                    <p className="text-xs text-gray-500 mt-3">Connected: {new Date(session.connected_at).toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground mt-3">Connected: {new Date(session.connected_at).toLocaleString()}</p>
                   )}
                 </div>
               );

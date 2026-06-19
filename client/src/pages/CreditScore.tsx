@@ -47,11 +47,11 @@ function collateralBadge(status: string) {
   const map: Record<string, string> = {
     REGISTERED: "bg-blue-500/20 text-blue-300",
     PLEDGED: "bg-purple-500/20 text-purple-300",
-    RELEASED: "bg-gray-500/20 text-gray-300",
+    RELEASED: "bg-gray-500/20 text-muted-foreground",
     LIQUIDATED: "bg-red-500/20 text-red-300",
     EXPIRED: "bg-orange-500/20 text-orange-300",
   };
-  return map[status] ?? "bg-gray-500/20 text-gray-300";
+  return map[status] ?? "bg-gray-500/20 text-muted-foreground";
 }
 
 // ── Instalment status icon ────────────────────────────────────────────────────

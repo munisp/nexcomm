@@ -306,23 +306,23 @@ export default function GingerPriceHistory() {
     : Minus;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-background text-foreground">
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
           <button
             onClick={() => setLocation("/farmer-journey")}
-            className="p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
             aria-label="Back to Farmer Journey"
           >
-            <ArrowLeft className="w-4 h-4 text-slate-400" />
+            <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </button>
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-emerald-400" style={{ fontFamily: "'DM Serif Display', serif" }}>
               NEXCOM
             </span>
-            <span className="text-slate-500">/</span>
-            <span className="text-sm font-medium text-slate-300">Ginger Price History</span>
+            <span className="text-muted-foreground">/</span>
+            <span className="text-sm font-medium text-muted-foreground">Ginger Price History</span>
           </div>
         </div>
       </div>
@@ -341,7 +341,7 @@ export default function GingerPriceHistory() {
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
                     symbol === s
                       ? "bg-emerald-500 text-white"
-                      : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+                      : "bg-secondary text-muted-foreground hover:bg-muted hover:text-white"
                   }`}
                 >
                   {s === "GINGER-NG-SPOT" ? "Split Dry (GINGER-NG-SPOT)" : "Whole Dry (GINGER-WHOLE-SPOT)"}
@@ -352,7 +352,7 @@ export default function GingerPriceHistory() {
             <h1 className="text-2xl sm:text-3xl font-bold text-white">
               {instrument?.name ?? symbol}
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               {instrument?.description} · Priced in {instrument?.currency ?? "USD"} per {instrument?.unit ?? "MT"}
             </p>
           </div>
@@ -370,7 +370,7 @@ export default function GingerPriceHistory() {
                   ({stats.change >= 0 ? "+" : ""}${stats.change.toFixed(2)})
                 </span>
               </div>
-              <span className="text-xs text-slate-500">{days}-day performance</span>
+              <span className="text-xs text-muted-foreground">{days}-day performance</span>
             </div>
           )}
         </div>
@@ -384,7 +384,7 @@ export default function GingerPriceHistory() {
               className={`px-3 py-1 rounded text-xs font-medium transition-all ${
                 days === p.days
                   ? "bg-emerald-600 text-white"
-                  : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+                  : "bg-secondary text-muted-foreground hover:bg-muted hover:text-white"
               }`}
             >
               {p.label}
@@ -401,8 +401,8 @@ export default function GingerPriceHistory() {
               { label: "Avg Daily Vol", value: `${stats.avgVol.toLocaleString()} MT`, color: AMBER },
               { label: "Total Volume",  value: `${stats.totalVol.toLocaleString()} MT`, color: SLATE },
             ].map(s => (
-              <div key={s.label} className="bg-slate-900 rounded-xl p-3 border border-slate-800">
-                <div className="text-xs text-slate-500 mb-1">{s.label}</div>
+              <div key={s.label} className="bg-card rounded-xl p-3 border border-border">
+                <div className="text-xs text-muted-foreground mb-1">{s.label}</div>
                 <div className="text-base font-bold tabular-nums" style={{ color: s.color }}>
                   {s.value}
                 </div>
@@ -412,20 +412,20 @@ export default function GingerPriceHistory() {
         )}
 
         {/* ── Chart ────────────────────────────────────────────────────────── */}
-        <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
+        <div className="bg-card rounded-2xl border border-border overflow-hidden">
           <div className="px-4 pt-4 pb-2 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-slate-300">
+              <span className="text-sm font-medium text-muted-foreground">
                 {chartMode === "candle" ? `Daily OHLCV — ${symbol}` : "Grade Price Spread"}
               </span>
               {/* Chart mode toggle */}
-              <div className="flex rounded-lg overflow-hidden border border-slate-700 text-xs">
+              <div className="flex rounded-lg overflow-hidden border border-border text-xs">
                 <button
                   onClick={() => setChartMode("candle")}
                   className={`px-3 py-1 transition-colors ${
                     chartMode === "candle"
                       ? "bg-emerald-600 text-white"
-                      : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      : "bg-secondary text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   OHLCV
@@ -435,7 +435,7 @@ export default function GingerPriceHistory() {
                   className={`px-3 py-1 transition-colors ${
                     chartMode === "grade"
                       ? "bg-emerald-600 text-white"
-                      : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      : "bg-secondary text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   Grade Spread
@@ -443,7 +443,7 @@ export default function GingerPriceHistory() {
               </div>
             </div>
             {isLoading && (
-              <span className="text-xs text-slate-500 animate-pulse">Loading…</span>
+              <span className="text-xs text-muted-foreground animate-pulse">Loading…</span>
             )}
           </div>
 
@@ -460,14 +460,14 @@ export default function GingerPriceHistory() {
           {/* Grade spread multi-line chart */}
           <div ref={gradeChartContainerRef} className={`w-full ${chartMode === "grade" ? "" : "hidden"}`} />
           {chartMode === "grade" && gradeData?.grades && (
-            <div className="px-4 pb-3 flex flex-wrap items-center gap-4 text-xs text-slate-500">
+            <div className="px-4 pb-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
               {gradeData.grades.map((g, idx) => (
                 <span key={g.code} className="flex items-center gap-1.5">
                   <span
                     className="w-4 h-0.5 inline-block rounded"
                     style={{ backgroundColor: GRADE_COLORS[idx % GRADE_COLORS.length] }}
                   />
-                  <span className="text-slate-400">{g.name.replace("Nigeria ", "")}</span>
+                  <span className="text-muted-foreground">{g.name.replace("Nigeria ", "")}</span>
                   <span className={g.premiumPct >= 0 ? "text-emerald-400" : "text-red-400"}>
                     ({g.premiumPct >= 0 ? "+" : ""}{g.premiumPct}%)
                   </span>
@@ -491,23 +491,23 @@ export default function GingerPriceHistory() {
         </div>
 
         {/* ── Grade specifications ─────────────────────────────────────────── */}
-        <div className="bg-slate-900 rounded-2xl border border-slate-800">
+        <div className="bg-card rounded-2xl border border-border">
           <button
             className="w-full flex items-center justify-between px-5 py-4 text-left"
             onClick={() => setShowGrades(v => !v)}
           >
             <div className="flex items-center gap-2">
               <Award className="w-4 h-4 text-emerald-400" />
-              <span className="font-semibold text-slate-200">Grade Specifications</span>
+              <span className="font-semibold text-foreground">Grade Specifications</span>
             </div>
-            {showGrades ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+            {showGrades ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
           </button>
           {showGrades && (
             <div className="px-5 pb-5">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-800 text-slate-500 text-xs uppercase tracking-wide">
+                    <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wide">
                       <th className="text-left py-2 pr-4">Grade Code</th>
                       <th className="text-left py-2 pr-4">Name</th>
                       <th className="text-left py-2 pr-4">Description</th>
@@ -516,17 +516,17 @@ export default function GingerPriceHistory() {
                   </thead>
                   <tbody>
                     {(gingerInfo?.grades ?? []).map(g => (
-                      <tr key={g.code} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                      <tr key={g.code} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
                         <td className="py-2.5 pr-4 font-mono text-emerald-400 text-xs">{g.code}</td>
-                        <td className="py-2.5 pr-4 text-slate-300 font-medium">{g.name}</td>
-                        <td className="py-2.5 pr-4 text-slate-500 text-xs max-w-xs">{g.description}</td>
+                        <td className="py-2.5 pr-4 text-muted-foreground font-medium">{g.name}</td>
+                        <td className="py-2.5 pr-4 text-muted-foreground text-xs max-w-xs">{g.description}</td>
                         <td className="py-2.5 text-right">
                           <Badge
                             variant="outline"
                             className={`text-xs ${
                               g.premiumPct > 0  ? "border-emerald-700 text-emerald-400" :
                               g.premiumPct < 0  ? "border-red-800 text-red-400" :
-                                                  "border-slate-700 text-slate-400"
+                                                  "border-border text-muted-foreground"
                             }`}
                           >
                             {g.premiumPct === 0 ? "Base" : `${g.premiumPct > 0 ? "+" : ""}${g.premiumPct}%`}
@@ -542,16 +542,16 @@ export default function GingerPriceHistory() {
         </div>
 
         {/* ── Certified warehouses ─────────────────────────────────────────── */}
-        <div className="bg-slate-900 rounded-2xl border border-slate-800">
+        <div className="bg-card rounded-2xl border border-border">
           <button
             className="w-full flex items-center justify-between px-5 py-4 text-left"
             onClick={() => setShowWarehouses(v => !v)}
           >
             <div className="flex items-center gap-2">
               <Warehouse className="w-4 h-4 text-emerald-400" />
-              <span className="font-semibold text-slate-200">Certified Ginger Warehouses</span>
+              <span className="font-semibold text-foreground">Certified Ginger Warehouses</span>
             </div>
-            {showWarehouses ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+            {showWarehouses ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
           </button>
           {showWarehouses && (
             <div className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -559,11 +559,11 @@ export default function GingerPriceHistory() {
                 const pctUsed = Math.round(((w.capacity - w.available) / w.capacity) * 100);
   if (isLoading) return <PageSkeleton cards={2} tableRows={10} tableCols={5} />;
                 return (
-                  <div key={w.id} className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/50">
+                  <div key={w.id} className="bg-secondary/60 rounded-xl p-4 border border-border/50">
                     <div className="flex items-start justify-between mb-2">
                       <div>
-                        <div className="font-medium text-slate-200 text-sm">{w.name}</div>
-                        <div className="text-xs text-slate-500">{w.city}, {w.state}</div>
+                        <div className="font-medium text-foreground text-sm">{w.name}</div>
+                        <div className="text-xs text-muted-foreground">{w.city}, {w.state}</div>
                       </div>
                       {w.certified && (
                         <Badge className="bg-emerald-900/60 text-emerald-400 border-emerald-800 text-xs">
@@ -571,14 +571,14 @@ export default function GingerPriceHistory() {
                         </Badge>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500 mb-2">Manager: {w.manager}</div>
+                    <div className="text-xs text-muted-foreground mb-2">Manager: {w.manager}</div>
                     {/* Capacity bar */}
                     <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-slate-500">
+                      <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Capacity used</span>
                         <span>{pctUsed}%</span>
                       </div>
-                      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${pctUsed > 80 ? "bg-red-500" : pctUsed > 60 ? "bg-amber-500" : "bg-emerald-500"}`}
                           style={{ width: `${pctUsed}%` }}
@@ -599,7 +599,7 @@ export default function GingerPriceHistory() {
         <div className="bg-gradient-to-r from-emerald-950/60 to-slate-900/60 rounded-2xl border border-emerald-800/40 p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-white text-lg">Ready to sell your ginger?</h3>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               Deposit at a certified warehouse, receive an EWR, and place your sell order in under 5 minutes.
             </p>
           </div>

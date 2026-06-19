@@ -73,7 +73,7 @@ export default function FixedIncome() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">Fixed Income Board</h1>
-            <p className="text-sm text-gray-400">Government bonds, T-bills, corporate bonds & agri-backed securities</p>
+            <p className="text-sm text-muted-foreground">Government bonds, T-bills, corporate bonds & agri-backed securities</p>
           </div>
         </div>
       </div>
@@ -86,11 +86,11 @@ export default function FixedIncome() {
           { label: "Avg Yield", value: `${avgYield.toFixed(2)}%`, icon: TrendingUp, color: "text-amber-400" },
           { label: "Avg Credit Rating", value: "A-", icon: Award, color: "text-purple-400" },
         ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label} className="bg-[#111827] border-gray-700/50">
+          <Card key={label} className="bg-[#111827] border-border/50">
             <CardContent className="p-4 flex items-center gap-3">
               <Icon className={`w-8 h-8 ${color}`} />
               <div>
-                <p className="text-xs text-gray-400">{label}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
                 <p className="text-xl font-bold text-white">{value}</p>
               </div>
             </CardContent>
@@ -99,7 +99,7 @@ export default function FixedIncome() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-[#111827] border border-gray-700/50 mb-6">
+        <TabsList className="bg-[#111827] border border-border/50 mb-6">
           <TabsTrigger value="board">Instruments</TabsTrigger>
           <TabsTrigger value="yield">Yield Curve</TabsTrigger>
           <TabsTrigger value="volume">Volume</TabsTrigger>
@@ -107,34 +107,34 @@ export default function FixedIncome() {
 
         {/* Instruments Table */}
         <TabsContent value="board">
-          <Card className="bg-[#111827] border-gray-700/50">
+          <Card className="bg-[#111827] border-border/50">
             <CardHeader>
               <CardTitle className="text-white text-base">Listed Instruments</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-700/50 hover:bg-transparent">
-                    <TableHead className="text-gray-400">Instrument</TableHead>
-                    <TableHead className="text-gray-400">Type</TableHead>
-                    <TableHead className="text-gray-400 text-right">Face Value</TableHead>
-                    <TableHead className="text-gray-400 text-right">Yield</TableHead>
-                    <TableHead className="text-gray-400 text-right">Outstanding</TableHead>
-                    <TableHead className="text-gray-400">Rating</TableHead>
-                    <TableHead className="text-gray-400">Maturity</TableHead>
-                    <TableHead className="text-gray-400"></TableHead>
+                  <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableHead className="text-muted-foreground">Instrument</TableHead>
+                    <TableHead className="text-muted-foreground">Type</TableHead>
+                    <TableHead className="text-muted-foreground text-right">Face Value</TableHead>
+                    <TableHead className="text-muted-foreground text-right">Yield</TableHead>
+                    <TableHead className="text-muted-foreground text-right">Outstanding</TableHead>
+                    <TableHead className="text-muted-foreground">Rating</TableHead>
+                    <TableHead className="text-muted-foreground">Maturity</TableHead>
+                    <TableHead className="text-muted-foreground"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={8} className="text-center text-gray-500 py-8">Loading instruments…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Loading instruments…</TableCell></TableRow>
                   ) : instruments.map((inst) => (
-                    <TableRow key={inst.id} className="border-gray-700/50 hover:bg-gray-800/30">
+                    <TableRow key={inst.id} className="border-border/50 hover:bg-secondary/30">
                       <TableCell>
                         <div>
                           <p className="font-medium text-white text-sm">{inst.ticker}</p>
-                          <p className="text-xs text-gray-400">{inst.name}</p>
-                          <p className="text-xs text-gray-500">{inst.isin}</p>
+                          <p className="text-xs text-muted-foreground">{inst.name}</p>
+                          <p className="text-xs text-muted-foreground">{inst.isin}</p>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -148,19 +148,19 @@ export default function FixedIncome() {
                       <TableCell className="text-right">
                         <span className="text-green-400 font-mono font-bold">{inst.yieldPct}%</span>
                       </TableCell>
-                      <TableCell className="text-right text-gray-300 text-sm">
+                      <TableCell className="text-right text-muted-foreground text-sm">
                         {formatNgn(inst.outstandingNgn)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Shield className="w-3 h-3 text-blue-400" />
                           <span className="text-sm font-bold text-blue-300">{inst.creditRating ?? "NR"}</span>
-                          <span className="text-xs text-gray-500">{inst.ratingAgency}</span>
+                          <span className="text-xs text-muted-foreground">{inst.ratingAgency}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-gray-300">
+                      <TableCell className="text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-gray-500" />
+                          <Calendar className="w-3 h-3 text-muted-foreground" />
                           {inst.maturityDate ? new Date(inst.maturityDate).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                         </div>
                       </TableCell>
@@ -172,22 +172,22 @@ export default function FixedIncome() {
                               Buy <ChevronRight className="w-3 h-3 ml-1" />
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="bg-[#111827] border-gray-700 text-white">
+                          <DialogContent className="bg-[#111827] border-border text-white">
                             <DialogHeader>
                               <DialogTitle>Buy — {inst.ticker}</DialogTitle>
                             </DialogHeader>
                             <div className="space-y-4 mt-2">
                               <div className="bg-[#0a0e1a] rounded-lg p-3 space-y-1 text-sm">
-                                <div className="flex justify-between"><span className="text-gray-400">Issuer</span><span>{inst.issuerName}</span></div>
-                                <div className="flex justify-between"><span className="text-gray-400">Yield</span><span className="text-green-400 font-bold">{inst.yieldPct}%</span></div>
-                                <div className="flex justify-between"><span className="text-gray-400">Maturity</span><span>{inst.maturityDate ? new Date(inst.maturityDate).toLocaleDateString() : "—"}</span></div>
-                                <div className="flex justify-between"><span className="text-gray-400">Rating</span><span className="text-blue-300">{inst.creditRating} ({inst.ratingAgency})</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Issuer</span><span>{inst.issuerName}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Yield</span><span className="text-green-400 font-bold">{inst.yieldPct}%</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Maturity</span><span>{inst.maturityDate ? new Date(inst.maturityDate).toLocaleDateString() : "—"}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Rating</span><span className="text-blue-300">{inst.creditRating} ({inst.ratingAgency})</span></div>
                               </div>
                               <div>
-                                <Label className="text-gray-300">Face Value (₦)</Label>
+                                <Label className="text-muted-foreground">Face Value (₦)</Label>
                                 <Input value={faceValue} onChange={e => setFaceValue(e.target.value)}
-                                  className="bg-[#0a0e1a] border-gray-600 text-white mt-1" />
-                                <p className="text-xs text-gray-500 mt-1">Min: ₦{parseInt(inst.faceValueNgn ?? "1000000").toLocaleString()}</p>
+                                  className="bg-[#0a0e1a] border-border text-white mt-1" />
+                                <p className="text-xs text-muted-foreground mt-1">Min: ₦{parseInt(inst.faceValueNgn ?? "1000000").toLocaleString()}</p>
                               </div>
                               <Button className="w-full bg-blue-600 hover:bg-blue-700"
                                 disabled={buyMutation.isPending}
@@ -208,7 +208,7 @@ export default function FixedIncome() {
 
         {/* Yield Curve */}
         <TabsContent value="yield">
-          <Card className="bg-[#111827] border-gray-700/50">
+          <Card className="bg-[#111827] border-border/50">
             <CardHeader>
               <CardTitle className="text-white text-base">Nigeria Yield Curve</CardTitle>
             </CardHeader>
@@ -235,7 +235,7 @@ export default function FixedIncome() {
 
         {/* Volume */}
         <TabsContent value="volume">
-          <Card className="bg-[#111827] border-gray-700/50">
+          <Card className="bg-[#111827] border-border/50">
             <CardHeader>
               <CardTitle className="text-white text-base">Weekly Trading Volume (₦B)</CardTitle>
             </CardHeader>

@@ -14,20 +14,6 @@ const DEFAULT_THRESHOLD = 500_000; // ₦500,000
 
 // ── In-memory fallback store (used when DB is unavailable, e.g. in tests) ──
 let _memThreshold = DEFAULT_THRESHOLD;
-const _memChallenges = new Map<number, {
-  id: number;
-  userId: number;
-  amount: string;
-  challengeText: string;
-  expectedAnswer: string;
-  status: "PENDING" | "PASSED" | "FAILED" | "EXPIRED";
-  attemptCount: number;
-  expiresAt: Date;
-  verifiedAt: Date | null;
-  createdAt: Date;
-}>();
-let _memChallengeSeq = 1;
-
 async function getWithdrawalThreshold(): Promise<number> {
   const db = await getDb();
   if (!db) return _memThreshold;
@@ -82,23 +68,7 @@ export const withdrawalVerificationRouter = router({
       const { challengeText, expectedAnswer } = buildChallenge(ctx.user);
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-      if (!db) {
-        // In-memory fallback
-        const id = _memChallengeSeq++;
-        _memChallenges.set(id, {
-          id,
-          userId: ctx.user.id,
-          amount: String(input.amount),
-          challengeText,
-          expectedAnswer,
-          status: "PENDING",
-          attemptCount: 0,
-          expiresAt,
-          verifiedAt: null,
-          createdAt: new Date(),
-        });
-        return { required: true, challengeId: id, challengeText, expiresAt };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [challenge] = await db
         .insert(withdrawalVerifications)
@@ -130,34 +100,7 @@ export const withdrawalVerificationRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
 
-      if (!db) {
-        // In-memory fallback
-        const challenge = _memChallenges.get(input.challengeId);
-        if (!challenge || challenge.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Verification challenge not found" });
-        }
-        if (challenge.status !== "PENDING") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `Challenge is already ${challenge.status.toLowerCase()}` });
-        }
-        if (new Date() > challenge.expiresAt) {
-          challenge.status = "EXPIRED";
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Verification challenge has expired." });
-        }
-        const maxAttempts = 3;
-        const normalised = input.answer.toLowerCase().replace(/\s+/g, " ").trim();
-        const isCorrect = normalised === challenge.expectedAnswer;
-        challenge.attemptCount += 1;
-        if (isCorrect) {
-          challenge.status = "PASSED";
-          challenge.verifiedAt = new Date();
-          return { passed: true, attemptsRemaining: 0 };
-        }
-        if (challenge.attemptCount >= maxAttempts) {
-          challenge.status = "FAILED";
-          throw new TRPCError({ code: "FORBIDDEN", message: "Verification failed after 3 attempts." });
-        }
-        return { passed: false, attemptsRemaining: maxAttempts - challenge.attemptCount, hint: "Incorrect answer." };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [challenge] = await db
         .select()
@@ -231,10 +174,7 @@ export const withdrawalVerificationRouter = router({
     .input(z.object({ challengeId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const challenge = _memChallenges.get(input.challengeId);
-        return { passed: !!(challenge && challenge.userId === ctx.user.id && challenge.status === "PASSED") };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [challenge] = await db
         .select()
@@ -264,10 +204,7 @@ export const withdrawalVerificationRouter = router({
     .input(z.object({ threshold: z.number().positive().min(1000) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        _memThreshold = input.threshold;
-        return { success: true, threshold: input.threshold };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       await db
         .insert(platformSettings)

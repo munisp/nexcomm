@@ -105,17 +105,17 @@ function MemberRow({
         <StatusIcon className={`w-4 h-4 flex-shrink-0 ${cfg.color}`} />
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-white truncate">{displayName}</div>
-          <div className="text-xs text-gray-500 truncate">{displayEmail}</div>
+          <div className="text-xs text-muted-foreground truncate">{displayEmail}</div>
         </div>
         <Badge variant="outline" className={`text-xs ${cfg.color}`}>{cfg.label}</Badge>
         <span className="text-xs text-gray-600">{new Date(member.submittedAt).toLocaleDateString()}</span>
-        {expanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-500" />}
+        {expanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
       </div>
 
       {expanded && (
         <div className="border-t border-white/10 px-4 py-3 bg-white/2 space-y-3">
           {member.reviewNotes && (
-            <p className="text-xs text-gray-400 italic">Notes: {member.reviewNotes}</p>
+            <p className="text-xs text-muted-foreground italic">Notes: {member.reviewNotes}</p>
           )}
           {member.status !== "APPROVED" && member.status !== "REJECTED" && (
             <div className="flex gap-2">
@@ -225,7 +225,7 @@ export default function BulkKycAdmin() {
         <div className="text-center">
           <Shield className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-white mb-2">Admin Access Required</h2>
-          <p className="text-gray-400">This page is restricted to platform administrators.</p>
+          <p className="text-muted-foreground">This page is restricted to platform administrators.</p>
         </div>
       </div>
     );
@@ -246,7 +246,7 @@ export default function BulkKycAdmin() {
               <Users className="w-5 h-5 text-amber-400" />
               Cooperative Bulk KYC — Admin Dashboard
             </h1>
-            <p className="text-sm text-gray-400 mt-0.5">Review and manage all cooperative bulk KYC uploads</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Review and manage all cooperative bulk KYC uploads</p>
           </div>
           <div className="flex items-center gap-2">
             {selectedUploadId && (
@@ -268,7 +268,7 @@ export default function BulkKycAdmin() {
               variant="outline"
               size="sm"
               onClick={() => refetch()}
-              className="border-white/20 text-gray-300 hover:text-white bg-transparent gap-2"
+              className="border-white/20 text-muted-foreground hover:text-white bg-transparent gap-2"
             >
               <RefreshCw className="w-3.5 h-3.5" /> Refresh
             </Button>
@@ -293,7 +293,7 @@ export default function BulkKycAdmin() {
                 }`}
               >
                 <div className="text-2xl font-bold text-white">{count}</div>
-                <div className={`text-xs mt-0.5 ${cfg ? cfg.color.split(" ")[0] : "text-gray-400"}`}>
+                <div className={`text-xs mt-0.5 ${cfg ? cfg.color.split(" ")[0] : "text-muted-foreground"}`}>
                   {s === "ALL" ? "Total Uploads" : cfg!.label}
                 </div>
               </button>
@@ -315,7 +315,7 @@ export default function BulkKycAdmin() {
               <SelectItem value="FAILED">Failed</SelectItem>
             </SelectContent>
           </Select>
-          <span className="text-xs text-gray-500">{uploads.length} upload{uploads.length !== 1 ? "s" : ""}</span>
+          <span className="text-xs text-muted-foreground">{uploads.length} upload{uploads.length !== 1 ? "s" : ""}</span>
         </div>
 
         {/* Upload list */}
@@ -324,7 +324,7 @@ export default function BulkKycAdmin() {
             <RefreshCw className="w-6 h-6 text-emerald-400 animate-spin" />
           </div>
         ) : uploads.length === 0 ? (
-          <div className="text-center py-16 text-gray-500">
+          <div className="text-center py-16 text-muted-foreground">
             <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">No bulk uploads found</p>
           </div>
@@ -347,8 +347,8 @@ export default function BulkKycAdmin() {
                         <span className="text-sm font-semibold text-white truncate">{upload.fileName}</span>
                         <Badge variant="outline" className={`text-xs ${cfg.color}`}>{cfg.label}</Badge>
                       </div>
-                      <div className="text-xs text-gray-400 space-y-0.5">
-                        <div>Uploaded by: <span className="text-gray-300">{upload.uploaderName ?? "Unknown"}</span> ({upload.uploaderEmail ?? "—"})</div>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <div>Uploaded by: <span className="text-muted-foreground">{upload.uploaderName ?? "Unknown"}</span> ({upload.uploaderEmail ?? "—"})</div>
                         <div>{new Date(upload.createdAt).toLocaleString()}</div>
                       </div>
                     </div>
@@ -356,7 +356,7 @@ export default function BulkKycAdmin() {
                       size="sm"
                       variant="outline"
                       onClick={() => openDrawer(upload.id)}
-                      className="border-white/20 text-gray-300 hover:text-white bg-transparent gap-1.5 text-xs flex-shrink-0"
+                      className="border-white/20 text-muted-foreground hover:text-white bg-transparent gap-1.5 text-xs flex-shrink-0"
                     >
                       <Eye className="w-3.5 h-3.5" /> View Members
                     </Button>
@@ -364,7 +364,7 @@ export default function BulkKycAdmin() {
 
                   {/* Progress bar */}
                   <div className="mt-3">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
                       <span>{upload.successRows} / {upload.totalRows} processed</span>
                       <span>{successPct}%</span>
                     </div>
@@ -400,7 +400,7 @@ export default function BulkKycAdmin() {
               <Users className="w-5 h-5 text-amber-400" />
               Member Applications
             </SheetTitle>
-            <SheetDescription className="text-gray-400">
+            <SheetDescription className="text-muted-foreground">
               {memberData?.upload?.fileName ?? "Loading…"} — {memberData?.members.length ?? 0} member{(memberData?.members.length ?? 0) !== 1 ? "s" : ""}
             </SheetDescription>
           </SheetHeader>
@@ -410,7 +410,7 @@ export default function BulkKycAdmin() {
               <RefreshCw className="w-6 h-6 text-emerald-400 animate-spin" />
             </div>
           ) : !memberData || memberData.members.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-muted-foreground">
               <Users className="w-8 h-8 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No member applications found for this upload</p>
             </div>
@@ -463,7 +463,7 @@ export default function BulkKycAdmin() {
             <DialogTitle className="text-white flex items-center gap-2">
               <XCircle className="w-5 h-5 text-red-400" /> Reject KYC Application
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-muted-foreground">
               Application #{rejectDialog.applicationId} \u2014 provide a reason so the farmer can resubmit.
             </DialogDescription>
           </DialogHeader>
@@ -472,7 +472,7 @@ export default function BulkKycAdmin() {
               placeholder="Reason for rejection (e.g. BVN mismatch, incomplete address)\u2026"
               value={rejectDialog.notes}
               onChange={(e) => setRejectDialog(prev => ({ ...prev, notes: e.target.value }))}
-              className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 resize-none"
+              className="bg-white/5 border-white/10 text-white placeholder:text-muted-foreground resize-none"
               rows={4}
             />
           </div>
@@ -480,7 +480,7 @@ export default function BulkKycAdmin() {
             <Button
               variant="outline"
               onClick={() => setRejectDialog({ open: false, applicationId: null, notes: "" })}
-              className="border-white/20 text-gray-300 bg-transparent hover:text-white"
+              className="border-white/20 text-muted-foreground bg-transparent hover:text-white"
             >
               Cancel
             </Button>

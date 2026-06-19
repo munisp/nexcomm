@@ -140,7 +140,7 @@ function CreateAlertForm({ onSuccess, initialSymbol }: { onSuccess: () => void; 
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Symbol selector */}
       <div className="relative">
-        <label className="block text-xs font-medium text-slate-400 mb-1.5">Instrument</label>
+        <label className="block text-xs font-medium text-muted-foreground mb-1.5">Instrument</label>
         <input
           type="text"
           value={symbolSearch || form.symbol}
@@ -148,20 +148,20 @@ function CreateAlertForm({ onSuccess, initialSymbol }: { onSuccess: () => void; 
           onFocus={() => setShowDropdown(true)}
           onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
           placeholder="Search symbol or name..."
-          className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+          className="w-full bg-secondary/60 border border-border rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
         />
         {showDropdown && filteredSymbols.length > 0 && (
-          <div className="absolute z-50 w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+          <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-xl max-h-56 overflow-y-auto">
             {filteredSymbols.map(s => (
               <button
                 key={s.symbol}
                 type="button"
                 onClick={() => selectSymbol(s)}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800 text-left"
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-secondary text-left"
               >
                 <div>
                   <span className="text-sm font-mono text-white">{s.symbol}</span>
-                  <span className="text-xs text-slate-400 ml-2">{s.name}</span>
+                  <span className="text-xs text-muted-foreground ml-2">{s.name}</span>
                 </div>
                 <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ASSET_CLASS_COLORS[s.assetClass]}`}>
                   {ASSET_CLASS_LABELS[s.assetClass]}
@@ -176,7 +176,7 @@ function CreateAlertForm({ onSuccess, initialSymbol }: { onSuccess: () => void; 
       {priceData?.price && (
         <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
           <Activity className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-xs text-slate-400">Current price:</span>
+          <span className="text-xs text-muted-foreground">Current price:</span>
           <span className="text-sm font-mono font-semibold text-emerald-400">
             {priceData.price < 0.01
               ? priceData.price.toFixed(8)
@@ -194,7 +194,7 @@ function CreateAlertForm({ onSuccess, initialSymbol }: { onSuccess: () => void; 
 
       {/* Condition selector */}
       <div>
-        <label className="block text-xs font-medium text-slate-400 mb-1.5">Alert Condition</label>
+        <label className="block text-xs font-medium text-muted-foreground mb-1.5">Alert Condition</label>
         <div className="grid grid-cols-2 gap-2">
           {(["ABOVE", "BELOW", "CROSS_ABOVE", "CROSS_BELOW"] as AlertCondition[]).map(cond => (
             <button
@@ -204,7 +204,7 @@ function CreateAlertForm({ onSuccess, initialSymbol }: { onSuccess: () => void; 
               className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
                 form.condition === cond
                   ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
-                  : "border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600"
+                  : "border-border bg-secondary/40 text-muted-foreground hover:border-border"
               }`}
             >
               {CONDITION_ICONS[cond]}
@@ -216,7 +216,7 @@ function CreateAlertForm({ onSuccess, initialSymbol }: { onSuccess: () => void; 
 
       {/* Target price */}
       <div>
-        <label className="block text-xs font-medium text-slate-400 mb-1.5">Target Price</label>
+        <label className="block text-xs font-medium text-muted-foreground mb-1.5">Target Price</label>
         <div className="relative">
           <input
             type="number"
@@ -225,7 +225,7 @@ function CreateAlertForm({ onSuccess, initialSymbol }: { onSuccess: () => void; 
             value={form.targetPrice}
             onChange={e => setForm(prev => ({ ...prev, targetPrice: e.target.value }))}
             placeholder={priceData?.price ? `e.g. ${(priceData.price * 1.05).toFixed(4)}` : "Enter target price..."}
-            className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 pr-16"
+            className="w-full bg-secondary/60 border border-border rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 pr-16"
           />
           {priceData?.price && form.targetPrice && (
             <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium ${
@@ -291,12 +291,12 @@ function AlertRow({ alert, onDelete, onEdit, selected = false, onToggleSelect }:
         ? "border-emerald-500/50 bg-emerald-500/8"
         : alert.triggered
         ? "border-emerald-500/30 bg-emerald-500/5"
-        : "border-slate-700/50 bg-slate-800/30 hover:border-slate-600"
+        : "border-border/50 bg-secondary/30 hover:border-border"
     }`}>
       {!alert.triggered && onToggleSelect && (
         <button
           onClick={() => onToggleSelect(alert.id)}
-          className="flex-shrink-0 text-slate-400 hover:text-white transition-colors"
+          className="flex-shrink-0 text-muted-foreground hover:text-white transition-colors"
           title={selected ? "Deselect" : "Select"}
         >
           {selected ? (
@@ -310,7 +310,7 @@ function AlertRow({ alert, onDelete, onEdit, selected = false, onToggleSelect }:
         {alert.triggered ? (
           <CheckCircle2 className="w-5 h-5 text-emerald-400" />
         ) : (
-          <Bell className="w-5 h-5 text-slate-400" />
+          <Bell className="w-5 h-5 text-muted-foreground" />
         )}
       </div>
 
@@ -320,7 +320,7 @@ function AlertRow({ alert, onDelete, onEdit, selected = false, onToggleSelect }:
           <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ASSET_CLASS_COLORS[assetClass]}`}>
             {ASSET_CLASS_LABELS[assetClass]}
           </span>
-          <span className="flex items-center gap-1 text-xs text-slate-400">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
             {CONDITION_ICONS[condition]}
             {CONDITION_LABELS[condition]}
           </span>
@@ -330,8 +330,8 @@ function AlertRow({ alert, onDelete, onEdit, selected = false, onToggleSelect }:
             Target: {target < 0.01 ? target.toFixed(8) : target < 1 ? target.toFixed(5) : target.toFixed(4)}
           </span>
           {current !== null && !alert.triggered && (
-            <span className="text-xs text-slate-400">
-              Current: <span className="font-mono text-slate-300">
+            <span className="text-xs text-muted-foreground">
+              Current: <span className="font-mono text-muted-foreground">
                 {current < 0.01 ? current.toFixed(8) : current < 1 ? current.toFixed(5) : current.toFixed(4)}
               </span>
               {pctFromTarget !== null && (
@@ -345,7 +345,7 @@ function AlertRow({ alert, onDelete, onEdit, selected = false, onToggleSelect }:
             <span className="text-xs text-emerald-400 font-medium">✓ Triggered</span>
           )}
         </div>
-        <div className="text-xs text-slate-500 mt-0.5">
+        <div className="text-xs text-muted-foreground mt-0.5">
           Created {new Date(alert.createdAt).toLocaleString()}
         </div>
       </div>
@@ -355,7 +355,7 @@ function AlertRow({ alert, onDelete, onEdit, selected = false, onToggleSelect }:
           {onEdit && (
             <button
               onClick={() => onEdit({ id: alert.id, symbol: alert.symbol, condition: alert.condition, targetPrice: alert.targetPrice })}
-              className="p-1.5 text-slate-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+              className="p-1.5 text-muted-foreground hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
               title="Edit alert"
             >
               <Pencil className="w-4 h-4" />
@@ -363,7 +363,7 @@ function AlertRow({ alert, onDelete, onEdit, selected = false, onToggleSelect }:
           )}
           <button
             onClick={() => onDelete(alert.id)}
-            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+            className="p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
             title="Delete alert"
           >
             <Trash2 className="w-4 h-4" />
@@ -442,7 +442,7 @@ export default function PriceAlerts() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <AlertTriangle className="w-12 h-12 text-amber-400" />
-        <p className="text-slate-400 text-center">Sign in to manage your price alerts</p>
+        <p className="text-muted-foreground text-center">Sign in to manage your price alerts</p>
         <a
           href={getLoginUrl()}
           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors"
@@ -479,9 +479,9 @@ export default function PriceAlerts() {
 
   if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-background text-white">
       {/* Header */}
-      <div className="border-b border-slate-800 px-4 sm:px-6 py-4">
+      <div className="border-b border-border px-4 sm:px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
@@ -489,14 +489,14 @@ export default function PriceAlerts() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-white">Price Alerts</h1>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 {activeAlerts.length} active · {triggeredAlerts.length} triggered · Checks every 30s
               </p>
             </div>
           </div>
           <button
             onClick={() => refetch()}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            className="p-2 text-muted-foreground hover:text-white hover:bg-secondary rounded-lg transition-colors"
             title="Refresh"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -508,7 +508,7 @@ export default function PriceAlerts() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Create Alert Panel */}
           <div className="lg:col-span-1">
-            <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-5">
+            <div className="bg-card/60 border border-border/50 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Plus className="w-4 h-4 text-emerald-400" />
                 <h2 className="text-sm font-semibold text-white">New Alert</h2>
@@ -518,22 +518,22 @@ export default function PriceAlerts() {
 
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3 mt-4">
-              <div className="bg-slate-900/60 border border-slate-700/50 rounded-xl p-4 text-center">
+              <div className="bg-card/60 border border-border/50 rounded-xl p-4 text-center">
                 <div className="text-2xl font-bold text-emerald-400">{activeAlerts.length}</div>
-                <div className="text-xs text-slate-400 mt-1">Active Alerts</div>
+                <div className="text-xs text-muted-foreground mt-1">Active Alerts</div>
               </div>
-              <div className="bg-slate-900/60 border border-slate-700/50 rounded-xl p-4 text-center">
+              <div className="bg-card/60 border border-border/50 rounded-xl p-4 text-center">
                 <div className="text-2xl font-bold text-blue-400">{triggeredAlerts.length}</div>
-                <div className="text-xs text-slate-400 mt-1">Triggered</div>
+                <div className="text-xs text-muted-foreground mt-1">Triggered</div>
               </div>
             </div>
 
             {/* Info box */}
-            <div className="mt-4 p-4 bg-slate-900/40 border border-slate-700/30 rounded-xl">
+            <div className="mt-4 p-4 bg-card/40 border border-border/30 rounded-xl">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                <div className="text-xs text-slate-400 space-y-1">
-                  <p className="font-medium text-slate-300">How alerts work</p>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium text-muted-foreground">How alerts work</p>
                   <p>The server checks prices every 30 seconds against your targets. When triggered, you receive an owner notification and the alert is marked as completed.</p>
                   <p className="mt-1">Alerts cover all asset classes: Commodities, Forex, Equities, and Digital Assets.</p>
                 </div>
@@ -544,13 +544,13 @@ export default function PriceAlerts() {
           {/* Alerts List */}
           <div className="lg:col-span-2">
             {/* Tabs */}
-            <div className="flex gap-1 bg-slate-900/60 border border-slate-700/50 rounded-xl p-1 mb-4">
+            <div className="flex gap-1 bg-card/60 border border-border/50 rounded-xl p-1 mb-4">
               <button
                 onClick={() => setActiveTab("active")}
                 className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
                   activeTab === "active"
                     ? "bg-emerald-600 text-white"
-                    : "text-slate-400 hover:text-white"
+                    : "text-muted-foreground hover:text-white"
                 }`}
               >
                 <Bell className="w-4 h-4" />
@@ -561,7 +561,7 @@ export default function PriceAlerts() {
                 className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
                   activeTab === "triggered"
                     ? "bg-blue-600 text-white"
-                    : "text-slate-400 hover:text-white"
+                    : "text-muted-foreground hover:text-white"
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
@@ -571,10 +571,10 @@ export default function PriceAlerts() {
 
             {/* Bulk action bar */}
             {selectableIds.length > 0 && (
-              <div className="flex items-center gap-3 mb-3 px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl">
+              <div className="flex items-center gap-3 mb-3 px-3 py-2 bg-secondary/60 border border-border/50 rounded-xl">
                 <button
                   onClick={toggleSelectAll}
-                  className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-white transition-colors"
                 >
                   {allSelected ? (
                     <CheckSquare className="w-4 h-4 text-emerald-400" />
@@ -587,7 +587,7 @@ export default function PriceAlerts() {
                 </button>
                 {someSelected && (
                   <>
-                    <span className="text-xs text-slate-500">{selectedIds.size} selected</span>
+                    <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
                     <button
                       onClick={() => deleteManyMutation.mutate({ ids: Array.from(selectedIds) })}
                       disabled={deleteManyMutation.isPending}
@@ -605,15 +605,15 @@ export default function PriceAlerts() {
             {isLoading ? (
               <div className="space-y-3">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-20 bg-slate-800/40 rounded-xl animate-pulse" />
+                  <div key={i} className="h-20 bg-secondary/40 rounded-xl animate-pulse" />
                 ))}
               </div>
             ) : activeTab === "active" ? (
               activeAlerts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 gap-3 bg-slate-900/40 border border-slate-700/30 rounded-2xl">
+                <div className="flex flex-col items-center justify-center h-48 gap-3 bg-card/40 border border-border/30 rounded-2xl">
                   <BellOff className="w-10 h-10 text-slate-600" />
-                  <p className="text-slate-400 text-sm">No active alerts</p>
-                  <p className="text-slate-500 text-xs">Create your first alert using the form on the left</p>
+                  <p className="text-muted-foreground text-sm">No active alerts</p>
+                  <p className="text-muted-foreground text-xs">Create your first alert using the form on the left</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -631,10 +631,10 @@ export default function PriceAlerts() {
               )
             ) : (
               triggeredAlerts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 gap-3 bg-slate-900/40 border border-slate-700/30 rounded-2xl">
+                <div className="flex flex-col items-center justify-center h-48 gap-3 bg-card/40 border border-border/30 rounded-2xl">
                   <CheckCircle2 className="w-10 h-10 text-slate-600" />
-                  <p className="text-slate-400 text-sm">No triggered alerts yet</p>
-                  <p className="text-slate-500 text-xs">Triggered alerts will appear here once conditions are met</p>
+                  <p className="text-muted-foreground text-sm">No triggered alerts yet</p>
+                  <p className="text-muted-foreground text-xs">Triggered alerts will appear here once conditions are met</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -657,16 +657,16 @@ export default function PriceAlerts() {
       {/* Edit Alert Dialog */}
       {editAlert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl">
             <h2 className="text-base font-bold text-white mb-1">Edit Alert</h2>
-            <p className="text-xs text-slate-400 mb-4 font-mono">{editAlert.symbol}</p>
+            <p className="text-xs text-muted-foreground mb-4 font-mono">{editAlert.symbol}</p>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Condition</label>
+                <label className="block text-xs text-muted-foreground mb-1">Condition</label>
                 <select
                   value={editCondition}
                   onChange={e => setEditCondition(e.target.value as AlertCondition)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                 >
                   {(Object.keys(CONDITION_LABELS) as AlertCondition[]).map(c => (
                     <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
@@ -674,12 +674,12 @@ export default function PriceAlerts() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Target Price</label>
+                <label className="block text-xs text-muted-foreground mb-1">Target Price</label>
                 <input
                   type="number"
                   value={editPrice}
                   onChange={e => setEditPrice(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
                   placeholder="0.0000"
                   step="any"
                   min="0"
@@ -689,7 +689,7 @@ export default function PriceAlerts() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setEditAlert(null)}
-                className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 bg-secondary hover:bg-muted text-muted-foreground text-sm font-medium rounded-lg transition-colors"
               >
                 Cancel
               </button>

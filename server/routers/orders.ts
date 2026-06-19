@@ -112,44 +112,7 @@ export const ordersRouter = router({
       // Normalize idempotencyKey → clientOrderId
       const clientOrderId = input.clientOrderId ?? input.idempotencyKey ?? undefined;
       const db = await getDb();
-      if (!db) {
-        // Check in-memory circuit breaker events when DB is unavailable
-        const { _cbEvents } = await import("./surveillanceRouter");
-        const nowCheck = new Date();
-        const activeHaltMem = Array.from(_cbEvents.values()).find(
-          (e: any) => e.instrument === input.symbol && e.status === "ACTIVE" && ((e.haltEndAt || e.haltUntil) > nowCheck)
-        );
-        if (activeHaltMem) {
-          const haltedUntil = (activeHaltMem as any).haltUntil
-            ? ` until ${new Date((activeHaltMem as any).haltUntil).toLocaleTimeString()}`
-            : "";
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: `Trading in ${input.symbol} is currently halted${haltedUntil}. Reason: ${(activeHaltMem as any).notes ?? "Circuit breaker triggered"}.`,
-          });
-        }
-        // In-memory fallback for test environments without DB
-        const now = new Date();
-        return {
-          id: Math.floor(Math.random() * 1_000_000) + 1,
-          userId: ctx.user.id,
-          symbol: input.symbol,
-          assetClass: input.assetClass,
-          side: input.side,
-          orderType: input.orderType,
-          quantity: String(input.quantity),
-          price: input.price != null ? String(input.price) : null,
-          stopPrice: input.stopPrice != null ? String(input.stopPrice) : null,
-          timeInForce: input.timeInForce,
-          notes: input.notes ?? null,
-          status: "OPEN" as const,
-          filledQty: "0",
-          avgFillPrice: null,
-          clientOrderId: clientOrderId ?? null,
-          createdAt: now,
-          updatedAt: now,
-        };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       // ── Circuit Breaker halt check ─────────────────────────────────────────
       const activeHalt = await checkInstrumentHalt(db, input.symbol);

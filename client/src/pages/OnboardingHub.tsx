@@ -129,7 +129,7 @@ function KycBadge({ status }: { status: KycStatus }) {
       </Badge>
     );
   return (
-    <Badge className="bg-slate-500/20 text-slate-400 border-slate-500/30 gap-1">
+    <Badge className="bg-slate-500/20 text-muted-foreground border-slate-500/30 gap-1">
       <AlertCircle className="w-3 h-3" /> Not Started
     </Badge>
   );
@@ -167,9 +167,9 @@ export default function OnboardingHub() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-background text-white">
       {/* Header */}
-      <div className="border-b border-slate-800 bg-slate-900/60 backdrop-blur-sm sticky top-0 z-10">
+      <div className="border-b border-border bg-card/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center font-bold text-sm">
@@ -179,11 +179,11 @@ export default function OnboardingHub() {
           </div>
           {isAuthenticated ? (
             <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-400">{user?.name}</span>
+              <span className="text-sm text-muted-foreground">{user?.name}</span>
               <Button
                 size="sm"
                 variant="outline"
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="border-border text-muted-foreground hover:bg-secondary"
                 onClick={() => navigate("/dashboard")}
               >
                 Go to Dashboard
@@ -211,7 +211,7 @@ export default function OnboardingHub() {
         <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
           Join NEXCOM Exchange
         </h1>
-        <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+        <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
           Choose your role on the exchange. Each stakeholder type has a dedicated
           onboarding flow, KYC process, and dashboard tailored to their needs.
         </p>
@@ -241,7 +241,7 @@ export default function OnboardingHub() {
                   bg-gradient-to-br ${card.gradient}
                   ${isApproved
                     ? "border-green-500/40 hover:border-green-400/60"
-                    : "border-slate-700/60 hover:border-slate-600"
+                    : "border-border/60 hover:border-border"
                   }
                   hover:scale-[1.02] hover:shadow-xl hover:shadow-black/40
                   focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 focus:ring-slate-600
@@ -249,11 +249,11 @@ export default function OnboardingHub() {
               >
                 {/* Icon + Status */}
                 <div className="flex items-start justify-between mb-4">
-                  <div className={`${card.color} bg-slate-800/60 rounded-xl p-3`}>
+                  <div className={`${card.color} bg-secondary/60 rounded-xl p-3`}>
                     {card.icon}
                   </div>
                   {isLoading ? (
-                    <div className="h-6 w-20 bg-slate-700/50 rounded-full animate-pulse" />
+                    <div className="h-6 w-20 bg-muted/50 rounded-full animate-pulse" />
                   ) : (
                     <KycBadge status={kycStatus} />
                   )}
@@ -262,30 +262,30 @@ export default function OnboardingHub() {
                 {/* Title */}
                 <h3 className="text-xl font-bold text-white mb-1">{card.title}</h3>
                 <p className={`text-sm font-medium mb-3 ${card.color}`}>{card.subtitle}</p>
-                <p className="text-slate-400 text-sm leading-relaxed mb-4">{card.description}</p>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4">{card.description}</p>
 
                 {/* Audience tag */}
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500 bg-slate-800/60 rounded-full px-3 py-1">
+                  <span className="text-xs text-muted-foreground bg-secondary/60 rounded-full px-3 py-1">
                     {card.audience}
                   </span>
                   <div className="flex items-center gap-1.5 text-sm font-medium group-hover:gap-2.5 transition-all">
-                    <span className={isApproved ? "text-green-400" : "text-slate-300"}>
+                    <span className={isApproved ? "text-green-400" : "text-muted-foreground"}>
                       {isApproved
                         ? "View Dashboard"
                         : isRegistered
                         ? "Continue Setup"
                         : "Get Started"}
                     </span>
-                    <ArrowRight className={`w-4 h-4 ${isApproved ? "text-green-400" : "text-slate-400"}`} />
+                    <ArrowRight className={`w-4 h-4 ${isApproved ? "text-green-400" : "text-muted-foreground"}`} />
                   </div>
                 </div>
 
                 {/* Progress indicator for in-progress registrations */}
                 {isRegistered && !isApproved && (
-                  <div className="mt-4 pt-4 border-t border-slate-700/50">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <div className="flex-1 bg-slate-700/50 rounded-full h-1">
+                  <div className="mt-4 pt-4 border-t border-border/50">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex-1 bg-muted/50 rounded-full h-1">
                         <div
                           className={`h-1 rounded-full transition-all ${
                             kycStatus === "UNDER_REVIEW"
@@ -312,7 +312,7 @@ export default function OnboardingHub() {
         </div>
 
         {/* Footer note */}
-        <div className="mt-12 text-center text-sm text-slate-500">
+        <div className="mt-12 text-center text-sm text-muted-foreground">
           <p>
             Already have an account?{" "}
             <button

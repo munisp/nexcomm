@@ -34,15 +34,15 @@ function StatCard({
   icon: React.ElementType; color: string; href?: string;
 }) {
   const inner = (
-    <Card className={`border-l-4 ${color} bg-slate-900 border-slate-700 hover:bg-slate-800 transition-colors`}>
+    <Card className={`border-l-4 ${color} bg-card border-border hover:bg-secondary transition-colors`}>
       <CardContent className="pt-4 pb-4">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs text-slate-400 uppercase tracking-wide">{title}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">{title}</p>
             <p className="text-3xl font-bold text-white mt-1">{value}</p>
-            {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+            {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
           </div>
-          <Icon className="h-8 w-8 text-slate-500" />
+          <Icon className="h-8 w-8 text-muted-foreground" />
         </div>
       </CardContent>
     </Card>
@@ -108,7 +108,7 @@ export default function ComplianceDashboard() {
   if (kycQueueQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6 bg-slate-950 min-h-screen">
+      <div className="p-6 space-y-6 bg-background min-h-screen">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -116,31 +116,31 @@ export default function ComplianceDashboard() {
               <Shield className="h-6 w-6 text-emerald-400" />
               Compliance Operations Centre
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               Unified view of KYC queue, AML flags, re-KYC schedules, and DFSP compliance
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}
-            className="border-slate-600 text-slate-300 hover:bg-slate-800">
+            className="border-border text-muted-foreground hover:bg-secondary">
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="bg-slate-800 border border-slate-700">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-300">Overview</TabsTrigger>
-            <TabsTrigger value="kyc" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-300">KYC Queue</TabsTrigger>
-            <TabsTrigger value="aml" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-300">AML Flags</TabsTrigger>
-            <TabsTrigger value="rekyc" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-300">Re-KYC</TabsTrigger>
-            <TabsTrigger value="dfsp" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-300">DFSP KYC</TabsTrigger>
+          <TabsList className="bg-secondary border border-border">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-muted-foreground">Overview</TabsTrigger>
+            <TabsTrigger value="kyc" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-muted-foreground">KYC Queue</TabsTrigger>
+            <TabsTrigger value="aml" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-muted-foreground">AML Flags</TabsTrigger>
+            <TabsTrigger value="rekyc" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-muted-foreground">Re-KYC</TabsTrigger>
+            <TabsTrigger value="dfsp" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-muted-foreground">DFSP KYC</TabsTrigger>
           </TabsList>
 
           {/* ── OVERVIEW ─────────────────────────────────────────────────── */}
           <TabsContent value="overview" className="space-y-6 mt-6">
             {/* KYC Queue */}
             <div>
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
                 <Users className="h-4 w-4" /> User KYC Queue
               </h2>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -157,7 +157,7 @@ export default function ComplianceDashboard() {
 
             {/* AML Flags */}
             <div>
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" /> AML Flags
               </h2>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -174,7 +174,7 @@ export default function ComplianceDashboard() {
 
             {/* Re-KYC */}
             <div>
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
                 <RefreshCw className="h-4 w-4" /> Re-KYC Schedule
               </h2>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -192,7 +192,7 @@ export default function ComplianceDashboard() {
 
             {/* DFSP KYC */}
             <div>
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4" /> DFSP KYC (Mojaloop)
               </h2>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -208,7 +208,7 @@ export default function ComplianceDashboard() {
             </div>
 
             {/* Recent AML Activity */}
-            <Card className="bg-slate-900 border-slate-700">
+            <Card className="bg-card border-border">
               <CardHeader className="pb-3">
                 <CardTitle className="text-white text-sm flex items-center justify-between">
                   <span className="flex items-center gap-2">
@@ -224,16 +224,16 @@ export default function ComplianceDashboard() {
               </CardHeader>
               <CardContent>
                 {recentFlags.length === 0 ? (
-                  <p className="text-slate-500 text-sm text-center py-4">No recent AML flags</p>
+                  <p className="text-muted-foreground text-sm text-center py-4">No recent AML flags</p>
                 ) : (
                   <div className="space-y-2">
                     {recentFlags.map((flag: any) => (
-                      <div key={flag.id} className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0">
+                      <div key={flag.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                         <div className="flex items-center gap-3">
                           <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0" />
                           <div>
                             <p className="text-sm text-white">{flag.reason ?? "AML flag triggered"}</p>
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-muted-foreground">
                               {flag.createdAt ? formatDistanceToNow(new Date(flag.createdAt), { addSuffix: true }) : ""}
                             </p>
                           </div>
@@ -242,7 +242,7 @@ export default function ComplianceDashboard() {
                           flag.status === "OPEN" ? "border-red-500 text-red-400" :
                           flag.status === "REVIEWED" ? "border-blue-500 text-blue-400" :
                           flag.status === "ESCALATED" ? "border-orange-500 text-orange-400" :
-                          "border-slate-500 text-slate-400"
+                          "border-slate-500 text-muted-foreground"
                         }>
                           {flag.status}
                         </Badge>
@@ -256,7 +256,7 @@ export default function ComplianceDashboard() {
 
           {/* ── KYC QUEUE TAB ─────────────────────────────────────────────── */}
           <TabsContent value="kyc" className="mt-6">
-            <Card className="bg-slate-900 border-slate-700">
+            <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-white flex items-center justify-between">
                   <span>KYC Application Queue</span>
@@ -270,12 +270,12 @@ export default function ComplianceDashboard() {
               <CardContent>
                 <div className="space-y-2">
                   {kycQueue.slice(0, 15).map((item: any) => (
-                    <div key={item.id} className="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
+                    <div key={item.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                       <div>
                         <p className="text-sm text-white font-medium">
                           {item.user?.name ?? `User #${item.userId}`}
                         </p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-muted-foreground">
                           Submitted {item.submittedAt ? formatDistanceToNow(new Date(item.submittedAt), { addSuffix: true }) : ""}
                         </p>
                       </div>
@@ -290,7 +290,7 @@ export default function ComplianceDashboard() {
                     </div>
                   ))}
                   {kycQueue.length === 0 && (
-                    <p className="text-slate-500 text-sm text-center py-8">No KYC applications in queue</p>
+                    <p className="text-muted-foreground text-sm text-center py-8">No KYC applications in queue</p>
                   )}
                 </div>
               </CardContent>
@@ -299,7 +299,7 @@ export default function ComplianceDashboard() {
 
           {/* ── AML FLAGS TAB ─────────────────────────────────────────────── */}
           <TabsContent value="aml" className="mt-6">
-            <Card className="bg-slate-900 border-slate-700">
+            <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-white flex items-center justify-between">
                   <span>AML Flag Summary</span>
@@ -322,18 +322,18 @@ export default function ComplianceDashboard() {
                     { label: "High Severity", value: amlStats?.high ?? 0, color: "text-orange-500" },
                     { label: "Active Rules", value: amlStats?.activeRules ?? 0, color: "text-emerald-400" },
                   ].map(s => (
-                    <div key={s.label} className="bg-slate-800 rounded-lg p-4">
-                      <p className="text-xs text-slate-400">{s.label}</p>
+                    <div key={s.label} className="bg-secondary rounded-lg p-4">
+                      <p className="text-xs text-muted-foreground">{s.label}</p>
                       <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
                     </div>
                   ))}
                 </div>
                 <div className="space-y-2">
                   {recentFlags.map((flag: any) => (
-                    <div key={flag.id} className="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
+                    <div key={flag.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                       <div>
                         <p className="text-sm text-white">{flag.reason ?? "AML flag"}</p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-muted-foreground">
                           {flag.transactionRef ?? ""} · {flag.createdAt ? formatDistanceToNow(new Date(flag.createdAt), { addSuffix: true }) : ""}
                         </p>
                       </div>
@@ -353,7 +353,7 @@ export default function ComplianceDashboard() {
 
           {/* ── RE-KYC TAB ────────────────────────────────────────────────── */}
           <TabsContent value="rekyc" className="mt-6">
-            <Card className="bg-slate-900 border-slate-700">
+            <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-white flex items-center justify-between">
                   <span>Re-KYC Schedule</span>
@@ -370,12 +370,12 @@ export default function ComplianceDashboard() {
                     const dueDate = flag.dueDate ? new Date(flag.dueDate) : null;
                     const isOverdue = dueDate && dueDate.getTime() < now;
                     return (
-                      <div key={flag.id} className="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
+                      <div key={flag.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                         <div>
                           <p className="text-sm text-white font-medium">
                             {flag.user?.name ?? `User #${flag.userId}`}
                           </p>
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-muted-foreground">
                             {flag.reason ?? "Periodic re-verification"} ·{" "}
                             {dueDate ? `Due ${formatDistanceToNow(dueDate, { addSuffix: true })}` : "No due date"}
                           </p>
@@ -391,7 +391,7 @@ export default function ComplianceDashboard() {
                     );
                   })}
                   {reKycFlags.length === 0 && (
-                    <p className="text-slate-500 text-sm text-center py-8">No re-KYC flags pending</p>
+                    <p className="text-muted-foreground text-sm text-center py-8">No re-KYC flags pending</p>
                   )}
                 </div>
               </CardContent>
@@ -400,7 +400,7 @@ export default function ComplianceDashboard() {
 
           {/* ── DFSP KYC TAB ──────────────────────────────────────────────── */}
           <TabsContent value="dfsp" className="mt-6">
-            <Card className="bg-slate-900 border-slate-700">
+            <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-white flex items-center justify-between">
                   <span>DFSP KYC Applications</span>
@@ -419,15 +419,15 @@ export default function ComplianceDashboard() {
                     { label: "Approved", value: dfspStats?.approved ?? 0, color: "text-emerald-400" },
                     { label: "EDD Required", value: dfspStats?.eddRequired ?? 0, color: "text-orange-400" },
                   ].map(s => (
-                    <div key={s.label} className="bg-slate-800 rounded-lg p-4">
-                      <p className="text-xs text-slate-400">{s.label}</p>
+                    <div key={s.label} className="bg-secondary rounded-lg p-4">
+                      <p className="text-xs text-muted-foreground">{s.label}</p>
                       <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 p-4 bg-slate-800 rounded-lg border border-amber-500/30">
+                <div className="flex items-center gap-2 p-4 bg-secondary rounded-lg border border-amber-500/30">
                   <TrendingUp className="h-5 w-5 text-amber-400 flex-shrink-0" />
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-muted-foreground">
                     DFSP KYC applications with HIGH AML risk are automatically flagged for Enhanced Due Diligence (EDD).
                     Review and approve/reject from the DFSP KYC Review panel.
                   </p>

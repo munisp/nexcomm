@@ -26,10 +26,6 @@ import {
 export const _memFarmerProfiles = new Map<number, Record<string, unknown>>();
 const _memFarmProfiles = new Map<number, Record<string, unknown>>();
 const _memCropListings = new Map<number, Record<string, unknown>>();
-let _memFarmerIdSeq = 1;
-let _memFarmIdSeq = 1;
-let _memListingIdSeq = 1;
-
 // ─── router ─────────────────────────────────────────────────────────────────
 
 export const farmerRouter = router({
@@ -45,16 +41,7 @@ export const farmerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        // In-memory fallback: check for existing profile
-        const existing = Array.from(_memFarmerProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id);
-        if (existing) throw new TRPCError({ code: "CONFLICT", message: "Farmer profile already exists for this user" });
-        const now = new Date();
-        const id = _memFarmerIdSeq++;
-        const profile = { id, userId: ctx.user.id, fullName: input.fullName, phone: input.phone, nin: input.nin ?? null, bvn: input.bvn ?? null, state: input.state, lga: input.lga, kycStatus: "PENDING", kycDocuments: null, kycNotes: null, kycReviewedAt: null, kycReviewedBy: null, createdAt: now, updatedAt: now };
-        _memFarmerProfiles.set(id, profile);
-        return profile;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const existing = await db
         .select({ id: farmerProfiles.id })
@@ -86,10 +73,7 @@ export const farmerRouter = router({
   // ── getMyFarmerProfile ─────────────────────────────────────────────────────
   getMyFarmerProfile: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) {
-      const profile = Array.from(_memFarmerProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id);
-      return profile ?? null;
-    }
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
     const [profile] = await db
       .select()
@@ -158,16 +142,7 @@ export const farmerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = Array.from(_memFarmerProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id) as Record<string, unknown> | undefined;
-        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Farmer profile not found. Please register first." });
-        if (profile.kycStatus === "APPROVED") throw new TRPCError({ code: "BAD_REQUEST", message: "KYC already approved" });
-        const docs = input.kycDocuments ?? JSON.stringify({ ninDocumentUrl: input.ninDocumentUrl, bvnDocumentUrl: input.bvnDocumentUrl });
-        profile.kycDocuments = docs;
-        profile.kycStatus = "UNDER_REVIEW";
-        profile.updatedAt = new Date();
-        return profile;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [existing] = await db
         .select()
@@ -256,19 +231,7 @@ export const farmerRouter = router({
     }))
         .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const profile = _memFarmerProfiles.get(input.farmerProfileId) as Record<string, unknown> | undefined;
-        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Farmer profile not found" });
-        if (profile.kycStatus !== "SUBMITTED" && profile.kycStatus !== "UNDER_REVIEW") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "KYC must be in SUBMITTED or UNDER_REVIEW status to review" });
-        }
-        profile.kycStatus = input.decision;
-        profile.kycNotes = input.notes ?? null;
-        profile.kycReviewedAt = new Date();
-        profile.kycReviewedBy = ctx.user.id;
-        profile.updatedAt = new Date();
-        return profile;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [profile] = await db
         .select()
         .from(farmerProfiles)
@@ -363,9 +326,7 @@ export const farmerRouter = router({
   // ── adminGetKYCStats ───────────────────────────────────────────────────────
   adminGetKYCStats: adminProcedure.query(async () => {
     const db = await getDb();
-    if (!db) {
-      return { total: 0, pending: 0, submitted: 0, underReview: 0, approved: 0, rejected: 0 };
-    }
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
     const [stats] = await db
       .select({
@@ -406,19 +367,7 @@ export const farmerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        // Check KYC status from in-memory store
-        const farmerProfile = Array.from(_memFarmerProfiles.values()).find((p: Record<string, unknown>) => p.userId === ctx.user.id) as Record<string, unknown> | undefined;
-        // When DB is unavailable, adminReviewKYC is skipped, so also allow UNDER_REVIEW
-        if (!farmerProfile || (farmerProfile.kycStatus !== "APPROVED" && farmerProfile.kycStatus !== "UNDER_REVIEW")) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "KYC must be approved before adding farms" });
-        }
-        const now = new Date();
-        const id = _memFarmIdSeq++;
-        const farm = { id, userId: ctx.user.id, farmName: input.farmName, sizeHectares: String(input.sizeHectares), latitude: input.latitude !== undefined ? String(input.latitude) : null, longitude: input.longitude !== undefined ? String(input.longitude) : null, state: input.state, lga: input.lga, soilType: input.soilType, description: input.description ?? null, boundary: null, centroid: null, geom: null, createdAt: now, updatedAt: now };
-        _memFarmProfiles.set(id, farm);
-        return farm;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       // Must have an approved KYC to add farms
       const [profile] = await db
@@ -674,11 +623,7 @@ export const farmerRouter = router({
     }))
     .query(async ({ input }) => {
             const db = await getDb();
-      if (!db) {
-        const allListings = Array.from(_memCropListings.values()).filter((l: Record<string, unknown>) => l.status === "ACTIVE");
-        const filtered = input.cropType ? allListings.filter((l: Record<string, unknown>) => (l.cropType as string).includes(input.cropType!)) : allListings;
-        return { listings: filtered, total: filtered.length, page: input.page, limit: input.limit };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const offset = (input.page - 1) * input.limit;
       const conditions = [eq(cropListings.status, "ACTIVE")];
       if (input.cropType) conditions.push(like(cropListings.cropType, `%${input.cropType}%`));
@@ -743,25 +688,7 @@ export const farmerRouter = router({
     }))
         .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const now = new Date();
-        const results: { id: number; success: boolean; error?: string }[] = [];
-        for (const id of input.farmerProfileIds) {
-          const profile = _memFarmerProfiles.get(id) as Record<string, unknown> | undefined;
-          if (!profile) { results.push({ id, success: false, error: "Not found" }); continue; }
-          if (profile.kycStatus !== "UNDER_REVIEW" && profile.kycStatus !== "SUBMITTED") {
-            results.push({ id, success: false, error: `Status is ${profile.kycStatus}, not reviewable` }); continue;
-          }
-          profile.kycStatus = input.decision;
-          profile.kycReviewedAt = now;
-          profile.kycNotes = input.notes ?? null;
-          results.push({ id, success: true });
-        }
-        const approved = results.filter(r => r.success && input.decision === "APPROVED").length;
-        const rejected = results.filter(r => r.success && input.decision === "REJECTED").length;
-        const failed = results.filter(r => !r.success).length;
-        return { results, approved, rejected, failed, total: input.farmerProfileIds.length };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const now = new Date();
       const results: { id: number; success: boolean; error?: string }[] = [];
 
@@ -819,11 +746,7 @@ export const farmerRouter = router({
   // Returns the farmer's crop types so the frontend can filter the live price feed
   getFarmerMarketPrices: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) {
-      const myListings = Array.from(_memCropListings.values()).filter((l: Record<string, unknown>) => l.userId === ctx.user.id && l.status === "ACTIVE");
-      const myCropTypes = [...new Set(myListings.map((l: Record<string, unknown>) => l.cropType as string))];
-      return { myCropTypes, marketPrices: [] };
-    }
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
     // Get farmer's active crop listings to derive their crop types
     // farm_profiles uses userId directly (no farmerProfileId FK)
@@ -912,9 +835,7 @@ export const farmerRouter = router({
   // ── adminGetFarmerStats ────────────────────────────────────────────────────
   adminGetFarmerStats: adminProcedure.query(async () => {
     const db = await getDb();
-    if (!db) {
-      return { totalFarmers: 0, totalFarms: 0, totalListings: 0, activeListings: 0, totalQuantityKg: 0, totalValueNGN: 0 };
-    }
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
     const [farmerStats] = await db
       .select({ total: sql<number>`COUNT(*)::int` })
@@ -1048,27 +969,7 @@ export const farmerRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        if (input.format === "CSV") {
-          return {
-            format: "CSV" as const,
-            contentType: "text/csv",
-            data: "Date,Crop Type,Quantity (kg),Price/kg,Total (NGN),Buyer,Notes",
-            totalRevenue: 0,
-            totalKg: 0,
-            count: 0,
-          };
-        }
-        return {
-          format: "JSON" as const,
-          contentType: "application/json",
-          data: null,
-          earnings: [],
-          totalRevenue: 0,
-          totalKg: 0,
-          count: 0,
-        };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const since = new Date();
       since.setDate(since.getDate() - input.days);
       const sinceIso = since.toISOString();
@@ -1131,7 +1032,7 @@ export const farmerRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const totalAmount = input.quantityKg * input.pricePerKg;
       const [earning] = await db
         .insert(farmerEarnings)
@@ -1216,7 +1117,7 @@ export const farmerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       await db
         .insert(farmerOnboardingDrafts)
         .values({

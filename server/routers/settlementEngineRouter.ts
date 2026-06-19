@@ -75,11 +75,6 @@ async function computeNetPositions(
 }
 
 // ─── In-memory fallback stores ────────────────────────────────────────────────
-let _cycleSeq = 1;
-let _instrSeq = 1;
-let _posSeq = 1;
-let _failSeq = 1;
-
 interface MemCycle {
   id: number; cycleDate: Date; settlementType: string; assetClass: string; currency: string;
   status: string; totalTrades: number; matchedTrades: number; failedTrades: number;
@@ -116,24 +111,7 @@ export const settlementEngineRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        // Check duplicate
-        const dup = _cycles.find(c =>
-          c.cycleDate.getTime() === input.cycleDate.getTime() &&
-          c.settlementType === input.settlementType &&
-          c.assetClass === input.assetClass
-        );
-        if (dup) throw new TRPCError({ code: "CONFLICT", message: "A settlement cycle already exists for this date, type, and asset class" });
-        const now = new Date();
-        const cycle: MemCycle = {
-          id: _cycleSeq++, cycleDate: input.cycleDate, settlementType: input.settlementType,
-          assetClass: input.assetClass, currency: input.currency, status: "OPEN",
-          totalTrades: 0, matchedTrades: 0, failedTrades: 0, grossValue: "0", netValue: "0",
-          createdBy: ctx.user.id, openedAt: now, matchedAt: null, settledAt: null, updatedAt: now,
-        };
-        _cycles.push(cycle);
-        return cycle;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const existing = await db.select({ id: settlementCycles.id }).from(settlementCycles).where(and(eq(settlementCycles.cycleDate, input.cycleDate), eq(settlementCycles.settlementType, input.settlementType), eq(settlementCycles.assetClass, input.assetClass))).limit(1);
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "A settlement cycle already exists for this date, type, and asset class" });
       const [cycle] = await db.insert(settlementCycles).values({ cycleDate: input.cycleDate, settlementType: input.settlementType, assetClass: input.assetClass, currency: input.currency, status: "OPEN", createdBy: ctx.user.id }).returning();
@@ -144,18 +122,7 @@ export const settlementEngineRouter = router({
     .input(z.object({ cycleId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const idx = _cycles.findIndex(c => c.id === input.cycleId);
-        if (idx === -1) throw new TRPCError({ code: "NOT_FOUND", message: "Cycle not found" });
-        const cycle = _cycles[idx];
-        if (cycle.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: `Cycle is in status ${cycle.status}, not OPEN` });
-        cycle.status = "MATCHING";
-        cycle.updatedAt = new Date();
-        // Simulate matching: set to MATCHED with 0 trades
-        cycle.status = "MATCHED";
-        cycle.matchedAt = new Date();
-        return cycle;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [cycle] = await db.select().from(settlementCycles).where(eq(settlementCycles.id, input.cycleId)).limit(1);
       if (!cycle) throw new TRPCError({ code: "NOT_FOUND", message: "Cycle not found" });
       if (cycle.status !== "OPEN") throw new TRPCError({ code: "BAD_REQUEST", message: `Cycle is in status ${cycle.status}, not OPEN` });
@@ -169,15 +136,7 @@ export const settlementEngineRouter = router({
     .input(z.object({ cycleId: z.number(), instructionIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        let toConfirm = _instructions.filter(i => i.cycleId === input.cycleId && i.status === "MATCHED");
-        if (input.instructionIds && input.instructionIds.length > 0) {
-          toConfirm = toConfirm.filter(i => input.instructionIds!.includes(i.id));
-        }
-        const now = new Date();
-        for (const i of toConfirm) { i.status = "CONFIRMED"; i.confirmedAt = now; i.updatedAt = now; }
-        return { confirmedCount: toConfirm.length };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const conditions = [eq(settlementInstructions.cycleId, input.cycleId), eq(settlementInstructions.status, "MATCHED")];
       if (input.instructionIds && input.instructionIds.length > 0) conditions.push(inArray(settlementInstructions.id, input.instructionIds));
       const confirmed = await db.update(settlementInstructions).set({ status: "CONFIRMED", confirmedAt: new Date(), updatedAt: new Date() }).where(and(...conditions)).returning();
@@ -189,21 +148,7 @@ export const settlementEngineRouter = router({
     .input(z.object({ cycleId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const idx = _cycles.findIndex(c => c.id === input.cycleId);
-        if (idx === -1) throw new TRPCError({ code: "NOT_FOUND" });
-        const cycle = _cycles[idx];
-        const toSettle = _instructions.filter(i => i.cycleId === input.cycleId && i.status === "CONFIRMED");
-        const now = new Date();
-        for (const i of toSettle) { i.status = "SETTLED"; i.settledAt = now; i.updatedAt = now; }
-        const grossValue = toSettle.reduce((s, i) => s + parseFloat(i.totalValue), 0);
-        cycle.status = "SETTLED";
-        cycle.settledAt = now;
-        cycle.grossValue = String(grossValue);
-        cycle.netValue = String(grossValue);
-        cycle.updatedAt = now;
-        return cycle;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const settled = await db.update(settlementInstructions).set({ status: "SETTLED", settledAt: new Date(), updatedAt: new Date() }).where(and(eq(settlementInstructions.cycleId, input.cycleId), eq(settlementInstructions.status, "CONFIRMED"))).returning();
       await db.update(settlementPositions).set({ status: "SETTLED", settledAt: new Date(), updatedAt: new Date() }).where(and(eq(settlementPositions.cycleId, input.cycleId), eq(settlementPositions.status, "CONFIRMED")));
       const [failCount] = await db.select({ cnt: count() }).from(settlementInstructions).where(and(eq(settlementInstructions.cycleId, input.cycleId), eq(settlementInstructions.status, "FAILED")));
@@ -218,25 +163,7 @@ export const settlementEngineRouter = router({
     .input(z.object({ instructionId: z.number(), failType: z.enum(["INSUFFICIENT_FUNDS", "INSUFFICIENT_STOCK", "COUNTERPARTY_DEFAULT", "SYSTEM_ERROR"]), failureReason: z.string().max(1000) }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const instrIdx = _instructions.findIndex(i => i.id === input.instructionId);
-        if (instrIdx === -1) throw new TRPCError({ code: "NOT_FOUND" });
-        const instruction = _instructions[instrIdx];
-        instruction.status = "FAILED";
-        instruction.failureReason = input.failureReason;
-        instruction.updatedAt = new Date();
-        const now = new Date();
-        const fail: MemFail = {
-          id: _failSeq++, instructionId: input.instructionId, cycleId: instruction.cycleId,
-          failType: input.failType, failedPartyUserId: instruction.buyerUserId,
-          status: "OPEN", escalatedTo: null, escalatedAt: null, resolvedAt: null,
-          resolutionNotes: null, penaltyAmount: "0", reviewedBy: null, createdAt: now, updatedAt: now,
-        };
-        _fails.push(fail);
-        const cycleIdx = _cycles.findIndex(c => c.id === instruction.cycleId);
-        if (cycleIdx !== -1) { _cycles[cycleIdx].failedTrades++; _cycles[cycleIdx].updatedAt = now; }
-        return { instruction, fail };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [instruction] = await db.update(settlementInstructions).set({ status: "FAILED", failureReason: input.failureReason, updatedAt: new Date() }).where(eq(settlementInstructions.id, input.instructionId)).returning();
       if (!instruction) throw new TRPCError({ code: "NOT_FOUND" });
       const [fail] = await db.insert(settlementFails).values({ instructionId: input.instructionId, cycleId: instruction.cycleId, failType: input.failType, failedPartyUserId: instruction.buyerUserId, status: "OPEN" }).returning();
@@ -249,18 +176,7 @@ export const settlementEngineRouter = router({
     .input(z.object({ failId: z.number(), escalatedTo: z.string().max(128), notes: z.string().max(2000).optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const idx = _fails.findIndex(f => f.id === input.failId);
-        if (idx === -1) throw new TRPCError({ code: "NOT_FOUND" });
-        const fail = _fails[idx];
-        fail.status = "ESCALATED";
-        fail.escalatedTo = input.escalatedTo;
-        fail.escalatedAt = new Date();
-        fail.resolutionNotes = input.notes ?? null;
-        fail.reviewedBy = ctx.user.id;
-        fail.updatedAt = new Date();
-        return fail;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [updated] = await db.update(settlementFails).set({ status: "ESCALATED", escalatedTo: input.escalatedTo, escalatedAt: new Date(), resolutionNotes: input.notes ?? null, reviewedBy: ctx.user.id, updatedAt: new Date() }).where(eq(settlementFails.id, input.failId)).returning();
       if (!updated) throw new TRPCError({ code: "NOT_FOUND" });
       return updated;
@@ -270,18 +186,7 @@ export const settlementEngineRouter = router({
     .input(z.object({ failId: z.number(), resolutionNotes: z.string().max(2000), penaltyAmount: z.number().min(0).optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const idx = _fails.findIndex(f => f.id === input.failId);
-        if (idx === -1) throw new TRPCError({ code: "NOT_FOUND" });
-        const fail = _fails[idx];
-        fail.status = "RESOLVED";
-        fail.resolvedAt = new Date();
-        fail.resolutionNotes = input.resolutionNotes;
-        fail.penaltyAmount = String(input.penaltyAmount ?? 0);
-        fail.reviewedBy = ctx.user.id;
-        fail.updatedAt = new Date();
-        return fail;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [updated] = await db.update(settlementFails).set({ status: "RESOLVED", resolvedAt: new Date(), resolutionNotes: input.resolutionNotes, penaltyAmount: input.penaltyAmount ? String(input.penaltyAmount) : "0", reviewedBy: ctx.user.id, updatedAt: new Date() }).where(eq(settlementFails.id, input.failId)).returning();
       if (!updated) throw new TRPCError({ code: "NOT_FOUND" });
       return updated;
@@ -291,13 +196,7 @@ export const settlementEngineRouter = router({
     .input(z.object({ status: z.enum(["OPEN", "MATCHING", "MATCHED", "SETTLING", "SETTLED", "FAILED", "ALL"]).default("ALL"), limit: z.number().int().min(1).max(100).default(20), offset: z.number().int().min(0).default(0) }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        let filtered = _cycles;
-        if (input.status !== "ALL") filtered = filtered.filter(c => c.status === input.status);
-        const total = filtered.length;
-        const cycles = [...filtered].sort((a, b) => b.openedAt.getTime() - a.openedAt.getTime()).slice(input.offset, input.offset + input.limit);
-        return { cycles, total };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const condition = input.status !== "ALL" ? eq(settlementCycles.status, input.status) : undefined;
       const [cycles, [{ total }]] = await Promise.all([
         db.select().from(settlementCycles).where(condition).orderBy(desc(settlementCycles.openedAt)).limit(input.limit).offset(input.offset),
@@ -310,13 +209,7 @@ export const settlementEngineRouter = router({
     .input(z.object({ cycleId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const cycle = _cycles.find(c => c.id === input.cycleId);
-        if (!cycle) throw new TRPCError({ code: "NOT_FOUND" });
-        const instructions = _instructions.filter(i => i.cycleId === input.cycleId);
-        const fails = _fails.filter(f => f.cycleId === input.cycleId);
-        return { cycle, positions: [], instructions, fails };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [cycle] = await db.select().from(settlementCycles).where(eq(settlementCycles.id, input.cycleId)).limit(1);
       if (!cycle) throw new TRPCError({ code: "NOT_FOUND" });
       const [positions, instructions, fails] = await Promise.all([
@@ -329,21 +222,7 @@ export const settlementEngineRouter = router({
 
   adminGetStats: adminProcedure.query(async () => {
     const db = await getDb();
-    if (!db) {
-      const statusGroups: Record<string, { status: string; cnt: number; totalGross: string }> = {};
-      for (const c of _cycles) {
-        if (!statusGroups[c.status]) statusGroups[c.status] = { status: c.status, cnt: 0, totalGross: "0" };
-        statusGroups[c.status].cnt++;
-        statusGroups[c.status].totalGross = String(parseFloat(statusGroups[c.status].totalGross) + parseFloat(c.grossValue));
-      }
-      const failGroups: Record<string, { failType: string; status: string; cnt: number }> = {};
-      for (const f of _fails) {
-        const key = `${f.failType}:${f.status}`;
-        if (!failGroups[key]) failGroups[key] = { failType: f.failType, status: f.status, cnt: 0 };
-        failGroups[key].cnt++;
-      }
-      return { cycleStats: Object.values(statusGroups), failStats: Object.values(failGroups), recentCycles: [..._cycles].sort((a, b) => b.openedAt.getTime() - a.openedAt.getTime()).slice(0, 5) };
-    }
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
     const [cycleStats, failStats, recentCycles] = await Promise.all([
       db.select({ status: settlementCycles.status, cnt: count(), totalGross: sum(settlementCycles.grossValue) }).from(settlementCycles).groupBy(settlementCycles.status),
       db.select({ failType: settlementFails.failType, status: settlementFails.status, cnt: count() }).from(settlementFails).groupBy(settlementFails.failType, settlementFails.status),
@@ -356,13 +235,7 @@ export const settlementEngineRouter = router({
     .input(z.object({ status: z.enum(["OPEN", "UNDER_REVIEW", "RESOLVED", "ESCALATED", "WRITTEN_OFF", "ALL"]).default("OPEN"), limit: z.number().int().min(1).max(100).default(50), offset: z.number().int().min(0).default(0) }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        let filtered = _fails;
-        if (input.status !== "ALL") filtered = filtered.filter(f => f.status === input.status);
-        const total = filtered.length;
-        const fails = filtered.slice(input.offset, input.offset + input.limit);
-        return { fails, total };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const condition = input.status !== "ALL" ? eq(settlementFails.status, input.status) : undefined;
       const [fails, [{ total }]] = await Promise.all([
         db.select().from(settlementFails).where(condition).orderBy(desc(settlementFails.createdAt)).limit(input.limit).offset(input.offset),
@@ -396,19 +269,7 @@ export const settlementEngineRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const now = new Date();
-        const instr: MemInstruction = {
-          id: _instrSeq++, cycleId: input.cycleId, buyerUserId: input.buyerUserId,
-          sellerUserId: input.sellerUserId, instrument: input.instrument,
-          quantity: input.quantity, price: input.price, totalValue: input.totalValue,
-          instructionType: "DVP", status: input.status,
-          confirmedAt: input.status === "CONFIRMED" ? now : null,
-          settledAt: null, failureReason: null, createdAt: now, updatedAt: now,
-        };
-        _instructions.push(instr);
-        return instr;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [instr] = await db.insert(settlementInstructions).values({
         cycleId: input.cycleId, buyerUserId: input.buyerUserId, sellerUserId: input.sellerUserId,
         instrument: input.instrument, quantity: input.quantity, price: input.price,

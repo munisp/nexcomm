@@ -48,7 +48,7 @@ import PushNotificationSettings from "@/pages/PushNotificationSettings";
 import { PageSkeleton } from "@/components/PageSkeleton";
 
 const KYC_COLORS: Record<string, string> = {
-  PENDING: "bg-slate-700 text-slate-300",
+  PENDING: "bg-muted text-muted-foreground",
   SUBMITTED: "bg-amber-900/60 text-amber-300 border-amber-700",
   UNDER_REVIEW: "bg-amber-900/60 text-amber-300 border-amber-700",
   APPROVED: "bg-green-900/60 text-green-300 border-green-700",
@@ -227,25 +227,25 @@ export default function FarmerDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto">
       {/* Header */}
-      <div className="p-4 flex items-center justify-between border-b border-slate-800">
+      <div className="p-4 flex items-center justify-between border-b border-border">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
             <User className="w-5 h-5 text-green-400" />
           </div>
           <div>
             <p className="text-white font-semibold text-sm">{profile.fullName}</p>
-            <p className="text-slate-400 text-xs">{profile.lga}, {profile.state}</p>
+            <p className="text-muted-foreground text-xs">{profile.lga}, {profile.state}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={openEdit}
-            className="text-slate-400 hover:text-green-400 transition-colors"
+            className="text-muted-foreground hover:text-green-400 transition-colors"
             title="Edit Profile"
           >
             <Pencil className="w-4 h-4" />
           </button>
-          <button onClick={() => logout()} className="text-slate-400 hover:text-white">
+          <button onClick={() => logout()} className="text-muted-foreground hover:text-white">
             <LogOut className="w-5 h-5" />
           </button>
         </div>
@@ -281,13 +281,13 @@ export default function FarmerDashboard() {
           </div>
         )}
         {/* KYC Status Card */}
-        <Card className={`border ${kycStatus === "APPROVED" ? "bg-green-950/40 border-green-800/40" : kycStatus === "REJECTED" ? "bg-red-950/40 border-red-800/40" : "bg-slate-800 border-slate-700"}`}>
+        <Card className={`border ${kycStatus === "APPROVED" ? "bg-green-950/40 border-green-800/40" : kycStatus === "REJECTED" ? "bg-red-950/40 border-red-800/40" : "bg-secondary border-border"}`}>
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <KYCIcon className={`w-6 h-6 ${kycStatus === "APPROVED" ? "text-green-400" : kycStatus === "REJECTED" ? "text-red-400" : "text-amber-400"}`} />
               <div>
                 <p className="text-white text-sm font-semibold">KYC Verification</p>
-                <p className="text-slate-400 text-xs">{KYC_MESSAGES[kycStatus] ?? "Not submitted yet"}</p>
+                <p className="text-muted-foreground text-xs">{KYC_MESSAGES[kycStatus] ?? "Not submitted yet"}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -303,38 +303,38 @@ export default function FarmerDashboard() {
 
         {/* Stats Row */}
         <div className="grid grid-cols-3 gap-3">
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-secondary border-border">
             <CardContent className="p-3 text-center">
               <p className="text-2xl font-bold text-white">{farms.length}</p>
-              <p className="text-slate-400 text-xs mt-0.5">Farms</p>
+              <p className="text-muted-foreground text-xs mt-0.5">Farms</p>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-secondary border-border">
             <CardContent className="p-3 text-center">
               <p className="text-2xl font-bold text-white">{listings.length}</p>
-              <p className="text-slate-400 text-xs mt-0.5">Active Listings</p>
+              <p className="text-muted-foreground text-xs mt-0.5">Active Listings</p>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-secondary border-border">
             <CardContent className="p-3 text-center">
               <p className="text-2xl font-bold text-green-400">
                 {listings.reduce((sum, l) => sum + parseFloat(l.quantityKg), 0).toLocaleString()}
               </p>
-              <p className="text-slate-400 text-xs mt-0.5">Total kg</p>
+              <p className="text-muted-foreground text-xs mt-0.5">Total kg</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Cooperative Membership Card */}
-        <Card className={`border ${cooperative ? "bg-blue-950/30 border-blue-800/40" : "bg-slate-800/60 border-slate-700 border-dashed"}`}>
+        <Card className={`border ${cooperative ? "bg-blue-950/30 border-blue-800/40" : "bg-secondary/60 border-border border-dashed"}`}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${cooperative ? "bg-blue-700/40" : "bg-slate-700/60"}`}>
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${cooperative ? "bg-blue-700/40" : "bg-muted/60"}`}>
                   {cooperative ? (
                     <Building2 className="w-4 h-4 text-blue-400" />
                   ) : (
-                    <Users className="w-4 h-4 text-slate-400" />
+                    <Users className="w-4 h-4 text-muted-foreground" />
                   )}
                 </div>
                 <div>
@@ -342,11 +342,11 @@ export default function FarmerDashboard() {
                     {cooperative ? "Cooperative Member" : "No Cooperative"}
                   </p>
                   {cooperative ? (
-                    <p className="text-slate-400 text-xs">
+                    <p className="text-muted-foreground text-xs">
                       {cooperative.fileName} · {cooperative.totalMembers} members
                     </p>
                   ) : (
-                    <p className="text-slate-500 text-xs">Join a cooperative for group benefits</p>
+                    <p className="text-muted-foreground text-xs">Join a cooperative for group benefits</p>
                   )}
                 </div>
               </div>
@@ -355,7 +355,7 @@ export default function FarmerDashboard() {
                   <Badge className={`text-xs ${
                     membershipStatus === "APPROVED" ? "bg-green-900/60 text-green-300 border-green-700" :
                     membershipStatus === "UNDER_REVIEW" ? "bg-amber-900/60 text-amber-300 border-amber-700" :
-                    "bg-slate-700 text-slate-300"
+                    "bg-muted text-muted-foreground"
                   }`}>
                     {membershipStatus}
                   </Badge>
@@ -375,7 +375,7 @@ export default function FarmerDashboard() {
         <div className="grid grid-cols-2 gap-3">
           <Button
             onClick={() => navigate("/farmer-farms")}
-            className="h-14 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white flex flex-col gap-1"
+            className="h-14 bg-secondary hover:bg-muted border border-border text-white flex flex-col gap-1"
             variant="outline"
           >
             <MapPin className="w-5 h-5 text-green-400" />
@@ -383,7 +383,7 @@ export default function FarmerDashboard() {
           </Button>
           <Button
             onClick={() => navigate("/farmer-crops")}
-            className="h-14 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white flex flex-col gap-1"
+            className="h-14 bg-secondary hover:bg-muted border border-border text-white flex flex-col gap-1"
             variant="outline"
           >
             <Wheat className="w-5 h-5 text-amber-400" />
@@ -391,7 +391,7 @@ export default function FarmerDashboard() {
           </Button>
           <Button
             onClick={() => navigate("/farmer-market")}
-            className="h-14 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white flex flex-col gap-1"
+            className="h-14 bg-secondary hover:bg-muted border border-border text-white flex flex-col gap-1"
             variant="outline"
           >
             <BarChart3 className="w-5 h-5 text-blue-400" />
@@ -399,7 +399,7 @@ export default function FarmerDashboard() {
           </Button>
           <Button
             onClick={() => navigate("/portfolio-analytics")}
-            className="h-14 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white flex flex-col gap-1"
+            className="h-14 bg-secondary hover:bg-muted border border-border text-white flex flex-col gap-1"
             variant="outline"
           >
             <TrendingUp className="w-5 h-5 text-purple-400" />
@@ -407,7 +407,7 @@ export default function FarmerDashboard() {
           </Button>
           <Button
             onClick={() => navigate("/alerts")}
-            className="h-14 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white flex flex-col gap-1 col-span-2"
+            className="h-14 bg-secondary hover:bg-muted border border-border text-white flex flex-col gap-1 col-span-2"
             variant="outline"
           >
             <Bell className="w-5 h-5 text-yellow-400" />
@@ -430,13 +430,13 @@ export default function FarmerDashboard() {
                 placeholder="Search crop..."
                 value={listingSearch}
                 onChange={(e) => setListingSearch(e.target.value)}
-                className="flex-1 h-8 px-3 rounded-md bg-slate-800 border border-slate-700 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="flex-1 h-8 px-3 rounded-md bg-secondary border border-border text-white text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-green-500"
               />
               {uniqueCropTypes.length > 1 && (
                 <select
                   value={listingCropFilter}
                   onChange={(e) => setListingCropFilter(e.target.value)}
-                  className="h-8 px-2 rounded-md bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
+                  className="h-8 px-2 rounded-md bg-secondary border border-border text-white text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
                 >
                   <option value="ALL">All Crops</option>
                   {uniqueCropTypes.map(c => <option key={c} value={c}>{c}</option>)}
@@ -445,10 +445,10 @@ export default function FarmerDashboard() {
             </div>
           )}
           {listings.length === 0 ? (
-            <Card className="bg-slate-800/50 border-slate-700 border-dashed">
+            <Card className="bg-secondary/50 border-border border-dashed">
               <CardContent className="p-6 text-center">
-                <Wheat className="w-8 h-8 text-slate-500 mx-auto mb-2" />
-                <p className="text-slate-400 text-sm">No active listings yet</p>
+                <Wheat className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground text-sm">No active listings yet</p>
                 <Button
                   size="sm"
                   onClick={() => navigate("/farmer-crops")}
@@ -459,20 +459,20 @@ export default function FarmerDashboard() {
                   Add Listing
                 </Button>
                 {kycStatus !== "APPROVED" && (
-                  <p className="text-slate-500 text-xs mt-2">KYC approval required</p>
+                  <p className="text-muted-foreground text-xs mt-2">KYC approval required</p>
                 )}
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-2">
               {filteredListings.length === 0 ? (
-                <p className="text-slate-400 text-xs text-center py-3">No listings match your search</p>
+                <p className="text-muted-foreground text-xs text-center py-3">No listings match your search</p>
               ) : filteredListings.slice(0, 6).map((listing) => (
-                <Card key={listing.id} className="bg-slate-800 border-slate-700">
+                <Card key={listing.id} className="bg-secondary border-border">
                   <CardContent className="p-3 flex items-center justify-between">
                     <div>
                       <p className="text-white text-sm font-medium">{listing.cropType}</p>
-                      <p className="text-slate-400 text-xs">
+                      <p className="text-muted-foreground text-xs">
                         {parseFloat(listing.quantityKg).toLocaleString()} kg · ₦{parseFloat(listing.askingPricePerKg).toLocaleString()}/kg
                       </p>
                     </div>
@@ -493,7 +493,7 @@ export default function FarmerDashboard() {
       </div>
 
       {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-slate-900 border-t border-slate-800 flex">
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card border-t border-border flex">
         {[
           { icon: Sprout, label: "Home", path: "/farmer-dashboard" },
           { icon: MapPin, label: "Farms", path: "/farmer-farms" },
@@ -505,7 +505,7 @@ export default function FarmerDashboard() {
             key={label}
             onClick={() => navigate(path)}
             className={`flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors ${
-              path === "/farmer-dashboard" ? "text-green-400" : "text-slate-400 hover:text-white"
+              path === "/farmer-dashboard" ? "text-green-400" : "text-muted-foreground hover:text-white"
             }`}
           >
             <Icon className="w-5 h-5" />

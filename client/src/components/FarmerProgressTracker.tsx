@@ -45,7 +45,7 @@ export default function FarmerProgressTracker() {
           <Wheat className="w-4 h-4 text-amber-400 flex-shrink-0" />
           <span className="text-sm font-semibold text-white">Farmer Journey</span>
         </div>
-        <span className={`text-xs font-medium ${allDone ? "text-emerald-400" : "text-gray-400"}`}>
+        <span className={`text-xs font-medium ${allDone ? "text-emerald-400" : "text-muted-foreground"}`}>
           {completedCount}/{totalCount} complete
         </span>
       </div>
@@ -79,12 +79,12 @@ export default function FarmerProgressTracker() {
                 <div className={`text-xs font-medium leading-tight ${
                   step.completed ? "text-emerald-300 line-through decoration-emerald-500/50"
                     : isNext ? "text-amber-300"
-                    : "text-gray-500"
+                    : "text-muted-foreground"
                 }`}>
                   {step.label}
                 </div>
                 {isNext && (
-                  <div className="text-xs text-gray-500 mt-0.5 leading-tight">{step.description}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5 leading-tight">{step.description}</div>
                 )}
               </div>
               {isNext && step.href && (

@@ -8,23 +8,6 @@ import { adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
 
 // ── In-memory fallback store ──────────────────────────────────────────────────
-type MemWebhook = {
-  id: number;
-  name: string;
-  url: string;
-  secret: string | null;
-  eventFilter: "ALL" | "HIGH_AND_CRITICAL" | "CRITICAL_ONLY";
-  isActive: boolean;
-  failureCount: number;
-  lastTriggeredAt: Date | null;
-  lastStatusCode: number | null;
-  createdBy: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
-const _memWebhooks = new Map<number, MemWebhook>();
-let _memWebhookSeq = 1;
-
 // ─── Webhook Dispatch ─────────────────────────────────────────────────────────
 export async function dispatchSecurityEventWebhooks(event: SecurityEvent): Promise<void> {
   const db = await getDb();
@@ -109,11 +92,7 @@ export const webhookRouter = router({
     .input(z.object({ includeInactive: z.boolean().default(false) }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const list = Array.from(_memWebhooks.values())
-          .filter(w => input.includeInactive || w.isActive);
-        return list.map(r => ({ ...r, secret: r.secret ? "••••••••" : null }));
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const rows = await db
         .select()
         .from(webhookConfigs)
@@ -131,25 +110,7 @@ export const webhookRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const id = _memWebhookSeq++;
-        const now = new Date();
-        _memWebhooks.set(id, {
-          id,
-          name: input.name,
-          url: input.url,
-          secret: input.secret ?? null,
-          eventFilter: input.eventFilter,
-          isActive: true,
-          failureCount: 0,
-          lastTriggeredAt: null,
-          lastStatusCode: null,
-          createdBy: ctx.user.id,
-          createdAt: now,
-          updatedAt: now,
-        });
-        return { success: true, id };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [webhook] = await db
         .insert(webhookConfigs)
         .values({
@@ -176,17 +137,7 @@ export const webhookRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const wh = _memWebhooks.get(input.id);
-        if (!wh) throw new TRPCError({ code: "NOT_FOUND", message: "Webhook not found" });
-        if (input.name !== undefined) wh.name = input.name;
-        if (input.url !== undefined) wh.url = input.url;
-        if (input.secret !== undefined) wh.secret = input.secret;
-        if (input.eventFilter !== undefined) wh.eventFilter = input.eventFilter;
-        if (input.isActive !== undefined) wh.isActive = input.isActive;
-        wh.updatedAt = new Date();
-        return { success: true };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [existing] = await db
         .select()
         .from(webhookConfigs)
@@ -207,11 +158,7 @@ export const webhookRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        if (!_memWebhooks.has(input.id)) throw new TRPCError({ code: "NOT_FOUND", message: "Webhook not found" });
-        _memWebhooks.delete(input.id);
-        return { success: true };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [existing] = await db
         .select()
         .from(webhookConfigs)
@@ -226,11 +173,7 @@ export const webhookRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const wh = _memWebhooks.get(input.id);
-        if (!wh || !wh.isActive) throw new TRPCError({ code: "NOT_FOUND", message: "Active webhook not found" });
-        return { success: true, statusCode: 200, errorMessage: null };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [cfg] = await db
         .select()
         .from(webhookConfigs)

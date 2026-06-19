@@ -7,19 +7,6 @@ import { adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
 
 // ── In-memory fallback store ──────────────────────────────────────────────────
-type MemEntry = {
-  id: number;
-  cidr: string;
-  label: string;
-  scope: "GLOBAL_ADMIN" | "BULK_OPERATIONS" | "LIQUIDATION_OVERRIDE" | "WITHDRAWAL_APPROVAL";
-  isActive: boolean;
-  createdBy: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
-const _memEntries = new Map<number, MemEntry>();
-let _memSeq = 1;
-
 // ─── CIDR Matching Utility ────────────────────────────────────────────────────
 function ipToInt(ip: string): number {
   return ip.split(".").reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
@@ -101,10 +88,7 @@ export const ipAllowlistRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        return Array.from(_memEntries.values())
-          .filter(e => (input.includeInactive || e.isActive) && (input.scope === "ALL" || e.scope === input.scope));
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const conditions = [];
       if (!input.includeInactive) conditions.push(eq(ipAllowlist.isActive, true));
       if (input.scope !== "ALL") conditions.push(eq(ipAllowlist.scope, input.scope));
@@ -126,12 +110,7 @@ export const ipAllowlistRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) {
-        const id = _memSeq++;
-        const now = new Date();
-        _memEntries.set(id, { id, cidr: input.cidr, label: input.label, scope: input.scope, isActive: true, createdBy: ctx.user.id, createdAt: now, updatedAt: now });
-        return { success: true, id };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [entry] = await db
         .insert(ipAllowlist)
         .values({ cidr: input.cidr, label: input.label, scope: input.scope, isActive: true, createdBy: ctx.user.id })
@@ -143,13 +122,7 @@ export const ipAllowlistRouter = router({
     .input(z.object({ id: z.number().int().positive(), isActive: z.boolean() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const e = _memEntries.get(input.id);
-        if (!e) throw new TRPCError({ code: "NOT_FOUND", message: "Entry not found" });
-        e.isActive = input.isActive;
-        e.updatedAt = new Date();
-        return { success: true };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [existing] = await db.select().from(ipAllowlist).where(eq(ipAllowlist.id, input.id)).limit(1);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Entry not found" });
       await db.update(ipAllowlist).set({ isActive: input.isActive, updatedAt: new Date() }).where(eq(ipAllowlist.id, input.id));
@@ -160,11 +133,7 @@ export const ipAllowlistRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        if (!_memEntries.has(input.id)) throw new TRPCError({ code: "NOT_FOUND", message: "Entry not found" });
-        _memEntries.delete(input.id);
-        return { success: true };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
       const [existing] = await db.select().from(ipAllowlist).where(eq(ipAllowlist.id, input.id)).limit(1);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Entry not found" });
       await db.delete(ipAllowlist).where(eq(ipAllowlist.id, input.id));

@@ -3005,3 +3005,16 @@ export const pbacPolicies = pgTable("pbac_policies", {
 });
 export type PbacPolicy = typeof pbacPolicies.$inferSelect;
 export type InsertPbacPolicy = typeof pbacPolicies.$inferInsert;
+
+// ─── AI Search History ────────────────────────────────────────────────────────
+// Persists the last N natural-language queries per user for quick-access chips.
+export const aiSearchHistory = pgTable("ai_search_history", {
+  id:          bigserial("id", { mode: "number" }).primaryKey(),
+  userId:      integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  query:       text("query").notNull(),
+  parsedIntent: jsonb("parsed_intent"),
+  resultCount: integer("result_count").default(0).notNull(),
+  createdAt:   timestamp("created_at").defaultNow().notNull(),
+});
+export type AiSearchHistory = typeof aiSearchHistory.$inferSelect;
+export type InsertAiSearchHistory = typeof aiSearchHistory.$inferInsert;

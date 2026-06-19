@@ -172,7 +172,7 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-sm">
+      <DialogContent className="bg-card border-border text-white max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShoppingCart className="w-4 h-4 text-emerald-400" />
@@ -182,8 +182,8 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
 
         {/* ── Live price indicator ── */}
         <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-400">Live price:</span>
-          <span className={cn("font-mono font-semibold", sseConnected ? "text-emerald-400" : "text-gray-300")}>
+          <span className="text-muted-foreground">Live price:</span>
+          <span className={cn("font-mono font-semibold", sseConnected ? "text-emerald-400" : "text-muted-foreground")}>
             {livePrice !== null ? livePrice.toLocaleString(undefined, { maximumFractionDigits: 4 }) : "—"}
             {sseConnected && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
           </span>
@@ -196,14 +196,14 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
               <button
                 className={cn(
                   "py-2 rounded-lg text-sm font-semibold transition-colors",
-                  side === "BUY" ? "bg-emerald-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                  side === "BUY" ? "bg-emerald-600 text-white" : "bg-secondary text-muted-foreground hover:bg-muted"
                 )}
                 onClick={() => setSide("BUY")}
               >BUY</button>
               <button
                 className={cn(
                   "py-2 rounded-lg text-sm font-semibold transition-colors",
-                  side === "SELL" ? "bg-red-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                  side === "SELL" ? "bg-red-600 text-white" : "bg-secondary text-muted-foreground hover:bg-muted"
                 )}
                 onClick={() => setSide("SELL")}
               >SELL</button>
@@ -211,12 +211,12 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
 
             {/* Order type */}
             <div className="space-y-1">
-              <Label className="text-xs text-gray-400">Order Type</Label>
+              <Label className="text-xs text-muted-foreground">Order Type</Label>
               <Select value={orderType} onValueChange={(v) => setOrderType(v as typeof orderType)}>
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white h-9">
+                <SelectTrigger className="bg-secondary border-border text-white h-9">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-secondary border-border">
                   <SelectItem value="LIMIT">Limit ({MAKER_FEE_BPS / 100}% maker fee)</SelectItem>
                   <SelectItem value="MARKET">Market ({TAKER_FEE_BPS / 100}% taker fee)</SelectItem>
                   <SelectItem value="STOP_LIMIT">Stop Limit ({TAKER_FEE_BPS / 100}% taker fee)</SelectItem>
@@ -226,7 +226,7 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
 
             {/* Quantity */}
             <div className="space-y-1">
-              <Label className="text-xs text-gray-400">Quantity</Label>
+              <Label className="text-xs text-muted-foreground">Quantity</Label>
               <Input
                 type="number"
                 min="0"
@@ -234,7 +234,7 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
                 placeholder="0.00"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white h-9"
+                className="bg-secondary border-border text-white h-9"
               />
             </div>
 
@@ -242,7 +242,7 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
             {orderType !== "MARKET" && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-gray-400">Limit Price</Label>
+                  <Label className="text-xs text-muted-foreground">Limit Price</Label>
                   {livePrice !== null && (
                     <button
                       className="text-[10px] text-emerald-400 hover:text-emerald-300"
@@ -259,19 +259,19 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
                   placeholder={livePrice ? String(livePrice) : "0.00"}
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white h-9"
+                  className="bg-secondary border-border text-white h-9"
                 />
               </div>
             )}
 
             {/* Time in Force */}
             <div className="space-y-1">
-              <Label className="text-xs text-gray-400">Time in Force</Label>
+              <Label className="text-xs text-muted-foreground">Time in Force</Label>
               <Select value={tif} onValueChange={(v) => setTif(v as typeof tif)}>
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white h-9">
+                <SelectTrigger className="bg-secondary border-border text-white h-9">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-secondary border-border">
                   <SelectItem value="GTC">GTC — Good Till Cancelled</SelectItem>
                   <SelectItem value="DAY">DAY — Day Order</SelectItem>
                   <SelectItem value="IOC">IOC — Immediate or Cancel</SelectItem>
@@ -282,17 +282,17 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
 
             {/* Live notional preview */}
             {qty > 0 && execPrice > 0 && (
-              <div className="bg-gray-800/60 rounded-lg p-3 text-xs space-y-1">
-                <div className="flex justify-between text-gray-400">
+              <div className="bg-secondary/60 rounded-lg p-3 text-xs space-y-1">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Est. notional</span>
                   <span className="text-white font-mono">₦{fmt(notional)}</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-muted-foreground">
                   <span>Est. fee ({feeBps / 100}%)</span>
                   <span className="text-amber-300 font-mono">₦{fmt(estimatedFee)}</span>
                 </div>
-                <div className="flex justify-between border-t border-gray-700 pt-1 font-semibold">
-                  <span className="text-gray-300">{side === "BUY" ? "Total cost" : "Net proceeds"}</span>
+                <div className="flex justify-between border-t border-border pt-1 font-semibold">
+                  <span className="text-muted-foreground">{side === "BUY" ? "Total cost" : "Net proceeds"}</span>
                   <span className={cn("font-mono", side === "BUY" ? "text-red-300" : "text-emerald-300")}>₦{fmt(totalCost)}</span>
                 </div>
               </div>
@@ -300,7 +300,7 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
 
             <DialogFooter className="gap-2">
               <Button variant="outline" size="sm" onClick={onClose}
-                className="border-gray-700 text-gray-300 bg-transparent hover:bg-gray-800">
+                className="border-border text-muted-foreground bg-transparent hover:bg-secondary">
                 Cancel
               </Button>
               <Button
@@ -320,7 +320,7 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
           <>
             <div className="space-y-3">
               {/* Order summary table */}
-              <div className="bg-gray-800/60 rounded-lg p-3 text-xs space-y-2">
+              <div className="bg-secondary/60 rounded-lg p-3 text-xs space-y-2">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                   {[
                     ["Symbol", symbol],
@@ -331,7 +331,7 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
                     ["TIF", tif],
                   ].map(([label, val]) => (
                     <>
-                      <span key={`l-${label}`} className="text-gray-400">{label}</span>
+                      <span key={`l-${label}`} className="text-muted-foreground">{label}</span>
                       <span key={`v-${label}`} className="text-white font-mono text-right">{val}</span>
                     </>
                   ))}
@@ -339,18 +339,18 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
               </div>
 
               {/* Cost breakdown */}
-              <div className="bg-gray-800/60 rounded-lg p-3 text-xs space-y-1.5">
-                <p className="text-gray-400 font-semibold mb-1">Cost Breakdown</p>
+              <div className="bg-secondary/60 rounded-lg p-3 text-xs space-y-1.5">
+                <p className="text-muted-foreground font-semibold mb-1">Cost Breakdown</p>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Notional value</span>
+                  <span className="text-muted-foreground">Notional value</span>
                   <span className="text-white font-mono">₦{fmt(notional)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">{orderType === "LIMIT" ? "Maker" : "Taker"} fee ({feeBps / 100}%)</span>
+                  <span className="text-muted-foreground">{orderType === "LIMIT" ? "Maker" : "Taker"} fee ({feeBps / 100}%)</span>
                   <span className="text-amber-300 font-mono">₦{fmt(estimatedFee)}</span>
                 </div>
-                <div className="flex justify-between border-t border-gray-700 pt-1 font-bold">
-                  <span className="text-gray-200">{side === "BUY" ? "Total debit" : "Net credit"}</span>
+                <div className="flex justify-between border-t border-border pt-1 font-bold">
+                  <span className="text-foreground">{side === "BUY" ? "Total debit" : "Net credit"}</span>
                   <span className={cn("font-mono", side === "BUY" ? "text-red-300" : "text-emerald-300")}>₦{fmt(totalCost)}</span>
                 </div>
               </div>
@@ -360,25 +360,25 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
                 "rounded-lg p-3 text-xs space-y-1.5 border",
                 marginWarning
                   ? "bg-red-900/30 border-red-700"
-                  : "bg-gray-800/60 border-gray-700"
+                  : "bg-secondary/60 border-border"
               )}>
-                <p className="text-gray-400 font-semibold mb-1">Margin Impact (10% req.)</p>
+                <p className="text-muted-foreground font-semibold mb-1">Margin Impact (10% req.)</p>
                 {marginQuery.isLoading ? (
-                  <p className="text-gray-500">Loading margin data…</p>
+                  <p className="text-muted-foreground">Loading margin data…</p>
                 ) : (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Available margin</span>
+                      <span className="text-muted-foreground">Available margin</span>
                       <span className="text-white font-mono">
                         {availableMargin !== null ? `₦${fmt(availableMargin)}` : "—"}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Margin required</span>
+                      <span className="text-muted-foreground">Margin required</span>
                       <span className="text-amber-300 font-mono">₦{fmt(marginImpact)}</span>
                     </div>
-                    <div className="flex justify-between border-t border-gray-700 pt-1 font-bold">
-                      <span className="text-gray-200">Margin after</span>
+                    <div className="flex justify-between border-t border-border pt-1 font-bold">
+                      <span className="text-foreground">Margin after</span>
                       <span className={cn("font-mono", marginWarning ? "text-red-400" : "text-emerald-300")}>
                         {marginAfter !== null ? `₦${fmt(marginAfter)}` : "—"}
                       </span>
@@ -395,7 +395,7 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
 
             <DialogFooter className="gap-2">
               <Button variant="outline" size="sm" onClick={() => setStep("entry")}
-                className="border-gray-700 text-gray-300 bg-transparent hover:bg-gray-800">
+                className="border-border text-muted-foreground bg-transparent hover:bg-secondary">
                 ← Back
               </Button>
               <Button
@@ -430,7 +430,7 @@ function Sparkline({
   height?: number;
 }) {
   if (!data || data.length < 2) {
-    return <div style={{ width, height }} className="opacity-30 text-xs text-gray-500 flex items-center justify-center">—</div>;
+    return <div style={{ width, height }} className="opacity-30 text-xs text-muted-foreground flex items-center justify-center">—</div>;
   }
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -487,7 +487,7 @@ function assetClassBadge(cls: string) {
     EQUITY: "bg-green-900/50 text-green-300 border-green-700",
     INDEX: "bg-cyan-900/50 text-cyan-300 border-cyan-700",
   };
-  return map[cls?.toUpperCase()] ?? "bg-gray-800 text-gray-300 border-gray-600";
+  return map[cls?.toUpperCase()] ?? "bg-secondary text-muted-foreground border-border";
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -619,11 +619,11 @@ export default function WatchlistPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 to-gray-900 text-white pb-24">
       {/* ── Header ── */}
-      <div className="sticky top-0 z-20 bg-gray-950/95 backdrop-blur border-b border-gray-800 px-4 py-3">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1 as unknown as string)}
-            className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -632,13 +632,13 @@ export default function WatchlistPage() {
               <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
               My Watchlist
             </h1>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               {watchedSymbols.length} instrument{watchedSymbols.length !== 1 ? "s" : ""} pinned
             </p>
           </div>
           <button
             onClick={() => refetch()}
-            className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-white transition-colors"
             title="Refresh prices"
           >
             <RefreshCw className="w-4 h-4" />
@@ -647,14 +647,14 @@ export default function WatchlistPage() {
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-white transition-colors"
                 title="Customise display"
               >
                 <Settings2 className="w-4 h-4" />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="bg-gray-900 border-gray-700 text-white w-56 p-3" align="end">
-              <p className="text-xs font-semibold text-gray-300 mb-2">Display options</p>
+            <PopoverContent className="bg-card border-border text-white w-56 p-3" align="end">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">Display options</p>
               {([
                 { key: "showOHLCV",    label: "OHLCV mini-row" },
                 { key: "showSparkline", label: "Sparkline chart" },
@@ -668,14 +668,14 @@ export default function WatchlistPage() {
                     onChange={() => toggleDisplayOpt(key)}
                     className="accent-emerald-500"
                   />
-                  <span className="text-xs text-gray-300">{label}</span>
+                  <span className="text-xs text-muted-foreground">{label}</span>
                 </label>
               ))}
               {/* Bulk alert management */}
               {alertCounts && Object.values(alertCounts).some(c => c > 0) && (
                 <>
-                  <hr className="border-gray-700 my-2" />
-                  <p className="text-xs font-semibold text-gray-300 mb-1">Alert management</p>
+                  <hr className="border-border my-2" />
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Alert management</p>
                   <button
                     className="w-full text-left text-xs text-red-400 hover:text-red-300 py-1 flex items-center gap-1.5 disabled:opacity-40"
                     disabled={deleteManyAlertsMutation.isPending}
@@ -709,27 +709,27 @@ export default function WatchlistPage() {
 
       {/* ── Add symbol panel ── */}
       {showAddPanel && (
-        <div className="mx-4 mt-3 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
-          <div className="p-3 border-b border-gray-800">
+        <div className="mx-4 mt-3 bg-card border border-border rounded-xl overflow-hidden">
+          <div className="p-3 border-b border-border">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                className="pl-9 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 h-9 text-sm"
+                className="pl-9 bg-secondary border-border text-white placeholder:text-muted-foreground h-9 text-sm"
                 placeholder="Search instruments to add…" value={instrumentSearch} onChange={(e) => setInstrumentSearch(e.target.value)}
                 autoFocus
               />
             </div>
           </div>
-          <div className="max-h-64 overflow-y-auto divide-y divide-gray-800">
+          <div className="max-h-64 overflow-y-auto divide-y divide-border">
             {filteredAll.length === 0 ? (
-              <p className="text-center text-gray-500 text-sm py-6">
+              <p className="text-center text-muted-foreground text-sm py-6">
                 {searchQuery ? "No matching instruments" : "All instruments are already in your watchlist"}
               </p>
             ) : (
                   filteredAll.slice(0, 30).map((p: LivePrice) => (
                 <button
                   key={p.symbol}
-                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-800 transition-colors text-left"
+                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-secondary transition-colors text-left"
                   onClick={() => {
                     addMutation.mutate({ symbol: p.symbol });
                     setShowAddPanel(false);
@@ -738,7 +738,7 @@ export default function WatchlistPage() {
                 >
                   <div>
                     <p className="text-sm font-semibold text-white">{p.symbol}</p>
-                    <p className="text-xs text-gray-400 truncate max-w-[180px]">{p.name}</p>
+                    <p className="text-xs text-muted-foreground truncate max-w-[180px]">{p.name}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={cn(
@@ -760,8 +760,8 @@ export default function WatchlistPage() {
       {!isLoading && watchedSymbols.length === 0 && (
         <div className="flex flex-col items-center justify-center py-24 px-8 text-center">
           <Star className="w-14 h-14 text-gray-700 mb-4" />
-          <h2 className="text-xl font-semibold text-gray-300 mb-2">Your watchlist is empty</h2>
-          <p className="text-gray-500 text-sm mb-6">
+          <h2 className="text-xl font-semibold text-muted-foreground mb-2">Your watchlist is empty</h2>
+          <p className="text-muted-foreground text-sm mb-6">
             Pin instruments to monitor their prices, OHLCV data, and trade directly from here.
           </p>
           <Button
@@ -778,7 +778,7 @@ export default function WatchlistPage() {
       {isLoading && watchedSymbols.length > 0 && (
         <div className="px-4 pt-4 space-y-3">
           {watchedSymbols.map((sym) => (
-            <div key={sym} className="h-20 bg-gray-800/50 rounded-xl animate-pulse" />
+            <div key={sym} className="h-20 bg-secondary/50 rounded-xl animate-pulse" />
           ))}
         </div>
       )}
@@ -803,7 +803,7 @@ export default function WatchlistPage() {
             return (
               <div
                 key={symbol}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-3 hover:border-gray-700 transition-colors"
+                className="bg-card border border-border rounded-xl p-3 hover:border-border transition-colors"
               >
                 <div className="flex items-start gap-3">
                   {/* Left: symbol + name + badge */}
@@ -819,14 +819,14 @@ export default function WatchlistPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-400 truncate">{row?.name ?? symbol}</p>
+                    <p className="text-xs text-muted-foreground truncate">{row?.name ?? symbol}</p>
 
                     {/* OHLCV mini row */}
                     {displayOpts.showOHLCV && row && high && low && (
-                      <div className="flex gap-3 mt-1.5 text-[10px] text-gray-500">
-                        <span>H <span className="text-gray-300">{high.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></span>
-                        <span>L <span className="text-gray-300">{low.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></span>
-                        <span>O <span className="text-gray-300">{open.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></span>
+                      <div className="flex gap-3 mt-1.5 text-[10px] text-muted-foreground">
+                        <span>H <span className="text-muted-foreground">{high.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></span>
+                        <span>L <span className="text-muted-foreground">{low.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></span>
+                        <span>O <span className="text-muted-foreground">{open.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></span>
                         <span className="text-gray-600">{row.currency}</span>
                       </div>
                     )}
@@ -867,13 +867,13 @@ export default function WatchlistPage() {
                         </p>
                       </>
                     ) : (
-                      <p className="text-xs text-gray-500">No data</p>
+                      <p className="text-xs text-muted-foreground">No data</p>
                     )}
                   </div>
                 </div>
 
                 {/* Action row */}
-                <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-gray-800">
+                <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-border">
                   <Button
                     size="sm"
                     className="flex-1 h-7 text-xs bg-emerald-700 hover:bg-emerald-600 text-white"
@@ -889,10 +889,10 @@ export default function WatchlistPage() {
                     size="sm"
                     variant="outline"
                     className={cn(
-                      "flex-1 h-7 text-xs border-gray-700 hover:bg-gray-800 bg-transparent",
+                      "flex-1 h-7 text-xs border-border hover:bg-secondary bg-transparent",
                       expandedBook === symbol
                         ? "text-emerald-400 border-emerald-700/50"
-                        : "text-gray-300"
+                        : "text-muted-foreground"
                     )}
                     onClick={() => setExpandedBook(expandedBook === symbol ? null : symbol)}
                   >
@@ -903,10 +903,10 @@ export default function WatchlistPage() {
                     size="sm"
                     variant="outline"
                     className={cn(
-                      "flex-1 h-7 text-xs border-gray-700 hover:bg-gray-800 bg-transparent",
+                      "flex-1 h-7 text-xs border-border hover:bg-secondary bg-transparent",
                       expandedChart === symbol
                         ? "text-amber-400 border-amber-700/50"
-                        : "text-gray-300"
+                        : "text-muted-foreground"
                     )}
                     onClick={() => setExpandedChart(expandedChart === symbol ? null : symbol)}
                   >
@@ -915,7 +915,7 @@ export default function WatchlistPage() {
                   </Button>
                   <div className="relative">
                     <button
-                      className="p-1.5 rounded-lg hover:bg-gray-800 text-yellow-400 hover:text-yellow-300 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-secondary text-yellow-400 hover:text-yellow-300 transition-colors"
                       title="Set price alert"
                       onClick={() => {
                         setAlertSymbol(symbol);
@@ -932,7 +932,7 @@ export default function WatchlistPage() {
                     )}
                   </div>
                   <button
-                    className="p-1.5 rounded-lg hover:bg-gray-800 text-amber-400 hover:text-red-400 transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-secondary text-amber-400 hover:text-red-400 transition-colors"
                     title="Remove from watchlist"
                     onClick={() => removeMutation.mutate({ symbol })}
                     disabled={removeMutation.isPending}
@@ -973,20 +973,20 @@ export default function WatchlistPage() {
 
       {/* ── Footer summary ── */}
       {watchedSymbols.length > 0 && (
-        <div className="mx-4 mt-6 p-3 bg-gray-900/50 border border-gray-800 rounded-xl">
+        <div className="mx-4 mt-6 p-3 bg-card/50 border border-border rounded-xl">
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
-              <p className="text-xs text-gray-500">Pinned</p>
+              <p className="text-xs text-muted-foreground">Pinned</p>
               <p className="text-lg font-bold text-white">{watchedSymbols.length}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Gainers</p>
+              <p className="text-xs text-muted-foreground">Gainers</p>
               <p className="text-lg font-bold text-emerald-400">
                 {(livePriceRows ?? [] as LivePrice[]).filter((r: LivePrice) => Number(r.changePct ?? 0) >= 0).length}
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Losers</p>
+              <p className="text-xs text-muted-foreground">Losers</p>
               <p className="text-lg font-bold text-red-400">
                 {(livePriceRows ?? [] as LivePrice[]).filter((r: LivePrice) => Number(r.changePct ?? 0) < 0).length}
               </p>
@@ -1007,27 +1007,27 @@ export default function WatchlistPage() {
 
       {/* ── Quick-add Price Alert Dialog ── */}
       <Dialog open={!!alertSymbol} onOpenChange={(open) => { if (!open) setAlertSymbol(null); }}>
-        <DialogContent className="sm:max-w-sm bg-gray-900 border-gray-700">
+        <DialogContent className="sm:max-w-sm bg-card border-border">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <Bell className="w-4 h-4 text-yellow-400" />
               Set Price Alert — {alertSymbol}
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-muted-foreground">
               Get notified when the price crosses your target.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <Label className="text-gray-300 text-xs">Condition</Label>
+              <Label className="text-muted-foreground text-xs">Condition</Label>
               <Select
                 value={alertCondition}
                 onValueChange={(v) => setAlertCondition(v as typeof alertCondition)}
               >
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                <SelectTrigger className="bg-secondary border-border text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-secondary border-border">
                   <SelectItem value="ABOVE">Price rises above</SelectItem>
                   <SelectItem value="BELOW">Price falls below</SelectItem>
                   <SelectItem value="CROSS_ABOVE">Crosses above (once)</SelectItem>
@@ -1036,20 +1036,20 @@ export default function WatchlistPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-gray-300 text-xs">Target Price</Label>
+              <Label className="text-muted-foreground text-xs">Target Price</Label>
               <Input
                 type="number"
                 step="any"
                 value={alertPrice}
                 onChange={(e) => setAlertPrice(e.target.value)}
                 placeholder="Enter target price"
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-secondary border-border text-white"
               />
             </div>
             <div className="flex gap-2 pt-1">
               <Button
                 variant="outline"
-                className="flex-1 border-gray-700 bg-transparent text-gray-300 hover:bg-gray-800"
+                className="flex-1 border-border bg-transparent text-muted-foreground hover:bg-secondary"
                 onClick={() => setAlertSymbol(null)}
               >
                 Cancel
@@ -1075,7 +1075,7 @@ export default function WatchlistPage() {
       </Dialog>
 
       {/* ── Mobile Bottom Nav with active-state indicators ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gray-950/95 backdrop-blur border-t border-gray-800 px-2 py-1.5 flex gap-1">
+      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border px-2 py-1.5 flex gap-1">
         {([
           { label: "Dashboard", path: "/trader-dashboard", Icon: LayoutDashboard },
           { label: "Watchlist", path: "/watchlist",        Icon: Star },
@@ -1092,7 +1092,7 @@ export default function WatchlistPage() {
                 "flex-1 h-14 text-xs rounded-lg flex flex-col items-center justify-center gap-1 relative transition-colors",
                 isActive
                   ? "text-emerald-400 font-semibold bg-emerald-400/10"
-                  : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50",
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
               )}
             >
               {isActive && (

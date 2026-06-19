@@ -242,7 +242,7 @@ function CommandPalette() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
-        className="p-0 max-w-2xl overflow-hidden bg-zinc-950 border-zinc-800"
+        className="p-0 max-w-2xl overflow-hidden bg-background border-border"
         aria-label="Global search"
       >
         <Command
@@ -251,7 +251,7 @@ function CommandPalette() {
           loop
         >
           {/* Mode toggle + Search input */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
             <Button
               variant={aiMode ? "default" : "ghost"}
               size="sm"
@@ -264,26 +264,26 @@ function CommandPalette() {
             </Button>
             {!aiMode && (
               <>
-                <Search className="h-4 w-4 text-zinc-400 shrink-0" />
+                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Command.Input
                   value={query}
                   onValueChange={setQuery}
                   placeholder="Search users, orders, receipts, deposits…"
-                  className="flex-1 bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 outline-none"
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                   autoFocus
                 />
                 {isFetching && (
-                  <Loader2 className="h-4 w-4 text-zinc-400 animate-spin shrink-0" />
+                  <Loader2 className="h-4 w-4 text-muted-foreground animate-spin shrink-0" />
                 )}
               </>
             )}
-            <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border border-zinc-700 bg-zinc-800 px-1.5 font-mono text-[10px] text-zinc-400">
+            <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border border-border bg-secondary px-1.5 font-mono text-[10px] text-muted-foreground">
               ESC
             </kbd>
           </div>
           {/* AI Search mode */}
           {aiMode && (
-            <div className="px-4 py-3 border-b border-zinc-800">
+            <div className="px-4 py-3 border-b border-border">
               <AISearchBar
                 autoFocus
                 onClose={() => setOpen(false)}
@@ -294,7 +294,7 @@ function CommandPalette() {
 
           <Command.List className="max-h-[420px] overflow-y-auto py-2">
             {/* Empty state */}
-            <Command.Empty className="py-10 text-center text-sm text-zinc-500">
+            <Command.Empty className="py-10 text-center text-sm text-muted-foreground">
               {isError
                 ? "Search unavailable — please try again."
                 : enabled
@@ -306,13 +306,13 @@ function CommandPalette() {
             {!enabled && recent.length > 0 && (
               <Command.Group
                 heading={
-                  <span className="px-4 py-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-2 w-full">
+                  <span className="px-4 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 w-full">
                     <Clock className="h-3 w-3" />
                     <span className="flex-1">Recently Visited</span>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); clearAllRecent(); }}
-                      className="flex items-center gap-1 text-[10px] font-normal normal-case tracking-normal text-zinc-600 hover:text-zinc-400 transition-colors px-1 py-0.5 rounded hover:bg-zinc-800"
+                      className="flex items-center gap-1 text-[10px] font-normal normal-case tracking-normal text-zinc-600 hover:text-muted-foreground transition-colors px-1 py-0.5 rounded hover:bg-secondary"
                       title="Clear all recently visited"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -326,14 +326,14 @@ function CommandPalette() {
                     key={item.href}
                     value={`recent-${item.href}`}
                     onSelect={() => handleSelect(item.href, item.label)}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-200 cursor-pointer hover:bg-zinc-800 data-[selected=true]:bg-zinc-800 rounded-none group"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground cursor-pointer hover:bg-secondary data-[selected=true]:bg-secondary rounded-none group"
                   >
-                    <Clock className="h-4 w-4 text-zinc-500 shrink-0" />
+                    <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="flex-1 truncate">{item.label}</span>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); removeRecent(item.href); }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-500 hover:text-zinc-300"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-muted-foreground"
                       aria-label={`Remove ${item.label} from recent`}
                     >
                       <X className="h-3 w-3" />
@@ -347,7 +347,7 @@ function CommandPalette() {
             {!enabled && (
               <Command.Group
                 heading={
-                  <span className="px-4 py-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  <span className="px-4 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Quick Navigation
                   </span>
                 }
@@ -357,9 +357,9 @@ function CommandPalette() {
                     key={item.href}
                     value={item.label}
                     onSelect={() => handleSelect(item.href, item.label)}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-200 cursor-pointer hover:bg-zinc-800 data-[selected=true]:bg-zinc-800 rounded-none"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground cursor-pointer hover:bg-secondary data-[selected=true]:bg-secondary rounded-none"
                   >
-                    <span className="text-zinc-400">{item.icon}</span>
+                    <span className="text-muted-foreground">{item.icon}</span>
                     {item.label}
                   </Command.Item>
                 ))}
@@ -372,7 +372,7 @@ function CommandPalette() {
                 <Command.Group
                   key={type}
                   heading={
-                    <span className="px-4 py-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                    <span className="px-4 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                       {TYPE_ICON[type]}
                       {TYPE_LABEL[type] ?? type}s
                     </span>
@@ -383,20 +383,20 @@ function CommandPalette() {
                       key={`${item.type}-${item.id}`}
                       value={`${item.type}-${item.id}-${item.title}`}
                       onSelect={() => handleSelect(item.href, item.title)}
-                      className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-zinc-800 data-[selected=true]:bg-zinc-800 rounded-none"
+                      className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-secondary data-[selected=true]:bg-secondary rounded-none"
                     >
                       <span className="shrink-0">{TYPE_ICON[item.type]}</span>
                       <div className="flex-1 min-w-0">
                         <HighlightText
                           highlight={item.titleHighlight}
                           fallback={item.title}
-                          className="text-sm text-zinc-100 truncate block"
+                          className="text-sm text-foreground truncate block"
                         />
                         {item.subtitle && (
                           <HighlightText
                             highlight={item.subtitleHighlight}
                             fallback={item.subtitle}
-                            className="text-xs text-zinc-500 truncate block"
+                            className="text-xs text-muted-foreground truncate block"
                           />
                         )}
                       </div>
@@ -417,7 +417,7 @@ function CommandPalette() {
 
             {/* Source indicator */}
             {enabled && results.length > 0 && source && (
-              <div className="px-4 py-2 flex items-center gap-1.5 text-[10px] text-zinc-600 border-t border-zinc-800 mt-1">
+              <div className="px-4 py-2 flex items-center gap-1.5 text-[10px] text-zinc-600 border-t border-border mt-1">
                 <Database className="h-3 w-3" />
                 {source === "opensearch" ? "Powered by OpenSearch" : "Powered by PostgreSQL fallback"}
               </div>

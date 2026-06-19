@@ -173,7 +173,7 @@ export default function FarmerKYC() {
       <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col items-center justify-center p-6 text-center">
         <ShieldCheck className="w-16 h-16 text-green-400 mb-4" />
         <h2 className="text-white text-xl font-bold mb-2">KYC Approved!</h2>
-        <p className="text-slate-400 text-sm mb-6">Your identity has been verified. You can now add farms and list crops.</p>
+        <p className="text-muted-foreground text-sm mb-6">Your identity has been verified. You can now add farms and list crops.</p>
         <Button onClick={() => navigate("/farmer-farms")} className="bg-green-600 hover:bg-green-700 text-white">
           Add Your Farm
         </Button>
@@ -186,9 +186,9 @@ export default function FarmerKYC() {
       <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col items-center justify-center p-6 text-center">
         <Clock className="w-16 h-16 text-amber-400 mb-4 animate-pulse" />
         <h2 className="text-white text-xl font-bold mb-2">Under Review</h2>
-        <p className="text-slate-400 text-sm mb-2">Your KYC documents are being reviewed.</p>
-        <p className="text-slate-500 text-xs mb-6">Estimated time: 1-2 business days</p>
-        <Button variant="outline" onClick={() => navigate("/farmer-dashboard")} className="border-slate-600 text-slate-300">
+        <p className="text-muted-foreground text-sm mb-2">Your KYC documents are being reviewed.</p>
+        <p className="text-muted-foreground text-xs mb-6">Estimated time: 1-2 business days</p>
+        <Button variant="outline" onClick={() => navigate("/farmer-dashboard")} className="border-border text-muted-foreground">
           Back to Dashboard
         </Button>
       </div>
@@ -210,10 +210,10 @@ export default function FarmerKYC() {
           </div>
         </div>
         <h2 className="text-white text-2xl font-bold mb-2">Documents Submitted!</h2>
-        <p className="text-slate-300 text-sm mb-1">Your KYC documents have been received.</p>
-        <p className="text-slate-400 text-xs mb-6">Our compliance team will review them within <strong className="text-slate-300">1–2 business days</strong>. You’ll be notified once approved.</p>
-        <div className="w-full max-w-xs bg-slate-800/60 border border-slate-700 rounded-xl p-4 mb-6 text-left space-y-2">
-          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">What happens next?</p>
+        <p className="text-muted-foreground text-sm mb-1">Your KYC documents have been received.</p>
+        <p className="text-muted-foreground text-xs mb-6">Our compliance team will review them within <strong className="text-muted-foreground">1–2 business days</strong>. You’ll be notified once approved.</p>
+        <div className="w-full max-w-xs bg-secondary/60 border border-border rounded-xl p-4 mb-6 text-left space-y-2">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">What happens next?</p>
           {[
             { step: "1", text: "Our team reviews your documents" },
             { step: "2", text: "Identity verified against NIN database" },
@@ -222,7 +222,7 @@ export default function FarmerKYC() {
           ].map(({ step, text }) => (
             <div key={step} className="flex items-center gap-3">
               <span className="w-6 h-6 rounded-full bg-green-700/50 text-green-300 text-xs font-bold flex items-center justify-center shrink-0">{step}</span>
-              <span className="text-slate-300 text-sm">{text}</span>
+              <span className="text-muted-foreground text-sm">{text}</span>
             </div>
           ))}
         </div>
@@ -239,13 +239,13 @@ export default function FarmerKYC() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-950 to-slate-950 flex flex-col max-w-md mx-auto" role="main" aria-label="KYC Verification">
       {/* Header */}
-      <div className="p-4 flex items-center gap-3 border-b border-slate-800">
-        <button onClick={() => navigate("/farmer-dashboard")} className="text-slate-400 hover:text-white" aria-label="Back to dashboard" type="button">
+      <div className="p-4 flex items-center gap-3 border-b border-border">
+        <button onClick={() => navigate("/farmer-dashboard")} className="text-muted-foreground hover:text-white" aria-label="Back to dashboard" type="button">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div>
           <h2 className="text-white font-semibold">KYC Verification</h2>
-          <p className="text-slate-400 text-xs">Upload your identity documents</p>
+          <p className="text-muted-foreground text-xs">Upload your identity documents</p>
         </div>
         <Badge className="ml-auto bg-amber-900/60 text-amber-300 border-amber-700 text-xs">
           {kycStatus}
@@ -253,7 +253,7 @@ export default function FarmerKYC() {
       </div>
 
       {/* Progress bar */}
-      <div className="w-full h-1 bg-slate-800" role="progressbar" aria-label="Document upload progress" aria-valuenow={Object.keys(allDocs).length} aria-valuemin={0} aria-valuemax={KYC_DOCS.filter(d => d.required).length}>
+      <div className="w-full h-1 bg-secondary" role="progressbar" aria-label="Document upload progress" aria-valuenow={Object.keys(allDocs).length} aria-valuemin={0} aria-valuemax={KYC_DOCS.filter(d => d.required).length}>
         <div
           className="h-full bg-green-500 transition-all"
           style={{ width: `${(Object.keys(allDocs).length / KYC_DOCS.filter(d => d.required).length) * 100}%` }}
@@ -276,10 +276,10 @@ export default function FarmerKYC() {
           </Card>
         )}
 
-        <Card className="bg-slate-800/60 border-slate-700">
+        <Card className="bg-secondary/60 border-border">
           <CardContent className="p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-            <p className="text-slate-300 text-xs">
+            <p className="text-muted-foreground text-xs">
               All documents are encrypted and stored securely. We only use them to verify your identity as required by the SEC Nigeria.
             </p>
           </CardContent>
@@ -290,7 +290,7 @@ export default function FarmerKYC() {
           const uploaded = !!allDocs[doc.id];
           const isUploading = !!uploadingDoc[doc.id];
           return (
-            <Card key={doc.id} className={`border ${uploaded ? "bg-green-950/30 border-green-800/40" : "bg-slate-800 border-slate-700"}`}>
+            <Card key={doc.id} className={`border ${uploaded ? "bg-green-950/30 border-green-800/40" : "bg-secondary border-border"}`}>
               <CardContent className="p-4">
                 {/* Hidden file input */}
                 <input
@@ -307,13 +307,13 @@ export default function FarmerKYC() {
                   }}
                 />
                 <div className="flex items-start gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${uploaded ? "bg-green-500/20" : "bg-slate-700"}`}>
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${uploaded ? "bg-green-500/20" : "bg-muted"}`}>
                     {isUploading ? (
                       <Loader2 className="w-5 h-5 text-green-400 animate-spin" />
                     ) : uploaded ? (
                       <CheckCircle2 className="w-5 h-5 text-green-400" />
                     ) : (
-                      <FileText className="w-5 h-5 text-slate-400" />
+                      <FileText className="w-5 h-5 text-muted-foreground" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -321,7 +321,7 @@ export default function FarmerKYC() {
                       {doc.label}
                       {doc.required && <span className="text-red-400 ml-1">*</span>}
                     </p>
-                    <p className="text-slate-400 text-xs mt-0.5">{doc.description}</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">{doc.description}</p>
                     {uploaded && (
                       <p className="text-green-400 text-xs mt-1 truncate">
                         ✓ Uploaded — <a href={allDocs[doc.id]} target="_blank" rel="noopener noreferrer" className="underline">View</a>
@@ -331,7 +331,7 @@ export default function FarmerKYC() {
                   {uploaded && (
                     <button
                       onClick={() => setUploadedDocs((prev) => { const n = { ...prev }; delete n[doc.id]; return n; })}
-                      className="text-slate-500 hover:text-red-400 shrink-0"
+                      className="text-muted-foreground hover:text-red-400 shrink-0"
                       aria-label={`Remove ${doc.label}`}
                       type="button"
                     >
@@ -345,7 +345,7 @@ export default function FarmerKYC() {
                     variant="outline"
                     onClick={() => triggerUpload(doc.id)}
                     disabled={isUploading}
-                    className={`flex-1 h-9 text-xs ${uploaded ? "border-green-700 text-green-400 hover:bg-green-950/40" : "border-slate-600 text-slate-300 hover:bg-slate-700"}`}
+                    className={`flex-1 h-9 text-xs ${uploaded ? "border-green-700 text-green-400 hover:bg-green-950/40" : "border-border text-muted-foreground hover:bg-muted"}`}
                   >
                     {isUploading ? (
                       <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />Uploading…</>
@@ -360,7 +360,7 @@ export default function FarmerKYC() {
                     variant="outline"
                     onClick={() => triggerUpload(doc.id)}
                     disabled={isUploading}
-                    className="h-9 w-9 p-0 border-slate-600 text-slate-300 hover:bg-slate-700"
+                    className="h-9 w-9 p-0 border-border text-muted-foreground hover:bg-muted"
                     title="Take photo"
                   >
                     <Camera className="w-3.5 h-3.5" />
@@ -379,7 +379,7 @@ export default function FarmerKYC() {
             stakeholderType="FARMER"
             documentTypeHint="NIN_SLIP"
             onResult={(r) => setAnalysisResult({ overallRiskLevel: r.overallRiskLevel, overallScore: r.overallScore })}
-            className="bg-slate-800/60 border border-slate-700 rounded-lg p-3"
+            className="bg-secondary/60 border border-border rounded-lg p-3"
           />
         )}
 
@@ -400,7 +400,7 @@ export default function FarmerKYC() {
               <Button
                 onClick={() => setLivenessOpen(true)}
                 variant="outline"
-                className="w-full h-11 border-slate-600 text-slate-200 hover:bg-slate-700"
+                className="w-full h-11 border-border text-foreground hover:bg-muted"
               >
                 <Camera className="w-4 h-4 mr-2" />
                 Complete Liveness Check <span className="text-red-400 ml-1">*</span>
@@ -427,7 +427,7 @@ export default function FarmerKYC() {
               "Submit for Verification"
             )}
           </Button>
-          <p className="text-center text-slate-500 text-xs mt-2">
+          <p className="text-center text-muted-foreground text-xs mt-2">
             Fields marked with * are required
           </p>
         </div>
@@ -436,11 +436,11 @@ export default function FarmerKYC() {
       {/* Full-screen submission overlay */}
       {submitKYCMut.isPending && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-slate-900/90 border border-green-800/40 shadow-2xl">
+          <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-card/90 border border-green-800/40 shadow-2xl">
             <Loader2 className="w-12 h-12 text-green-400 animate-spin" />
             <div className="text-center">
               <p className="text-white font-semibold text-lg">Submitting KYC Documents</p>
-              <p className="text-slate-400 text-sm mt-1">Please wait while we securely process your submission…</p>
+              <p className="text-muted-foreground text-sm mt-1">Please wait while we securely process your submission…</p>
             </div>
             <div className="flex gap-1.5 mt-1">
               {[0, 1, 2].map((i) => (

@@ -22,14 +22,7 @@ function calcMovePct(priceBefore: number, priceAfter: number): number {
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 
-// ─── In-memory fallback stores ────────────────────────────────────────────────
-type MemCBRule = { id: number; instrument: string; assetClass: string; triggerPct: string; windowMinutes: number; haltDurationMinutes: number; isActive: boolean; notes: string | null; createdBy: number | null; createdAt: Date; updatedAt: Date; };
-type MemCBEvent = { id: number; ruleId: number | null; instrument: string; assetClass: string; triggerPct: string; haltDurationMinutes: number; haltStartAt: Date; haltEndAt: Date; liftedAt: Date | null; liftedBy: number | null; status: string; notes: string | null; triggeredBy: number | null; createdAt: Date; };
-type MemWTFlag = { id: number; userId: number; orderId: number | null; counterpartyId: number | null; instrument: string; flaggedAt: Date; totalValue: string; reviewStatus: string; reviewedBy: number | null; reviewedAt: Date | null; penaltyApplied: string | null; notes: string | null; };
-const _cbRules = new Map<number, MemCBRule>();
-export const _cbEvents = new Map<number, MemCBEvent>();
-const _wtFlags = new Map<number, MemWTFlag>();
-let _cbrSeq = 1; let _cbeSeq = 1; let _wtSeq = 1;
+let _wtSeq = 1;
 
 export const surveillanceRouter = router({
   // ─── Circuit Breaker Rules ───────────────────────────────────────────────
@@ -46,18 +39,7 @@ export const surveillanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) {
-        const id = _cbrSeq++;
-        const now = new Date();
-        const rule: MemCBRule = {
-          id, instrument: input.instrument, assetClass: input.assetClass,
-          triggerPct: String(input.triggerPct), windowMinutes: input.windowMinutes,
-          haltDurationMinutes: input.haltDurationMinutes, isActive: true,
-          notes: input.notes ?? null, createdBy: ctx.user.id, createdAt: now, updatedAt: now,
-        };
-        _cbRules.set(id, rule);
-        return rule;
-      }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [rule] = await db.insert(circuitBreakerRules).values({
         instrument: input.instrument,
@@ -79,12 +61,7 @@ export const surveillanceRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        let rules = Array.from(_cbRules.values());
-        if (input.activeOnly) rules = rules.filter(r => r.isActive);
-        if (input.assetClass) rules = rules.filter(r => r.assetClass === input.assetClass);
-        return rules.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const conditions = [];
       if (input.activeOnly) conditions.push(eq(circuitBreakerRules.isActive, true));
@@ -107,17 +84,7 @@ export const surveillanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) {
-        const rule = _cbRules.get(input.ruleId);
-        if (!rule) throw new TRPCError({ code: "NOT_FOUND" });
-        if (input.triggerPct !== undefined) rule.triggerPct = String(input.triggerPct);
-        if (input.windowMinutes !== undefined) rule.windowMinutes = input.windowMinutes;
-        if (input.haltDurationMinutes !== undefined) rule.haltDurationMinutes = input.haltDurationMinutes;
-        if (input.isActive !== undefined) rule.isActive = input.isActive;
-        if (input.notes !== undefined) rule.notes = input.notes;
-        rule.updatedAt = new Date();
-        return rule;
-      }
+            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.triggerPct !== undefined) updates.triggerPct = String(input.triggerPct);
@@ -139,11 +106,7 @@ export const surveillanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const deleted = _cbRules.delete(input.ruleId);
-        if (!deleted) throw new TRPCError({ code: "NOT_FOUND" });
-        return { success: true };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [deleted] = await db.delete(circuitBreakerRules)
         .where(eq(circuitBreakerRules.id, input.ruleId))
@@ -164,10 +127,7 @@ export const surveillanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        // Return no halt (DB unavailable, no real data)
-        return { halted: false, triggered: false, movePct: 0 };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       // Check if already halted
       const now = new Date();
@@ -225,13 +185,7 @@ export const surveillanceRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        let events = Array.from(_cbEvents.values());
-        if (input.instrument) events = events.filter(e => e.instrument === input.instrument);
-        if (input.status) events = events.filter(e => e.status === input.status);
-        const offset = (input.page - 1) * input.limit;
-        return { events: events.slice(offset, offset + input.limit), total: events.length };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const offset = (input.page - 1) * input.limit;
       const conditions = [];
@@ -253,7 +207,7 @@ export const surveillanceRouter = router({
     .query(async ({ ctx }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) { const now = new Date(); return Array.from(_cbEvents.values()).filter(e => e.status === "ACTIVE" && e.haltEndAt > now); }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const now = new Date();
       // Auto-expire halts that have passed their haltUntil
@@ -280,14 +234,7 @@ export const surveillanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const event = _cbEvents.get(input.eventId);
-        if (!event || event.status !== "ACTIVE") throw new TRPCError({ code: "NOT_FOUND", message: "Active halt not found" });
-        event.status = "LIFTED";
-        event.liftedAt = new Date();
-        event.liftedBy = ctx.user.id;
-        return event;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [updated] = await db.update(circuitBreakerEvents)
         .set({ status: "LIFTED", liftedAt: new Date(), liftedBy: ctx.user.id, notes: input.notes ?? null })
@@ -314,26 +261,7 @@ export const surveillanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const id = _cbeSeq++;
-        const now = new Date();
-        const movePct = calcMovePct(input.priceBefore, input.priceAfter);
-        const haltUntil = new Date(now.getTime() + input.haltDurationMinutes * 60_000);
-        const event = {
-          id, ruleId: input.ruleId ?? null, instrument: input.instrument,
-          assetClass: "COMMODITY",
-          triggerPct: String(movePct.toFixed(4)),
-          actualMovePct: String(movePct.toFixed(4)),
-          priceBefore: String(input.priceBefore),
-          priceAfter: String(input.priceAfter),
-          haltDurationMinutes: input.haltDurationMinutes,
-          haltStartAt: now, haltEndAt: haltUntil, haltUntil,
-          liftedAt: null, liftedBy: null, status: "ACTIVE",
-          notes: null, triggeredBy: ctx.user.id, createdAt: now, haltedAt: now,
-        };
-        _cbEvents.set(id, event as any);
-        return event;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const movePct = calcMovePct(input.priceBefore, input.priceAfter);
       const haltUntil = new Date(Date.now() + input.haltDurationMinutes * 60_000);
@@ -376,22 +304,7 @@ export const surveillanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const id = _wtSeq++;
-        const flag = {
-          id, userId: input.userId, buyOrderId: input.buyOrderId, sellOrderId: input.sellOrderId,
-          instrument: input.instrument, assetClass: "COMMODITY",
-          quantity: input.quantity ? String(input.quantity) : null,
-          windowMinutes: input.windowMinutes,
-          flaggedAt: new Date(), detectedAt: new Date(),
-          status: "PENDING" as const,
-          reviewStatus: "PENDING",
-          reviewedBy: null, reviewedAt: null,
-          penaltyApplied: false, reviewNotes: input.notes ?? null,
-        };
-        _wtFlags.set(id, flag as any);
-        return flag;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [flag] = await db.insert(washTradeFlags).values({
         userId: input.userId,
@@ -424,7 +337,7 @@ export const surveillanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) { return { detected: false, flags: [] }; }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const windowStart = new Date(Date.now() - input.windowMinutes * 60_000);
 
@@ -498,13 +411,7 @@ export const surveillanceRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        let flags = Array.from(_wtFlags.values()) as any[];
-        if (input.status) flags = flags.filter(f => f.status === input.status);
-        if (input.userId) flags = flags.filter(f => f.userId === input.userId);
-        const offset = (input.page - 1) * input.limit;
-        return { flags: flags.slice(offset, offset + input.limit), total: flags.length };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const offset = (input.page - 1) * input.limit;
       const conditions = [];
@@ -532,18 +439,7 @@ export const surveillanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const flag = _wtFlags.get(input.flagId) as any;
-        if (!flag) throw new TRPCError({ code: "NOT_FOUND", message: "Wash trade flag not found" });
-        if (flag.status !== "PENDING") throw new TRPCError({ code: "BAD_REQUEST", message: `Flag is already ${flag.status} and cannot be reviewed again` });
-        flag.status = input.decision;
-        flag.reviewStatus = input.decision;
-        flag.reviewedBy = ctx.user.id;
-        flag.reviewedAt = new Date();
-        flag.penaltyApplied = input.penaltyApplied;
-        flag.reviewNotes = input.reviewNotes ?? null;
-        return flag;
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       // Fetch the flag first to check its current status
       const [existing] = await db.select({ id: washTradeFlags.id, status: washTradeFlags.status })
@@ -573,24 +469,7 @@ export const surveillanceRouter = router({
     .query(async ({ ctx }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) {
-        const now = new Date();
-        return {
-          circuitBreakers: {
-            totalRules: _cbRules.size,
-            activeRules: Array.from(_cbRules.values()).filter(r => r.isActive).length,
-            totalHalts: _cbEvents.size,
-            totalHaltsToday: _cbEvents.size,
-            activeHalts: Array.from(_cbEvents.values()).filter((e: any) => e.status === "ACTIVE" && (e.haltEndAt || e.haltUntil) > now).length,
-          },
-          washTrades: {
-            total: _wtFlags.size,
-            pendingFlags: Array.from(_wtFlags.values()).filter((f: any) => f.status === "PENDING").length,
-            confirmedFlags: Array.from(_wtFlags.values()).filter((f: any) => f.status === "CONFIRMED").length,
-            dismissedFlags: Array.from(_wtFlags.values()).filter((f: any) => f.status === "DISMISSED").length,
-          },
-        };
-      }
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 5
       const now = new Date();
 

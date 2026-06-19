@@ -8,7 +8,7 @@ import { z } from "zod";
 import { writeAuditLog } from "../audit";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, orders, warehouseReceipts, depositRequests, cropListings } from "../../drizzle/schema";
+import { users, orders, warehouseReceipts, depositRequests, cropListings, aiSearchHistory } from "../../drizzle/schema";
 import { ilike, or, desc, sql, and, gte, lte, eq } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 
@@ -565,6 +565,46 @@ export const searchRouter = router({
       }
 
       results.sort((a, b) => b.score - a.score);
+
+      // ── Persist search history (keep last 20 per user) ────────────────────
+      try {
+        await db.insert(aiSearchHistory).values({
+          userId: ctx.user.id,
+          query: input.query,
+          parsedIntent: parsedIntent as any,
+          resultCount: results.length,
+        });
+        // Prune to last 20 entries for this user
+        const oldest = await db
+          .select({ id: aiSearchHistory.id })
+          .from(aiSearchHistory)
+          .where(eq(aiSearchHistory.userId, ctx.user.id))
+          .orderBy(desc(aiSearchHistory.createdAt))
+          .offset(20)
+          .limit(1000);
+        if (oldest.length > 0) {
+          const idsToDelete = oldest.map((r) => r.id);
+          for (const id of idsToDelete) {
+            await db.delete(aiSearchHistory).where(eq(aiSearchHistory.id, id));
+          }
+        }
+      } catch (e) {
+        console.warn("[Search] Failed to persist search history:", (e as Error).message);
+      }
+
       return { results, parsedIntent };
     }),
+
+  // ── Get recent AI search history for the current user ──────────────────────
+  searchHistory: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db
+      .select()
+      .from(aiSearchHistory)
+      .where(eq(aiSearchHistory.userId, ctx.user.id))
+      .orderBy(desc(aiSearchHistory.createdAt))
+      .limit(10);
+    return rows;
+  }),
 });

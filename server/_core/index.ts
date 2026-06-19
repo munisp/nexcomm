@@ -37,6 +37,7 @@ import { disconnectKafkaProducer } from "../kafka/kafkaProducer";
 import { startMojaloopHubHealthJob } from "../jobs/mojaloopHubHealthJob";
 import { spatialProxyRouter } from "../routes/spatialProxy";
 import { haStatusRouter } from "../routes/haStatusRoute";
+import { sseRouter } from "../sseRouter";
 import { suspiciousPatternDetector, ipBlocklistMiddleware, securityHeaders } from "../security";
 import { ddosProtection, slowLorisGuard, tradingLimiter, transferLimiter, applyDDoSProtections } from "../ddos-protection";
 import { ddosCircuitBreaker, bruteForceProtection, inputSanitization, additionalSecurityHeaders, sessionFixationPrevention, csrfProtection, csrfTokenEndpoint } from "../security-middleware";
@@ -233,6 +234,8 @@ async function startServer() {
 
   // HA status REST endpoint — /api/ha/status, /api/ha/status/metrics, /api/ha/status/engines
   app.use(haStatusRouter);
+  // SSE real-time order fill notifications — GET /api/sse/order-fills
+  app.use(sseRouter);
   // CSRF token endpoint — SPA calls this on boot to get a fresh token
   app.get("/api/csrf-token", csrfTokenEndpoint);
   // CSRF protection middleware — validates double-submit cookie on all state-changing requests

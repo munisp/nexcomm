@@ -89,7 +89,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   ACTIVE:        { label: "Active",        color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", icon: <CheckCircle2 className="w-3 h-3" /> },
   LOCKED:        { label: "Locked",        color: "bg-amber-500/15 text-amber-400 border-amber-500/30",       icon: <Lock className="w-3 h-3" /> },
   FRACTIONALIZED:{ label: "Fractionalized",color: "bg-purple-500/15 text-purple-400 border-purple-500/30",   icon: <Split className="w-3 h-3" /> },
-  REDEEMED:      { label: "Redeemed",      color: "bg-slate-500/15 text-slate-400 border-slate-500/30",      icon: <Unlock className="w-3 h-3" /> },
+  REDEEMED:      { label: "Redeemed",      color: "bg-slate-500/15 text-muted-foreground border-slate-500/30",      icon: <Unlock className="w-3 h-3" /> },
 };
 
 const CHAIN_CONFIG: Record<string, { label: string; color: string }> = {
@@ -100,7 +100,7 @@ const CHAIN_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] ?? { label: status, color: "bg-slate-500/15 text-slate-400 border-slate-500/30", icon: null };
+  const cfg = STATUS_CONFIG[status] ?? { label: status, color: "bg-slate-500/15 text-muted-foreground border-slate-500/30", icon: null };
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>
       {cfg.icon}{cfg.label}
@@ -109,7 +109,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function ChainBadge({ chain }: { chain: string }) {
-  const cfg = CHAIN_CONFIG[chain?.toLowerCase()] ?? { label: chain, color: "bg-slate-500/15 text-slate-400 border-slate-500/30" };
+  const cfg = CHAIN_CONFIG[chain?.toLowerCase()] ?? { label: chain, color: "bg-slate-500/15 text-muted-foreground border-slate-500/30" };
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>
       <Layers className="w-3 h-3" />{cfg.label}
@@ -146,7 +146,7 @@ function TokenHistoryDialog({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl bg-slate-900 border-slate-700 text-slate-100">
+      <DialogContent className="max-w-3xl bg-card border-border text-foreground">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-amber-400">
             <History className="w-5 h-5" />
@@ -155,46 +155,46 @@ function TokenHistoryDialog({
         </DialogHeader>
 
         {/* Token Summary */}
-        <div className="grid grid-cols-3 gap-3 p-3 bg-slate-800/60 rounded-lg border border-slate-700 text-sm">
+        <div className="grid grid-cols-3 gap-3 p-3 bg-secondary/60 rounded-lg border border-border text-sm">
           <div>
-            <p className="text-slate-400 text-xs mb-0.5">Commodity</p>
-            <p className="font-semibold text-slate-100">{token.commodity_type}</p>
+            <p className="text-muted-foreground text-xs mb-0.5">Commodity</p>
+            <p className="font-semibold text-foreground">{token.commodity_type}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-xs mb-0.5">Quantity</p>
-            <p className="font-semibold text-slate-100">{token.quantity} {token.unit}</p>
+            <p className="text-muted-foreground text-xs mb-0.5">Quantity</p>
+            <p className="font-semibold text-foreground">{token.quantity} {token.unit}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-xs mb-0.5">Chain</p>
+            <p className="text-muted-foreground text-xs mb-0.5">Chain</p>
             <ChainBadge chain={token.chain} />
           </div>
           <div>
-            <p className="text-slate-400 text-xs mb-0.5">Status</p>
+            <p className="text-muted-foreground text-xs mb-0.5">Status</p>
             <StatusBadge status={token.status} />
           </div>
           <div>
-            <p className="text-slate-400 text-xs mb-0.5">Warehouse Receipt</p>
-            <p className="font-mono text-xs text-slate-300">{token.warehouse_receipt_id ?? "—"}</p>
+            <p className="text-muted-foreground text-xs mb-0.5">Warehouse Receipt</p>
+            <p className="font-mono text-xs text-muted-foreground">{token.warehouse_receipt_id ?? "—"}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-xs mb-0.5">Contract / Peer</p>
-            <p className="font-mono text-xs text-slate-300">{truncate(token.contract_address ?? "", 16)}</p>
+            <p className="text-muted-foreground text-xs mb-0.5">Contract / Peer</p>
+            <p className="font-mono text-xs text-muted-foreground">{truncate(token.contract_address ?? "", 16)}</p>
           </div>
         </div>
 
         {/* History Timeline */}
         <div className="mt-2">
-          <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
             <History className="w-4 h-4 text-amber-400" />
             Transaction History ({history.length} events)
           </h3>
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-8 text-slate-400">
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
               <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Loading on-chain history…
             </div>
           ) : history.length === 0 ? (
-            <div className="flex flex-col items-center py-8 text-slate-500 gap-2">
+            <div className="flex flex-col items-center py-8 text-muted-foreground gap-2">
               <AlertCircle className="w-8 h-8" />
               <p className="text-sm">No history available — blockchain service may be offline</p>
             </div>
@@ -203,7 +203,7 @@ function TokenHistoryDialog({
               {history.map((entry, idx) => (
                 <div
                   key={entry.tx_id ?? idx}
-                  className="flex gap-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700/60 text-sm"
+                  className="flex gap-3 p-3 bg-secondary/50 rounded-lg border border-border/60 text-sm"
                 >
                   {/* Timeline dot */}
                   <div className="flex flex-col items-center">
@@ -211,26 +211,26 @@ function TokenHistoryDialog({
                       entry.is_delete ? "bg-red-500" : idx === 0 ? "bg-emerald-500" : "bg-amber-500"
                     }`} />
                     {idx < history.length - 1 && (
-                      <div className="w-px flex-1 bg-slate-700 mt-1" />
+                      <div className="w-px flex-1 bg-muted mt-1" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="font-medium text-slate-200">
+                      <span className="font-medium text-foreground">
                         {entry.event_type ?? (entry.is_delete ? "DELETE" : idx === 0 ? "MINT" : "UPDATE")}
                       </span>
-                      <span className="text-xs text-slate-500 flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />{formatTs(entry.timestamp)}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-400">
-                      <span>Tx: <span className="font-mono text-slate-300">{truncate(entry.tx_id, 16)}</span></span>
-                      {entry.block_number && <span>Block: <span className="text-slate-300">{entry.block_number}</span></span>}
-                      {entry.from_address && <span>From: <span className="font-mono text-slate-300">{truncate(entry.from_address, 14)}</span></span>}
-                      {entry.to_address && <span>To: <span className="font-mono text-slate-300">{truncate(entry.to_address, 14)}</span></span>}
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>Tx: <span className="font-mono text-muted-foreground">{truncate(entry.tx_id, 16)}</span></span>
+                      {entry.block_number && <span>Block: <span className="text-muted-foreground">{entry.block_number}</span></span>}
+                      {entry.from_address && <span>From: <span className="font-mono text-muted-foreground">{truncate(entry.from_address, 14)}</span></span>}
+                      {entry.to_address && <span>To: <span className="font-mono text-muted-foreground">{truncate(entry.to_address, 14)}</span></span>}
                       {entry.value?.status && <span>Status: <StatusBadge status={entry.value.status} /></span>}
                       {entry.value?.quantity !== undefined && (
-                        <span>Qty: <span className="text-slate-300">{entry.value.quantity}</span></span>
+                        <span>Qty: <span className="text-muted-foreground">{entry.value.quantity}</span></span>
                       )}
                     </div>
                   </div>
@@ -306,11 +306,11 @@ export default function TokenExplorer() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <Coins className="w-7 h-7 text-amber-400" />
               Commodity Token Explorer
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               Browse all on-chain commodity tokens · view full provenance via Hyperledger GetHistory
             </p>
           </div>
@@ -318,7 +318,7 @@ export default function TokenExplorer() {
             variant="outline"
             size="sm"
             onClick={() => refetch()}
-            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            className="border-border text-muted-foreground hover:bg-muted"
           >
             <RefreshCw className="w-4 h-4 mr-1.5" />
             Refresh
@@ -326,20 +326,20 @@ export default function TokenExplorer() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-3 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+        <div className="flex flex-wrap gap-3 p-4 bg-secondary/50 rounded-xl border border-border">
           <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search by token ID, commodity, owner, tx hash…" value={search} onChange={e => setSearch(e.target.value)}
-              className="pl-9 bg-slate-900 border-slate-600 text-slate-100 placeholder:text-slate-500"
+              className="pl-9 bg-card border-border text-foreground placeholder:text-muted-foreground"
             />
           </div>
           <Select value={filterCommodity || "all"} onValueChange={v => { setFilterCommodity(v === "all" ? "" : v); handleFilterChange(); }}>
-            <SelectTrigger className="w-44 bg-slate-900 border-slate-600 text-slate-100">
-              <Package className="w-4 h-4 mr-1.5 text-slate-400" />
+            <SelectTrigger className="w-44 bg-card border-border text-foreground">
+              <Package className="w-4 h-4 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="Commodity" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-700 text-slate-100">
+            <SelectContent className="bg-card border-border text-foreground">
               <SelectItem value="all">All Commodities</SelectItem>
               <SelectItem value="MAIZE">Maize</SelectItem>
               <SelectItem value="COCOA">Cocoa</SelectItem>
@@ -353,11 +353,11 @@ export default function TokenExplorer() {
             </SelectContent>
           </Select>
           <Select value={filterStatus} onValueChange={v => { setFilterStatus(v); handleFilterChange(); }}>
-            <SelectTrigger className="w-40 bg-slate-900 border-slate-600 text-slate-100">
-              <Filter className="w-4 h-4 mr-1.5 text-slate-400" />
+            <SelectTrigger className="w-40 bg-card border-border text-foreground">
+              <Filter className="w-4 h-4 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="Status" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-700 text-slate-100">
+            <SelectContent className="bg-card border-border text-foreground">
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="ACTIVE">Active</SelectItem>
               <SelectItem value="LOCKED">Locked</SelectItem>
@@ -366,11 +366,11 @@ export default function TokenExplorer() {
             </SelectContent>
           </Select>
           <Select value={filterChain} onValueChange={v => { setFilterChain(v); handleFilterChange(); }}>
-            <SelectTrigger className="w-44 bg-slate-900 border-slate-600 text-slate-100">
-              <Layers className="w-4 h-4 mr-1.5 text-slate-400" />
+            <SelectTrigger className="w-44 bg-card border-border text-foreground">
+              <Layers className="w-4 h-4 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="Chain" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-700 text-slate-100">
+            <SelectContent className="bg-card border-border text-foreground">
               <SelectItem value="all">All Chains</SelectItem>
               <SelectItem value="hyperledger">Hyperledger Fabric</SelectItem>
               <SelectItem value="ethereum">Ethereum</SelectItem>
@@ -388,46 +388,46 @@ export default function TokenExplorer() {
             { label: "Locked", value: tokens.filter(t => t.status === "LOCKED").length, icon: <Lock className="w-4 h-4 text-amber-400" /> },
             { label: "Fractionalized", value: tokens.filter(t => t.status === "FRACTIONALIZED").length, icon: <Split className="w-4 h-4 text-purple-400" /> },
           ].map(stat => (
-            <div key={stat.label} className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+            <div key={stat.label} className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg border border-border">
               {stat.icon}
               <div>
-                <p className="text-xl font-bold text-slate-100">{stat.value}</p>
-                <p className="text-xs text-slate-400">{stat.label}</p>
+                <p className="text-xl font-bold text-foreground">{stat.value}</p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
               </div>
             </div>
           ))}
         </div>
 
         {/* Token Table */}
-        <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+        <div className="bg-secondary/50 rounded-xl border border-border overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow className="border-slate-700 hover:bg-transparent">
-                <TableHead className="text-slate-400">Token ID</TableHead>
-                <TableHead className="text-slate-400">Commodity</TableHead>
-                <TableHead className="text-slate-400">Quantity</TableHead>
-                <TableHead className="text-slate-400">Owner</TableHead>
-                <TableHead className="text-slate-400">Chain</TableHead>
-                <TableHead className="text-slate-400">Status</TableHead>
-                <TableHead className="text-slate-400">Warehouse Receipt</TableHead>
-                <TableHead className="text-slate-400">Minted</TableHead>
-                <TableHead className="text-slate-400 text-right">Actions</TableHead>
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="text-muted-foreground">Token ID</TableHead>
+                <TableHead className="text-muted-foreground">Commodity</TableHead>
+                <TableHead className="text-muted-foreground">Quantity</TableHead>
+                <TableHead className="text-muted-foreground">Owner</TableHead>
+                <TableHead className="text-muted-foreground">Chain</TableHead>
+                <TableHead className="text-muted-foreground">Status</TableHead>
+                <TableHead className="text-muted-foreground">Warehouse Receipt</TableHead>
+                <TableHead className="text-muted-foreground">Minted</TableHead>
+                <TableHead className="text-muted-foreground text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i} className="border-slate-700">
+                  <TableRow key={i} className="border-border">
                     {Array.from({ length: 9 }).map((_, j) => (
                       <TableCell key={j}>
-                        <div className="h-4 bg-slate-700/60 rounded animate-pulse" />
+                        <div className="h-4 bg-muted/60 rounded animate-pulse" />
                       </TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : filteredTokens.length === 0 ? (
-                <TableRow className="border-slate-700">
-                  <TableCell colSpan={9} className="text-center py-12 text-slate-500">
+                <TableRow className="border-border">
+                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <Coins className="w-10 h-10 text-slate-600" />
                       <p className="font-medium">No tokens found</p>
@@ -443,21 +443,21 @@ export default function TokenExplorer() {
                 filteredTokens.map(token => (
                   <TableRow
                     key={token.token_id}
-                    className="border-slate-700 hover:bg-slate-700/30 cursor-pointer"
+                    className="border-border hover:bg-muted/30 cursor-pointer"
                     onClick={() => setSelectedToken(token)}
                   >
                     <TableCell className="font-mono text-xs text-amber-400">
                       {truncate(token.token_id, 16)}
                     </TableCell>
-                    <TableCell className="font-medium text-slate-200">{token.commodity_type}</TableCell>
-                    <TableCell className="text-slate-300">{token.quantity} <span className="text-slate-500 text-xs">{token.unit}</span></TableCell>
-                    <TableCell className="font-mono text-xs text-slate-400">{truncate(token.owner_id, 14)}</TableCell>
+                    <TableCell className="font-medium text-foreground">{token.commodity_type}</TableCell>
+                    <TableCell className="text-muted-foreground">{token.quantity} <span className="text-muted-foreground text-xs">{token.unit}</span></TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{truncate(token.owner_id, 14)}</TableCell>
                     <TableCell><ChainBadge chain={token.chain} /></TableCell>
                     <TableCell><StatusBadge status={token.status} /></TableCell>
-                    <TableCell className="font-mono text-xs text-slate-400">
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {token.warehouse_receipt_id ? truncate(token.warehouse_receipt_id, 14) : "—"}
                     </TableCell>
-                    <TableCell className="text-xs text-slate-500">{formatTs(token.created_at)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatTs(token.created_at)}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="ghost"
@@ -478,7 +478,7 @@ export default function TokenExplorer() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm text-slate-400">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>
               Showing {((page - 1) * LIMIT) + 1}–{Math.min(page * LIMIT, total)} of {total} tokens
             </span>
@@ -488,11 +488,11 @@ export default function TokenExplorer() {
                 size="sm"
                 disabled={page <= 1}
                 onClick={() => setPage(p => p - 1)}
-                className="border-slate-600 text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+                className="border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <span className="px-3 py-1 bg-slate-800 rounded border border-slate-700">
+              <span className="px-3 py-1 bg-secondary rounded border border-border">
                 {page} / {totalPages}
               </span>
               <Button
@@ -500,7 +500,7 @@ export default function TokenExplorer() {
                 size="sm"
                 disabled={page >= totalPages}
                 onClick={() => setPage(p => p + 1)}
-                className="border-slate-600 text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+                className="border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
