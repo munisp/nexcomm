@@ -976,16 +976,16 @@
 
 ## UX Enhancements (Jun 2026)
 
-- [ ] Backend: profileRouter.dashboard — user account details, order stats, positions, recent fills from PostgreSQL
-- [ ] Backend: profileRouter.orderHistory — paginated order history with filters (status, asset class, date range)
-- [ ] Backend: searchRouter.aiSearch — LLM natural language query → structured filters → PostgreSQL results
-- [ ] Frontend: UserProfileDashboard page — account card, order history table, positions, activity stats
-- [ ] Frontend: Add /profile route to App.tsx and DashboardLayout sidebar
-- [ ] Frontend: AISearchBar component — natural language input, result cards with entity type badges
-- [ ] Frontend: Global search modal (Cmd+K) wired to AISearchBar
-- [ ] Frontend: Loading skeletons for Orders, Portfolio, Markets, Trade pages
-- [ ] Frontend: Toast notifications for order create/cancel/amend, deposit, withdrawal, alert set/delete
-- [ ] Frontend: Optimistic updates for watchlist add/remove and price alert toggle
+- [x] Backend: profileRouter.dashboard — user account details, order stats, positions, recent fills from PostgreSQL
+- [x] Backend: profileRouter.orderHistory — paginated order history with filters (status, asset class, date range)
+- [x] Backend: searchRouter.aiSearch — LLM natural language query → structured filters → PostgreSQL results
+- [x] Frontend: UserProfileDashboard page — account card, order history table, positions, activity stats
+- [x] Frontend: Add /profile route to App.tsx and DashboardLayout sidebar
+- [x] Frontend: AISearchBar component — natural language input, result cards with entity type badges
+- [x] Frontend: Global search modal (Cmd+K) wired to AISearchBar
+- [x] Frontend: Loading skeletons for Orders, Portfolio, Markets, Trade pages
+- [x] Frontend: Toast notifications for order create/cancel/amend, deposit, withdrawal, alert set/delete
+- [x] Frontend: Optimistic updates for watchlist add/remove and price alert toggle
 
 ## Round N — UX Enhancements (Jun 2026)
 - [x] User Profile Dashboard page (/profile) with account details, order stats, open positions, recent fills, watchlist count
