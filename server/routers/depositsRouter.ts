@@ -17,6 +17,7 @@ import { publishFluvioEvent } from "../fluvio/fluvioClient";
 import { FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { triggerTemporalWorkflow } from "../temporal/temporalClient";
 import { ingestDeposit } from "../lakehouse";
+import { FundFlow } from "../fundFlow";
 
 export const depositsRouter = router({
   // LIST deposit requests for current user
@@ -196,6 +197,13 @@ export const depositsRouter = router({
           status: "pending",
           correlationId: String(deposit.id),
         });
+        // FundFlow: unified middleware orchestration (Dapr pub/sub + Redis idempotency)
+        FundFlow.deposit({
+          depositId: String(deposit.id),
+          userId: ctx.user.id,
+          amount: parseFloat(input.quantity) || 0,
+          currency: "NGN",
+        }).catch(() => {});
       });
 
       return deposit;

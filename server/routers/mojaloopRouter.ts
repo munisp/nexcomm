@@ -24,6 +24,7 @@ import { emitMojaloopTransferInitiated, emitMojaloopQuoteAccepted } from "../kaf
 import { produce, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { settleCrossBorder } from "../gatewayClient";
 import { ingestCrossBorderTransfer } from "../lakehouse";
+import { FundFlow } from "../fundFlow";
 
 const MOJALOOP_ADAPTER_URL =
   process.env.MOJALOOP_ADAPTER_URL ?? "http://localhost:4001";
@@ -278,6 +279,20 @@ export const mojaloopRouter = router({
         ilpPacket: quote.ilpPacket,
         status: "initiated",
         correlationId: transfer.transferId,
+      });
+      // FundFlow: unified middleware orchestration for cross-border transfer
+      setImmediate(() => {
+        FundFlow.crossBorder({
+          transferId: transfer.transferId,
+          userId: ctx.user.id,
+          amount: input.amount,
+          sourceCurrency: input.currency,
+          targetCurrency: input.currency,
+          payerFspId: "nexcom-exchange",
+          payeeFspId: input.payeeFspId,
+          ilpPacket: quote.ilpPacket,
+          condition: quote.condition,
+        }).catch(() => {});
       });
       return {
         transferId: transfer.transferId,

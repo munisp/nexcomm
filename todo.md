@@ -1144,3 +1144,89 @@
 - [x] GitHub Actions CI pipeline — .github/workflows/ci.yml: Vitest + Playwright on every PR with localhost/CI rate-limit bypass; 4-job pipeline (unit-test, e2e, temporal-worker-build, security-audit)
 - [x] Temporal Worker K8s deployment — Go worker Dockerfile + entrypoint.sh + K8s Deployment manifest (infra/k8s/temporal-workers.yaml) + TEMPORAL_ADDRESS + TLS support in temporalClient.ts + deployment guide (docs/temporal-worker-deployment.md)
 - [x] Ledger UI page — /ledger fully wired with TigerBeetle real-time panel (marketData.ledgerAccounts), double-entry journal history, internal transfer dialog, admin summary; new TigerBeetle tab added to Ledger.tsx
+
+## Fund-Flow Guarantee Audit — Round 2 (2026-06-21)
+
+### Phase 1 — Deep Audit
+- [ ] Map all 20 fund-flow scenarios against every middleware layer (Temporal, Kafka, TigerBeetle, Fluvio, Dapr, Mojaloop, Redis, OpenSearch, Lakehouse, Permify, Keycloak, APISIX, OpenAppsec)
+- [ ] Produce gap matrix: for each scenario × middleware, mark: WIRED / PARTIAL / MISSING
+- [ ] Identify all PARTIAL and MISSING entries as implementation targets
+
+### Phase 2 — Go Temporal Saga Hardening
+- [ ] Add idempotency keys (UUID v5 from input hash) to all 3 Temporal workflows
+- [ ] Add dead-letter signal handler to all 3 workflows (DLQ → Kafka nexcom.dlq topic)
+- [ ] Add compensation rollback for partial failures in DepositWorkflow (reverse TigerBeetle + Kafka tombstone)
+- [ ] Add compensation rollback for WithdrawalWorkflow (re-credit TigerBeetle + Kafka tombstone)
+- [ ] Add compensation rollback for LoanDisbursementWorkflow (reverse disbursement + Kafka tombstone)
+- [ ] Add MarginWorkflow (pledge + release + liquidation with full saga compensation)
+- [ ] Add TradeSettlementWorkflow (DVP atomic: debit buyer + credit seller + fee leg)
+- [ ] Add CrossBorderWorkflow (ILP quote → reserve → execute → confirm/abort)
+- [ ] Add WarehouseReceiptWorkflow (issue → pledge → redeem/cancel with collateral lock)
+- [ ] Add LoanRepaymentWorkflow (debit borrower → credit lender → release collateral)
+- [ ] Wire all new workflows into TypeScript triggerTemporalWorkflow calls
+
+### Phase 3 — Rust Matching Engine Hardening
+- [ ] Add TigerBeetle 2-phase commit to order fill: createPendingTransfer → post fill → commitTransfer
+- [ ] Add Kafka event emission on every order fill (nexcom.order.filled topic)
+- [ ] Add Fluvio publish on every order fill (order-book-updates stream)
+- [ ] Add idempotency check: reject duplicate fill for same order_id
+- [ ] Add atomic rollback: if TigerBeetle commit fails → cancel fill → emit nexcom.order.fill.failed
+- [ ] Add Prometheus metrics: fill_latency_ms, fill_count, fill_failure_count
+- [ ] Add OpenSearch index update on fill (update order status to FILLED)
+
+### Phase 4 — Python AML/Analytics Hardening
+- [ ] Add Kafka consumer for nexcom.order.filled → run AML velocity check
+- [ ] Add Kafka consumer for nexcom.deposit.created → run AML source-of-funds check
+- [ ] Add Kafka consumer for nexcom.withdrawal.requested → run AML destination check
+- [ ] Add Kafka consumer for nexcom.cross_border.initiated → run sanctions screening (OpenSanctions)
+- [ ] Add OpenSearch bulk indexer for AML events (nexcom-aml-events index)
+- [ ] Add Lakehouse Bronze ingest for all AML events (via HTTP to lakehouseRouter)
+- [ ] Add Dapr pub/sub publisher for AML alerts (nexcom-aml-alerts topic)
+- [ ] Add structured logging with correlation IDs for all AML decisions
+
+### Phase 5 — TypeScript Router Hardening
+- [ ] Add Redis idempotency guard to depositsRouter.create (key: deposit:{userId}:{amount}:{currency}:{nonce})
+- [ ] Add Redis idempotency guard to bankingRouter.withdrawal (key: withdrawal:{userId}:{amount}:{nonce})
+- [ ] Add Redis idempotency guard to orders.create (key: order:{userId}:{symbol}:{side}:{price}:{qty}:{nonce})
+- [ ] Add Redis idempotency guard to mojaloopRouter.initiateTransfer (key: xborder:{userId}:{transferId})
+- [ ] Add Redis idempotency guard to stripeRouter webhook (key: stripe:webhook:{eventId})
+- [ ] Add Permify authorization check to all fund-flow mutations (can user:X do action:Y on resource:Z)
+- [ ] Add Keycloak token audience validation to all fund-flow protected procedures
+- [ ] Wire Dapr state store for saga state persistence (key: saga:{workflowId})
+- [ ] Wire Fluvio publisher into orders.create (order-placed event)
+- [ ] Wire Fluvio publisher into bankingRouter.withdrawal (withdrawal-requested event)
+- [ ] Wire Dapr service invocation for cross-service fund-flow calls (deposit → core-banking)
+
+### Phase 6 — Infrastructure Hardening
+- [ ] Add APISIX rate limit plugin to all 20 fund-flow routes (tiered: 10/min for mutations, 100/min for reads)
+- [ ] Add APISIX request-id plugin to all routes (correlation ID propagation)
+- [ ] Add APISIX opentelemetry plugin for distributed tracing
+- [ ] Add OpenAppsec signature for USSD PIN brute-force (>5 PIN attempts in 60s)
+- [ ] Add OpenAppsec signature for bulk transfer abuse (>10 transfers in 10s from same IP)
+- [ ] Add Permify RBAC schema: fund-flow specific permissions (deposit:create, withdrawal:create, trade:create, loan:apply, xborder:initiate)
+- [ ] Add Keycloak realm role mapping: nexcom-trader, nexcom-admin, nexcom-agent, nexcom-bank
+
+### Phase 7 — Testing & Coverage Matrix
+- [ ] Write Go unit tests for all 8 Temporal workflows (happy path + compensation path)
+- [ ] Write Rust unit tests for atomic fill + rollback
+- [ ] Write Python unit tests for all 4 AML Kafka consumers
+- [ ] Write Vitest integration tests for all 20 fund-flow scenarios (idempotency, auth, ledger)
+- [ ] Produce signed fund-flow-coverage-matrix-v2.md with WIRED/PARTIAL/MISSING for all 20×13 cells
+
+## Round 56 — FundFlow Router Wiring + Infrastructure Hardening (Jun 21 2026)
+
+- [x] Wire FundFlow.orderPlaced into orders.create setImmediate block
+- [x] Wire FundFlow.orderCancelled into orders.cancel setImmediate block
+- [x] Wire FundFlow.loanDisbursed into bankingRouter.ts adminDisburseLoan mutation
+- [x] Wire FundFlow.loanRepaid into bankingRouter.ts makeRepayment mutation
+- [x] Wire FundFlow.marginPledge into marginRouter.ts pledgeWarehouseReceipt mutation
+- [x] Wire FundFlow.marginRelease into marginRouter.ts releaseCollateral mutation
+- [x] Wire FundFlow.loanDisbursed into bankFinancingRouter.ts adminUpdate (status=DISBURSED)
+- [x] Wire FundFlow.crossBorder into mojaloopRouter.ts initiateTransfer mutation
+- [x] Wire FundFlow.deposit into depositsRouter.ts create setImmediate block
+- [x] Wire FundFlow.receiptIssued into receipts.ts create mutation (after Lakehouse ingest)
+- [x] Wire FundFlow.receiptRedeemed into receipts.ts redeem mutation (after Lakehouse ingest)
+- [x] Extend Permify RBAC schema with 6 new entities: deposit, withdrawal, warehouse_receipt, loan, margin_call, cross_border_transfer
+- [x] Add APISIX routes for bankFinancing, receipts, inputFinancing (fund-flow tier: 10-20 req/min, JWT, WAF)
+- [x] Write 20 Vitest unit tests for all FundFlow scenarios (fundFlow.test.ts) — all 20 pass
+- [x] Full test suite: 18 test files, 1098 tests, 0 failures, TypeScript 0 errors

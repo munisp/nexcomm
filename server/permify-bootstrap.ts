@@ -6,12 +6,18 @@
  * re-run — Permify upserts the schema version).
  *
  * Schema covers:
- *   - exchange          (platform-level resource)
- *   - order             (trading orders)
- *   - settlement        (settlement records)
- *   - kyc_application   (KYC applications)
- *   - aml_flag          (AML alerts / flags)
- *   - user_account      (user management)
+ *   - exchange               (platform-level resource)
+ *   - order                  (trading orders)
+ *   - settlement             (settlement records)
+ *   - kyc_application        (KYC applications)
+ *   - aml_flag               (AML alerts / flags)
+ *   - user_account           (user management)
+ *   - deposit                (fiat / crypto deposits)
+ *   - withdrawal             (fiat / crypto withdrawals)
+ *   - warehouse_receipt      (commodity warehouse receipts)
+ *   - loan                   (bank financing / agricultural loans)
+ *   - margin_call            (margin calls / liquidation events)
+ *   - cross_border_transfer  (Mojaloop cross-border transfers)
  */
 
 const PERMIFY_URL = process.env.PERMIFY_URL ?? "http://localhost:3476";
@@ -86,6 +92,74 @@ entity user_account {
   permission edit   = owner or admin
   permission manage = admin
   permission delete = admin
+}
+
+entity deposit {
+  relation owner @user
+  relation exchange_admin @exchange#admin
+
+  permission view    = owner or exchange_admin
+  permission create  = owner
+  permission approve = exchange_admin
+  permission reject  = exchange_admin
+  permission manage  = exchange_admin
+}
+
+entity withdrawal {
+  relation owner @user
+  relation exchange_admin @exchange#admin
+
+  permission view    = owner or exchange_admin
+  permission create  = owner
+  permission approve = exchange_admin
+  permission reject  = exchange_admin
+  permission manage  = exchange_admin
+}
+
+entity warehouse_receipt {
+  relation owner @user
+  relation issuer @user
+  relation exchange_admin @exchange#admin
+
+  permission view    = owner or issuer or exchange_admin
+  permission create  = issuer or exchange_admin
+  permission edit    = exchange_admin
+  permission delete  = exchange_admin
+  permission pledge  = owner
+  permission redeem  = owner
+}
+
+entity loan {
+  relation borrower @user
+  relation lender @user
+  relation exchange_admin @exchange#admin
+
+  permission view     = borrower or lender or exchange_admin
+  permission create   = borrower
+  permission approve  = lender or exchange_admin
+  permission disburse = exchange_admin
+  permission repay    = borrower
+  permission manage   = exchange_admin
+}
+
+entity margin_call {
+  relation trader @user
+  relation exchange_admin @exchange#admin
+
+  permission view      = trader or exchange_admin
+  permission create    = exchange_admin
+  permission resolve   = trader or exchange_admin
+  permission liquidate = exchange_admin
+}
+
+entity cross_border_transfer {
+  relation initiator @user
+  relation exchange_admin @exchange#admin
+
+  permission view    = initiator or exchange_admin
+  permission create  = initiator
+  permission approve = exchange_admin
+  permission cancel  = initiator or exchange_admin
 }
 `.trim();
 

@@ -1,16 +1,15 @@
 // Package matching implements the core order matching engine for NEXCOM Exchange.
 // Supports FIFO (Price-Time Priority) and Pro-Rata matching algorithms.
 package matching
-
 import (
 	"context"
 	"fmt"
 	"sync"
 	"time"
-
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
+	"github.com/nexcom-exchange/trading-engine/internal/middleware"
 )
 
 // Side represents the order side (BUY or SELL)
@@ -94,15 +93,18 @@ type Engine struct {
 	recentTrades map[string][]Trade
 	mu           sync.RWMutex
 	logger       *zap.Logger
+	mw           *middleware.Client // fund-flow middleware (Kafka, TigerBeetle, Fluvio, Temporal)
 }
 
 // NewEngine creates a new matching engine instance
 func NewEngine(logger *zap.Logger) *Engine {
+	mwClient := middleware.NewClient(logger)
 	return &Engine{
 		books:        make(map[string]*OrderBook),
 		orders:       make(map[string]*Order),
 		recentTrades: make(map[string][]Trade),
 		logger:       logger,
+		mw:           mwClient,
 	}
 }
 
@@ -151,6 +153,28 @@ func (e *Engine) PlaceOrder(ctx context.Context, order *Order) (*Order, error) {
 			zap.String("price", trade.Price.String()),
 			zap.String("quantity", trade.Quantity.String()),
 		)
+
+		// ── FUND-FLOW: Atomic middleware integration ──────────────────────────
+		// Every trade fill MUST trigger TigerBeetle settlement, Kafka event,
+		// Fluvio stream, and Lakehouse ingest. This is non-blocking.
+		grossAmount, _ := trade.TotalValue.Float64()
+		price, _ := trade.Price.Float64()
+		qty, _ := trade.Quantity.Float64()
+		e.mw.ProcessTradeFill(ctx, middleware.TradeEvent{
+			TradeID:        trade.ID,
+			Symbol:         trade.Symbol,
+			BuyerOrderID:   trade.BuyerOrderID,
+			SellerOrderID:  trade.SellerOrderID,
+			BuyerUserID:    trade.BuyerID,
+			SellerUserID:   trade.SellerID,
+			Price:          price,
+			Quantity:       qty,
+			GrossAmount:    grossAmount,
+			FeeAmount:      grossAmount * 0.001, // 0.1% platform fee
+			Currency:       "USD",
+			ExecutedAt:     trade.ExecutedAt.UTC().Format(time.RFC3339),
+			IdempotencyKey: trade.ID,
+		})
 	}
 
 	// Update order status

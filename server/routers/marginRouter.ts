@@ -25,6 +25,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { users } from "../../drizzle/schema";
 import { ingestMarginMovement } from "../lakehouse";
 import { writeAuditLog } from "../audit";
+import { FundFlow } from "../fundFlow";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -232,6 +233,17 @@ export const marginRouter = router({
         newBalance: String(balanceBefore + eligibleValue),
         correlationId: `pledge-${item.id}`,
       });
+      // FundFlow: unified middleware orchestration for margin pledge
+      setImmediate(() => {
+        FundFlow.marginPledge({
+          marginId: `pledge-${item.id}`,
+          userId: ctx.user.id,
+          amount: eligibleValue,
+          currency: "USD",
+          collateralType: item.collateralType,
+          collateralId: String(item.id),
+        }).catch(() => {});
+      });
       return { collateralItem: item, eligibleValue };
     }),
 
@@ -303,6 +315,15 @@ export const marginRouter = router({
         currency: "USD",
         newBalance: String(Math.max(0, balanceBefore - eligibleValue)),
         correlationId: `release-${item.id}`,
+      });
+      // FundFlow: unified middleware orchestration for margin release
+      setImmediate(() => {
+        FundFlow.marginRelease({
+          marginId: `release-${item.id}`,
+          userId: ctx.user.id,
+          amount: eligibleValue,
+          currency: "USD",
+        }).catch(() => {});
       });
       return { success: true };
     }),

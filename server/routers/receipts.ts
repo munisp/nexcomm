@@ -6,6 +6,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
 import { ingestWarehouseReceipt } from "../lakehouse";
+import { FundFlow } from "../fundFlow";
 
 export const receiptsRouter = router({
   // LIST warehouse receipts for current user
@@ -119,6 +120,17 @@ export const receiptsRouter = router({
         status: "issued",
         correlationId: receipt.receiptNumber,
       });
+      // FundFlow: unified middleware orchestration for receipt issuance
+      setImmediate(() => {
+        FundFlow.receiptIssued({
+          receiptId: String(receipt.id),
+          userId: targetUserId,
+          commodityId: input.commodity,
+          quantity: input.quantity,
+          unit: input.unit,
+          warehouseId: input.warehouseId ?? "unknown",
+        }).catch(() => {});
+      });
       return receipt;
     }),
 
@@ -194,6 +206,17 @@ export const receiptsRouter = router({
         warehouseId: result[0].warehouseId ?? "unknown",
         status: "redeemed",
         correlationId: result[0].receiptNumber,
+      });
+      // FundFlow: unified middleware orchestration for receipt redemption
+      setImmediate(() => {
+        FundFlow.receiptRedeemed({
+          receiptId: String(input.id),
+          userId: ctx.user.id,
+          commodityId: result[0].commodity,
+          quantity: result[0].quantity,
+          unit: result[0].unit,
+          warehouseId: result[0].warehouseId ?? "unknown",
+        }).catch(() => {});
       });
       return { success: true };
     }),

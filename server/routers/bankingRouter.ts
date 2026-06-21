@@ -20,6 +20,7 @@ import { TRPCError } from "@trpc/server";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import { ENV } from "../_core/env";
 import { writeAuditLog } from "../audit";
+import { FundFlow } from "../fundFlow";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -745,6 +746,19 @@ export const bankingRouter = router({
           read: false,
         });
       });
+      // FundFlow: unified middleware orchestration for loan disbursement
+      setImmediate(() => {
+        const dueDate = new Date();
+        dueDate.setMonth(dueDate.getMonth() + (loan.tenorMonths ?? 6));
+        FundFlow.loanDisbursed({
+          loanId: String(input.loanId),
+          userId: loan.farmerId,
+          principalAmount: input.disbursedValueNgn,
+          currency: "NGN",
+          interestRate: 0.12, // 12% p.a. default
+          dueDate: dueDate.toISOString(),
+        }).catch(() => {});
+      });
       return { success: true };
     }),
 
@@ -848,6 +862,20 @@ export const bankingRouter = router({
         message: `₦${input.amountNgn.toLocaleString()} repayment recorded. Total repaid: ₦${newRepaid.toLocaleString()}.`,
         type: "SYSTEM",
         read: false,
+      });
+      // FundFlow: unified middleware orchestration for loan repayment
+      setImmediate(() => {
+        const disbursed = Number(loan.disbursedValueNgn ?? loan.requestedValueNgn ?? 0);
+        FundFlow.loanRepaid({
+          repaymentId: `repay-${input.loanId}-${Date.now()}`,
+          loanId: String(input.loanId),
+          userId: ctx.user.id,
+          amount: input.amountNgn,
+          currency: "NGN",
+          principalPaid: input.amountNgn * 0.9,
+          interestPaid: input.amountNgn * 0.1,
+          remainingBalance: Math.max(0, disbursed - newRepaid),
+        }).catch(() => {});
       });
       return { success: true, newStatus, totalRepaid: newRepaid };
     }),

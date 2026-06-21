@@ -32,6 +32,7 @@ import { writeAuditLog } from "../audit";
 import { cacheDel, invalidatePattern, CacheKeys } from "../cache";
 import { indexOrder } from "../opensearch";
 import { ingestOrder } from "../lakehouse";
+import { FundFlow } from "../fundFlow";
 const assetClasses = ["COMMODITY", "FOREX", "EQUITY", "DIGITAL_ASSET", "INDEX"] as const;
 
 /**
@@ -395,6 +396,16 @@ export const ordersRouter = router({
           status: "created",
           correlationId: String(order.id),
         }).catch(() => {});
+        // FundFlow: unified middleware orchestration (Dapr pub/sub + Redis idempotency)
+        FundFlow.orderPlaced({
+          orderId: order.id,
+          userId: ctx.user.id,
+          symbol: order.symbol,
+          side: order.side as "BUY" | "SELL",
+          type: order.orderType,
+          quantity: parseFloat(order.quantity),
+          price: order.price ? parseFloat(order.price) : undefined,
+        }).catch(() => {});
       });
 
       return { ...order, idempotent: false as const };
@@ -469,6 +480,16 @@ export const ordersRouter = router({
           price: updated.price ?? undefined,
           status: "cancelled",
           correlationId: String(updated.id),
+        }).catch(() => {});
+        // FundFlow: unified middleware orchestration for order cancellation
+        FundFlow.orderCancelled({
+          orderId: updated.id,
+          userId: ctx.user.id,
+          symbol: updated.symbol,
+          side: updated.side as "BUY" | "SELL",
+          quantity: parseFloat(updated.quantity),
+          price: updated.price ? parseFloat(updated.price) : undefined,
+          reason: "User cancelled",
         }).catch(() => {});
       });
 

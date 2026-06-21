@@ -18,6 +18,7 @@ import { bankFinancingApplications, notifications } from "../../drizzle/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { writeAuditLog } from "../audit";
 import { ingestLoan } from "../lakehouse";
+import { FundFlow } from "../fundFlow";
 
 const BANK_FINANCING_STATUSES = [
   "DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED",
@@ -198,6 +199,19 @@ export const bankFinancingRouter = router({
           dueDate: updated.updatedAt?.toISOString() ?? new Date().toISOString(),
           status: "disbursed",
           correlationId: String(updated.id),
+        });
+        // FundFlow: unified middleware orchestration for loan disbursement
+        setImmediate(() => {
+          const dueDate = new Date();
+          dueDate.setMonth(dueDate.getMonth() + (updated.tenorMonths ?? 6));
+          FundFlow.loanDisbursed({
+            loanId: String(updated.id),
+            userId: updated.userId,
+            principalAmount: Number(updated.approvedAmountNgn ?? 0),
+            currency: "NGN",
+            interestRate: Number(updated.interestRatePct ?? 12) / 100,
+            dueDate: dueDate.toISOString(),
+          }).catch(() => {});
         });
       }
       return { success: true, application: updated };

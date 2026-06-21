@@ -260,6 +260,79 @@ routes:
         include_req_body: true
         include_resp_body: false
 
+  # ── Fund-flow: bank financing / institutional loans ──────────────────────────
+  - id: bankfinancing-fund-flow
+    name: BankFinancing — Fund Flow
+    uri: /api/trpc/bankFinancing.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 10
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+        rejected_msg: "Rate limit exceeded for bank financing operations"
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+      kafka-logger:
+        include_req_body: true
+        include_resp_body: false
+
+  # ── Fund-flow: warehouse receipts ────────────────────────────────────────────
+  - id: receipts-fund-flow
+    name: Receipts — Fund Flow
+    uri: /api/trpc/receipts.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 20
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+
+  # ── Fund-flow: input financing / agricultural loans ───────────────────────────
+  - id: inputfinancing-fund-flow
+    name: InputFinancing — Fund Flow
+    uri: /api/trpc/inputFinancing.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 10
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+
   # ── Admin: admin-only procedures ─────────────────────────────────────────────
   - id: admin-procedures
     name: Admin — Protected
