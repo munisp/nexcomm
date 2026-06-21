@@ -1038,3 +1038,79 @@
 - [x] Add error handling to 16 pages missing it
 - [x] Add toast notifications to 17 pages missing them
 - [x] Replace hardcoded color classes with design tokens (1,685 instances)
+
+## Critical Production Gaps (Jun 2026 — Final Sprint)
+
+### P0 — JWT Session Security
+- [ ] Reduce JWT session maxAge from 1 year to 8 hours in shared/const.ts (ONE_YEAR_MS → EIGHT_HOURS_MS)
+- [ ] Add refresh token rotation: issue short-lived access token (8h) + long-lived refresh token (7d)
+- [ ] Add /api/auth/refresh endpoint that validates refresh token and issues new access token
+- [ ] Store refresh tokens in PostgreSQL (refresh_tokens table) with revocation support
+- [ ] Add token expiry check middleware that returns 401 with WWW-Authenticate: Bearer on expiry
+- [ ] Wire refresh token auto-renewal in tRPC client (intercept 401 → call /api/auth/refresh → retry)
+
+### P1 — Redis Integration (rate limiting + session + cache)
+- [ ] Wire express-rate-limit with ioredis store (rate-limit-redis) for persistent rate limit counters
+- [ ] Wire Redis session store for rate limit state (replaces in-process memory)
+- [ ] Wire cache.ts getOrSet into livePricesRouter.getAll (5s TTL)
+- [ ] Wire cache.ts getOrSet into commodities.list (30s TTL)
+- [ ] Wire cache.ts getOrSet into portfolio.summary (10s TTL)
+- [ ] Wire cache.ts invalidatePattern into orders.create/cancel/amend (invalidate order book cache)
+- [ ] Add /api/admin/cache/flush endpoint (admin-only) wired to flushNexcomCache()
+
+### P2 — OpenSearch Integration (full-text indexing)
+- [ ] Add indexDocument() helper to searchRouter that upserts a doc into the correct OpenSearch index
+- [ ] Wire indexDocument into orders.create/amend/cancel (index to nexcom-orders)
+- [ ] Wire indexDocument into warehouseReceipts.create/update (index to nexcom-warehouse-receipts)
+- [ ] Wire indexDocument into users upsert in db.ts (index to nexcom-users)
+- [ ] Wire indexDocument into cropListings.create/update (index to nexcom-instruments)
+- [ ] Wire indexDocument into depositRequests.create/update (index to nexcom-deposits)
+- [ ] Add createOpenSearchIndices() bootstrap function called on server startup
+- [ ] Replace aiSearch PostgreSQL ILIKE fallback with OpenSearch when available
+
+### P3 — TigerBeetle Ledger (double-entry accounting)
+- [ ] Wire createLedgerAccount() in db.upsertUser (provision margin+settlement+fee accounts on first login)
+- [ ] Wire createLedgerTransfer(code=6) in depositsRouter.create (deposit → credit settlement account)
+- [ ] Wire createLedgerTransfer(code=5) in bankingRouter.withdrawal (withdrawal → debit settlement account)
+- [ ] Wire settleTrade() in orders fill handler (trade settlement → TigerBeetle double-entry)
+- [ ] Wire createPendingLedgerTransfer(code=2) in marginRouter.deposit (margin hold → pending transfer)
+- [ ] Wire commitLedgerTransfer() in marginRouter.release (commit pending margin transfer)
+- [ ] Add ledger.getAccountSummary tRPC procedure (returns TigerBeetle balances for current user)
+- [ ] Add ledger.getTransferHistory tRPC procedure (returns TigerBeetle transfer history)
+- [ ] Wire Ledger.tsx page to new ledger tRPC procedures
+
+### P4 — Keycloak Auth (enterprise SSO)
+- [ ] Add verifyKeycloakToken() function to keycloakClient.ts (OIDC token introspection)
+- [ ] Add Keycloak bearer token extraction in sdk.ts authenticateRequest (Authorization: Bearer header)
+- [ ] Wire Keycloak token path: if Bearer header present → introspect with Keycloak → resolve user
+- [ ] Add /api/auth/keycloak/login endpoint (redirect to Keycloak OIDC login page)
+- [ ] Add /api/auth/keycloak/callback endpoint (exchange code → Keycloak token → session cookie)
+- [ ] Wire syncUserToKeycloak() in db.upsertUser (sync new users to Keycloak realm)
+- [ ] Add Keycloak login button to login page (enterprise SSO option)
+
+### P5 — PWA Service Worker (offline caching)
+- [ ] Upgrade sw.js to Workbox-style caching: cache-first for static assets, network-first for API
+- [ ] Add background sync for offline order placement (queue in IndexedDB, replay on reconnect)
+- [ ] Add push notification permission request UI in DashboardLayout
+- [ ] Add PWA install prompt banner in DashboardLayout
+
+### P6 — E2E Tests (Playwright)
+- [ ] Install Playwright and configure playwright.config.ts
+- [ ] Write E2E test: login flow (OAuth redirect → callback → dashboard)
+- [ ] Write E2E test: place order (navigate to Trade → fill form → submit → toast confirmation)
+- [ ] Write E2E test: view profile (navigate to /profile → verify order history loads)
+- [ ] Write E2E test: AI search (open Cmd+K → type query → verify results appear)
+- [ ] Write E2E test: security headers (verify CSP, HSTS, X-Frame-Options present)
+
+## Critical Production Gaps — Completion Status (Jun 21 2026)
+
+- [x] JWT session security: reduced maxAge to 8h, added refresh_tokens table + rotation in oauth.ts
+- [x] Redis rate limiting: wired RedisStore into all express-rate-limit instances in ddos-protection.ts + index.ts
+- [x] Redis cache-aside: commodities.list, portfolio summary, order book cache with invalidation on mutations
+- [x] OpenSearch: centralized server/opensearch.ts, createNexcomIndices on startup, indexOrder/indexUser helpers
+- [x] TigerBeetle ledger: createLedgerAccount wired in upsertUser, deposit credit in Stripe webhook, transfer in depositsRouter
+- [x] Keycloak auth: verifyKeycloakToken + introspectToken added, bearer token path wired in authenticateRequest
+- [x] PWA: sw.js v2 with versioned caches + offline.html fallback, SW registered in main.tsx
+- [x] E2E tests: 32 Playwright tests across homepage, security, market-data, payments (all passing)
+- [x] Vitest unit tests: 1078 tests across 17 test files (all passing)
+- [x] localhost/CI rate limit bypass: ddosCircuitBreaker + apiLimiter + authLimiter skip localhost/CI

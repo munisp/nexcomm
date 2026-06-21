@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import { getDb } from "../db";
+import { getOrSet, cacheDel, CacheKeys, TTL } from "../cache";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
@@ -89,7 +90,11 @@ async function computePortfolioSummary(userId: number) {
 export const portfolioRouter = router({
   // ── getPortfolioSummary ────────────────────────────────────────────────────
   getPortfolioSummary: protectedProcedure.query(async ({ ctx }) => {
-    return computePortfolioSummary(ctx.user.id);
+    return getOrSet(
+      CacheKeys.portfolioSummary(ctx.user.id),
+      TTL.PORTFOLIO,
+      () => computePortfolioSummary(ctx.user.id)
+    );
   }),
 
   // ── getEquityCurve ─────────────────────────────────────────────────────────

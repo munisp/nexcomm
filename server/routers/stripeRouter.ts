@@ -20,6 +20,7 @@ import {
   bankTransactions,
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
+import { createLedgerTransfer, getUserLedgerAccounts } from "../gatewayClient";
 
 // ── Stripe client ─────────────────────────────────────────────────────────────
 // Keys are injected by the platform; empty string causes Stripe to throw on first use
@@ -319,6 +320,25 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log(
     `[Stripe Webhook] Credited ${amountKobo} kobo to user ${userId} (session ${session.id})`
   );
+
+  // Post TigerBeetle double-entry ledger credit (code=6: fiat deposit)
+  // Fire-and-forget — do not block webhook response
+  setImmediate(async () => {
+    try {
+      const accounts = await getUserLedgerAccounts(String(userId));
+      const settlementAccount = accounts.find(a => a.type === "settlement");
+      if (settlementAccount) {
+        await createLedgerTransfer({
+          debitAccountId: "exchange-clearing",
+          creditAccountId: settlementAccount.id,
+          amount: amountKobo, // already in minor units (kobo)
+          code: 6, // deposit
+        });
+      }
+    } catch (e) {
+      console.warn("[Stripe Webhook] TigerBeetle credit failed:", (e as Error).message);
+    }
+  });
 }
 
 async function handlePaymentFailed(intent: Stripe.PaymentIntent) {

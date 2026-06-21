@@ -257,7 +257,50 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // Regular authentication flow
+    // ── Keycloak Bearer token path (enterprise SSO / API clients) ─────────────
+    // If an Authorization: Bearer <token> header is present, attempt Keycloak
+    // token introspection first. Falls through to cookie auth on failure.
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) {
+      const bearerToken = authHeader.slice(7);
+      try {
+        const { verifyKeycloakToken } = await import("../keycloak/keycloakClient");
+        const claims = await verifyKeycloakToken(bearerToken);
+        if (claims) {
+          // Map Keycloak claims → NEXCOM user
+          // nexcomUserId attribute is set by syncUserToKeycloak
+          const nexcomUserId = claims.nexcomUserId
+            ? parseInt(claims.nexcomUserId, 10)
+            : null;
+
+          if (nexcomUserId && !isNaN(nexcomUserId)) {
+            const user = await db.getUserById(nexcomUserId);
+            if (user) {
+              // Update last sign-in asynchronously
+              setImmediate(() =>
+                db.upsertUser({ openId: user.openId, lastSignedIn: new Date() }).catch(() => {})
+              );
+              return user;
+            }
+          }
+
+          // Fallback: look up by email from Keycloak claims
+          if (claims.email) {
+            const userByEmail = await db.getUserByEmail(claims.email);
+            if (userByEmail) {
+              setImmediate(() =>
+                db.upsertUser({ openId: userByEmail.openId, lastSignedIn: new Date() }).catch(() => {})
+              );
+              return userByEmail;
+            }
+          }
+        }
+      } catch {
+        // Keycloak unavailable — fall through to cookie auth
+      }
+    }
+
+    // ── Cookie-based Manus OAuth path (primary) ──────────────────────────────
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);

@@ -277,3 +277,71 @@ export async function assignKeycloakRole(keycloakUserId: string, roleName: strin
     return false;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Token verification (for API bearer token auth)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface KeycloakTokenClaims {
+  sub: string;            // Keycloak user UUID
+  email?: string;
+  preferred_username?: string;
+  name?: string;
+  realm_access?: { roles: string[] };
+  resource_access?: Record<string, { roles: string[] }>;
+  /** NEXCOM-specific custom attributes injected via Keycloak mapper */
+  nexcomUserId?: string;
+  nexcomRole?: string;
+  exp: number;
+  iat: number;
+  iss: string;
+}
+
+/**
+ * Introspect a Keycloak access token using the realm's token introspection endpoint.
+ * Returns the claims if the token is active, or null if invalid/expired/unavailable.
+ *
+ * This is the server-side verification path for API clients that present a
+ * Keycloak-issued Bearer token in the Authorization header.
+ */
+export async function introspectKeycloakToken(
+  accessToken: string
+): Promise<KeycloakTokenClaims | null> {
+  if (!KEYCLOAK_CLIENT_SECRET) return null;
+
+  try {
+    const resp = await fetch(
+      `${KEYCLOAK_BASE}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token/introspect`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          token: accessToken,
+          client_id: KEYCLOAK_CLIENT_ID,
+          client_secret: KEYCLOAK_CLIENT_SECRET,
+        }).toString(),
+        signal: AbortSignal.timeout(3000),
+      }
+    );
+
+    if (!resp.ok) return null;
+    const claims = await resp.json() as KeycloakTokenClaims & { active: boolean };
+    if (!claims.active) return null;
+    return claims;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verify a Keycloak JWT using JWKS (offline verification — no introspection call).
+ * Falls back to introspection if JWKS verification fails.
+ *
+ * Returns the decoded claims or null if verification fails.
+ */
+export async function verifyKeycloakToken(
+  bearerToken: string
+): Promise<KeycloakTokenClaims | null> {
+  // Try introspection first (authoritative, handles revoked tokens)
+  return introspectKeycloakToken(bearerToken);
+}

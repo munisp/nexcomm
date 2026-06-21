@@ -29,6 +29,8 @@ import { notifyOwner } from "../_core/notification";
 import { emitOrderFilled, emitOrderCancelled } from "../kafka/kafkaProducer";
 import { pushToUser } from "./pushNotificationsRouter";
 import { writeAuditLog } from "../audit";
+import { cacheDel, invalidatePattern, CacheKeys } from "../cache";
+import { indexOrder } from "../opensearch";
 const assetClasses = ["COMMODITY", "FOREX", "EQUITY", "DIGITAL_ASSET", "INDEX"] as const;
 
 /**
@@ -374,6 +376,14 @@ export const ordersRouter = router({
         }
       });
 
+      // Invalidate order book and portfolio cache for this symbol
+      // Also index the order in OpenSearch for full-text search
+      setImmediate(() => {
+        cacheDel(CacheKeys.orderBook(input.symbol)).catch(() => {});
+        cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        indexOrder(order).catch(() => {});
+      });
+
       return { ...order, idempotent: false as const };
     }),
   cancel: protectedProcedure
@@ -429,6 +439,14 @@ export const ordersRouter = router({
           "systemAlerts",
         ).catch(e => console.warn("[WebPush] cancel push failed:", (e as Error).message));
       });
+      // Invalidate order book and portfolio cache for the cancelled order's symbol
+      // Re-index the updated order in OpenSearch (status changed to CANCELLED)
+      setImmediate(() => {
+        cacheDel(CacheKeys.orderBook(updated.symbol)).catch(() => {});
+        cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        indexOrder(updated).catch(() => {});
+      });
+
       return updated;
     }),
 

@@ -9,6 +9,7 @@ import { publicProcedure, router } from "../_core/trpc";
 import { COMMODITY_MAP, COMMODITIES, GRADE_SPECS, WAREHOUSES } from '../../shared/commodities';
 import { getReadDb } from "../db";
 import { livePrices } from "../../drizzle/schema";
+import { getOrSet, CacheKeys, TTL } from "../cache";
 
 // ── Seeded random (mirrors shared/commodities.ts) ────────────────────────────
 function seededRandom(seed: number): number {
@@ -89,16 +90,18 @@ function generateDailyOHLCV(symbol: string, days: number): OHLCVBar[] {
 export const commoditiesRouter = router({
   /** List all available commodity instruments */
   list: publicProcedure.query(() => {
-    return COMMODITIES.map(c => ({
-      symbol:      c.symbol,
-      name:        c.name,
-      category:    c.category,
-      unit:        c.unit,
-      currency:    c.currency,
-      basePrice:   c.basePrice,
-      description: c.description,
-      country:     c.country ?? null,
-    }));
+    return getOrSet(CacheKeys.commodities(), TTL.COMMODITIES, async () =>
+      COMMODITIES.map(c => ({
+        symbol:      c.symbol,
+        name:        c.name,
+        category:    c.category,
+        unit:        c.unit,
+        currency:    c.currency,
+        basePrice:   c.basePrice,
+        description: c.description,
+        country:     c.country ?? null,
+      }))
+    );
   }),
 
   /**

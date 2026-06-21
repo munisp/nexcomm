@@ -165,6 +165,44 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
     await db.insert(users).values(values)
       .onConflictDoUpdate({ target: users.openId, set: updateSet });
+
+    // Post-upsert side effects (fire-and-forget — do not block login)
+    setImmediate(async () => {
+      try {
+        const savedUser = await getUserByOpenId(user.openId);
+        if (!savedUser) return;
+
+        // Provision TigerBeetle ledger accounts on first login
+        const { createLedgerAccount } = await import("./gatewayClient");
+        await Promise.allSettled([
+          createLedgerAccount(String(savedUser.id), "margin"),
+          createLedgerAccount(String(savedUser.id), "settlement"),
+          createLedgerAccount(String(savedUser.id), "fee"),
+        ]);
+
+        // Index user in OpenSearch for full-text search
+        const { indexUser } = await import("./opensearch");
+        await indexUser({
+          id: savedUser.id,
+          name: savedUser.name,
+          email: savedUser.email,
+          role: savedUser.role,
+          createdAt: savedUser.createdAt,
+        });
+
+        // Sync user to Keycloak realm
+        const { syncUserToKeycloak } = await import("./keycloak/keycloakClient");
+        await syncUserToKeycloak({
+          openId: savedUser.openId,
+          email: savedUser.email ?? "",
+          name: savedUser.name ?? savedUser.openId,
+          role: savedUser.role === "admin" ? "admin" : "user",
+          nexcomUserId: savedUser.id,
+        });
+      } catch (e) {
+        console.warn("[upsertUser] Post-upsert side effects failed:", (e as Error).message);
+      }
+    });
   } catch (error) { console.error("[Database] Failed to upsert user:", error); throw error; }
 }
 
@@ -172,6 +210,20 @@ export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) { console.warn("[Database] Cannot get user: database not available"); return undefined; }
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 

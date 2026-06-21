@@ -13,10 +13,48 @@
 
 import type { Request, Response, NextFunction, Application } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
 import slowDown from "express-slow-down";
 // @ts-ignore
 import hpp from "hpp";
 import { randomUUID } from "crypto";
+import Redis from "ioredis";
+
+// ── Redis store for persistent rate limit counters ────────────────────────────
+// Falls back to in-memory if Redis is unavailable (graceful degradation)
+let _redisClient: Redis | null = null;
+function getRateLimitRedisStore(prefix: string) {
+  try {
+    if (!_redisClient) {
+      _redisClient = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+        maxRetriesPerRequest: 1,
+        connectTimeout: 2_000,
+        lazyConnect: true,
+        enableOfflineQueue: false,
+      });
+      _redisClient.on("error", () => { /* silently degrade */ });
+      _redisClient.connect().catch(() => {});
+    }
+    return new RedisStore({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendCommand: (...args: any[]) => (_redisClient as any).call(...args),
+      prefix: `rl:${prefix}:`,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+// ── 0. CI / Localhost Bypass ─────────────────────────────────────────────────
+/**
+ * Skip rate limiting for localhost/CI environments.
+ * In production this never triggers (no loopback traffic).
+ */
+const isLocalhostOrCI = (req: Request): boolean => {
+  if (process.env.CI === "true" || process.env.SKIP_RATE_LIMIT === "true") return true;
+  const ip = req.ip ?? "";
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+};
 
 // ── 1. Tiered Rate Limits ─────────────────────────────────────────────────────
 
@@ -26,9 +64,10 @@ export const publicReadLimiter = rateLimit({
   max: 120,
   standardHeaders: true,
   legacyHeaders: false,
+  store: getRateLimitRedisStore("public"),
   keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
   message: { error: "Rate limit exceeded on public endpoints.", code: "RATE_LIMIT_PUBLIC" },
-  skip: (req) => req.path === "/api/health" || req.path === "/api/trpc/health.check",
+  skip: (req) => isLocalhostOrCI(req) || req.path === "/api/health" || req.path === "/api/trpc/health.check",
 });
 
 /** Authenticated API: 200 req/min per user (stricter than IP-based) */
@@ -43,6 +82,7 @@ export const authenticatedLimiter = rateLimit({
     return sessionId ? `sess:${sessionId}` : `ip:${ipKeyGenerator(req.ip ?? "")}`;
   },
   message: { error: "Rate limit exceeded. Please slow down.", code: "RATE_LIMIT_AUTH" },
+  skip: isLocalhostOrCI,
 });
 
 /** Trading endpoints: 60 orders/min per user (prevents order flooding) */
@@ -56,6 +96,7 @@ export const tradingLimiter = rateLimit({
     return `trade:${sessionId ?? ipKeyGenerator(req.ip ?? "")}`;
   },
   message: { error: "Trading rate limit exceeded. Maximum 60 orders per minute.", code: "RATE_LIMIT_TRADING" },
+  skip: isLocalhostOrCI,
 });
 
 /** Financial transfers: 10 transfers/min per user (prevents transfer flooding) */
@@ -69,6 +110,7 @@ export const transferLimiter = rateLimit({
     return `transfer:${sessionId ?? ipKeyGenerator(req.ip ?? "")}`;
   },
   message: { error: "Transfer rate limit exceeded. Maximum 10 transfers per minute.", code: "RATE_LIMIT_TRANSFER" },
+  skip: isLocalhostOrCI,
 });
 
 /** KYC/document upload: 5 uploads/hour per user */
@@ -82,6 +124,7 @@ export const uploadLimiter = rateLimit({
     return `upload:${sessionId ?? ipKeyGenerator(req.ip ?? "")}`;
   },
   message: { error: "Upload rate limit exceeded. Maximum 5 uploads per hour.", code: "RATE_LIMIT_UPLOAD" },
+  skip: isLocalhostOrCI,
 });
 
 // ── 2. Progressive Slowdown (before hard block) ───────────────────────────────

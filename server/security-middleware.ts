@@ -17,12 +17,20 @@ const RATE_LIMIT_MAX = 100;            // max requests per window
 const BLOCK_DURATION_MS = 300_000;     // 5 minute block after circuit trips
 
 export function ddosCircuitBreaker(req: Request, res: Response, next: NextFunction) {
-  // Skip for health checks and static assets
-  if (req.path.startsWith("/api/trpc/health") || req.path.startsWith("/assets/")) {
+  // Skip for health checks, static assets, and localhost/CI environments
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+  const isLocalhost = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  if (
+    process.env.CI === "true" ||
+    process.env.SKIP_RATE_LIMIT === "true" ||
+    isLocalhost ||
+    req.path.startsWith("/api/trpc/health") ||
+    req.path.startsWith("/assets/")
+  ) {
     return next();
   }
 
-  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+  // ip already declared above
   const now = Date.now();
   let entry = ipRequestCounts.get(ip);
 

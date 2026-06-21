@@ -45,6 +45,8 @@ import cookieParser from "cookie-parser";
 import { policyStore } from "../pbac";
 import { bootstrapPermify } from "../permify-bootstrap";
 import { startTemporalWorker } from "../temporal/worker";
+import { createNexcomIndices } from "../opensearch";
+import { purgeExpiredRefreshTokens } from "../refreshTokens";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -176,6 +178,13 @@ async function startServer() {
   });
 
   // ── Rate limiting ──────────────────────────────────────────────────────────
+  // Localhost / CI bypass helper (production traffic never comes from loopback)
+  const isLocalhostOrCI = (req: import("express").Request): boolean => {
+    if (process.env.CI === "true" || process.env.SKIP_RATE_LIMIT === "true") return true;
+    const ip = req.ip ?? "";
+    return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  };
+
   // General API rate limit: 300 requests per minute per IP
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
@@ -183,7 +192,7 @@ async function startServer() {
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later." },
-    skip: (req) => req.path === "/api/ha/status" || req.path === "/api/ha/status/metrics",
+    skip: (req) => isLocalhostOrCI(req) || req.path === "/api/ha/status" || req.path === "/api/ha/status/metrics",
   });
   app.use("/api", apiLimiter);
 
@@ -194,6 +203,7 @@ async function startServer() {
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many authentication attempts, please try again later." },
+    skip: isLocalhostOrCI,
   });
   app.use("/api/oauth", authLimiter);
   // Financial endpoint rate limits — applied before tRPC middleware to prevent order flooding
@@ -371,6 +381,11 @@ async function startServer() {
   // Gracefully degrades if Permify is unreachable.
   bootstrapPermify().catch(err => console.warn("[Permify Bootstrap] Startup error:", err));
   startTemporalWorker().catch(err => console.warn("[Temporal] Startup error:", err));
+  // Bootstrap OpenSearch indices (gracefully degrades if OpenSearch is unavailable)
+  createNexcomIndices().catch(err => console.warn("[OpenSearch] Index bootstrap error:", err));
+  // Purge expired refresh tokens on startup (and every 6 hours)
+  purgeExpiredRefreshTokens().catch(() => {});
+  setInterval(() => purgeExpiredRefreshTokens().catch(() => {}), 6 * 60 * 60 * 1000).unref();
 
   // Graceful shutdown: stop all native engines when Node process exits
   process.on("SIGTERM", async () => { stopAllEngines(); stopMojaloopHealthJob(); await stopKafkaConsumer(); await disconnectKafkaProducer(); process.exit(0); });

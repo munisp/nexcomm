@@ -5,6 +5,8 @@ import { depositRequests, auditLog } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
+import { createLedgerTransfer, getUserLedgerAccounts } from "../gatewayClient";
+import { indexDeposit } from "../opensearch";
 
 export const depositsRouter = router({
   // LIST deposit requests for current user
@@ -94,6 +96,40 @@ export const depositsRouter = router({
         resource: "deposit_requests",
         resourceId: String(deposit.id),
         details: { commodity: input.commodity, quantity: input.quantity },
+      });
+
+      // Fire-and-forget: TigerBeetle ledger credit + OpenSearch index
+      setImmediate(async () => {
+        try {
+          // Credit user's settlement account via TigerBeetle (code=6: deposit)
+          const accounts = await getUserLedgerAccounts(String(ctx.user.id));
+          const settlementAccount = accounts.find(a => a.type === "settlement");
+          if (settlementAccount) {
+            const quantityNum = parseFloat(input.quantity) || 0;
+            if (quantityNum > 0) {
+              await createLedgerTransfer({
+                debitAccountId: "exchange-clearing",
+                creditAccountId: settlementAccount.id,
+                amount: Math.round(quantityNum * 100), // store in minor units
+                code: 6, // deposit
+              });
+            }
+          }
+        } catch (e) {
+          console.warn("[Deposits] TigerBeetle credit failed:", (e as Error).message);
+        }
+        try {
+          await indexDeposit({
+            id: deposit.id,
+            quantity: deposit.quantity,
+            commodity: deposit.commodity,
+            status: deposit.status,
+            notes: deposit.notes,
+            createdAt: deposit.createdAt,
+          });
+        } catch (e) {
+          console.warn("[Deposits] OpenSearch index failed:", (e as Error).message);
+        }
       });
 
       return deposit;

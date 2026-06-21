@@ -4,14 +4,16 @@
  * Push notification support for price alerts and order fills
  */
 
-const CACHE_NAME = "nexcom-v1";
-const STATIC_CACHE = "nexcom-static-v1";
-const API_CACHE = "nexcom-api-v1";
+const CACHE_VERSION = "v2";
+const CACHE_NAME = `nexcom-${CACHE_VERSION}`;
+const STATIC_CACHE = `nexcom-static-${CACHE_VERSION}`;
+const API_CACHE = `nexcom-api-${CACHE_VERSION}`;
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
   "/",
   "/manifest.json",
+  "/offline.html",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
 ];
@@ -27,11 +29,12 @@ self.addEventListener("install", (event) => {
 
 // ─── Activate ────────────────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
+  const validCaches = [STATIC_CACHE, API_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== STATIC_CACHE && name !== API_CACHE)
+          .filter((name) => !validCaches.includes(name))
           .map((name) => caches.delete(name))
       );
     }).then(() => self.clients.claim())
@@ -89,7 +92,25 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // HTML navigation — network-first, fallback to cached shell
+  // HTML navigation — network-first, fallback to offline page
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match("/offline.html").then((cached) => cached || caches.match("/"))
+        )
+    );
+    return;
+  }
+
+  // Default: network with cache fallback
   event.respondWith(
     fetch(request)
       .then((response) => {

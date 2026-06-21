@@ -3018,3 +3018,24 @@ export const aiSearchHistory = pgTable("ai_search_history", {
 });
 export type AiSearchHistory = typeof aiSearchHistory.$inferSelect;
 export type InsertAiSearchHistory = typeof aiSearchHistory.$inferInsert;
+
+// ============================================================
+// Refresh Tokens (JWT rotation — 7-day sliding window)
+// ============================================================
+export const refreshTokens = pgTable("refresh_tokens", {
+  id:          bigserial("id", { mode: "number" }).primaryKey(),
+  userId:      integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  /** SHA-256 hash of the raw token (never store raw token) */
+  tokenHash:   varchar("token_hash", { length: 64 }).notNull().unique(),
+  /** Token family — used to detect refresh token reuse attacks */
+  family:      varchar("family", { length: 64 }).notNull(),
+  expiresAt:   timestamp("expires_at").notNull(),
+  revokedAt:   timestamp("revoked_at"),
+  createdAt:   timestamp("created_at").defaultNow().notNull(),
+  /** IP address at time of issuance */
+  issuedIp:    varchar("issued_ip", { length: 45 }),
+  /** User-agent at time of issuance */
+  userAgent:   text("user_agent"),
+});
+export type RefreshToken = typeof refreshTokens.$inferSelect;
+export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
