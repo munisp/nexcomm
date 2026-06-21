@@ -1,0 +1,387 @@
+# NEXCOM Temporal Workers — Kubernetes Deployment
+# Deploys three worker pods: deposit, withdrawal, loan
+# Each reads TEMPORAL_ADDRESS from the nexcom-temporal-secret Secret.
+#
+# Apply with:
+#   kubectl apply -f infra/k8s/temporal-workers.yaml
+#
+# Required secret (create once):
+#   kubectl create secret generic nexcom-temporal-secret \
+#     --from-literal=TEMPORAL_ADDRESS=<your-temporal-cloud-endpoint>:7233 \
+#     --from-literal=TEMPORAL_NAMESPACE=nexcom \
+#     --from-literal=TEMPORAL_TLS_CERT=<base64-cert> \
+#     --from-literal=TEMPORAL_TLS_KEY=<base64-key>
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexcom
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+
+---
+# ─── Deposit Worker ──────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-worker-deposit
+  namespace: nexcom
+  labels:
+    app: temporal-worker
+    worker: deposit
+    app.kubernetes.io/part-of: nexcom-exchange
+    app.kubernetes.io/component: temporal-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: temporal-worker
+      worker: deposit
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: temporal-worker
+        worker: deposit
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      serviceAccountName: nexcom-temporal-worker
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: nexcom/temporal-workers:latest
+          imagePullPolicy: Always
+          env:
+            - name: WORKER
+              value: deposit
+            - name: TEMPORAL_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_ADDRESS
+            - name: TEMPORAL_NAMESPACE
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_NAMESPACE
+            - name: TEMPORAL_TLS_CERT
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_TLS_CERT
+                  optional: true
+            - name: TEMPORAL_TLS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_TLS_KEY
+                  optional: true
+            # Database (for activity implementations)
+            - name: NEXCOM_PG_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-db-secret
+                  key: NEXCOM_PG_URL
+            # TigerBeetle
+            - name: TIGERBEETLE_GATEWAY_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-infra-secret
+                  key: TIGERBEETLE_GATEWAY_URL
+                  optional: true
+            # Kafka
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-infra-secret
+                  key: KAFKA_BROKERS
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "ps aux | grep worker-deposit | grep -v grep"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "ps aux | grep worker-deposit | grep -v grep"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# ─── Withdrawal Worker ───────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-worker-withdrawal
+  namespace: nexcom
+  labels:
+    app: temporal-worker
+    worker: withdrawal
+    app.kubernetes.io/part-of: nexcom-exchange
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: temporal-worker
+      worker: withdrawal
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: temporal-worker
+        worker: withdrawal
+    spec:
+      serviceAccountName: nexcom-temporal-worker
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: nexcom/temporal-workers:latest
+          imagePullPolicy: Always
+          env:
+            - name: WORKER
+              value: withdrawal
+            - name: TEMPORAL_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_ADDRESS
+            - name: TEMPORAL_NAMESPACE
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_NAMESPACE
+            - name: TEMPORAL_TLS_CERT
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_TLS_CERT
+                  optional: true
+            - name: TEMPORAL_TLS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_TLS_KEY
+                  optional: true
+            - name: NEXCOM_PG_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-db-secret
+                  key: NEXCOM_PG_URL
+            - name: TIGERBEETLE_GATEWAY_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-infra-secret
+                  key: TIGERBEETLE_GATEWAY_URL
+                  optional: true
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-infra-secret
+                  key: KAFKA_BROKERS
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "ps aux | grep worker-withdrawal | grep -v grep"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+
+---
+# ─── Loan Worker ─────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-worker-loan
+  namespace: nexcom
+  labels:
+    app: temporal-worker
+    worker: loan
+    app.kubernetes.io/part-of: nexcom-exchange
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: temporal-worker
+      worker: loan
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: temporal-worker
+        worker: loan
+    spec:
+      serviceAccountName: nexcom-temporal-worker
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: nexcom/temporal-workers:latest
+          imagePullPolicy: Always
+          env:
+            - name: WORKER
+              value: loan
+            - name: TEMPORAL_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_ADDRESS
+            - name: TEMPORAL_NAMESPACE
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_NAMESPACE
+            - name: TEMPORAL_TLS_CERT
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_TLS_CERT
+                  optional: true
+            - name: TEMPORAL_TLS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-temporal-secret
+                  key: TEMPORAL_TLS_KEY
+                  optional: true
+            - name: NEXCOM_PG_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-db-secret
+                  key: NEXCOM_PG_URL
+            - name: TIGERBEETLE_GATEWAY_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-infra-secret
+                  key: TIGERBEETLE_GATEWAY_URL
+                  optional: true
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-infra-secret
+                  key: KAFKA_BROKERS
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "ps aux | grep worker-loan | grep -v grep"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+
+---
+# ─── Service Account ─────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexcom-temporal-worker
+  namespace: nexcom
+  labels:
+    app.kubernetes.io/part-of: nexcom-exchange
+
+---
+# ─── HorizontalPodAutoscaler ─────────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: temporal-worker-deposit-hpa
+  namespace: nexcom
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: temporal-worker-deposit
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: temporal-worker-withdrawal-hpa
+  namespace: nexcom
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: temporal-worker-withdrawal
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: temporal-worker-loan-hpa
+  namespace: nexcom
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: temporal-worker-loan
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+# ─── PodDisruptionBudget ─────────────────────────────────────────────────────
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: temporal-workers-pdb
+  namespace: nexcom
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: temporal-worker

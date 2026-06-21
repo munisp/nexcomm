@@ -1138,3 +1138,9 @@
 - [x] TypeScript: 0 errors
 - [x] Checkpoint saved: see final checkpoint below
 - [x] GitHub push: munisp/nexcomm updated with all changes
+
+## Suggested Next Steps — COMPLETED (2026-06-21)
+
+- [x] GitHub Actions CI pipeline — .github/workflows/ci.yml: Vitest + Playwright on every PR with localhost/CI rate-limit bypass; 4-job pipeline (unit-test, e2e, temporal-worker-build, security-audit)
+- [x] Temporal Worker K8s deployment — Go worker Dockerfile + entrypoint.sh + K8s Deployment manifest (infra/k8s/temporal-workers.yaml) + TEMPORAL_ADDRESS + TLS support in temporalClient.ts + deployment guide (docs/temporal-worker-deployment.md)
+- [x] Ledger UI page — /ledger fully wired with TigerBeetle real-time panel (marketData.ledgerAccounts), double-entry journal history, internal transfer dialog, admin summary; new TigerBeetle tab added to Ledger.tsx

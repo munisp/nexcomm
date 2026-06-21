@@ -14,10 +14,34 @@
  */
 
 import { Connection, Client, WorkflowExecutionAlreadyStartedError } from "@temporalio/client";
+import * as fs from "fs";
 
 const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS ?? "localhost:7233";
 const TEMPORAL_NAMESPACE = process.env.TEMPORAL_NAMESPACE ?? "nexcom-exchange";
 const TEMPORAL_TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE ?? "nexcom-fund-flows";
+
+// Temporal Cloud TLS support — set TEMPORAL_TLS_CERT and TEMPORAL_TLS_KEY to
+// base64-encoded PEM strings (or file paths) when connecting to Temporal Cloud.
+function buildTlsConfig(): { serverNameOverride?: string; serverRootCACertificate?: Buffer; clientCertPair?: { crt: Buffer; key: Buffer } } | undefined {
+  const certEnv = process.env.TEMPORAL_TLS_CERT;
+  const keyEnv = process.env.TEMPORAL_TLS_KEY;
+  if (!certEnv || !keyEnv) return undefined;
+
+  const loadPem = (value: string): Buffer => {
+    // If it looks like a file path, read it; otherwise treat as base64-encoded PEM
+    if (value.startsWith("/") || value.startsWith(".")) {
+      return fs.readFileSync(value);
+    }
+    return Buffer.from(value, "base64");
+  };
+
+  return {
+    clientCertPair: {
+      crt: loadPem(certEnv),
+      key: loadPem(keyEnv),
+    },
+  };
+}
 
 let _client: Client | null = null;
 let _connectionFailed = false;
@@ -26,13 +50,17 @@ async function getTemporalClient(): Promise<Client | null> {
   if (_connectionFailed) return null;
   if (_client) return _client;
 
+  const tls = buildTlsConfig();
+  const isTemporalCloud = TEMPORAL_ADDRESS.includes(".tmprl.cloud") || TEMPORAL_ADDRESS.includes(".temporal.io");
+
   try {
     const connection = await Connection.connect({
       address: TEMPORAL_ADDRESS,
-      connectTimeout: "3s",
+      connectTimeout: "5s",
+      tls: tls ?? (isTemporalCloud ? {} : false),
     });
     _client = new Client({ connection, namespace: TEMPORAL_NAMESPACE });
-    console.log(`[Temporal] Connected to ${TEMPORAL_ADDRESS} namespace=${TEMPORAL_NAMESPACE}`);
+    console.log(`[Temporal] Connected to ${TEMPORAL_ADDRESS} namespace=${TEMPORAL_NAMESPACE} tls=${!!tls || isTemporalCloud}`);
     return _client;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

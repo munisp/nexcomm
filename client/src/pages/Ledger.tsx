@@ -25,7 +25,7 @@ import {
   ArrowUpRight, ArrowDownLeft, RefreshCw, TrendingUp, TrendingDown,
   Wallet, BookOpen, ArrowLeftRight, Shield, AlertCircle, CheckCircle2,
   Clock, DollarSign, BarChart3, Download, Filter, Search, ChevronLeft, ChevronRight,
-  Landmark, CreditCard, Banknote, Activity
+  Landmark, CreditCard, Banknote, Activity, Zap, Database, Hash
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { PageSkeleton } from "@/components/PageSkeleton";
@@ -621,6 +621,165 @@ function AdminSettlementQueueActions() {
   );
 }
 
+// ─── TigerBeetle Account Panel ───────────────────────────────────────────────
+function TigerBeetlePanel() {
+  const { data: tbAccounts, isLoading: tbLoading, refetch } =
+    trpc.marketData.ledgerAccounts.useQuery({});
+
+  const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+    "1": "Trading",
+    "2": "Settlement",
+    "3": "Margin",
+    "4": "Fee",
+    "5": "Escrow",
+    "6": "Insurance",
+    "7": "Reserve",
+  };
+
+  const ACCOUNT_TYPE_COLORS: Record<string, string> = {
+    "1": "text-blue-400 bg-blue-500/10 border-blue-500/20",
+    "2": "text-purple-400 bg-purple-500/10 border-purple-500/20",
+    "3": "text-amber-400 bg-amber-500/10 border-amber-500/20",
+    "4": "text-slate-400 bg-slate-500/10 border-slate-500/20",
+    "5": "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+    "6": "text-rose-400 bg-rose-500/10 border-rose-500/20",
+    "7": "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  };
+
+  if (tbLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-40 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  const accounts = Array.isArray(tbAccounts) ? tbAccounts : [];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Zap className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">TigerBeetle Double-Entry Ledger</p>
+            <p className="text-xs text-muted-foreground">Real-time account balances from the financial kernel</p>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" className="gap-2" onClick={() => refetch()}>
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </Button>
+      </div>
+
+      {/* Architecture note */}
+      <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-xs text-muted-foreground space-y-1">
+        <p className="flex items-center gap-1.5 font-medium text-foreground">
+          <Database className="w-3.5 h-3.5 text-primary" />
+          About TigerBeetle
+        </p>
+        <p>
+          TigerBeetle is a purpose-built financial transactions database with strict double-entry
+          accounting, 1M+ TPS, and crash-safe ACID guarantees. Every deposit, withdrawal, trade
+          settlement, margin hold, and fee collection is recorded here as an immutable transfer.
+        </p>
+      </div>
+
+      {/* Account cards */}
+      {accounts.length === 0 ? (
+        <Card className="bg-card/50 border-border/50">
+          <CardContent className="py-16 text-center">
+            <Zap className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-40" />
+            <p className="text-muted-foreground">No TigerBeetle accounts found</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Accounts are provisioned automatically on first login when TigerBeetle is connected
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {(accounts as Record<string, unknown>[]).map((account, i) => {
+            const typeCode = String(account.account_type ?? account.accountType ?? i + 1);
+            const label = ACCOUNT_TYPE_LABELS[typeCode] ?? `Account ${typeCode}`;
+            const colorClass = ACCOUNT_TYPE_COLORS[typeCode] ?? "text-muted-foreground bg-muted/10 border-border/30";
+            const credits = BigInt(String(account.credits_posted ?? account.creditsPosted ?? 0));
+            const debits  = BigInt(String(account.debits_posted ?? account.debitsPosted ?? 0));
+            const balance = credits - debits;
+            const pending = BigInt(String(account.debits_pending ?? account.debitsPending ?? 0));
+            const available = balance - pending;
+            const currency = String(account.currency ?? "NGN");
+
+            return (
+              <Card key={String(account.id ?? i)} className="bg-card/50 border-border/50 hover:border-primary/30 transition-colors">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${colorClass}`}>
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-medium">{label}</CardTitle>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {String(account.id ?? "").slice(0, 16)}…
+                        </p>
+                      </div>
+                    </div>
+                    <Badge className={`text-xs border ${colorClass}`}>{currency}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Balance</p>
+                    <p className="text-2xl font-bold font-mono">
+                      {formatCurrency(Number(balance) / 100, currency)}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-emerald-500/5 rounded-lg p-2 border border-emerald-500/10">
+                      <p className="text-xs text-muted-foreground">Available</p>
+                      <p className="text-sm font-semibold text-emerald-400 font-mono">
+                        {formatCurrency(Number(available) / 100, currency)}
+                      </p>
+                    </div>
+                    <div className="bg-amber-500/5 rounded-lg p-2 border border-amber-500/10">
+                      <p className="text-xs text-muted-foreground">Pending</p>
+                      <p className="text-sm font-semibold text-amber-400 font-mono">
+                        {formatCurrency(Number(pending) / 100, currency)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/30">
+                    <div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Hash className="w-2.5 h-2.5" /> Credits
+                      </p>
+                      <p className="text-xs font-mono text-emerald-400">
+                        {formatCurrency(Number(credits) / 100, currency)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Hash className="w-2.5 h-2.5" /> Debits
+                      </p>
+                      <p className="text-xs font-mono text-rose-400">
+                        {formatCurrency(Number(debits) / 100, currency)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Ledger Page ─────────────────────────────────────────────────────────
 export default function Ledger() {
   const { user } = useAuth();
@@ -733,6 +892,9 @@ export default function Ledger() {
           </TabsTrigger>
           <TabsTrigger value="transfers" className="gap-2">
             <ArrowLeftRight className="w-4 h-4" /> Transfers
+          </TabsTrigger>
+          <TabsTrigger value="tigerbeetle" className="gap-2">
+            <Zap className="w-4 h-4" /> TigerBeetle
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="admin" className="gap-2">
@@ -878,6 +1040,11 @@ export default function Ledger() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* TigerBeetle Tab */}
+        <TabsContent value="tigerbeetle" className="mt-6">
+          <TigerBeetlePanel />
         </TabsContent>
 
         {/* Admin Tab */}
