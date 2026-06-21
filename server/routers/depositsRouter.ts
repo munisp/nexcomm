@@ -7,6 +7,16 @@ import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
 import { createLedgerTransfer, getUserLedgerAccounts } from "../gatewayClient";
 import { indexDeposit } from "../opensearch";
+import {
+  emitDepositInitiated,
+  emitDepositCompleted,
+  emitDepositFailed,
+  emitFeeCollected,
+} from "../kafka/kafkaProducer";
+import { publishFluvioEvent } from "../fluvio/fluvioClient";
+import { FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { ingestDeposit } from "../lakehouse";
 
 export const depositsRouter = router({
   // LIST deposit requests for current user
@@ -98,8 +108,19 @@ export const depositsRouter = router({
         details: { commodity: input.commodity, quantity: input.quantity },
       });
 
-      // Fire-and-forget: TigerBeetle ledger credit + OpenSearch index
+      // ── Kafka: emit deposit-initiated event ────────────────────────────────
+      void emitDepositInitiated({
+        depositId: String(deposit.id),
+        userId: ctx.user.id,
+        amount: parseFloat(input.quantity) || 0,
+        currency: "NGN",
+        channel: "warehouse",
+        reference: input.notes ?? "",
+      });
+
+      // ── Fire-and-forget: TigerBeetle ledger credit + OpenSearch index + Fluvio ──
       setImmediate(async () => {
+        let ledgerTxId: string | undefined;
         try {
           // Credit user's settlement account via TigerBeetle (code=6: deposit)
           const accounts = await getUserLedgerAccounts(String(ctx.user.id));
@@ -107,16 +128,39 @@ export const depositsRouter = router({
           if (settlementAccount) {
             const quantityNum = parseFloat(input.quantity) || 0;
             if (quantityNum > 0) {
-              await createLedgerTransfer({
+              const transfer = await createLedgerTransfer({
                 debitAccountId: "exchange-clearing",
                 creditAccountId: settlementAccount.id,
                 amount: Math.round(quantityNum * 100), // store in minor units
                 code: 6, // deposit
               });
+              ledgerTxId = transfer?.id;
             }
           }
+          // Kafka: emit deposit-completed
+          await emitDepositCompleted({
+            depositId: String(deposit.id),
+            userId: ctx.user.id,
+            amount: parseFloat(input.quantity) || 0,
+            currency: "NGN",
+            channel: "warehouse",
+            ledgerTxId: ledgerTxId ?? "",
+          });
+          // Fluvio: real-time event for live dashboard
+          await publishFluvioEvent(FLUVIO_TOPICS.SETTLEMENT_INITIATED, {
+            depositId: String(deposit.id),
+            userId: ctx.user.id,
+            amount: parseFloat(input.quantity) || 0,
+            ledgerTxId,
+          });
         } catch (e) {
           console.warn("[Deposits] TigerBeetle credit failed:", (e as Error).message);
+          void emitDepositFailed({
+            depositId: String(deposit.id),
+            userId: ctx.user.id,
+            amount: parseFloat(input.quantity) || 0,
+            reason: (e as Error).message,
+          });
         }
         try {
           await indexDeposit({
@@ -130,6 +174,28 @@ export const depositsRouter = router({
         } catch (e) {
           console.warn("[Deposits] OpenSearch index failed:", (e as Error).message);
         }
+        // Trigger Temporal workflow for durable deposit processing
+        try {
+          await triggerTemporalWorkflow("DepositWorkflow", {
+            depositId: String(deposit.id),
+            userId: String(ctx.user.id),
+            amount: parseFloat(input.quantity) || 0,
+            currency: "NGN",
+            channel: "warehouse",
+            reference: input.notes ?? "",
+          });
+        } catch (e) {
+          console.warn("[Deposits] Temporal workflow trigger failed (degraded):", (e as Error).message);
+        }
+        // Lakehouse: immutable audit trail (Bronze layer)
+        void ingestDeposit({
+          depositId: String(deposit.id),
+          userId: ctx.user.id,
+          amount: parseFloat(input.quantity) || 0,
+          currency: "NGN",
+          status: "pending",
+          correlationId: String(deposit.id),
+        });
       });
 
       return deposit;

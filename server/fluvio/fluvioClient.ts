@@ -332,3 +332,108 @@ export async function publishAuditLog(entry: {
     value: { ...entry, timestamp: new Date().toISOString() },
   });
 }
+
+/**
+ * Generic event publisher — used by routers that need to emit to any topic.
+ * Wraps produce() with a simpler API (no FluvioRecord wrapper needed).
+ */
+export async function publishFluvioEvent(
+  topic: FluvioTopic,
+  payload: unknown,
+  key?: string
+): Promise<void> {
+  await produce(topic, {
+    key: key ?? String(Date.now()),
+    value: payload,
+    timestamp: Date.now(),
+  });
+}
+
+// ─── Banking / fund-flow publishers ──────────────────────────────────────────
+
+export async function publishDepositEvent(event: {
+  depositId: string;
+  userId: number;
+  amount: number;
+  currency: string;
+  status: "initiated" | "completed" | "failed";
+  ledgerTxId?: string;
+  reason?: string;
+}): Promise<void> {
+  const topic =
+    event.status === "completed"
+      ? FLUVIO_TOPICS.SETTLEMENT_COMPLETED
+      : event.status === "failed"
+      ? FLUVIO_TOPICS.SETTLEMENT_FAILED
+      : FLUVIO_TOPICS.SETTLEMENT_INITIATED;
+  await produce(topic, {
+    key: `DEPOSIT-${event.depositId}`,
+    value: { ...event, timestamp: new Date().toISOString() },
+  });
+}
+
+export async function publishWithdrawalEvent(event: {
+  withdrawalId: string;
+  userId: number;
+  amount: number;
+  currency: string;
+  status: "initiated" | "completed" | "failed";
+  externalTxId?: string;
+  ledgerTxId?: string;
+  reason?: string;
+}): Promise<void> {
+  const topic =
+    event.status === "completed"
+      ? FLUVIO_TOPICS.SETTLEMENT_COMPLETED
+      : event.status === "failed"
+      ? FLUVIO_TOPICS.SETTLEMENT_FAILED
+      : FLUVIO_TOPICS.SETTLEMENT_INITIATED;
+  await produce(topic, {
+    key: `WITHDRAWAL-${event.withdrawalId}`,
+    value: { ...event, timestamp: new Date().toISOString() },
+  });
+}
+
+export async function publishLoanEvent(event: {
+  loanId: string;
+  userId: number;
+  amount: number;
+  currency: string;
+  status: "disbursed" | "repaid" | "defaulted";
+  ledgerTxId?: string;
+  externalTxId?: string;
+}): Promise<void> {
+  await produce(FLUVIO_TOPICS.LOAN_DISBURSED, {
+    key: `LOAN-${event.loanId}`,
+    value: { ...event, timestamp: new Date().toISOString() },
+  });
+}
+
+export async function publishMarginEvent(event: {
+  userId: number;
+  amount: number;
+  currency: string;
+  eventType: "deposited" | "released" | "call" | "liquidated";
+  ledgerTxId?: string;
+  utilisationPct?: number;
+}): Promise<void> {
+  await produce(FLUVIO_TOPICS.SETTLEMENT_INITIATED, {
+    key: `MARGIN-${event.userId}-${Date.now()}`,
+    value: { ...event, timestamp: new Date().toISOString() },
+  });
+}
+
+export async function publishFeeEvent(event: {
+  userId: number;
+  feeType: string;
+  feeAmount: number;
+  currency: string;
+  tradeId?: string;
+  depositId?: string;
+  ledgerTxId: string;
+}): Promise<void> {
+  await produce(FLUVIO_TOPICS.SETTLEMENT_COMPLETED, {
+    key: `FEE-${event.userId}-${Date.now()}`,
+    value: { ...event, timestamp: new Date().toISOString() },
+  });
+}

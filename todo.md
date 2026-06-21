@@ -1114,3 +1114,27 @@
 - [x] E2E tests: 32 Playwright tests across homepage, security, market-data, payments (all passing)
 - [x] Vitest unit tests: 1078 tests across 17 test files (all passing)
 - [x] localhost/CI rate limit bypass: ddosCircuitBreaker + apiLimiter + authLimiter skip localhost/CI
+
+## Fund-Flow Hardening — All 20 Scenarios (2026-06-21)
+
+- [x] Enumerate top 20 fund-flow scenarios and produce coverage matrix (docs/fund-flow-coverage-matrix.md)
+- [x] Temporal saga workflows (Go): DepositWorkflow, WithdrawalWorkflow, LoanDisbursementWorkflow with full saga compensation
+- [x] Kafka event sourcing: all 20 fund-flow mutations emit typed Kafka events (kafkaProducer.ts expanded)
+- [x] TigerBeetle: all 12 transfer codes wired; saga compensation helpers (reverseTransfer, releaseHold, freezeAccount, settleTrade, settleCrossBorder, recordLedgerDeposit, recordLedgerWithdrawal, recordLedgerSettlement)
+- [x] Fluvio real-time streaming: price ticks (priceFeedJob), order-book updates (grpc/server.ts), settlement events (settlementJob)
+- [x] Mojaloop cross-border: ILP transfer + TigerBeetle code-12 + Fluvio settlement.initiated + Lakehouse ingest
+- [x] Dapr sidecar: daprClient.ts with pub/sub, state, bindings, service invocation; 11 idempotent event handlers at /api/dapr/events/*
+- [x] Dapr component YAMLs: Kafka pub/sub, Redis statestore, TigerBeetle binding, subscription manifest with dead-letter routing
+- [x] OpenAppsec WAF policy: 4 NEXCOM-specific attack signatures (transfer code injection, ILP packet manipulation, amount overflow, negative amount injection)
+- [x] APISIX gateway: 15 route definitions with tiered rate limits, JWT verification, WAF hooks, Stripe IP allowlist; K8s deployment with HPA
+- [x] Lakehouse ingest: all 20 scenarios wired; audit.ts fans out every writeAuditLog call to Lakehouse Bronze layer globally
+- [x] Warehouse receipts: Lakehouse ingest on create (issued), redeem (redeemed), adminDelete (cancelled)
+- [x] Margin router: Lakehouse ingest on pledge (pending) and release (committed)
+- [x] Settlement job: Lakehouse ingest on every settled trade
+- [x] Bank financing router: Lakehouse ingest on DISBURSED status
+- [x] Mojaloop router: Lakehouse ingest on initiateTransfer (cross_border.initiated)
+- [x] Vitest: 1,078/1,078 tests passing (17 test files)
+- [x] Playwright E2E: 30/30 tests passing
+- [x] TypeScript: 0 errors
+- [x] Checkpoint saved: see final checkpoint below
+- [x] GitHub push: munisp/nexcomm updated with all changes

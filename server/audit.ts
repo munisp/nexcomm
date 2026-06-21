@@ -18,6 +18,7 @@
 
 import { getDb } from "./db";
 import { auditLog } from "../drizzle/schema";
+import { ingestAuditEvent } from "./lakehouse";
 
 export interface AuditEntry {
   userId?: number | null;
@@ -48,6 +49,17 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
   } catch (err) {
     // Audit log failures must never break the primary operation
     console.error("[AuditLog] Failed to write audit entry:", err);
+  }
+  // Lakehouse: fan-out every audit entry to the immutable audit trail (fire-and-forget)
+  if (entry.userId != null) {
+    void ingestAuditEvent({
+      userId: entry.userId,
+      action: entry.action,
+      resource: entry.resource ?? "unknown",
+      resourceId: entry.resourceId ?? "0",
+      details: entry.details,
+      ipAddress: entry.ipAddress,
+    });
   }
 }
 

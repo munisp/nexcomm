@@ -1,0 +1,396 @@
+# NEXCOM Exchange — APISIX Route Definitions
+# ─────────────────────────────────────────────────────────────────────────────
+# Each route maps an external API path to the upstream NEXCOM Node.js server.
+# Fund-flow routes have stricter rate limits and mandatory JWT verification.
+#
+# Rate limit tiers:
+#   - PUBLIC:       60 req/min per IP  (market data, health)
+#   - AUTHENTICATED: 120 req/min per user (general tRPC)
+#   - FUND_FLOW:    10 req/min per user  (deposits, withdrawals, orders, loans)
+#   - ADMIN:        30 req/min per user  (admin procedures)
+#   - INTERNAL:     IP allowlist only    (Dapr callbacks, Mojaloop callbacks)
+
+upstreams:
+  - id: nexcom-node
+    name: nexcom-exchange-nodejs
+    type: roundrobin
+    nodes:
+      "nexcom-exchange:3000": 1
+    scheme: http
+    pass_host: pass
+    keepalive_pool:
+      size: 320
+      idle_timeout: 60
+      requests: 1000
+
+  - id: nexcom-go-gateway
+    name: nexcom-go-gateway
+    type: roundrobin
+    nodes:
+      "nexcom-go-gateway:8200": 1
+    scheme: http
+
+routes:
+  # ── Public: market data (no auth required) ──────────────────────────────────
+  - id: market-data-public
+    name: Market Data — Public
+    uri: /api/trpc/marketData.*
+    methods: [GET]
+    upstream_id: nexcom-node
+    plugins:
+      limit-count:
+        count: 60
+        time_window: 60
+        key: remote_addr
+        rejected_code: 429
+      cors:
+        allow_origins: "*"
+        allow_methods: "GET,OPTIONS"
+        allow_headers: "Content-Type,Authorization"
+      prometheus: {}
+
+  # ── Public: commodities list ─────────────────────────────────────────────────
+  - id: commodities-public
+    name: Commodities — Public
+    uri: /api/trpc/commodities.list
+    methods: [GET]
+    upstream_id: nexcom-node
+    plugins:
+      limit-count:
+        count: 60
+        time_window: 60
+        key: remote_addr
+        rejected_code: 429
+      cors:
+        allow_origins: "*"
+        allow_methods: "GET,OPTIONS"
+
+  # ── Authenticated: general tRPC ──────────────────────────────────────────────
+  - id: trpc-authenticated
+    name: tRPC — Authenticated
+    uri: /api/trpc/*
+    methods: [GET, POST, OPTIONS]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        key_claim_name: sub
+        algorithm: RS256
+      limit-count:
+        count: 120
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      request-size-limiter:
+        allowed_payload_size: 2
+        size_unit: megabytes
+        rejected_code: 413
+      cors:
+        allow_origins: "${CORS_ALLOWED_ORIGINS}"
+        allow_methods: "GET,POST,OPTIONS"
+        allow_headers: "Content-Type,Authorization,X-CSRF-Token"
+        allow_credential: true
+      prometheus: {}
+      kafka-logger:
+        include_req_body: false
+        include_resp_body: false
+
+  # ── Fund-flow: deposits (strict rate limit + WAF) ────────────────────────────
+  - id: deposits-fund-flow
+    name: Deposits — Fund Flow
+    uri: /api/trpc/stripe.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 10
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+        rejected_msg: "Rate limit exceeded for deposit operations"
+      request-size-limiter:
+        allowed_payload_size: 512
+        size_unit: kilobytes
+        rejected_code: 413
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+      kafka-logger:
+        include_req_body: true
+        include_resp_body: false
+
+  # ── Fund-flow: orders (strict rate limit + WAF) ──────────────────────────────
+  - id: orders-fund-flow
+    name: Orders — Fund Flow
+    uri: /api/trpc/orders.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 30
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      limit-req:
+        rate: 5
+        burst: 10
+        key: consumer_name
+        rejected_code: 429
+      request-size-limiter:
+        allowed_payload_size: 256
+        size_unit: kilobytes
+        rejected_code: 413
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+
+  # ── Fund-flow: banking / withdrawals ────────────────────────────────────────
+  - id: banking-fund-flow
+    name: Banking — Fund Flow
+    uri: /api/trpc/banking.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 10
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+        rejected_msg: "Rate limit exceeded for withdrawal operations"
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+      kafka-logger:
+        include_req_body: true
+        include_resp_body: false
+
+  # ── Fund-flow: margin ────────────────────────────────────────────────────────
+  - id: margin-fund-flow
+    name: Margin — Fund Flow
+    uri: /api/trpc/margin.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 20
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+
+  # ── Fund-flow: loans ─────────────────────────────────────────────────────────
+  - id: loans-fund-flow
+    name: Loans — Fund Flow
+    uri: /api/trpc/loans.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 10
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+
+  # ── Fund-flow: Mojaloop transfers ────────────────────────────────────────────
+  - id: mojaloop-fund-flow
+    name: Mojaloop — Cross-Border
+    uri: /api/trpc/mojaloop.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 5
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+        rejected_msg: "Rate limit exceeded for cross-border transfer operations"
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+      kafka-logger:
+        include_req_body: true
+        include_resp_body: false
+
+  # ── Admin: admin-only procedures ─────────────────────────────────────────────
+  - id: admin-procedures
+    name: Admin — Protected
+    uri: /api/trpc/admin.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      ip-restriction:
+        allowlist:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          - "127.0.0.1"
+      limit-count:
+        count: 30
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      prometheus: {}
+
+  # ── Internal: Dapr event callbacks ──────────────────────────────────────────
+  - id: dapr-internal
+    name: Dapr — Internal Events
+    uri: /api/dapr/events/*
+    methods: [POST]
+    upstream_id: nexcom-node
+    plugins:
+      ip-restriction:
+        allowlist:
+          - "127.0.0.1"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+      limit-count:
+        count: 1000
+        time_window: 60
+        key: remote_addr
+        rejected_code: 429
+
+  # ── Internal: Mojaloop settlement callback ───────────────────────────────────
+  - id: mojaloop-callback-internal
+    name: Mojaloop — Settlement Callback
+    uri: /api/internal/mojaloop/*
+    methods: [POST]
+    upstream_id: nexcom-node
+    plugins:
+      ip-restriction:
+        allowlist:
+          - "127.0.0.1"
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+      limit-count:
+        count: 500
+        time_window: 60
+        key: remote_addr
+        rejected_code: 429
+
+  # ── Stripe webhook ───────────────────────────────────────────────────────────
+  - id: stripe-webhook
+    name: Stripe — Webhook
+    uri: /api/stripe/webhook
+    methods: [POST]
+    upstream_id: nexcom-node
+    plugins:
+      ip-restriction:
+        allowlist:
+          # Stripe webhook IP ranges (https://stripe.com/docs/ips)
+          - "3.18.12.63"
+          - "3.130.192.231"
+          - "13.235.14.237"
+          - "13.235.122.149"
+          - "18.211.135.69"
+          - "35.154.171.200"
+          - "52.15.183.38"
+          - "54.88.130.119"
+          - "54.88.130.237"
+          - "54.187.174.169"
+          - "54.187.205.235"
+          - "54.187.216.72"
+          # Allow internal/sandbox for testing
+          - "127.0.0.1"
+          - "10.0.0.0/8"
+      request-size-limiter:
+        allowed_payload_size: 512
+        size_unit: kilobytes
+        rejected_code: 413
+      prometheus: {}
+
+  # ── OAuth callback ───────────────────────────────────────────────────────────
+  - id: oauth-callback
+    name: OAuth — Callback
+    uri: /api/oauth/*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      limit-count:
+        count: 20
+        time_window: 60
+        key: remote_addr
+        rejected_code: 429
+      prometheus: {}
+
+  # ── Health check ─────────────────────────────────────────────────────────────
+  - id: health-public
+    name: Health — Public
+    uri: /api/health*
+    methods: [GET]
+    upstream_id: nexcom-node
+    plugins:
+      limit-count:
+        count: 30
+        time_window: 60
+        key: remote_addr
+        rejected_code: 429
+
+  # ── Static assets (Vite SPA) ─────────────────────────────────────────────────
+  - id: spa-static
+    name: SPA — Static Assets
+    uri: /*
+    methods: [GET, HEAD, OPTIONS]
+    upstream_id: nexcom-node
+    plugins:
+      limit-count:
+        count: 300
+        time_window: 60
+        key: remote_addr
+        rejected_code: 429
+      cors:
+        allow_origins: "${CORS_ALLOWED_ORIGINS}"
+        allow_methods: "GET,HEAD,OPTIONS"

@@ -5,6 +5,7 @@ import { warehouseReceipts, auditLog } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
+import { ingestWarehouseReceipt } from "../lakehouse";
 
 export const receiptsRouter = router({
   // LIST warehouse receipts for current user
@@ -107,6 +108,17 @@ export const receiptsRouter = router({
         details: { receiptNumber, commodity: input.commodity, quantity: input.quantity },
       });
 
+      // Lakehouse: immutable Bronze-layer record of warehouse receipt issuance
+      void ingestWarehouseReceipt({
+        receiptId: String(receipt.id),
+        userId: targetUserId,
+        commodityId: input.commodity,
+        quantity: input.quantity,
+        unit: input.unit,
+        warehouseId: input.warehouseId ?? "unknown",
+        status: "issued",
+        correlationId: receipt.receiptNumber,
+      });
       return receipt;
     }),
 
@@ -172,6 +184,17 @@ export const receiptsRouter = router({
         .set({ status: "REDEEMED", updatedAt: new Date() })
         .where(eq(warehouseReceipts.id, input.id));
 
+      // Lakehouse: immutable Bronze-layer record of receipt redemption
+      void ingestWarehouseReceipt({
+        receiptId: String(input.id),
+        userId: ctx.user.id,
+        commodityId: result[0].commodity,
+        quantity: result[0].quantity,
+        unit: result[0].unit,
+        warehouseId: result[0].warehouseId ?? "unknown",
+        status: "redeemed",
+        correlationId: result[0].receiptNumber,
+      });
       return { success: true };
     }),
 
@@ -187,6 +210,17 @@ export const receiptsRouter = router({
         .where(eq(warehouseReceipts.id, input.receiptId))
         .returning();
       if (!receipt) throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
+      // Lakehouse: immutable Bronze-layer record of receipt cancellation
+      void ingestWarehouseReceipt({
+        receiptId: String(receipt.id),
+        userId: receipt.userId,
+        commodityId: receipt.commodity,
+        quantity: receipt.quantity,
+        unit: receipt.unit,
+        warehouseId: receipt.warehouseId ?? "unknown",
+        status: "cancelled",
+        correlationId: receipt.receiptNumber,
+      });
       return { success: true };
     }),
 

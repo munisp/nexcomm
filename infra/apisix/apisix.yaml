@@ -1,0 +1,57 @@
+# NEXCOM Exchange — APISIX Gateway Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# APISIX acts as the API gateway in front of the NEXCOM Exchange Node.js server.
+# It provides:
+#   - JWT verification (Keycloak JWKS)
+#   - Rate limiting (fund-flow endpoints: 10 req/min per user)
+#   - Request size limits (prevent oversized payloads)
+#   - OpenAppsec WAF integration (via plugin)
+#   - IP allowlist for internal services (TigerBeetle gateway, Mojaloop adapter)
+#   - CORS policy enforcement
+#   - Request/response logging to Kafka (for Lakehouse ingestion)
+#
+# Deploy: kubectl apply -f infra/apisix/apisix.yaml
+# Requires: APISIX 3.x + apisix-ingress-controller
+
+apisix:
+  node_listen: 9080
+  enable_ipv6: false
+  enable_admin: true
+  admin_listen:
+    ip: 127.0.0.1
+    port: 9180
+
+plugin_attr:
+  prometheus:
+    export_uri: /apisix/prometheus/metrics
+    metric_prefix: nexcom_apisix_
+    enable_export_server: true
+    export_addr:
+      ip: 0.0.0.0
+      port: 9091
+  kafka-logger:
+    broker_list:
+      - host: "${KAFKA_BROKER_HOST}"
+        port: 9092
+    kafka_topic: nexcom-api-access-log
+    key: nexcom-apisix
+    timeout: 3
+    required_acks: 1
+
+plugins:
+  - jwt-auth
+  - key-auth
+  - rate-limiting
+  - limit-req
+  - limit-count
+  - openid-connect
+  - cors
+  - ip-restriction
+  - request-size-limiter
+  - response-rewrite
+  - proxy-rewrite
+  - kafka-logger
+  - prometheus
+  - opentelemetry
+  - ext-plugin-pre-req     # OpenAppsec WAF hook
+  - ext-plugin-post-resp   # OpenAppsec response inspection

@@ -17,6 +17,7 @@ import { getDb } from "../db";
 import { bankFinancingApplications, notifications } from "../../drizzle/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { writeAuditLog } from "../audit";
+import { ingestLoan } from "../lakehouse";
 
 const BANK_FINANCING_STATUSES = [
   "DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED",
@@ -186,6 +187,19 @@ export const bankFinancingRouter = router({
         metadata: { applicationId: input.id, status: input.status },
         read: false,
       });
+      // Lakehouse: immutable Bronze-layer record of loan disbursement
+      if (input.status === "DISBURSED" && updated) {
+        void ingestLoan({
+          loanId: String(updated.id),
+          userId: updated.userId,
+          amount: Number(updated.approvedAmountNgn ?? 0),
+          currency: "NGN",
+          interestRate: Number(updated.interestRatePct ?? 0),
+          dueDate: updated.updatedAt?.toISOString() ?? new Date().toISOString(),
+          status: "disbursed",
+          correlationId: String(updated.id),
+        });
+      }
       return { success: true, application: updated };
     }),
 

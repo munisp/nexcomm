@@ -21,6 +21,9 @@ import { eq, desc, and, sql, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
 import { emitMojaloopTransferInitiated, emitMojaloopQuoteAccepted } from "../kafka/kafkaProducer";
+import { produce, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { settleCrossBorder } from "../gatewayClient";
+import { ingestCrossBorderTransfer } from "../lakehouse";
 
 const MOJALOOP_ADAPTER_URL =
   process.env.MOJALOOP_ADAPTER_URL ?? "http://localhost:4001";
@@ -237,6 +240,45 @@ export const mojaloopRouter = router({
         ilpPacket: quote.ilpPacket,
         condition: quote.condition,
       }).catch(e => console.warn("[Kafka] emitMojaloopTransferInitiated failed:", (e as Error).message));
+
+      // ── TigerBeetle: record cross-border settlement (code 12) via Go gateway ────
+      settleCrossBorder({
+        settlementId: transfer.transferId,
+        payerUserId: String(ctx.user.id),
+        payeeFspId: input.payeeFspId,
+        amount: parseFloat(input.amount),
+        currency: input.currency,
+        ilpPacket: quote.ilpPacket,
+        condition: quote.condition,
+      }).catch(e => console.warn("[TigerBeetle] settleCrossBorder failed:", (e as Error).message));
+
+      // ── Fluvio: emit settlement.initiated for real-time downstream consumers ───
+      produce(FLUVIO_TOPICS.SETTLEMENT_INITIATED, {
+        key: `MOJALOOP-${transfer.transferId}`,
+        value: {
+          transferId: transfer.transferId,
+          quoteId: quote.quoteId,
+          payerUserId: ctx.user.id,
+          payeeFspId: input.payeeFspId,
+          amount: input.amount,
+          currency: input.currency,
+          transferState: transfer.transferState,
+          timestamp: new Date().toISOString(),
+        },
+      }).catch(() => { /* Fluvio unavailable — Kafka handles durability */ });
+
+      // Lakehouse: immutable Bronze-layer record of cross-border transfer
+      void ingestCrossBorderTransfer({
+        transferId: transfer.transferId,
+        userId: ctx.user.id,
+        payerFspId: input.payeeFspId, // sender FSP
+        payeeFspId: input.payeeFspId,
+        amount: String(input.amount),
+        currency: input.currency,
+        ilpPacket: quote.ilpPacket,
+        status: "initiated",
+        correlationId: transfer.transferId,
+      });
       return {
         transferId: transfer.transferId,
         quoteId: quote.quoteId,

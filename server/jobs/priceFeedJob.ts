@@ -9,6 +9,7 @@ import { getDb } from "../db";
 import { livePrices, priceAlerts, pushTokens } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { emitPriceUpdated } from "../kafka/kafkaProducer";
+import { produce, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 
 // Mapping: NEXCOM symbol → Yahoo Finance futures symbol + metadata
 const PRICE_FEED_MAP: Array<{
@@ -208,6 +209,22 @@ export async function runPriceFeedJob(): Promise<void> {
           changePercent: changePct ?? 0,
           volume: 0, // Yahoo Finance futures don't always provide volume
         }).catch(e => console.warn("[Kafka] emitPriceUpdated failed:", (e as Error).message));
+        // Emit Fluvio price-tick for real-time order book consumers (lower latency than Kafka)
+        produce(FLUVIO_TOPICS.MARKET_PRICE_TICK, {
+          key: entry.symbol,
+          value: {
+            symbol: entry.symbol,
+            assetClass: entry.assetClass,
+            price,
+            previousClose: priceData.previousClose,
+            change: change ?? 0,
+            changePct: changePct ?? 0,
+            high: priceData.high,
+            low: priceData.low,
+            currency: entry.currency,
+            timestamp: new Date().toISOString(),
+          },
+        }).catch(() => { /* Fluvio unavailable — Kafka handles durability */ });
       } else fallback++;
     } catch (err) {
       console.error(`[PriceFeed] Failed to update ${entry.symbol}:`, err);

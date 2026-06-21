@@ -1,0 +1,22 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: tigerbeetle-binding
+  namespace: nexcom
+spec:
+  type: bindings.http
+  version: v1
+  metadata:
+    # Go gateway service that proxies to TigerBeetle
+    - name: url
+      value: "${CORE_BANKING_URL}"
+    - name: method
+      value: "POST"
+    - name: headers
+      value: |
+        Content-Type: application/json
+        X-Service: dapr-binding
+    - name: responseTimeout
+      value: "10s"
+    - name: maxIdleConnections
+      value: "20"

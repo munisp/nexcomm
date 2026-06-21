@@ -23,6 +23,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { users } from "../../drizzle/schema";
+import { ingestMarginMovement } from "../lakehouse";
 import { writeAuditLog } from "../audit";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -221,6 +222,16 @@ export const marginRouter = router({
       // Recalculate margin account
       await recalcMarginAccount(db, ctx.user.id);
 
+      // Lakehouse: immutable Bronze-layer record of margin pledge
+      void ingestMarginMovement({
+        movementId: `pledge-${item.id}`,
+        userId: ctx.user.id,
+        action: "deposit",
+        amount: String(eligibleValue),
+        currency: "USD",
+        newBalance: String(balanceBefore + eligibleValue),
+        correlationId: `pledge-${item.id}`,
+      });
       return { collateralItem: item, eligibleValue };
     }),
 
@@ -283,6 +294,16 @@ export const marginRouter = router({
       // Recalculate margin account
       await recalcMarginAccount(db, ctx.user.id);
 
+      // Lakehouse: immutable Bronze-layer record of margin release
+      void ingestMarginMovement({
+        movementId: `release-${item.id}`,
+        userId: ctx.user.id,
+        action: "release",
+        amount: String(eligibleValue),
+        currency: "USD",
+        newBalance: String(Math.max(0, balanceBefore - eligibleValue)),
+        correlationId: `release-${item.id}`,
+      });
       return { success: true };
     }),
 

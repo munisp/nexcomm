@@ -214,6 +214,239 @@ export async function emitMojaloopQuoteAccepted(event: {
   await emitEvent("mojaloop.quote.accepted", { ...event, timestamp: Date.now() });
 }
 
+// ─── Deposit / Withdrawal event emitters ─────────────────────────────────────
+
+export async function emitDepositInitiated(event: {
+  depositId: string;
+  userId: number;
+  amount: number;
+  currency: string;
+  channel: string;
+  reference: string;
+}): Promise<void> {
+  await emitEvent("nexcom.banking.deposit-initiated", { ...event, timestamp: Date.now() });
+}
+
+export async function emitDepositCompleted(event: {
+  depositId: string;
+  userId: number;
+  amount: number;
+  currency: string;
+  channel: string;
+  ledgerTxId: string;
+}): Promise<void> {
+  await emitEvent("nexcom.banking.deposit-completed", { ...event, timestamp: Date.now() });
+}
+
+export async function emitDepositFailed(event: {
+  depositId: string;
+  userId: number;
+  amount: number;
+  reason: string;
+}): Promise<void> {
+  await emitEvent("nexcom.banking.deposit-failed", { ...event, timestamp: Date.now() });
+}
+
+export async function emitWithdrawalInitiated(event: {
+  withdrawalId: string;
+  userId: number;
+  amount: number;
+  currency: string;
+  channel: string;
+  destination: string;
+}): Promise<void> {
+  await emitEvent("nexcom.banking.withdrawal-initiated", { ...event, timestamp: Date.now() });
+}
+
+export async function emitWithdrawalCompleted(event: {
+  withdrawalId: string;
+  userId: number;
+  amount: number;
+  currency: string;
+  externalTxId: string;
+  ledgerTxId: string;
+}): Promise<void> {
+  await emitEvent("nexcom.banking.withdrawal-completed", { ...event, timestamp: Date.now() });
+}
+
+export async function emitWithdrawalFailed(event: {
+  withdrawalId: string;
+  userId: number;
+  amount: number;
+  reason: string;
+}): Promise<void> {
+  await emitEvent("nexcom.banking.withdrawal-failed", { ...event, timestamp: Date.now() });
+}
+
+// ─── Margin event emitters ────────────────────────────────────────────────────
+
+export async function emitMarginDeposited(event: {
+  userId: number;
+  amount: number;
+  currency: string;
+  collateralType: string;
+  ledgerPendingId: string;
+}): Promise<void> {
+  await emitEvent("nexcom.margin.deposited", { ...event, timestamp: Date.now() });
+}
+
+export async function emitMarginReleased(event: {
+  userId: number;
+  amount: number;
+  currency: string;
+  ledgerTxId: string;
+}): Promise<void> {
+  await emitEvent("nexcom.margin.released", { ...event, timestamp: Date.now() });
+}
+
+export async function emitMarginCallTriggered(event: {
+  userId: number;
+  utilisationPct: number;
+  reason: string;
+  severity: string;
+}): Promise<void> {
+  await emitEvent("nexcom.margin.call-triggered", { ...event, timestamp: Date.now() });
+}
+
+export async function emitMarginLiquidated(event: {
+  userId: number;
+  positionsLiquidated: string[];
+  recoveredAmount: number;
+}): Promise<void> {
+  await emitEvent("nexcom.margin.liquidated", { ...event, timestamp: Date.now() });
+}
+
+// ─── Loan event emitters ──────────────────────────────────────────────────────
+
+export async function emitLoanDisbursed(event: {
+  loanId: string;
+  userId: number;
+  amount: number;
+  currency: string;
+  tenorDays: number;
+  ledgerTxId: string;
+  externalTxId: string;
+}): Promise<void> {
+  await emitEvent("nexcom.banking.loan-disbursed", { ...event, timestamp: Date.now() });
+}
+
+export async function emitLoanRepaid(event: {
+  loanId: string;
+  userId: number;
+  principalAmount: number;
+  interestAmount: number;
+  ledgerTxId: string;
+}): Promise<void> {
+  await emitEvent("nexcom.banking.loan-repaid", { ...event, timestamp: Date.now() });
+}
+
+export async function emitLoanDefaulted(event: {
+  loanId: string;
+  userId: number;
+  outstandingAmount: number;
+  daysOverdue: number;
+}): Promise<void> {
+  await emitEvent("nexcom.banking.loan-defaulted", { ...event, timestamp: Date.now() });
+}
+
+// ─── Trade / order event emitters ────────────────────────────────────────────
+
+export async function emitOrderPlaced(event: {
+  orderId: string;
+  userId: number;
+  symbol: string;
+  side: string;
+  orderType: string;
+  quantity: number;
+  price?: number;
+}): Promise<void> {
+  await emitEvent("nexcom.orders.placed", { ...event, timestamp: Date.now() });
+}
+
+export async function emitOrderAmended(event: {
+  orderId: string;
+  userId: number;
+  symbol: string;
+  newQuantity?: number;
+  newPrice?: number;
+}): Promise<void> {
+  await emitEvent("nexcom.orders.amended", { ...event, timestamp: Date.now() });
+}
+
+export async function emitTradeFill(event: {
+  tradeId: string;
+  buyOrderId: string;
+  sellOrderId: string;
+  symbol: string;
+  quantity: number;
+  price: number;
+  buyerUserId: number;
+  sellerUserId: number;
+  settlementDate: string;
+}): Promise<void> {
+  await emitEvent("nexcom.market.trade-fill", { ...event, timestamp: Date.now() });
+}
+
+// ─── Fee collection event emitters ───────────────────────────────────────────
+
+export async function emitFeeCollected(event: {
+  tradeId?: string;
+  depositId?: string;
+  userId: number;
+  feeType: string; // "trading" | "deposit" | "withdrawal" | "loan_origination"
+  feeAmount: number;
+  currency: string;
+  ledgerTxId: string;
+}): Promise<void> {
+  await emitEvent("nexcom.fees.collected", { ...event, timestamp: Date.now() });
+}
+
+// ─── KYC / AML event emitters ─────────────────────────────────────────────────
+
+export async function emitKycStatusChanged(event: {
+  userId: number;
+  previousStatus: string;
+  newStatus: string;
+  reason?: string;
+}): Promise<void> {
+  await emitEvent("nexcom.kyc.status-changed", { ...event, timestamp: Date.now() });
+}
+
+export async function emitAmlAlertRaised(event: {
+  userId: number;
+  alertType: string;
+  severity: string;
+  amount?: number;
+  currency?: string;
+  description: string;
+}): Promise<void> {
+  await emitEvent("nexcom.aml.alert-raised", { ...event, timestamp: Date.now() });
+}
+
+// ─── Corporate actions event emitters ────────────────────────────────────────
+
+export async function emitDividendPaid(event: {
+  corporateActionId: string;
+  symbol: string;
+  dividendPerShare: number;
+  currency: string;
+  recordDate: string;
+  paymentDate: string;
+  totalPaid: number;
+}): Promise<void> {
+  await emitEvent("nexcom.corporate.dividend-paid", { ...event, timestamp: Date.now() });
+}
+
+export async function emitCouponPaid(event: {
+  instrumentId: string;
+  symbol: string;
+  couponAmount: number;
+  currency: string;
+  paymentDate: string;
+}): Promise<void> {
+  await emitEvent("nexcom.corporate.coupon-paid", { ...event, timestamp: Date.now() });
+}
+
 export async function disconnectKafkaProducer(): Promise<void> {
   if (_producer && _isConnected) {
     try {

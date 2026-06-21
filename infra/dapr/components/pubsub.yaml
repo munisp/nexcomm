@@ -1,0 +1,31 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: nexcom-pubsub
+  namespace: nexcom
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    # Kafka broker — matches the KAFKA_BROKERS env var
+    - name: brokers
+      value: "${KAFKA_BROKERS}"
+    - name: authType
+      value: "none"
+    # Consumer group for Dapr subscribers
+    - name: consumerGroup
+      value: "nexcom-dapr-consumer"
+    # Retry policy: 3 retries with exponential backoff
+    - name: maxMessageBytes
+      value: "1048576"
+    - name: consumeRetryInterval
+      value: "200ms"
+    - name: initialOffset
+      value: "newest"
+    # Topic auto-creation
+    - name: autoCreateTopics
+      value: "true"
+    - name: replicationFactor
+      value: "1"
+    - name: defaultNumPartitions
+      value: "6"

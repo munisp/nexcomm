@@ -1,0 +1,41 @@
+apiVersion: dapr.io/v2alpha1
+kind: Subscription
+metadata:
+  name: nexcom-fund-flow-subscriptions
+  namespace: nexcom
+spec:
+  pubsubname: nexcom-pubsub
+  # ── Deposit events ──────────────────────────────────────────────────────────
+  routes:
+    rules:
+      - match: event.type == "nexcom.deposit.completed"
+        path: /api/dapr/events/deposit/completed
+      - match: event.type == "nexcom.deposit.failed"
+        path: /api/dapr/events/deposit/failed
+      - match: event.type == "nexcom.withdrawal.completed"
+        path: /api/dapr/events/withdrawal/completed
+      - match: event.type == "nexcom.withdrawal.failed"
+        path: /api/dapr/events/withdrawal/failed
+      - match: event.type == "nexcom.order.filled"
+        path: /api/dapr/events/order/filled
+      - match: event.type == "nexcom.trade.settled"
+        path: /api/dapr/events/trade/settled
+      - match: event.type == "nexcom.margin.call"
+        path: /api/dapr/events/margin/call
+      - match: event.type == "nexcom.margin.liquidated"
+        path: /api/dapr/events/margin/liquidated
+      - match: event.type == "nexcom.loan.disbursed"
+        path: /api/dapr/events/loan/disbursed
+      - match: event.type == "nexcom.aml.freeze"
+        path: /api/dapr/events/aml/freeze
+      - match: event.type == "nexcom.crossborder.committed"
+        path: /api/dapr/events/crossborder/committed
+    default: /api/dapr/events/unhandled
+  topic: nexcom-fund-flow
+  # Dead-letter topic for failed events
+  deadLetterTopic: nexcom-fund-flow-dlq
+  # Bulk subscribe for throughput
+  bulkSubscribe:
+    enabled: true
+    maxMessagesCount: 100
+    maxAwaitDurationMs: 40

@@ -21,6 +21,7 @@ import {
 } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { createLedgerTransfer, getUserLedgerAccounts } from "../gatewayClient";
+import { ingestDeposit } from "../lakehouse";
 
 // ── Stripe client ─────────────────────────────────────────────────────────────
 // Keys are injected by the platform; empty string causes Stripe to throw on first use
@@ -338,6 +339,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     } catch (e) {
       console.warn("[Stripe Webhook] TigerBeetle credit failed:", (e as Error).message);
     }
+    // Lakehouse: immutable Bronze-layer record of this Stripe deposit
+    void ingestDeposit({
+      depositId: session.id,
+      userId,
+      amount: amountCents / 100, // USD
+      currency: "USD",
+      stripePaymentIntentId: session.payment_intent as string | undefined,
+      stripeSessionId: session.id,
+      status: "completed",
+      correlationId: session.id,
+    });
   });
 }
 

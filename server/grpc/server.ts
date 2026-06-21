@@ -21,6 +21,7 @@ import { fileURLToPath } from "url";
 import { getDb } from "../db";
 import { orders, settlements, priceAlerts } from "../../drizzle/schema";
 import { eq, and, desc, lte } from "drizzle-orm";
+import { produce, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROTO_PATH = path.resolve(__dirname, "../../proto/nexcom.proto");
@@ -52,19 +53,33 @@ function getOrCreateBook(symbol: string) {
 
 function broadcastOrderBookUpdate(symbol: string) {
   const subs = orderBookSubscribers.get(symbol);
-  if (!subs || subs.size === 0) return;
   const book = getOrCreateBook(symbol);
+  const now = Date.now();
   const update = {
     symbol,
     bids: book.bids.slice(0, 20),
     asks: book.asks.slice(0, 20),
-    timestamp_ms: Date.now().toString(),
+    timestamp_ms: now.toString(),
     last_price: book.lastPrice,
     is_snapshot: false,
   };
-  for (const stream of subs) {
-    try { stream.write(update); } catch { subs.delete(stream); }
+  // Broadcast to gRPC subscribers
+  if (subs && subs.size > 0) {
+    for (const stream of subs) {
+      try { stream.write(update); } catch { subs.delete(stream); }
+    }
   }
+  // Emit to Fluvio for real-time downstream consumers (analytics, risk engine, lakehouse)
+  produce(FLUVIO_TOPICS.ORDER_BOOK_UPDATE, {
+    key: symbol,
+    value: {
+      symbol,
+      bids: update.bids,
+      asks: update.asks,
+      lastPrice: book.lastPrice,
+      timestamp: new Date(now).toISOString(),
+    },
+  }).catch(() => { /* Fluvio unavailable — gRPC stream handles delivery */ });
 }
 
 // ─── Matching Engine Implementation ──────────────────────────────────────────

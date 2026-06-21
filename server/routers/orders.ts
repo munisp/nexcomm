@@ -31,6 +31,7 @@ import { pushToUser } from "./pushNotificationsRouter";
 import { writeAuditLog } from "../audit";
 import { cacheDel, invalidatePattern, CacheKeys } from "../cache";
 import { indexOrder } from "../opensearch";
+import { ingestOrder } from "../lakehouse";
 const assetClasses = ["COMMODITY", "FOREX", "EQUITY", "DIGITAL_ASSET", "INDEX"] as const;
 
 /**
@@ -382,6 +383,18 @@ export const ordersRouter = router({
         cacheDel(CacheKeys.orderBook(input.symbol)).catch(() => {});
         cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
         indexOrder(order).catch(() => {});
+        // Lakehouse: immutable Bronze-layer record of order creation
+        ingestOrder({
+          orderId: order.id,
+          userId: ctx.user.id,
+          symbol: order.symbol,
+          side: order.side as "BUY" | "SELL",
+          orderType: order.orderType,
+          quantity: order.quantity,
+          price: order.price ?? undefined,
+          status: "created",
+          correlationId: String(order.id),
+        }).catch(() => {});
       });
 
       return { ...order, idempotent: false as const };
@@ -445,6 +458,18 @@ export const ordersRouter = router({
         cacheDel(CacheKeys.orderBook(updated.symbol)).catch(() => {});
         cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
         indexOrder(updated).catch(() => {});
+        // Lakehouse: immutable Bronze-layer record of order cancellation
+        ingestOrder({
+          orderId: updated.id,
+          userId: ctx.user.id,
+          symbol: updated.symbol,
+          side: updated.side as "BUY" | "SELL",
+          orderType: updated.orderType,
+          quantity: updated.quantity,
+          price: updated.price ?? undefined,
+          status: "cancelled",
+          correlationId: String(updated.id),
+        }).catch(() => {});
       });
 
       return updated;

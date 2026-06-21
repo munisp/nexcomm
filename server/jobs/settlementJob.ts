@@ -26,6 +26,8 @@ import {
   getGatewayHealth,
 } from "../gatewayClient";
 import { emitSettlementCompleted } from "../kafka/kafkaProducer";
+import { produce, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { ingestSettlement } from "../lakehouse";
 
 const JOB_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const FEE_RATE = 0.001; // 0.1% exchange fee
@@ -186,6 +188,41 @@ export async function runSettlementJob(): Promise<number> {
         feeAmount: Math.round(Number(s.netAmount ?? 0) * FEE_RATE),
         tigerBeetleTransferId: ledgerRecorded ? `tb-${s.id}` : undefined,
       }).catch(e => console.warn("[Kafka] emitSettlementCompleted failed:", (e as Error).message));
+
+      // ── Fluvio: emit settlement.completed for real-time downstream consumers ──
+      produce(FLUVIO_TOPICS.SETTLEMENT_COMPLETED, {
+        key: `SETTLEMENT-${s.id}`,
+        value: {
+          settlementId: String(s.id),
+          userId: s.userId,
+          counterpartyId: s.counterpartyId ?? s.userId,
+          symbol: s.symbol,
+          side: s.side,
+          quantity: Number(s.quantity ?? 0),
+          price: Number(s.price ?? s.netAmount ?? 0),
+          netAmount: Number(s.netAmount ?? 0),
+          currency: s.currency,
+          feeAmount: Math.round(Number(s.netAmount ?? 0) * FEE_RATE),
+          ledgerRecorded,
+          tigerBeetleTransferId: ledgerRecorded ? `tb-${s.id}` : null,
+          settledAt: now.toISOString(),
+        },
+      }      ).catch(() => { /* Fluvio unavailable — Kafka handles durability */ });
+
+      // ── Lakehouse: immutable Bronze-layer record of this settlement ────────────────
+      ingestSettlement({
+        settlementId: String(s.id),
+        tradeId: String(s.id),
+        buyerUserId: s.userId,
+        sellerUserId: s.counterpartyId ?? s.userId,
+        symbol: s.symbol,
+        netAmount: String(s.netAmount ?? 0),
+        currency: s.currency,
+        settlementDate: now.toISOString(),
+        status: "completed",
+        tigerBeetleTransferId: ledgerRecorded ? `tb-${s.id}` : undefined,
+        correlationId: String(s.id),
+      }).catch(() => { /* Non-blocking — Lakehouse unavailable */ });
 
       settled++;
     } catch (err) {

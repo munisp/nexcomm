@@ -1,0 +1,202 @@
+# NEXCOM Exchange — APISIX Kubernetes Deployment
+# ─────────────────────────────────────────────────────────────────────────────
+# Deploys APISIX as the API gateway in front of the NEXCOM Node.js server.
+# OpenAppsec WAF agent runs as a sidecar container.
+#
+# Deploy: kubectl apply -f infra/apisix/deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexcom-apisix
+  namespace: nexcom
+  labels:
+    app: nexcom-apisix
+    component: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nexcom-apisix
+  template:
+    metadata:
+      labels:
+        app: nexcom-apisix
+        component: gateway
+      annotations:
+        # Dapr sidecar injection for pub/sub event publishing
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "nexcom-apisix-gateway"
+        dapr.io/app-port: "9080"
+        # Prometheus scraping
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/apisix/prometheus/metrics"
+    spec:
+      containers:
+        # ── APISIX Gateway ──────────────────────────────────────────────────────
+        - name: apisix
+          image: apache/apisix:3.9.1-debian
+          ports:
+            - containerPort: 9080
+              name: http
+            - containerPort: 9443
+              name: https
+            - containerPort: 9180
+              name: admin
+            - containerPort: 9091
+              name: prometheus
+          env:
+            - name: APISIX_STAND_ALONE
+              value: "false"
+          volumeMounts:
+            - name: apisix-config
+              mountPath: /usr/local/apisix/conf/config.yaml
+              subPath: apisix.yaml
+              readOnly: true
+            - name: apisix-routes
+              mountPath: /usr/local/apisix/conf/apisix.yaml
+              subPath: routes.yaml
+              readOnly: true
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /apisix/status
+              port: 9080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /apisix/status
+              port: 9080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+        # ── OpenAppsec WAF Agent (sidecar) ──────────────────────────────────────
+        - name: openappsec-agent
+          image: openappsec/agent:latest
+          env:
+            - name: OPENAPPSEC_UID
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-openappsec-secrets
+                  key: uid
+            - name: OPENAPPSEC_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: nexcom-openappsec-secrets
+                  key: token
+            - name: OPENAPPSEC_MODE
+              value: "prevent"
+            - name: OPENAPPSEC_POLICY
+              value: "nexcom-fund-flow-policy"
+          volumeMounts:
+            - name: openappsec-policy
+              mountPath: /etc/cp/conf/policy.yaml
+              subPath: policy.yaml
+              readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+      volumes:
+        - name: apisix-config
+          configMap:
+            name: nexcom-apisix-config
+        - name: apisix-routes
+          configMap:
+            name: nexcom-apisix-routes
+        - name: openappsec-policy
+          configMap:
+            name: nexcom-openappsec-policy
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexcom-apisix
+  namespace: nexcom
+  labels:
+    app: nexcom-apisix
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 80
+      targetPort: 9080
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 9443
+      protocol: TCP
+  selector:
+    app: nexcom-apisix
+
+---
+# ── ConfigMaps for APISIX and OpenAppsec ─────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexcom-apisix-config
+  namespace: nexcom
+data:
+  apisix.yaml: |
+    # See infra/apisix/apisix.yaml for full config
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexcom-apisix-routes
+  namespace: nexcom
+data:
+  routes.yaml: |
+    # See infra/apisix/routes.yaml for full route definitions
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexcom-openappsec-policy
+  namespace: nexcom
+data:
+  policy.yaml: |
+    # See infra/openappsec/policy.yaml for full WAF policy
+
+---
+# ── HorizontalPodAutoscaler ───────────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nexcom-apisix-hpa
+  namespace: nexcom
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexcom-apisix
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

@@ -1,0 +1,26 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: nexcom-statestore
+  namespace: nexcom
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: "${REDIS_URL}"
+    - name: redisPassword
+      secretKeyRef:
+        name: nexcom-secrets
+        key: redis-password
+    - name: enableTLS
+      value: "true"
+    # Strong consistency for fund-flow idempotency keys
+    - name: consistency
+      value: "strong"
+    # TTL default: 24 hours (overridden per key)
+    - name: ttlInSeconds
+      value: "86400"
+    # First-write wins for idempotency (prevents duplicate processing)
+    - name: concurrency
+      value: "first-write"

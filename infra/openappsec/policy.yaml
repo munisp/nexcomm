@@ -1,0 +1,185 @@
+# NEXCOM Exchange — OpenAppsec WAF Policy
+# ─────────────────────────────────────────────────────────────────────────────
+# OpenAppsec is a machine-learning WAF that integrates with APISIX via the
+# ext-plugin-pre-req mechanism. This policy defines protection rules for
+# NEXCOM fund-flow APIs.
+#
+# Deploy: kubectl apply -f infra/openappsec/policy.yaml
+# Requires: openappsec-agent sidecar + APISIX ext-plugin configuration
+
+apiVersion: openappsec.io/v1beta2
+kind: Policy
+metadata:
+  name: nexcom-fund-flow-policy
+  namespace: nexcom
+spec:
+  # ── Default mode: detect (log but don't block) for all routes ────────────────
+  default:
+    mode: detect-learn
+    practices:
+      - name: nexcom-base-practice
+
+  # ── Fund-flow routes: prevent mode (block attacks) ───────────────────────────
+  specificRules:
+    - host: "*"
+      url: /api/trpc/stripe.*
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+
+    - host: "*"
+      url: /api/trpc/orders.*
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+
+    - host: "*"
+      url: /api/trpc/banking.*
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+
+    - host: "*"
+      url: /api/trpc/margin.*
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+
+    - host: "*"
+      url: /api/trpc/loans.*
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+
+    - host: "*"
+      url: /api/trpc/mojaloop.*
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+
+    - host: "*"
+      url: /api/trpc/deposits.*
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+
+---
+apiVersion: openappsec.io/v1beta2
+kind: Practice
+metadata:
+  name: nexcom-base-practice
+  namespace: nexcom
+spec:
+  webAttacks:
+    minimumConfidence: high
+    maxBodySizeKb: 2048
+    maxHeaderSizeBytes: 8192
+    maxUrlSizeBytes: 4096
+    maxObjectDepth: 20
+    illegalHttpMethods: false
+  snortSignatures:
+    configmap: nexcom-snort-sigs
+    files:
+      - nexcom-custom.rules
+  openSchemaValidation: []
+
+---
+apiVersion: openappsec.io/v1beta2
+kind: Practice
+metadata:
+  name: nexcom-fund-flow-practice
+  namespace: nexcom
+spec:
+  webAttacks:
+    # Block on medium+ confidence for fund-flow routes
+    minimumConfidence: medium
+    maxBodySizeKb: 512
+    maxHeaderSizeBytes: 4096
+    maxUrlSizeBytes: 2048
+    maxObjectDepth: 10
+    # Block common injection attacks
+    illegalHttpMethods: true
+  antiBot:
+    # Detect and block automated trading bots (not legitimate API clients)
+    injectedCookies: true
+    validatedCookies: true
+    javascriptInjection: true
+  # Rate-based anomaly detection
+  rateLimiting:
+    # Block IPs that exceed 100 fund-flow requests per minute
+    maxRequestsPerMinute: 100
+    blockDurationSeconds: 300
+
+---
+# ── Threat Prevention: custom NEXCOM rules ────────────────────────────────────
+apiVersion: openappsec.io/v1beta2
+kind: ThreatPrevention
+metadata:
+  name: nexcom-threat-prevention
+  namespace: nexcom
+spec:
+  # Detect SQL injection in order parameters
+  sqlInjection:
+    enabled: true
+    sensitivity: high
+
+  # Detect XSS in user-supplied fields
+  xss:
+    enabled: true
+    sensitivity: high
+
+  # Detect path traversal in file upload routes
+  pathTraversal:
+    enabled: true
+    sensitivity: high
+
+  # Detect SSRF attempts (e.g., forging Mojaloop callback URLs)
+  ssrf:
+    enabled: true
+    sensitivity: high
+    blockedInternalRanges:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
+      - "192.168.0.0/16"
+      - "127.0.0.0/8"
+      - "169.254.0.0/16"
+
+  # Detect command injection
+  commandInjection:
+    enabled: true
+    sensitivity: high
+
+  # Detect JSON injection / prototype pollution
+  jsonInjection:
+    enabled: true
+    sensitivity: medium
+
+  # Custom signatures for NEXCOM-specific attack patterns
+  customSignatures:
+    # Block attempts to inject TigerBeetle transfer codes
+    - id: NEXCOM-001
+      name: "TigerBeetle Transfer Code Injection"
+      pattern: '(transfer_code|ledger_code|tb_code)\s*[=:]\s*\d+'
+      severity: critical
+      action: block
+
+    # Block attempts to manipulate Mojaloop ILP packets
+    - id: NEXCOM-002
+      name: "ILP Packet Manipulation"
+      pattern: '(ilpPacket|condition|fulfillment)\s*[=:]\s*[A-Za-z0-9+/=]{100,}'
+      severity: high
+      action: block
+
+    # Block attempts to forge settlement amounts
+    - id: NEXCOM-003
+      name: "Settlement Amount Overflow"
+      pattern: '"amount"\s*:\s*"?[0-9]{15,}'
+      severity: critical
+      action: block
+
+    # Block attempts to inject negative amounts
+    - id: NEXCOM-004
+      name: "Negative Amount Injection"
+      pattern: '"(amount|price|quantity)"\s*:\s*"?-[0-9]'
+      severity: critical
+      action: block

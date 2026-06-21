@@ -47,6 +47,7 @@ import { bootstrapPermify } from "../permify-bootstrap";
 import { startTemporalWorker } from "../temporal/worker";
 import { createNexcomIndices } from "../opensearch";
 import { purgeExpiredRefreshTokens } from "../refreshTokens";
+import daprEventHandler from "../routes/daprEventHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -238,6 +239,11 @@ async function startServer() {
   // Endpoint: POST /api/internal/mojaloop/settlement-callback
   // Protected by X-Source: mojaloop-adapter header
   app.use(mojaloopSettlementCallbackRouter);
+
+  // Dapr pub/sub event handlers — receive fund-flow events from Dapr sidecar
+  // Endpoint: POST /api/dapr/events/:category/:action
+  // Dapr delivers CloudEvents; each handler is idempotent via Dapr state store
+  app.use("/api/dapr/events", daprEventHandler);
 
   // Spatial analytics proxy — forwards /api/spatial/* to Sedona Python service (port 7474)
   app.use(spatialProxyRouter);
