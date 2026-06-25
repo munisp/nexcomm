@@ -1163,16 +1163,16 @@
 - [x] Add CrossBorderWorkflow (ILP quote → reserve → execute → confirm/abort) (Round 58)
 - [x] Add WarehouseReceiptWorkflow (issue → pledge → redeem/cancel with collateral lock) (Round 58)
 - [x] Add LoanRepaymentWorkflow (debit borrower → credit lender → release collateral) (Round 58)
-- [ ] Wire all new workflows into TypeScript triggerTemporalWorkflow calls
+- [x] Wire all new workflows into TypeScript triggerTemporalWorkflow calls (Round 60 — saveSagaState + triggerTemporalWorkflow for all 10 workflows)
 
 ### Phase 3 — Rust Matching Engine Hardening
-- [ ] Add TigerBeetle 2-phase commit to order fill: createPendingTransfer → post fill → commitTransfer
-- [ ] Add Kafka event emission on every order fill (nexcom.order.filled topic)
-- [ ] Add Fluvio publish on every order fill (order-book-updates stream)
-- [ ] Add idempotency check: reject duplicate fill for same order_id
-- [ ] Add atomic rollback: if TigerBeetle commit fails → cancel fill → emit nexcom.order.fill.failed
-- [ ] Add Prometheus metrics: fill_latency_ms, fill_count, fill_failure_count
-- [ ] Add OpenSearch index update on fill (update order status to FILLED)
+- [x] Add TigerBeetle 2-phase commit to order fill: createPendingTransfer → post fill → commitTransfer (Round 60 — fill_hardening.rs)
+- [x] Add Kafka event emission on every order fill (nexcom.order.filled topic) (Round 58 — amlConsumers.ts + orders.ts tradeFill)
+- [x] Add Fluvio publish on every order fill (order-book-updates stream) (Round 60 — fill_hardening.rs)
+- [x] Add idempotency check: reject duplicate fill for same order_id (Round 60 — fill_hardening.rs Redis guard)
+- [x] Add atomic rollback: if TigerBeetle commit fails → cancel fill → emit nexcom.order.fill.failed (Round 60 — fill_hardening.rs tb_void + emit_fill_failed)
+- [x] Add Prometheus metrics: fill_latency_ms, fill_count, fill_failure_count (Round 60 — fill_hardening.rs + main.rs /metrics)
+- [x] Add OpenSearch index update on fill (update order status to FILLED) (Round 60 — fill_hardening.rs opensearch_upsert)
 
 ### Phase 4 — Python AML/Analytics Hardening
 - [x] Add Kafka consumer for nexcom.order.filled → run AML velocity check (Round 58 amlConsumers.ts)
@@ -1192,10 +1192,10 @@
 - [x] Add Redis idempotency guard to stripeRouter webhook (key: stripe:webhook:{eventId}) (Round 59)
 - [x] Add Permify authorization check to all fund-flow mutations (can user:X do action:Y on resource:Z) (Round 59)
 - [x] Add Keycloak token audience validation to all fund-flow protected procedures (Round 59 — aud field added)
-- [ ] Wire Dapr state store for saga state persistence (key: saga:{workflowId})
+- [x] Wire Dapr state store for saga state persistence (key: saga:{workflowId}) (Round 60 — daprClient.ts saveSagaState/getSagaState/deleteSagaState)
 - [x] Wire Fluvio publisher into orders.create (order-placed event) (Round 56)
 - [x] Wire Fluvio publisher into bankingRouter.withdrawal (withdrawal-requested event) (Round 59)
-- [ ] Wire Dapr service invocation for cross-service fund-flow calls (deposit → core-banking)
+- [x] Wire Dapr service invocation for cross-service fund-flow calls (deposit → core-banking) (Round 60 — daprCreditCoreBanking/daprDebitCoreBanking)
 
 ### Phase 6 — Infrastructure Hardening
 - [x] Add APISIX rate limit plugin to all 20 fund-flow routes (tiered: 10/min for mutations, 100/min for reads) (Round 56)
