@@ -15,6 +15,41 @@
  *  11. signCount replay detection — rejects credential with lower signCount
  */
 import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
+
+// ── Mock external dependencies that require live services ────────────────────
+// The webauthn router only needs the DB; all other services are fire-and-forget.
+// We do NOT mock the DB here — tests that need it guard with `if (!db) return`.
+vi.mock("./kafka/kafkaProducer", () => ({
+  emitEvent: vi.fn().mockResolvedValue(undefined),
+  publishEvent: vi.fn().mockResolvedValue(undefined),
+  emitDepositCompleted: vi.fn().mockResolvedValue(undefined),
+  emitWithdrawalCompleted: vi.fn().mockResolvedValue(undefined),
+  emitOrderFilled: vi.fn().mockResolvedValue(undefined),
+  emitOrderCancelled: vi.fn().mockResolvedValue(undefined),
+  emitOrderPlaced: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("./fluvio/fluvioClient", () => ({
+  publishFluvioEvent: vi.fn().mockResolvedValue(undefined),
+  publishOrderEvent: vi.fn().mockResolvedValue(undefined),
+  produce: vi.fn().mockResolvedValue(undefined),
+  FLUVIO_TOPICS: {},
+}));
+vi.mock("./_core/notification", () => ({
+  notifyOwner: vi.fn().mockResolvedValue(true),
+}));
+vi.mock("./fundFlow", () => ({
+  FundFlow: {
+    tradeFill: vi.fn().mockResolvedValue(undefined),
+    deposit: vi.fn().mockResolvedValue(undefined),
+    withdrawal: vi.fn().mockResolvedValue(undefined),
+    loanDisbursed: vi.fn().mockResolvedValue(undefined),
+    loanRepaid: vi.fn().mockResolvedValue(undefined),
+    crossBorderTransfer: vi.fn().mockResolvedValue(undefined),
+    warehouseReceiptIssued: vi.fn().mockResolvedValue(undefined),
+    marginTopUp: vi.fn().mockResolvedValue(undefined),
+    marginLiquidation: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { getDb } from "./db";

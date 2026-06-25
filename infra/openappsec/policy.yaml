@@ -183,3 +183,38 @@ spec:
       pattern: '"(amount|price|quantity)"\s*:\s*"?-[0-9]'
       severity: critical
       action: block
+
+  # ── USSD PIN brute-force protection ─────────────────────────────────────────
+  # Limits repeated USSD session attempts to prevent PIN enumeration attacks.
+    - host: "*"
+      url: /api/trpc/ussd.*
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+      rateLimit:
+        enabled: true
+        maxRequests: 10
+        windowSeconds: 60
+        blockDurationSeconds: 300
+  # ── Bulk transfer / batch payment protection ─────────────────────────────────
+  # Bulk transfer endpoints are high-value targets; enforce strict WAF + rate limit.
+    - host: "*"
+      url: /api/trpc/banking.bulkTransfer
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+      rateLimit:
+        enabled: true
+        maxRequests: 5
+        windowSeconds: 60
+        blockDurationSeconds: 600
+    - host: "*"
+      url: /api/trpc/banking.batchPayment
+      mode: prevent
+      practices:
+        - name: nexcom-fund-flow-practice
+      rateLimit:
+        enabled: true
+        maxRequests: 5
+        windowSeconds: 60
+        blockDurationSeconds: 600

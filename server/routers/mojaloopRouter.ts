@@ -25,6 +25,7 @@ import { produce, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { settleCrossBorder } from "../gatewayClient";
 import { ingestCrossBorderTransfer } from "../lakehouse";
 import { FundFlow } from "../fundFlow";
+import { cacheGet, cacheSet } from "../cache";
 
 const MOJALOOP_ADAPTER_URL =
   process.env.MOJALOOP_ADAPTER_URL ?? "http://localhost:4001";
@@ -178,6 +179,15 @@ export const mojaloopRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      // ── Redis idempotency guard ────────────────────────────────────────────
+      // Prevent double-spend from network retries within a 5-minute window.
+      const transferKey = `mojaloop:transfer:${ctx.user.id}:${input.payerIdentifier}:${input.payeeIdentifier}:${input.amount}:${input.currency}`;
+      const cachedTransfer = await cacheGet<{ transferId: string; transferState: string }>(transferKey).catch(() => null);
+      if (cachedTransfer) {
+        console.log(`[Mojaloop] Duplicate transfer request ignored for user ${ctx.user.id}`);
+        return { ...cachedTransfer, duplicate: true };
+      }
+
       // Step 1: Request a quote
       const quote = await adapterFetch<{
         quoteId: string;
@@ -294,6 +304,8 @@ export const mojaloopRouter = router({
           condition: quote.condition,
         }).catch(() => {});
       });
+      // Cache result for 5 minutes to handle duplicate submissions
+      await cacheSet(transferKey, { transferId: transfer.transferId, transferState: transfer.transferState }, 300).catch(() => {});
       return {
         transferId: transfer.transferId,
         quoteId: quote.quoteId,

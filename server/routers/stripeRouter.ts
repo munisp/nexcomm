@@ -22,6 +22,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { createLedgerTransfer, getUserLedgerAccounts } from "../gatewayClient";
 import { ingestDeposit } from "../lakehouse";
+import { cacheGet, cacheSet } from "../cache";
 
 // ── Stripe client ─────────────────────────────────────────────────────────────
 // Keys are injected by the platform; empty string causes Stripe to throw on first use
@@ -237,6 +238,17 @@ export function registerStripeWebhook(app: Express) {
       }
 
       console.log(`[Stripe Webhook] Received event: ${event.type} (${event.id})`);
+
+      // ── Redis idempotency guard ────────────────────────────────────────────
+      // Stripe may deliver the same webhook event more than once (retries).
+      // Cache the event ID for 24 h; if already processed, return 200 immediately.
+      const idempotencyKey = `stripe:webhook:${event.id}`;
+      const alreadyProcessed = await cacheGet<boolean>(idempotencyKey).catch(() => null);
+      if (alreadyProcessed) {
+        console.log(`[Stripe Webhook] Duplicate event ignored: ${event.id}`);
+        return res.json({ received: true, duplicate: true });
+      }
+      await cacheSet(idempotencyKey, true, 86_400).catch(() => {});
 
       try {
         if (event.type === "checkout.session.completed") {

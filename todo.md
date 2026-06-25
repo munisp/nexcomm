@@ -1230,3 +1230,19 @@
 - [x] Add APISIX routes for bankFinancing, receipts, inputFinancing (fund-flow tier: 10-20 req/min, JWT, WAF)
 - [x] Write 20 Vitest unit tests for all FundFlow scenarios (fundFlow.test.ts) — all 20 pass
 - [x] Full test suite: 18 test files, 1098 tests, 0 failures, TypeScript 0 errors
+
+## Round 59 — Fund-Flow Guarantees: Idempotency, tradeFill Wiring, Test Mocks (Jun 25 2026)
+- [x] Wire FundFlow.tradeFill() for every RustTrade fill in orders.ts (fire-and-forget per fill)
+- [x] Add Redis idempotency guard to stripeRouter.ts webhook handler (24h dedup on event.id)
+- [x] Add Redis idempotency guard to mojaloopRouter.ts initiateTransfer (5-min dedup window)
+- [x] Cache mojaloop transfer result after success for replay protection
+- [x] Add Fluvio LOAN_DISBURSED publish after FundFlow.loanDisbursed in bankingRouter.ts
+- [x] Add Fluvio PAYMENT_RECEIVED publish after FundFlow.loanRepaid in bankingRouter.ts
+- [x] Add fund-flow Permify guards to permify.ts (requireOrderCreate, requireOrderView, requireTradeCreate, requireReceiptView, requireReceiptCreate, requireReceiptApprove)
+- [x] Add RFC 7519 aud, session_state, azp, jti, typ fields to KeycloakTokenClaims interface
+- [x] Add USSD PIN brute-force WAF rule to openappsec/policy.yaml (10 req/60s, 5-min block)
+- [x] Add bulk transfer WAF rules to openappsec/policy.yaml (5 req/60s, 10-min block)
+- [x] Add global_rules section to APISIX routes.yaml (opentelemetry + request-id on all routes)
+- [x] Fix pg_connection.test.ts: skip when CI=true (no local PostgreSQL available)
+- [x] Fix webauthn.test.ts: add vi.mock for fundFlow (tradeFill now called in orders fill path)
+- [x] Fix nexcom.test.ts: add vi.mock for FundFlow (tradeFill now called in orders fill path)

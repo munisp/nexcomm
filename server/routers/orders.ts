@@ -341,6 +341,33 @@ export const ordersRouter = router({
                   counterpartyOrderId: rustResp?.trades?.[0]?.buyer ?? "",
                 }).catch(e => console.warn("[Kafka] emitOrderFilled failed:", (e as Error).message));
 
+                // ── FundFlow: TigerBeetle + Fluvio + Dapr + Temporal per trade ─
+                if (rustResp?.trades?.length) {
+                  for (const rustTrade of rustResp.trades) {
+                    const buyerUserId = parseInt(rustTrade.buyer.replace("USER-", ""), 10) || ctx.user.id;
+                    const sellerUserId = parseInt(rustTrade.seller.replace("USER-", ""), 10) || ctx.user.id;
+                    const tradeQty = rustTrade.quantity / 1_000_000;
+                    const grossAmount = tradeQty * rustTrade.price;
+                    const feeAmount = grossAmount * 0.001;
+                    FundFlow.tradeFill({
+                      tradeId: rustTrade.id,
+                      fillId: order.id,
+                      symbol: input.symbol,
+                      assetClass: input.assetClass,
+                      buyOrderId: input.side === "BUY" ? order.id : 0,
+                      sellOrderId: input.side === "SELL" ? order.id : 0,
+                      buyerUserId,
+                      sellerUserId,
+                      price: rustTrade.price,
+                      quantity: tradeQty,
+                      grossAmount,
+                      feeAmount,
+                      currency: "NGN",
+                      idempotencyKey: `trade:${rustTrade.id}`,
+                    }).catch(e => console.warn("[FundFlow] tradeFill failed:", (e as Error).message));
+                  }
+                }
+
                 // ── Browser Push: notify trader of fill status ─────────────────
                 const fillStatusLabel = newStatus === "FILLED" ? "Order Filled" : "Order Partially Filled";
                 const fillPriceStr = avgFillPrice > 0

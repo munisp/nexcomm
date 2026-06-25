@@ -295,6 +295,18 @@ export interface KeycloakTokenClaims {
   exp: number;
   iat: number;
   iss: string;
+  /** RFC 7519 §4.1.3 — audience claim. Can be a single string or array of strings.
+   * For Keycloak tokens, this is typically the client_id of the intended recipient.
+   * NEXCOM validates this against the expected client_id to prevent token substitution. */
+  aud?: string | string[];
+  /** Keycloak session state — used for backchannel logout */
+  session_state?: string;
+  /** Authorized party — the client that the token was issued to (RFC 7523 §3) */
+  azp?: string;
+  /** JWT ID — unique identifier for this token (RFC 7519 §4.1.7) */
+  jti?: string;
+  /** Token type — typically "Bearer" */
+  typ?: string;
 }
 
 /**

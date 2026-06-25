@@ -21,6 +21,7 @@ import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import { ENV } from "../_core/env";
 import { writeAuditLog } from "../audit";
 import { FundFlow } from "../fundFlow";
+import { produce, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -750,7 +751,7 @@ export const bankingRouter = router({
       setImmediate(() => {
         const dueDate = new Date();
         dueDate.setMonth(dueDate.getMonth() + (loan.tenorMonths ?? 6));
-        FundFlow.loanDisbursed({
+                FundFlow.loanDisbursed({
           loanId: String(input.loanId),
           userId: loan.farmerId,
           principalAmount: input.disbursedValueNgn,
@@ -758,10 +759,20 @@ export const bankingRouter = router({
           interestRate: 0.12, // 12% p.a. default
           dueDate: dueDate.toISOString(),
         }).catch(() => {});
+        // Fluvio: emit loan.disbursed for real-time downstream consumers
+        produce(FLUVIO_TOPICS.LOAN_DISBURSED, {
+          key: `LOAN-${input.loanId}`,
+          value: {
+            loanId: input.loanId,
+            userId: loan.farmerId,
+            amount: input.disbursedValueNgn,
+            currency: "NGN",
+            timestamp: new Date().toISOString(),
+          },
+        }).catch(() => {});
       });
       return { success: true };
     }),
-
   adminRejectLoan: protectedProcedure
     .input(z.object({
       loanId: z.number().int().positive(),
@@ -875,6 +886,18 @@ export const bankingRouter = router({
           principalPaid: input.amountNgn * 0.9,
           interestPaid: input.amountNgn * 0.1,
           remainingBalance: Math.max(0, disbursed - newRepaid),
+        }).catch(() => {});
+        // Fluvio: emit loan.repaid for real-time downstream consumers
+        produce(FLUVIO_TOPICS.PAYMENT_RECEIVED, {
+          key: `LOAN-REPAY-${input.loanId}`,
+          value: {
+            loanId: input.loanId,
+            userId: ctx.user.id,
+            amount: input.amountNgn,
+            currency: "NGN",
+            remainingBalance: Math.max(0, disbursed - newRepaid),
+            timestamp: new Date().toISOString(),
+          },
         }).catch(() => {});
       });
       return { success: true, newStatus, totalRepaid: newRepaid };

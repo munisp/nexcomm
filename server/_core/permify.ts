@@ -187,3 +187,26 @@ export const requireAmlEscalate = withPermify("aml_flag", "escalate", () => "*")
 
 /** Allow only users who can 'approve' settlements. */
 export const requireSettlementApprove = withPermify("settlement", "approve", () => "*");
+
+// ── Fund-flow Permify guards ──────────────────────────────────────────────────
+// These guards are used by fund-flow routers to enforce fine-grained RBAC.
+// Permify is fail-open by default in dev (PERMIFY_FAIL_OPEN=true) and
+// fail-closed in production (PERMIFY_FAIL_OPEN=false).
+
+/** Allow only users who can 'create' orders (trading permission). */
+export const requireOrderCreate = withPermify("order", "create", () => "*");
+
+/** Allow only users who can 'view' their own orders. */
+export const requireOrderView = withPermify("order", "view", () => "*");
+
+/** Allow only users who can 'create' trades (trade execution permission). */
+export const requireTradeCreate = withPermify("trade", "create", () => "*");
+
+/** Allow only users who can 'view' warehouse receipts. */
+export const requireReceiptView = withPermify("warehouse_receipt", "view", () => "*");
+
+/** Allow only users who can 'create' warehouse receipts. */
+export const requireReceiptCreate = withPermify("warehouse_receipt", "create", () => "*");
+
+/** Allow only users who can 'approve' warehouse receipts (warehouse operators). */
+export const requireReceiptApprove = withPermify("warehouse_receipt", "approve", () => "*");

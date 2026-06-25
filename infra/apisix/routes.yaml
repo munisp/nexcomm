@@ -10,6 +10,26 @@
 #   - ADMIN:        30 req/min per user  (admin procedures)
 #   - INTERNAL:     IP allowlist only    (Dapr callbacks, Mojaloop callbacks)
 
+# ── Global rules — applied to every route ─────────────────────────────────────
+global_rules:
+  - id: 1
+    plugins:
+      # Inject a unique X-Request-ID on every request for distributed tracing
+      request-id:
+        header_name: X-Request-ID
+        include_in_response: true
+        algorithm: uuid
+      # Export OpenTelemetry spans for all routes to the OTEL collector
+      opentelemetry:
+        sampler:
+          name: always_on
+        additional_attributes:
+          - "service.name=nexcom-exchange"
+          - "deployment.environment=production"
+        collector:
+          address: otel-collector:4318
+          request_timeout: 3
+
 upstreams:
   - id: nexcom-node
     name: nexcom-exchange-nodejs
@@ -38,6 +58,8 @@ routes:
     methods: [GET]
     upstream_id: nexcom-node
     plugins:
+      - opentelemetry
+      - request-id
       limit-count:
         count: 60
         time_window: 60

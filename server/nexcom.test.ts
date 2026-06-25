@@ -10,6 +10,79 @@
  *   6. gRPC client — graceful error handling
  *   7. Currency formatting — 8 currencies
  */
+// ── Stub fire-and-forget services that are unavailable in the test sandbox ───
+vi.mock("./kafka/kafkaProducer", () => ({
+  emitEvent: vi.fn().mockResolvedValue(undefined),
+  publishEvent: vi.fn().mockResolvedValue(undefined),
+  emitDepositCompleted: vi.fn().mockResolvedValue(undefined),
+  emitDepositInitiated: vi.fn().mockResolvedValue(undefined),
+  emitDepositFailed: vi.fn().mockResolvedValue(undefined),
+  emitWithdrawalCompleted: vi.fn().mockResolvedValue(undefined),
+  emitWithdrawalInitiated: vi.fn().mockResolvedValue(undefined),
+  emitWithdrawalFailed: vi.fn().mockResolvedValue(undefined),
+  emitOrderFilled: vi.fn().mockResolvedValue(undefined),
+  emitOrderCancelled: vi.fn().mockResolvedValue(undefined),
+  emitOrderPlaced: vi.fn().mockResolvedValue(undefined),
+  emitSettlementCompleted: vi.fn().mockResolvedValue(undefined),
+  emitFeeCollected: vi.fn().mockResolvedValue(undefined),
+  emitMojaloopTransferInitiated: vi.fn().mockResolvedValue(undefined),
+  emitMojaloopQuoteAccepted: vi.fn().mockResolvedValue(undefined),
+  emitLoanDisbursed: vi.fn().mockResolvedValue(undefined),
+  emitLoanRepaid: vi.fn().mockResolvedValue(undefined),
+  emitMarginCallIssued: vi.fn().mockResolvedValue(undefined),
+  emitMarginCallResolved: vi.fn().mockResolvedValue(undefined),
+  emitAmlFlagRaised: vi.fn().mockResolvedValue(undefined),
+  emitKycStatusChanged: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("./fluvio/fluvioClient", () => ({
+  publishFluvioEvent: vi.fn().mockResolvedValue(undefined),
+  publishOrderEvent: vi.fn().mockResolvedValue(undefined),
+  publishTradeFill: vi.fn().mockResolvedValue(undefined),
+  publishKycStatusChange: vi.fn().mockResolvedValue(undefined),
+  publishAmlAlert: vi.fn().mockResolvedValue(undefined),
+  publishAuditLog: vi.fn().mockResolvedValue(undefined),
+  publishDepositEvent: vi.fn().mockResolvedValue(undefined),
+  publishWithdrawalEvent: vi.fn().mockResolvedValue(undefined),
+  publishLoanEvent: vi.fn().mockResolvedValue(undefined),
+  publishMarginEvent: vi.fn().mockResolvedValue(undefined),
+  publishFeeEvent: vi.fn().mockResolvedValue(undefined),
+  produce: vi.fn().mockResolvedValue(undefined),
+  produceBatch: vi.fn().mockResolvedValue(undefined),
+  FLUVIO_TOPICS: {
+    MARKET_PRICE_TICK: "nexcom.market.price-tick",
+    ORDER_BOOK_UPDATE: "nexcom.market.order-book",
+    TRADE_FILL: "nexcom.market.trade-fill",
+    ORDER_PLACED: "nexcom.orders.placed",
+    ORDER_MATCHED: "nexcom.orders.matched",
+    ORDER_CANCELLED: "nexcom.orders.cancelled",
+    ORDER_AMENDED: "nexcom.orders.amended",
+    KYC_STATUS_CHANGED: "nexcom.kyc.status-changed",
+    AML_ALERT_RAISED: "nexcom.aml.alert-raised",
+    AML_ALERT_RESOLVED: "nexcom.aml.alert-resolved",
+    SETTLEMENT_INITIATED: "nexcom.settlement.initiated",
+    SETTLEMENT_COMPLETED: "nexcom.settlement.completed",
+    SETTLEMENT_FAILED: "nexcom.settlement.failed",
+    LOAN_DISBURSED: "nexcom.banking.loan-disbursed",
+    PAYMENT_RECEIVED: "nexcom.banking.payment-received",
+    AUDIT_LOG: "nexcom.audit.log",
+  },
+}));
+vi.mock("./_core/notification", () => ({
+  notifyOwner: vi.fn().mockResolvedValue(true),
+}));
+vi.mock("./fundFlow", () => ({
+  FundFlow: {
+    tradeFill: vi.fn().mockResolvedValue(undefined),
+    deposit: vi.fn().mockResolvedValue(undefined),
+    withdrawal: vi.fn().mockResolvedValue(undefined),
+    loanDisbursed: vi.fn().mockResolvedValue(undefined),
+    loanRepaid: vi.fn().mockResolvedValue(undefined),
+    crossBorderTransfer: vi.fn().mockResolvedValue(undefined),
+    warehouseReceiptIssued: vi.fn().mockResolvedValue(undefined),
+    marginTopUp: vi.fn().mockResolvedValue(undefined),
+    marginLiquidation: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 import { describe, expect, it, vi, beforeEach, beforeAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
