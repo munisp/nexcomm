@@ -51,7 +51,7 @@ import {
   settleCrossBorder,
 } from "./gatewayClient";
 import { triggerTemporalWorkflow } from "./temporal/temporalClient";
-import { DAPR_TOPICS, daprPublish } from "./dapr/daprClient";
+import { DAPR_TOPICS, daprPublish, saveSagaState, deleteSagaState, daprCreditCoreBanking, daprDebitCoreBanking } from "./dapr/daprClient";
 import {
   ingestDeposit,
   ingestWithdrawal,
@@ -145,7 +145,16 @@ export const FundFlow = {
       });
       // Dapr
       await daprPublish(DAPR_TOPICS.DEPOSIT_COMPLETED, event);
+      // Core-banking credit via Dapr service invocation (deposit → core-banking)
+      await daprCreditCoreBanking({
+        userId: event.userId,
+        amount: event.amount,
+        currency: event.currency,
+        reference: `deposit-${event.depositId}`,
+        channel: "deposit",
+      });
       // Temporal saga
+      await saveSagaState(`deposit-${event.depositId}`, { status: "running", step: "initiated", payload: event });
       await triggerTemporalWorkflow("DepositWorkflow", event, `deposit-${event.depositId}`);
       // Lakehouse Bronze
       await ingestDeposit({
@@ -206,6 +215,15 @@ export const FundFlow = {
         status: "completed",
       });
       await daprPublish(DAPR_TOPICS.WITHDRAWAL_COMPLETED, event);
+      // Core-banking debit via Dapr service invocation (withdrawal → core-banking)
+      await daprDebitCoreBanking({
+        userId: event.userId,
+        amount: event.amount,
+        currency: event.currency,
+        reference: `withdrawal-${event.withdrawalId}`,
+        channel: "withdrawal",
+      });
+      await saveSagaState(`withdrawal-${event.withdrawalId}`, { status: "running", step: "initiated", payload: event });
       await triggerTemporalWorkflow("WithdrawalWorkflow", event, `withdrawal-${event.withdrawalId}`);
       await ingestWithdrawal({
         withdrawalId: event.withdrawalId,
@@ -300,6 +318,7 @@ export const FundFlow = {
       // Dapr
       await daprPublish(DAPR_TOPICS.TRADE_SETTLED, event);
       // Temporal saga fallback
+      await saveSagaState(`trade-${event.tradeId}`, { status: "running", step: "settlement_initiated", payload: event });
       await triggerTemporalWorkflow("TradeSettlementWorkflow", event, `trade-${event.tradeId}`);
       // Lakehouse Bronze
       await ingestTrade({
@@ -445,6 +464,7 @@ export const FundFlow = {
         eventType: "deposited",
       });
       await daprPublish(DAPR_TOPICS.MARGIN_DEPOSITED, event);
+      await saveSagaState(`margin-pledge-${event.marginId}`, { status: "running", step: "pledge_initiated", payload: event });
       await triggerTemporalWorkflow("MarginWorkflow", event, `margin-pledge-${event.marginId}`);
       await ingestMarginMovement({
         movementId: event.marginId,
@@ -529,6 +549,8 @@ export const FundFlow = {
         eventType: "liquidated",
       });
       await daprPublish(DAPR_TOPICS.MARGIN_LIQUIDATED, event);
+      await saveSagaState(`margin-call-${event.marginId}`, { status: "running", step: "liquidation_initiated", payload: event });
+      await triggerTemporalWorkflow("MarginCallWorkflow", event, `margin-call-${event.marginId}`);
       await ingestMarginMovement({
         movementId: event.marginId,
         userId: event.userId,
@@ -575,6 +597,7 @@ export const FundFlow = {
         status: "disbursed",
       });
       await daprPublish(DAPR_TOPICS.LOAN_DISBURSED, event);
+      await saveSagaState(`loan-${event.loanId}`, { status: "running", step: "disbursement_initiated", payload: event });
       await triggerTemporalWorkflow("LoanDisbursementWorkflow", event, `loan-${event.loanId}`);
       await ingestLoan({
         loanId: event.loanId,
@@ -624,6 +647,8 @@ export const FundFlow = {
         status: "repaid",
       });
       await daprPublish(DAPR_TOPICS.LOAN_REPAID, event);
+      await saveSagaState(`loan-repay-${event.repaymentId}`, { status: "running", step: "repayment_initiated", payload: event });
+      await triggerTemporalWorkflow("LoanRepaymentWorkflow", event, `loan-repay-${event.repaymentId}`);
       await ingestLoanRepayment({
         repaymentId: event.repaymentId,
         loanId: event.loanId,
@@ -672,6 +697,7 @@ export const FundFlow = {
       });
       await emitEvent("crossborder.initiated", { ...event, timestamp: Date.now() });
       await daprPublish(DAPR_TOPICS.CROSS_BORDER_INITIATED, event);
+      await saveSagaState(`crossborder-${event.transferId}`, { status: "running", step: "transfer_initiated", payload: event });
       await triggerTemporalWorkflow("CrossBorderWorkflow", event, `crossborder-${event.transferId}`);
       await ingestCrossBorderTransfer({
         transferId: event.transferId,
@@ -707,6 +733,8 @@ export const FundFlow = {
 
     fireAndForget(async () => {
       await emitEvent("receipt.issued", { ...event, timestamp: Date.now() });
+      await saveSagaState(`receipt-issued-${event.receiptId}`, { status: "running", step: "receipt_issued", payload: event });
+      await triggerTemporalWorkflow("WarehouseReceiptWorkflow", event, `receipt-issued-${event.receiptId}`);
       await ingestWarehouseReceipt({
         receiptId: event.receiptId,
         userId: event.userId,
@@ -739,6 +767,8 @@ export const FundFlow = {
 
     fireAndForget(async () => {
       await emitEvent("receipt.redeemed", { ...event, timestamp: Date.now() });
+      await saveSagaState(`receipt-redeemed-${event.receiptId}`, { status: "running", step: "receipt_redeemed", payload: event });
+      await triggerTemporalWorkflow("WarehouseReceiptWorkflow", event, `receipt-redeemed-${event.receiptId}`);
       await ingestWarehouseReceipt({
         receiptId: event.receiptId,
         userId: event.userId,

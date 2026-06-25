@@ -320,6 +320,96 @@ export async function daprPublishLoanDisbursed(event: {
   });
 }
 
+// ─── Saga state persistence ──────────────────────────────────────────────────
+
+/**
+ * Persist saga state for a Temporal workflow.
+ * Key pattern: saga:{workflowId}
+ * Used by DepositWorkflow, WithdrawalWorkflow, TradeSettlementWorkflow,
+ * MarginCallWorkflow, LoanRepaymentWorkflow, CrossBorderWorkflow,
+ * WarehouseReceiptWorkflow, and LoanDisbursementWorkflow to checkpoint
+ * progress so that a crashed worker can resume from the last known state.
+ */
+export async function saveSagaState(
+  workflowId: string,
+  state: {
+    status: "running" | "compensating" | "completed" | "failed";
+    step: string;
+    payload: unknown;
+    updatedAt?: string;
+  }
+): Promise<boolean> {
+  return saveIdempotencyKey(
+    `saga:${workflowId}`,
+    { ...state, updatedAt: state.updatedAt ?? new Date().toISOString() },
+    // 7-day TTL — long enough to cover any saga timeout
+    604800
+  );
+}
+
+/**
+ * Retrieve saga state for a workflow.
+ */
+export async function getSagaState(workflowId: string): Promise<{
+  status: "running" | "compensating" | "completed" | "failed";
+  step: string;
+  payload: unknown;
+  updatedAt: string;
+} | null> {
+  return getStateValue(`saga:${workflowId}`);
+}
+
+/**
+ * Delete saga state after successful completion or permanent failure.
+ */
+export async function deleteSagaState(workflowId: string): Promise<boolean> {
+  return deleteStateKey(`saga:${workflowId}`);
+}
+
+// ─── Core-banking service invocation ─────────────────────────────────────────
+
+/**
+ * Invoke the core-banking service via Dapr service invocation.
+ * Used by the deposit flow to credit the customer's account in the
+ * core-banking system after the TigerBeetle ledger entry is confirmed.
+ *
+ * App ID: nexcom-core-banking (registered in Dapr runtime)
+ * Method: api/v1/accounts/credit
+ */
+export async function daprCreditCoreBanking(params: {
+  userId: number;
+  amount: number;
+  currency: string;
+  reference: string;
+  channel: "deposit" | "loan" | "refund" | "dividend";
+}): Promise<{ success: boolean; coreRef?: string } | null> {
+  return daprInvokeService<{ success: boolean; coreRef?: string }>(
+    "nexcom-core-banking",
+    "api/v1/accounts/credit",
+    params,
+    "POST"
+  );
+}
+
+/**
+ * Invoke the core-banking service to debit a customer account.
+ * Used by the withdrawal flow after the TigerBeetle debit is confirmed.
+ */
+export async function daprDebitCoreBanking(params: {
+  userId: number;
+  amount: number;
+  currency: string;
+  reference: string;
+  channel: "withdrawal" | "fee" | "margin_call" | "loan_repayment";
+}): Promise<{ success: boolean; coreRef?: string } | null> {
+  return daprInvokeService<{ success: boolean; coreRef?: string }>(
+    "nexcom-core-banking",
+    "api/v1/accounts/debit",
+    params,
+    "POST"
+  );
+}
+
 export async function daprPublishAmlFreeze(event: {
   userId: number;
   reason: string;
