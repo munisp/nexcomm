@@ -1,0 +1,339 @@
+{
+  "dashboard": {
+    "uid": "nexcom-kafka",
+    "title": "NEXCOM Kafka Consumer Health",
+    "description": "Consumer lag per topic, produce rate, error rate, offset commit rate",
+    "tags": [
+      "nexcom",
+      "kafka",
+      "streaming"
+    ],
+    "timezone": "browser",
+    "refresh": "15s",
+    "schemaVersion": 38,
+    "panels": [
+      {
+        "id": 1,
+        "title": "Consumer Lag by Topic (all groups)",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 10
+        },
+        "targets": [
+          {
+            "expr": "kafka_consumer_group_lag",
+            "legendFormat": "{{group}} / {{topic}}",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 1000
+                },
+                {
+                  "color": "red",
+                  "value": 10000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 2,
+        "title": "Produce Rate (msgs/s)",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 10,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(kafka_producer_record_send_total[1m])",
+            "legendFormat": "{{topic}} msgs/s",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 3,
+        "title": "Consume Rate (msgs/s)",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 10,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(kafka_consumer_records_consumed_total[1m])",
+            "legendFormat": "{{group}} msgs/s",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 4,
+        "title": "Producer Error Rate",
+        "type": "stat",
+        "gridPos": {
+          "x": 0,
+          "y": 18,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "rate(kafka_producer_record_error_total[5m])",
+            "legendFormat": "Errors/s",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 0.1
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 5,
+        "title": "Consumer Commit Rate",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 6,
+          "y": 18,
+          "w": 12,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "rate(kafka_consumer_commit_total[1m])",
+            "legendFormat": "{{group}} commits/s",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 6,
+        "title": "DLQ Depth (nexcom.dlq)",
+        "type": "stat",
+        "gridPos": {
+          "x": 18,
+          "y": 18,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "kafka_consumer_group_lag{topic=\"nexcom.dlq\"}",
+            "legendFormat": "DLQ Depth",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 1
+                },
+                {
+                  "color": "red",
+                  "value": 10
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 7,
+        "title": "Fluvio vs Kafka Throughput Comparison",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 22,
+          "w": 24,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(kafka_producer_record_send_total[1m])",
+            "legendFormat": "Kafka msgs/s",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          },
+          {
+            "expr": "rate(fluvio_producer_records_sent_total[1m])",
+            "legendFormat": "Fluvio msgs/s",
+            "refId": "B",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      }
+    ]
+  },
+  "overwrite": true,
+  "folderId": 0
+}

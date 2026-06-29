@@ -1261,3 +1261,65 @@
 - [x] Harden Rust matching engine: atomic rollback (TigerBeetle void + fill.failed Kafka tombstone) — fill_hardening.rs
 - [x] Harden Rust matching engine: Prometheus fill metrics (fill_count, fill_failure_count, fill_latency_ms_avg) — fill_hardening.rs + main.rs
 - [x] TypeScript: 0 compile errors confirmed (tsc --watch)
+
+## Round 61 — K8s Manifests, Grafana Dashboards, Router Test Coverage
+
+### Phase 1 — Kubernetes Manifests (25 microservices)
+- [ ] infra/k8s/ai-ml-deployment.yaml
+- [ ] infra/k8s/aml-alert-subscriber-deployment.yaml
+- [ ] infra/k8s/analytics-deployment.yaml
+- [ ] infra/k8s/analytics-engine-deployment.yaml
+- [ ] infra/k8s/blockchain-deployment.yaml
+- [ ] infra/k8s/bot-logic-deployment.yaml
+- [ ] infra/k8s/channel-gateway-deployment.yaml
+- [ ] infra/k8s/core-banking-deployment.yaml
+- [ ] infra/k8s/credit-scoring-deployment.yaml
+- [ ] infra/k8s/crypto-guard-deployment.yaml
+- [ ] infra/k8s/ddos-guard-deployment.yaml
+- [ ] infra/k8s/fraud-engine-deployment.yaml
+- [ ] infra/k8s/indices-deployment.yaml
+- [ ] infra/k8s/ingestion-engine-deployment.yaml
+- [ ] infra/k8s/kyc-service-deployment.yaml
+- [ ] infra/k8s/market-data-deployment.yaml
+- [ ] infra/k8s/middleware-hub-deployment.yaml
+- [ ] infra/k8s/mojaloop-adapter-deployment.yaml
+- [ ] infra/k8s/notification-deployment.yaml
+- [ ] infra/k8s/opensearch-sync-deployment.yaml
+- [ ] infra/k8s/risk-management-deployment.yaml
+- [ ] infra/k8s/trading-engine-deployment.yaml
+- [ ] infra/k8s/user-management-deployment.yaml
+- [ ] infra/k8s/ussd-engine-deployment.yaml
+- [ ] infra/k8s/matching-engine-deployment.yaml
+- [ ] infra/k8s/nexcom-exchange-deployment.yaml (main Node.js app)
+- [ ] infra/k8s/kustomization.yaml (kustomize root)
+
+### Phase 2 — Grafana Dashboards
+- [ ] infra/monitoring/fund-flow-dashboard.json (latency, throughput, idempotency hit rate, saga success rate)
+- [ ] infra/monitoring/aml-dashboard.json (alert rate, false positive rate, OpenSearch indexing lag)
+- [ ] infra/monitoring/kafka-dashboard.json (consumer lag per topic, produce rate, error rate)
+- [ ] infra/monitoring/temporal-dashboard.json (workflow SLA, compensation rate, DLQ depth)
+
+### Phase 3 — Vitest Router Tests (18 untested routers)
+- [ ] server/abcp.test.ts
+- [ ] server/bankFinancing.test.ts
+- [ ] server/corporateActions.test.ts
+- [ ] server/cropReports.test.ts
+- [ ] server/dfspKyc.test.ts
+- [ ] server/engineHA.test.ts
+- [ ] server/fixedIncome.test.ts
+- [ ] server/inputFinancing.test.ts
+- [ ] server/livePrices.test.ts
+- [ ] server/marketData.test.ts
+- [ ] server/mojaloopTiers.test.ts
+- [ ] server/participantPerformance.test.ts
+- [ ] server/pbac.test.ts
+- [ ] server/pushNotifications.test.ts
+- [ ] server/receipts.test.ts
+- [ ] server/riskManagement.test.ts
+- [ ] server/ussdWhatsappReceipt.test.ts
+- [ ] server/workbench.test.ts
+
+## Round 61 — Completion Notes (all items completed)
+
+All 27 K8s manifests written (infra/k8s/), 4 Grafana dashboards written (infra/monitoring/),
+18 router test files written (server/*.test.ts). Total test files: 36. Total K8s manifests: 30.

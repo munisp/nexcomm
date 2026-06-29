@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nexcom
+
+resources:
+  # Core application
+  - nexcom-exchange-deployment.yaml
+  # Matching / trading
+  - matching-engine-deployment.yaml
+  - trading-engine-deployment.yaml
+  # Data & analytics
+  - analytics-deployment.yaml
+  - analytics-engine-deployment.yaml
+  - market-data-deployment.yaml
+  - indices-deployment.yaml
+  - ingestion-engine-deployment.yaml
+  - opensearch-sync-deployment.yaml
+  # Payments & banking
+  - core-banking-deployment.yaml
+  - mojaloop-adapter-deployment.yaml
+  - notification-deployment.yaml
+  # Channels
+  - channel-gateway-deployment.yaml
+  - bot-logic-deployment.yaml
+  - ussd-engine-deployment.yaml
+  # Compliance & risk
+  - aml-alert-subscriber-deployment.yaml
+  - kyc-service-deployment.yaml
+  - credit-scoring-deployment.yaml
+  - risk-management-deployment.yaml
+  - fraud-engine-deployment.yaml
+  - ai-ml-deployment.yaml
+  # Security
+  - crypto-guard-deployment.yaml
+  - ddos-guard-deployment.yaml
+  # Identity & access
+  - user-management-deployment.yaml
+  - middleware-hub-deployment.yaml
+  # Infrastructure
+  - blockchain-deployment.yaml
+  - pbac-deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: nexcom-exchange
+  app.kubernetes.io/managed-by: kustomize
+
+commonAnnotations:
+  nexcom.io/round: "61"

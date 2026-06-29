@@ -1,0 +1,421 @@
+{
+  "dashboard": {
+    "uid": "nexcom-aml",
+    "title": "NEXCOM AML & Compliance",
+    "description": "Alert rate, false positive rate, OpenSearch indexing lag, sanctions screening latency",
+    "tags": [
+      "nexcom",
+      "aml",
+      "compliance",
+      "opensearch"
+    ],
+    "timezone": "browser",
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "panels": [
+      {
+        "id": 1,
+        "title": "AML Alert Rate (all types)",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(aml_alerts_total[1m])",
+            "legendFormat": "{{alert_type}} /min",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 2,
+        "title": "Sanctions Hits (24h)",
+        "type": "stat",
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "increase(aml_sanctions_hits_total[24h])",
+            "legendFormat": "Sanctions Hits",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 3,
+        "title": "Velocity Breaches (24h)",
+        "type": "stat",
+        "gridPos": {
+          "x": 6,
+          "y": 8,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "increase(aml_velocity_breaches_total[24h])",
+            "legendFormat": "Velocity Breaches",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 4,
+        "title": "Structuring Detections (24h)",
+        "type": "stat",
+        "gridPos": {
+          "x": 12,
+          "y": 8,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "increase(aml_structuring_detections_total[24h])",
+            "legendFormat": "Structuring",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 5,
+        "title": "4-Eyes Pending Approvals",
+        "type": "stat",
+        "gridPos": {
+          "x": 18,
+          "y": 8,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "aml_four_eyes_pending_total",
+            "legendFormat": "Pending",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 5
+                },
+                {
+                  "color": "red",
+                  "value": 20
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 6,
+        "title": "OpenSearch Indexing Lag",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 12,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "opensearch_indexing_lag_ms",
+            "legendFormat": "Lag {{index}}",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 7,
+        "title": "AML Consumer Kafka Lag",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 12,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "kafka_consumer_group_lag{group=\"nexcom-aml\"}",
+            "legendFormat": "Lag {{topic}}",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 8,
+        "title": "OpenSanctions API Latency",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 20,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(opensanctions_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P99 ms",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 9,
+        "title": "False Positive Rate (manual overrides / total alerts)",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 20,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(aml_manual_overrides_total[1h]) / rate(aml_alerts_total[1h]) * 100",
+            "legendFormat": "FP Rate %",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      }
+    ]
+  },
+  "overwrite": true,
+  "folderId": 0
+}

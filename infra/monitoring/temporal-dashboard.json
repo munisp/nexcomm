@@ -1,0 +1,421 @@
+{
+  "dashboard": {
+    "uid": "nexcom-temporal",
+    "title": "NEXCOM Temporal Workflow SLA",
+    "description": "Workflow SLA, compensation rate, DLQ depth, activity failure rate",
+    "tags": [
+      "nexcom",
+      "temporal",
+      "saga",
+      "workflows"
+    ],
+    "timezone": "browser",
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "panels": [
+      {
+        "id": 1,
+        "title": "Workflow Start Rate (all types)",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(temporal_workflow_started_total[1m])",
+            "legendFormat": "{{workflow_type}} /min",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 2,
+        "title": "Workflow Completion Rate",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(temporal_workflow_completed_total[1m])",
+            "legendFormat": "{{workflow_type}} {{status}} /min",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 3,
+        "title": "Workflow P99 Duration",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(temporal_workflow_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P99 {{workflow_type}} ms",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 4,
+        "title": "SLA Breach Rate (>30s)",
+        "type": "stat",
+        "gridPos": {
+          "x": 12,
+          "y": 8,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "rate(temporal_workflow_duration_seconds_count{le=\"+Inf\"}[5m]) - rate(temporal_workflow_duration_seconds_count{le=\"30\"}[5m])",
+            "legendFormat": "SLA Breaches/s",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 0.01
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 5,
+        "title": "Compensation (Rollback) Rate",
+        "type": "stat",
+        "gridPos": {
+          "x": 18,
+          "y": 8,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "rate(temporal_workflow_compensated_total[5m])",
+            "legendFormat": "Rollbacks/s",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.01
+                },
+                {
+                  "color": "red",
+                  "value": 0.1
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 6,
+        "title": "Activity Failure Rate by Type",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 12,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(temporal_activity_failed_total[5m])",
+            "legendFormat": "{{activity_type}} failures/s",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 7,
+        "title": "DLQ Signal Depth",
+        "type": "stat",
+        "gridPos": {
+          "x": 12,
+          "y": 12,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "temporal_workflow_dlq_pending_total",
+            "legendFormat": "DLQ Pending",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 1
+                },
+                {
+                  "color": "red",
+                  "value": 5
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 8,
+        "title": "Worker Task Queue Backlog",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 18,
+          "y": 12,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "temporal_worker_task_slots_available",
+            "legendFormat": "Available {{task_queue}}",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      },
+      {
+        "id": 9,
+        "title": "Workflow Success Rate by Type (7d)",
+        "type": "bargauge",
+        "gridPos": {
+          "x": 0,
+          "y": 20,
+          "w": 24,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(temporal_workflow_completed_total{status=\"completed\"}[7d]) / rate(temporal_workflow_started_total[7d]) * 100",
+            "legendFormat": "{{workflow_type}}",
+            "refId": "A",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "nexcom-prometheus"
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 2000
+                }
+              ]
+            }
+          }
+        },
+        "options": {}
+      }
+    ]
+  },
+  "overwrite": true,
+  "folderId": 0
+}
