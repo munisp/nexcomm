@@ -1265,59 +1265,59 @@
 ## Round 61 — K8s Manifests, Grafana Dashboards, Router Test Coverage
 
 ### Phase 1 — Kubernetes Manifests (25 microservices)
-- [ ] infra/k8s/ai-ml-deployment.yaml
-- [ ] infra/k8s/aml-alert-subscriber-deployment.yaml
-- [ ] infra/k8s/analytics-deployment.yaml
-- [ ] infra/k8s/analytics-engine-deployment.yaml
-- [ ] infra/k8s/blockchain-deployment.yaml
-- [ ] infra/k8s/bot-logic-deployment.yaml
-- [ ] infra/k8s/channel-gateway-deployment.yaml
-- [ ] infra/k8s/core-banking-deployment.yaml
-- [ ] infra/k8s/credit-scoring-deployment.yaml
-- [ ] infra/k8s/crypto-guard-deployment.yaml
-- [ ] infra/k8s/ddos-guard-deployment.yaml
-- [ ] infra/k8s/fraud-engine-deployment.yaml
-- [ ] infra/k8s/indices-deployment.yaml
-- [ ] infra/k8s/ingestion-engine-deployment.yaml
-- [ ] infra/k8s/kyc-service-deployment.yaml
-- [ ] infra/k8s/market-data-deployment.yaml
-- [ ] infra/k8s/middleware-hub-deployment.yaml
-- [ ] infra/k8s/mojaloop-adapter-deployment.yaml
-- [ ] infra/k8s/notification-deployment.yaml
-- [ ] infra/k8s/opensearch-sync-deployment.yaml
-- [ ] infra/k8s/risk-management-deployment.yaml
-- [ ] infra/k8s/trading-engine-deployment.yaml
-- [ ] infra/k8s/user-management-deployment.yaml
-- [ ] infra/k8s/ussd-engine-deployment.yaml
-- [ ] infra/k8s/matching-engine-deployment.yaml
-- [ ] infra/k8s/nexcom-exchange-deployment.yaml (main Node.js app)
-- [ ] infra/k8s/kustomization.yaml (kustomize root)
+- [x] infra/k8s/ai-ml-deployment.yaml
+- [x] infra/k8s/aml-alert-subscriber-deployment.yaml
+- [x] infra/k8s/analytics-deployment.yaml
+- [x] infra/k8s/analytics-engine-deployment.yaml
+- [x] infra/k8s/blockchain-deployment.yaml
+- [x] infra/k8s/bot-logic-deployment.yaml
+- [x] infra/k8s/channel-gateway-deployment.yaml
+- [x] infra/k8s/core-banking-deployment.yaml
+- [x] infra/k8s/credit-scoring-deployment.yaml
+- [x] infra/k8s/crypto-guard-deployment.yaml
+- [x] infra/k8s/ddos-guard-deployment.yaml
+- [x] infra/k8s/fraud-engine-deployment.yaml
+- [x] infra/k8s/indices-deployment.yaml
+- [x] infra/k8s/ingestion-engine-deployment.yaml
+- [x] infra/k8s/kyc-service-deployment.yaml
+- [x] infra/k8s/market-data-deployment.yaml
+- [x] infra/k8s/middleware-hub-deployment.yaml
+- [x] infra/k8s/mojaloop-adapter-deployment.yaml
+- [x] infra/k8s/notification-deployment.yaml
+- [x] infra/k8s/opensearch-sync-deployment.yaml
+- [x] infra/k8s/risk-management-deployment.yaml
+- [x] infra/k8s/trading-engine-deployment.yaml
+- [x] infra/k8s/user-management-deployment.yaml
+- [x] infra/k8s/ussd-engine-deployment.yaml
+- [x] infra/k8s/matching-engine-deployment.yaml
+- [x] infra/k8s/nexcom-exchange-deployment.yaml (main Node.js app)
+- [x] infra/k8s/kustomization.yaml (kustomize root)
 
 ### Phase 2 — Grafana Dashboards
-- [ ] infra/monitoring/fund-flow-dashboard.json (latency, throughput, idempotency hit rate, saga success rate)
-- [ ] infra/monitoring/aml-dashboard.json (alert rate, false positive rate, OpenSearch indexing lag)
-- [ ] infra/monitoring/kafka-dashboard.json (consumer lag per topic, produce rate, error rate)
-- [ ] infra/monitoring/temporal-dashboard.json (workflow SLA, compensation rate, DLQ depth)
+- [x] infra/monitoring/fund-flow-dashboard.json (latency, throughput, idempotency hit rate, saga success rate)
+- [x] infra/monitoring/aml-dashboard.json (alert rate, false positive rate, OpenSearch indexing lag)
+- [x] infra/monitoring/kafka-dashboard.json (consumer lag per topic, produce rate, error rate)
+- [x] infra/monitoring/temporal-dashboard.json (workflow SLA, compensation rate, DLQ depth)
 
 ### Phase 3 — Vitest Router Tests (18 untested routers)
-- [ ] server/abcp.test.ts
-- [ ] server/bankFinancing.test.ts
-- [ ] server/corporateActions.test.ts
-- [ ] server/cropReports.test.ts
-- [ ] server/dfspKyc.test.ts
-- [ ] server/engineHA.test.ts
-- [ ] server/fixedIncome.test.ts
-- [ ] server/inputFinancing.test.ts
-- [ ] server/livePrices.test.ts
-- [ ] server/marketData.test.ts
-- [ ] server/mojaloopTiers.test.ts
-- [ ] server/participantPerformance.test.ts
-- [ ] server/pbac.test.ts
-- [ ] server/pushNotifications.test.ts
-- [ ] server/receipts.test.ts
-- [ ] server/riskManagement.test.ts
-- [ ] server/ussdWhatsappReceipt.test.ts
-- [ ] server/workbench.test.ts
+- [x] server/abcp.test.ts
+- [x] server/bankFinancing.test.ts
+- [x] server/corporateActions.test.ts
+- [x] server/cropReports.test.ts
+- [x] server/dfspKyc.test.ts
+- [x] server/engineHA.test.ts
+- [x] server/fixedIncome.test.ts
+- [x] server/inputFinancing.test.ts
+- [x] server/livePrices.test.ts
+- [x] server/marketData.test.ts
+- [x] server/mojaloopTiers.test.ts
+- [x] server/participantPerformance.test.ts
+- [x] server/pbac.test.ts
+- [x] server/pushNotifications.test.ts
+- [x] server/receipts.test.ts
+- [x] server/riskManagement.test.ts
+- [x] server/ussdWhatsappReceipt.test.ts
+- [x] server/workbench.test.ts
 
 ## Round 61 — Completion Notes (all items completed)
 
