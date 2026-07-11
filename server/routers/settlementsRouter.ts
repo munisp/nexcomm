@@ -148,7 +148,7 @@ export const settlementsRouter = router({
           await triggerTemporalWorkflow("TradeSettlementWorkflow", { settlementId: settlement.id, userId: ctx.user.id, amount: Number(settlement.netAmount), symbol: settlement.symbol }, `settlement-${settlement.id}`);
           await daprPublishTradeSettled({ settlementId: String(settlement.id), buyerUserId: settlement.side === "BUY" ? ctx.user.id : 0, sellerUserId: settlement.side === "SELL" ? ctx.user.id : 0, symbol: settlement.symbol, amount: Number(settlement.netAmount), currency: settlement.currency });
           await publishFluvioEvent(FLUVIO_TOPICS.SETTLEMENT_INITIATED, { settlementId: settlement.id, symbol: settlement.symbol, userId: ctx.user.id, amount: settlement.netAmount });
-          void ingestSettlement({ settlementId: String(settlement.id), tradeId: String(settlement.orderId), buyerUserId: settlement.side === "BUY" ? ctx.user.id : 0, sellerUserId: settlement.side === "SELL" ? ctx.user.id : 0, symbol: settlement.symbol, netAmount: settlement.netAmount, currency: settlement.currency, settlementDate: settlement.settlementDate.toISOString(), status: "pending" });
+          void ingestSettlement({ settlementId: String(settlement.id), tradeId: String(settlement.orderId), buyerUserId: settlement.side === "BUY" ? ctx.user.id : 0, sellerUserId: settlement.side === "SELL" ? ctx.user.id : 0, symbol: settlement.symbol, netAmount: settlement.netAmount, currency: settlement.currency, settlementDate: (settlement.settlementDate ?? new Date()).toISOString(), status: "pending" });
           cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
         } catch { /* non-blocking */ }
       })();
