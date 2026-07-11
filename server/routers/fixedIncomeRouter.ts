@@ -14,6 +14,7 @@ import { daprPublishTradeSettled } from "../dapr/daprClient";
 import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { ingestTrade } from "../lakehouse";
 import { cacheDel, CacheKeys } from "../cache";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 export const fixedIncomeRouter = router({
   // List all instruments
@@ -24,6 +25,7 @@ export const fixedIncomeRouter = router({
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
+      setSpanAttrs({ "fixed_income.operation": "purchase" });
       if (!db) return DEMO_INSTRUMENTS;
       try {
         const rows = await db.select().from(fixedIncomeInstruments)

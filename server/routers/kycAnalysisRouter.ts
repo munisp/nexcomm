@@ -18,6 +18,7 @@ import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { ingestKycEvent } from "../lakehouse";
 import { cacheDel, CacheKeys } from "../cache";
 import { syncUserToKeycloak } from "../keycloak/keycloakClient";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 const KYC_SERVICE_URL = process.env.KYC_SERVICE_URL ?? "http://localhost:3002";
 

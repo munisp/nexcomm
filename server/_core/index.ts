@@ -1,3 +1,7 @@
+// OpenTelemetry MUST be the very first import — before any instrumented modules
+import { initTelemetry } from "../telemetry/otel";
+initTelemetry();
+
 import "dotenv/config";
 import express from "express";
 import { createServer } from "http";

@@ -474,6 +474,81 @@ routes:
         key: remote_addr
         rejected_code: 429
 
+  # ── Middleware Health (admin-only) ────────────────────────────────────────────
+  - id: middleware-health-admin
+    name: Middleware Health — Admin
+    uri: /api/trpc/middlewareHealth.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      ip-restriction:
+        allowlist:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          - "127.0.0.1"
+      limit-count:
+        count: 30
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"admin"}'
+      prometheus: {}
+
+  # ── Cooperative (authenticated, rate-limited) ─────────────────────────────────
+  - id: cooperative-authenticated
+    name: Cooperative — Authenticated
+    uri: /api/trpc/cooperative.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 60
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"standard"}'
+      prometheus: {}
+
+  # ── Corporate Actions (authenticated, moderate rate limit) ────────────────────
+  - id: corporate-actions-authenticated
+    name: Corporate Actions — Authenticated
+    uri: /api/trpc/corporateActions.*
+    methods: [GET, POST]
+    upstream_id: nexcom-node
+    plugins:
+      jwt-auth:
+        header: Authorization
+        query: token
+        cookie: nexcom_session
+        algorithm: RS256
+      limit-count:
+        count: 30
+        time_window: 60
+        key: consumer_name
+        rejected_code: 429
+      ext-plugin-pre-req:
+        conf:
+          - name: openappsec-waf
+            value: '{"mode":"prevent","policy":"fund-flow"}'
+      prometheus: {}
+
   # ── Static assets (Vite SPA) ─────────────────────────────────────────────────
   - id: spa-static
     name: SPA — Static Assets

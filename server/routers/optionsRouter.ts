@@ -11,6 +11,7 @@ import { daprPublishTradeSettled } from "../dapr/daprClient";
 import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { ingestTrade } from "../lakehouse";
 import { cacheDel, CacheKeys } from "../cache";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 import {
   optionsContracts,
   optionsPositions,
@@ -102,6 +103,7 @@ export const optionsRouter = router({
       if (expiry <= new Date()) throw new TRPCError({ code: "BAD_REQUEST", message: "Expiry must be in the future" });
 
       const db = await getDb();
+      setSpanAttrs({ "options.operation": "buy" });
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       const [contract] = await db.insert(optionsContracts).values({

@@ -17,6 +17,7 @@ import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { ingestSettlement } from "../lakehouse";
 import { cacheDel, CacheKeys } from "../cache";
 import { writeAuditLog } from "../audit";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 const FEE_RATE = 0.001; // 0.1% exchange fee
 
 export const settlementsRouter = router({

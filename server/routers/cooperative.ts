@@ -27,6 +27,7 @@ import { triggerTemporalWorkflow } from "../temporal/temporalClient";
 import { daprPublishKycDecision } from "../dapr/daprClient";
 import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { cacheDel, CacheKeys } from "../cache";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 // ─── Guard: platform admin only ───────────────────────────────────────────────
 function assertAdmin(role: string) {

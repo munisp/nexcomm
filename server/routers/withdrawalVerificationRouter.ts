@@ -14,6 +14,7 @@ import { daprPublishWithdrawal } from "../dapr/daprClient";
 import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { ingestWithdrawal } from "../lakehouse";
 import { cacheDel, CacheKeys } from "../cache";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 // Default threshold: withdrawals above this amount require typed verification
 const DEFAULT_THRESHOLD = 500_000; // ₦500,000
@@ -22,6 +23,7 @@ const DEFAULT_THRESHOLD = 500_000; // ₦500,000
 let _memThreshold = DEFAULT_THRESHOLD;
 async function getWithdrawalThreshold(): Promise<number> {
   const db = await getDb();
+  setSpanAttrs({ "withdrawal.operation": "verify_and_release" });
   if (!db) return _memThreshold;
   const [row] = await db
     .select()

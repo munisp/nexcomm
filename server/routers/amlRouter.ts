@@ -23,6 +23,7 @@ import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { ingestAmlAlert } from "../lakehouse";
 import { cacheDel, CacheKeys } from "../cache";
 import { createLedgerTransfer } from "../gatewayClient";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ export async function runAmlDetection(params: {
   currency: string;
 }): Promise<void> {
   const db = await getDb();
+  setSpanAttrs({ "aml.operation": "freeze" });
   if (!db) return; // Graceful no-op when DB unavailable
   const { userId, transactionType, transactionRef, amount, currency } = params;
 

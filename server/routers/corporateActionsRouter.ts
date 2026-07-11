@@ -15,6 +15,7 @@ import { triggerTemporalWorkflow } from "../temporal/temporalClient";
 import { daprPublishCorporateAction } from "../dapr/daprClient";
 import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { cacheDel, CacheKeys } from "../cache";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 const ACTION_TYPE_VALUES = ["DIVIDEND", "STOCK_SPLIT", "RIGHTS_ISSUE", "BONUS_ISSUE", "MERGER", "DELISTING", "IPO"] as const;
 const STATUS_VALUES = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED"] as const;
@@ -54,6 +55,7 @@ export const corporateActionsRouter = router({
     .query(async ({ input }) => {
       try {
         const db = await getDb();
+        setSpanAttrs({ "corporate_action.operation": "execute" });
         if (!db) return { actions: [], total: 0 };
 
         const conditions = [];

@@ -24,6 +24,7 @@ import { triggerTemporalWorkflow } from "../temporal/temporalClient";
 import { daprPublishLoanDisbursed } from "../dapr/daprClient";
 import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { cacheDel, CacheKeys } from "../cache";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 const BANK_FINANCING_STATUSES = [
   "DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED",
@@ -42,6 +43,7 @@ export const bankFinancingRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const db = await getDb();
+      setSpanAttrs({ "financing.operation": "bank_disburse" });
       if (!db) return { applications: [], total: 0 };
       const conditions = [eq(bankFinancingApplications.userId, ctx.user.id)];
       if (input?.status) {

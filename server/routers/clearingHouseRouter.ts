@@ -21,6 +21,7 @@ import { daprPublishMarginCall } from "../dapr/daprClient";
 import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { ingestMarginCall } from "../lakehouse";
 import { cacheDel, CacheKeys } from "../cache";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,7 @@ export const clearingHouseRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
+      setSpanAttrs({ "clearing.operation": "margin_call" });
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
       // Check for existing account

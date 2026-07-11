@@ -10,6 +10,7 @@ import { FundFlow } from "../fundFlow";
 import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { daprPublishReceiptPledge } from "../dapr/daprClient";
 import { cacheDel, CacheKeys } from "../cache";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 export const receiptsRouter = router({
   // LIST warehouse receipts for current user
@@ -21,6 +22,7 @@ export const receiptsRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
+      setSpanAttrs({ "receipts.operation": "pledge" });
       if (!db) return { receipts: [], total: 0 };
       const offset = (input.page - 1) * input.limit;
 

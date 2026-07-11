@@ -15,11 +15,13 @@ import { daprPublishLoanDisbursed } from "../dapr/daprClient";
 import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { ingestLoan, ingestLoanRepayment } from "../lakehouse";
 import { cacheDel, CacheKeys } from "../cache";
+import { withSpan, recordEvent, setSpanAttrs } from "../telemetry/otel";
 
 export const inputFinancingRouter = router({
   // ── Loans ──────────────────────────────────────────────────────────────────
   myLoans: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
+    setSpanAttrs({ "financing.operation": "disburse" });
     if (!db) return DEMO_LOANS;
     try {
       const rows = await db.select().from(inputFinancingLoans)
