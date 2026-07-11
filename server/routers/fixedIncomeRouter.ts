@@ -8,6 +8,12 @@ import {
 } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 import { writeAuditLog } from "../audit";
+import { requireExchangeAdmin } from "../_core/permify";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishTradeSettled } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { ingestTrade } from "../lakehouse";
+import { cacheDel, CacheKeys } from "../cache";
 
 export const fixedIncomeRouter = router({
   // List all instruments
@@ -68,6 +74,16 @@ export const fixedIncomeRouter = router({
         code: 1,
       }).catch(() => null);
 
+        // Middleware: Temporal + Dapr + Fluvio + Lakehouse + Redis
+        void (async () => {
+          try {
+            await triggerTemporalWorkflow("TradeSettlementWorkflow", { tradeId: trade.id, userId: ctx.user.id, amount: Number(input.faceValueNgn), type: "fixed_income" }, `fixed-income-${trade.id}`);
+            await daprPublishTradeSettled({ settlementId: String(trade.id), buyerUserId: ctx.user.id, sellerUserId: 0, symbol: instr[0].ticker, amount: Number(input.faceValueNgn), currency: "NGN" });
+            await publishFluvioEvent(FLUVIO_TOPICS.SETTLEMENT_INITIATED, { type: "FIXED_INCOME_BUY", tradeId: trade.id, userId: ctx.user.id, symbol: instr[0].ticker, faceValue: input.faceValueNgn });
+            void ingestTrade({ tradeId: String(trade.id), buyOrderId: trade.id, sellOrderId: 0, buyerUserId: ctx.user.id, sellerUserId: 0, symbol: instr[0].ticker, quantity: "1", price: input.faceValueNgn, totalValue: input.faceValueNgn, currency: "NGN" });
+            cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+          } catch { /* non-blocking */ }
+        })();
         return { success: true, tradeId: trade.id };
       } catch (e: any) {
         throw new Error(e.message);

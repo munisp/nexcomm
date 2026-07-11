@@ -12,6 +12,12 @@ import { eq, desc, and, or } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { createLedgerAccount } from "../matchingEngineClient";
 import { writeAuditLog } from "../audit";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishKycDecision } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { ingestKycEvent } from "../lakehouse";
+import { cacheDel, CacheKeys } from "../cache";
+import { syncUserToKeycloak } from "../keycloak/keycloakClient";
 
 const KYC_SERVICE_URL = process.env.KYC_SERVICE_URL ?? "http://localhost:3002";
 

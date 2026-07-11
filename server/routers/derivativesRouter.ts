@@ -13,6 +13,12 @@ import {
 import { eq, desc, and, lt, lte, gte, sql, inArray, ne } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { writeAuditLog } from "../audit";
+import { requireExchangeAdmin } from "../_core/permify";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishMarginCall } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { ingestMarginMovement } from "../lakehouse";
+import { cacheDel, CacheKeys } from "../cache";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -275,6 +281,16 @@ export const derivativesRouter = router({
       }).catch(() => null);
 
 
+      // Middleware: Temporal + Dapr + Fluvio + Lakehouse + Redis
+      void (async () => {
+        try {
+          await triggerTemporalWorkflow("MarginWorkflow", { marginId: position.id, userId: ctx.user.id, amount: requiredMargin, type: "futures_initial" }, `futures-margin-${position.id}`);
+          await daprPublishMarginCall({ userId: ctx.user.id, utilisationPct: 1.0, marginBalance: cashBalance - requiredMargin, requiredMargin, currency: "NGN" });
+          await publishFluvioEvent(FLUVIO_TOPICS.ORDER_PLACED, { type: "FUTURES_POSITION_OPENED", positionId: position.id, userId: ctx.user.id, requiredMargin });
+          void ingestMarginMovement({ movementId: String(position.id), userId: ctx.user.id, action: "deposit", amount: String(requiredMargin), currency: "NGN", newBalance: String(cashBalance - requiredMargin) });
+          cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        } catch { /* non-blocking */ }
+      })();
       await db.update(clearingAccounts)
         .set({
           cashBalance: String(cashBalance - requiredMargin),

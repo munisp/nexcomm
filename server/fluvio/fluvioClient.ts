@@ -45,7 +45,24 @@ export const FLUVIO_TOPICS = {
 
   // Banking
   LOAN_DISBURSED: "nexcom.banking.loan-disbursed",
+  LOAN_REPAID: "nexcom.banking.loan-repaid",
   PAYMENT_RECEIVED: "nexcom.banking.payment-received",
+  WITHDRAWAL_COMPLETED: "nexcom.banking.withdrawal-completed",
+
+  // Derivatives & Options
+  MARGIN_CALL: "nexcom.derivatives.margin-call",
+  TRADE_SETTLED: "nexcom.settlement.trade-settled",
+
+  // KYC lifecycle
+  KYC_APPROVED: "nexcom.kyc.approved",
+  KYC_REJECTED: "nexcom.kyc.rejected",
+
+  // Corporate actions
+  CORPORATE_ACTION: "nexcom.corporate.action",
+
+  // Warehouse receipts
+  RECEIPT_PLEDGED: "nexcom.warehouse.receipt-pledged",
+  RECEIPT_REDEEMED: "nexcom.warehouse.receipt-redeemed",
 
   // Audit
   AUDIT_LOG: "nexcom.audit.log",
@@ -143,7 +160,16 @@ export async function ensureTopicsExist(): Promise<{
     [FLUVIO_TOPICS.SETTLEMENT_COMPLETED]: { partitions: 4, retentionMs: 604_800_000 },
     [FLUVIO_TOPICS.SETTLEMENT_FAILED]: { partitions: 4, retentionMs: 604_800_000 },
     [FLUVIO_TOPICS.LOAN_DISBURSED]: { partitions: 2, retentionMs: 2_592_000_000 },
+    [FLUVIO_TOPICS.LOAN_REPAID]: { partitions: 2, retentionMs: 2_592_000_000 },
     [FLUVIO_TOPICS.PAYMENT_RECEIVED]: { partitions: 2, retentionMs: 2_592_000_000 },
+    [FLUVIO_TOPICS.WITHDRAWAL_COMPLETED]: { partitions: 2, retentionMs: 2_592_000_000 },
+    [FLUVIO_TOPICS.MARGIN_CALL]: { partitions: 2, retentionMs: 2_592_000_000 },
+    [FLUVIO_TOPICS.TRADE_SETTLED]: { partitions: 4, retentionMs: 604_800_000 },
+    [FLUVIO_TOPICS.KYC_APPROVED]: { partitions: 2, retentionMs: 2_592_000_000 },
+    [FLUVIO_TOPICS.KYC_REJECTED]: { partitions: 2, retentionMs: 2_592_000_000 },
+    [FLUVIO_TOPICS.CORPORATE_ACTION]: { partitions: 2, retentionMs: 2_592_000_000 },
+    [FLUVIO_TOPICS.RECEIPT_PLEDGED]: { partitions: 2, retentionMs: 2_592_000_000 },
+    [FLUVIO_TOPICS.RECEIPT_REDEEMED]: { partitions: 2, retentionMs: 2_592_000_000 },
     [FLUVIO_TOPICS.AUDIT_LOG]: { partitions: 4, retentionMs: 31_536_000_000 },          // 365d
   };
 

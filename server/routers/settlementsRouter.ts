@@ -10,8 +10,13 @@ import { getDb } from "../db";
 import { settlements, orders } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { requireExchangeAdmin } from "../_core/permify";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishTradeSettled } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { ingestSettlement } from "../lakehouse";
+import { cacheDel, CacheKeys } from "../cache";
 import { writeAuditLog } from "../audit";
-
 const FEE_RATE = 0.001; // 0.1% exchange fee
 
 export const settlementsRouter = router({
@@ -137,9 +142,18 @@ export const settlementsRouter = router({
           settlementDate,
         })
         .returning();
+            // Middleware: Temporal + Dapr + Fluvio + Lakehouse + Redis
+      void (async () => {
+        try {
+          await triggerTemporalWorkflow("TradeSettlementWorkflow", { settlementId: settlement.id, userId: ctx.user.id, amount: Number(settlement.netAmount), symbol: settlement.symbol }, `settlement-${settlement.id}`);
+          await daprPublishTradeSettled({ settlementId: String(settlement.id), buyerUserId: settlement.side === "BUY" ? ctx.user.id : 0, sellerUserId: settlement.side === "SELL" ? ctx.user.id : 0, symbol: settlement.symbol, amount: Number(settlement.netAmount), currency: settlement.currency });
+          await publishFluvioEvent(FLUVIO_TOPICS.SETTLEMENT_INITIATED, { settlementId: settlement.id, symbol: settlement.symbol, userId: ctx.user.id, amount: settlement.netAmount });
+          void ingestSettlement({ settlementId: String(settlement.id), tradeId: String(settlement.orderId), buyerUserId: settlement.side === "BUY" ? ctx.user.id : 0, sellerUserId: settlement.side === "SELL" ? ctx.user.id : 0, symbol: settlement.symbol, netAmount: settlement.netAmount, currency: settlement.currency, settlementDate: settlement.settlementDate.toISOString(), status: "pending" });
+          cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        } catch { /* non-blocking */ }
+      })();
       return settlement;
     }),
-
   /** Admin: update settlement status */
   updateStatus: protectedProcedure
     .input(z.object({

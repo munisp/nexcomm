@@ -23,6 +23,10 @@ import {
 } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishKycDecision } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { cacheDel, CacheKeys } from "../cache";
 
 // ─── Guard: platform admin only ───────────────────────────────────────────────
 function assertAdmin(role: string) {
@@ -343,6 +347,15 @@ export const cooperativeRouter = router({
         type: "KYC",
       });
 
+      // Middleware: Temporal + Dapr + Fluvio + Redis (on KYC approval)
+      void (async () => {
+        try {
+          await triggerTemporalWorkflow("KycApprovalWorkflow", { submissionId: String(input.kycQueueId), userId: entry.userId, decision: "APPROVED" }, `kyc-coop-${input.kycQueueId}`);
+          await daprPublishKycDecision({ submissionId: String(input.kycQueueId), userId: entry.userId, decision: "APPROVED" });
+          await publishFluvioEvent(FLUVIO_TOPICS.KYC_APPROVED, { submissionId: input.kycQueueId, userId: entry.userId });
+          cacheDel(CacheKeys.portfolioSummary(entry.userId)).catch(() => {});
+        } catch { /* non-blocking */ }
+      })();
       return { success: true, kycQueueId: input.kycQueueId };
     }),
 

@@ -640,3 +640,48 @@ export async function ingestAuditEvent(event: {
     timestamp: new Date().toISOString(),
   });
 }
+
+// ─── Scenario 13: KYC Event ──────────────────────────────────────────────────
+export async function ingestKycEvent(event: {
+  eventId: string;
+  userId: number;
+  eventType: "submitted" | "approved" | "rejected" | "escalated";
+  submissionId: string;
+  correlationId?: string;
+}): Promise<void> {
+  return ingestEvent("nexcom_kyc_events", {
+    event_id: event.eventId,
+    event_type: `kyc.${event.eventType}`,
+    user_id: event.userId,
+    submission_id: event.submissionId,
+    correlation_id: event.correlationId ?? event.submissionId,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+// ─── Scenario 14: Receipt Pledge ─────────────────────────────────────────────
+export async function ingestReceiptPledge(event: {
+  pledgeId: string;
+  userId: number;
+  receiptId: string;
+  commodityType: string;
+  quantityMt: string;
+  warehouseId: number;
+  status: "pledged" | "redeemed" | "cancelled";
+  tigerBeetleTransferId?: string;
+  correlationId?: string;
+}): Promise<void> {
+  return ingestEvent("nexcom_receipt_pledges", {
+    event_id: event.pledgeId,
+    event_type: `receipt.${event.status}`,
+    user_id: event.userId,
+    receipt_id: event.receiptId,
+    commodity_type: event.commodityType,
+    quantity_mt: event.quantityMt,
+    warehouse_id: event.warehouseId,
+    status: event.status,
+    tigerbeetle_transfer_id: event.tigerBeetleTransferId,
+    correlation_id: event.correlationId ?? event.pledgeId,
+    timestamp: new Date().toISOString(),
+  });
+}

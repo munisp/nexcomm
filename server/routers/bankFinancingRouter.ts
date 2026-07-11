@@ -20,6 +20,10 @@ import { writeAuditLog } from "../audit";
 import { ingestLoan } from "../lakehouse";
 import { FundFlow } from "../fundFlow";
 import { createLedgerTransfer } from "../gatewayClient";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishLoanDisbursed } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { cacheDel, CacheKeys } from "../cache";
 
 const BANK_FINANCING_STATUSES = [
   "DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED",
@@ -225,6 +229,17 @@ export const bankFinancingRouter = router({
             dueDate: dueDate.toISOString(),
           }).catch(() => {});
         });
+      }
+      // Middleware: Temporal + Dapr + Fluvio + Redis (on DISBURSED)
+      if (input.status === "DISBURSED" && updated) {
+        void (async () => {
+          try {
+            await triggerTemporalWorkflow("LoanDisbursementWorkflow", { loanId: updated.id, userId: updated.userId, amount: Number(updated.approvedAmountNgn ?? 0), currency: "NGN" }, `bank-loan-${updated.id}`);
+            await daprPublishLoanDisbursed({ loanId: String(updated.id), userId: updated.userId, amount: Number(updated.approvedAmountNgn ?? 0), currency: "NGN", interestRate: Number(updated.interestRatePct ?? 0), dueDate: new Date(Date.now() + (updated.tenorMonths ?? 12) * 30 * 86400000).toISOString() });
+            await publishFluvioEvent(FLUVIO_TOPICS.LOAN_DISBURSED, { loanId: updated.id, userId: updated.userId, type: "bank_financing", amount: updated.approvedAmountNgn });
+            cacheDel(CacheKeys.portfolioSummary(updated.userId)).catch(() => {});
+          } catch { /* non-blocking */ }
+        })();
       }
       return { success: true, application: updated };
     }),

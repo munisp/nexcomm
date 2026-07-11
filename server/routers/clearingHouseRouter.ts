@@ -15,6 +15,12 @@ import {
 import { eq, desc, and, lt, gte, sql, inArray } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { writeAuditLog } from "../audit";
+import { requireExchangeAdmin } from "../_core/permify";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishMarginCall } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { ingestMarginCall } from "../lakehouse";
+import { cacheDel, CacheKeys } from "../cache";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -276,6 +282,16 @@ export const clearingHouseRouter = router({
       }).catch(() => null);
 
 
+      // Middleware: Temporal + Dapr + Fluvio + Lakehouse + Redis
+      void (async () => {
+        try {
+          await triggerTemporalWorkflow("MarginCallWorkflow", { marginCallId: call.id, userId: account.userId, deficit, dueAt: dueAt.toISOString() }, `margin-call-${call.id}`);
+          await daprPublishMarginCall({ userId: account.userId ?? ctx.user.id, utilisationPct: equityRatio, marginBalance: cashBalance, requiredMargin: deficit, currency: "NGN" });
+          await publishFluvioEvent(FLUVIO_TOPICS.AML_ALERT_RAISED, { type: "MARGIN_CALL", marginCallId: call.id, userId: account.userId, deficit });
+          void ingestMarginCall({ alertId: String(call.id), userId: account.userId ?? 0, utilisationPct: equityRatio, marginBalance: cashBalance, requiredMargin: deficit, currency: "NGN", status: "issued" });
+          cacheDel(CacheKeys.portfolioSummary(account.userId ?? ctx.user.id)).catch(() => {});
+        } catch { /* non-blocking */ }
+      })();
       // Record ISSUED event
       await db.insert(marginCallEvents).values({
         marginCallId: call.id,

@@ -9,6 +9,11 @@ import { getDb } from "../db";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
 import { createLedgerTransfer } from "../gatewayClient";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishWithdrawal } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { ingestWithdrawal } from "../lakehouse";
+import { cacheDel, CacheKeys } from "../cache";
 
 // Default threshold: withdrawals above this amount require typed verification
 const DEFAULT_THRESHOLD = 500_000; // ₦500,000
@@ -151,6 +156,16 @@ export const withdrawalVerificationRouter = router({
           amount: Math.round(Number(challenge.amount ?? 0) * 100),
           code: 5,
         }).catch(() => null);
+        // Middleware: Temporal + Dapr + Fluvio + Lakehouse + Redis
+        void (async () => {
+          try {
+            await triggerTemporalWorkflow("WithdrawalWorkflow", { withdrawalId: challenge.id, userId: ctx.user.id, amount: Number(challenge.amount), currency: "NGN" }, `withdrawal-${challenge.id}`);
+            await daprPublishWithdrawal({ withdrawalId: String(challenge.id), userId: ctx.user.id, amount: Number(challenge.amount), currency: "NGN", status: "initiated" });
+            await publishFluvioEvent(FLUVIO_TOPICS.PAYMENT_RECEIVED, { type: "WITHDRAWAL_VERIFIED", withdrawalId: challenge.id, userId: ctx.user.id, amount: challenge.amount });
+            void ingestWithdrawal({ withdrawalId: String(challenge.id), userId: ctx.user.id, amount: Number(challenge.amount), currency: "NGN", status: "processing" });
+            cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+          } catch { /* non-blocking */ }
+        })();
         return { passed: true, attemptsRemaining: 0 };
       }
 

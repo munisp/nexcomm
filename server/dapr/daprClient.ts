@@ -419,3 +419,54 @@ export async function daprPublishAmlFreeze(event: {
   const topic = event.frozen ? DAPR_TOPICS.AML_FREEZE : DAPR_TOPICS.AML_UNFREEZE;
   await daprPublish(topic, { ...event, timestamp: new Date().toISOString() });
 }
+
+// ─── KYC Decision ─────────────────────────────────────────────────────────────
+export async function daprPublishKycDecision(event: {
+  submissionId: string;
+  userId: number;
+  decision: "APPROVED" | "REJECTED" | "PENDING";
+}): Promise<void> {
+  await daprPublish("nexcom.kyc.decision" as DaprTopic, { ...event, timestamp: new Date().toISOString() });
+}
+
+// ─── AML Alert ────────────────────────────────────────────────────────────────
+export async function daprPublishAmlAlert(event: {
+  alertId: string;
+  userId: number;
+  riskScore: number;
+  reason: string;
+  status: "open" | "resolved" | "escalated";
+}): Promise<void> {
+  await daprPublish("nexcom.aml.alert" as DaprTopic, { ...event, timestamp: new Date().toISOString() });
+}
+
+// ─── Corporate Action ─────────────────────────────────────────────────────────
+export async function daprPublishCorporateAction(event: {
+  actionId: string;
+  actionType: string;
+  symbol: string;
+  exDate: string;
+}): Promise<void> {
+  await daprPublish("nexcom.corporate.action" as DaprTopic, { ...event, timestamp: new Date().toISOString() });
+}
+
+// ─── Cooperative Payout ───────────────────────────────────────────────────────
+export async function daprPublishCooperativePayout(event: {
+  payoutId: string;
+  cooperativeId: string;
+  memberId: number;
+  amountNgn: string;
+}): Promise<void> {
+  await daprPublish("nexcom.cooperative.payout" as DaprTopic, { ...event, timestamp: new Date().toISOString() });
+}
+
+// ─── Receipt Pledge ───────────────────────────────────────────────────────────
+export async function daprPublishReceiptPledge(event: {
+  receiptId: string;
+  userId: number;
+  commodityType: string;
+  quantityMt: string;
+  warehouseId: number;
+}): Promise<void> {
+  await daprPublish("nexcom.receipt.pledged" as DaprTopic, { ...event, timestamp: new Date().toISOString() });
+}

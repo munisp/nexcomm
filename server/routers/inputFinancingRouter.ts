@@ -10,6 +10,11 @@ import {
 import { eq, desc, and } from "drizzle-orm";
 import { writeAuditLog } from "../audit";
 import { createLedgerTransfer } from "../gatewayClient";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishLoanDisbursed } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { ingestLoan, ingestLoanRepayment } from "../lakehouse";
+import { cacheDel, CacheKeys } from "../cache";
 
 export const inputFinancingRouter = router({
   // ── Loans ──────────────────────────────────────────────────────────────────
@@ -55,6 +60,16 @@ export const inputFinancingRouter = router({
       }).then((tbTx) => {
         if (tbTx && loan) db.update(inputFinancingLoans).set({ ledgerDisbursementTxId: tbTx.id } as any).where(eq(inputFinancingLoans.id, loan.id)).catch(() => null);
       }).catch(() => null);
+      // Middleware: Temporal + Dapr + Fluvio + Lakehouse + Redis
+      void (async () => {
+        try {
+          await triggerTemporalWorkflow("LoanDisbursementWorkflow", { loanId: loan.id, userId: ctx.user.id, amount: Number(input.requestedValueNgn), currency: "NGN" }, `input-loan-${loan.id}`);
+          await daprPublishLoanDisbursed({ loanId: String(loan.id), userId: ctx.user.id, amount: Number(input.requestedValueNgn), currency: "NGN", interestRate: 0, dueDate: new Date(Date.now() + (input.tenorMonths ?? 6) * 30 * 86400000).toISOString() });
+          await publishFluvioEvent(FLUVIO_TOPICS.LOAN_DISBURSED, { loanId: loan.id, userId: ctx.user.id, amount: input.requestedValueNgn, type: "input_financing" });
+          void ingestLoan({ loanId: String(loan.id), userId: ctx.user.id, amount: Number(input.requestedValueNgn), currency: "NGN", interestRate: 0, dueDate: new Date(Date.now() + (input.tenorMonths ?? 6) * 30 * 86400000).toISOString(), status: "disbursed" });
+          cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        } catch { /* non-blocking */ }
+      })();
       return { success: true, loanId: loan.id };
     }),
 
@@ -83,6 +98,15 @@ export const inputFinancingRouter = router({
       }).then((tbTx) => {
         if (tbTx) db.update(inputFinancingLoans).set({ ledgerRepaymentTxId: tbTx.id } as any).where(eq(inputFinancingLoans.id, input.loanId)).catch(() => null);
       }).catch(() => null);
+      // Middleware: Temporal + Fluvio + Lakehouse + Redis
+      void (async () => {
+        try {
+          await triggerTemporalWorkflow("LoanRepaymentWorkflow", { loanId: input.loanId, userId: ctx.user.id, amount: Number(input.amountNgn), currency: "NGN" }, `input-repay-${input.loanId}-${Date.now()}`);
+          await publishFluvioEvent(FLUVIO_TOPICS.PAYMENT_RECEIVED, { type: "LOAN_REPAYMENT", loanId: input.loanId, userId: ctx.user.id, amount: input.amountNgn });
+          void ingestLoanRepayment({ repaymentId: `repay-${input.loanId}-${Date.now()}`, loanId: String(input.loanId), userId: ctx.user.id, amount: Number(input.amountNgn), currency: "NGN", principalPaid: Number(input.amountNgn), interestPaid: 0, remainingBalance: 0, status: "on_time" });
+          cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        } catch { /* non-blocking */ }
+      })();
       return { success: true };
     }),
 

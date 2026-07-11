@@ -3163,3 +3163,123 @@ export const settlementLedgerEntries = pgTable("settlement_ledger_entries", {
   createdAt:       timestamp("created_at").defaultNow().notNull(),
 });
 export type SettlementLedgerEntry = typeof settlementLedgerEntries.$inferSelect;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Round 63 — Middleware Integration Tracking Tables
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Keycloak User Sync Log ───────────────────────────────────────────────────
+export const keycloakUserSync = pgTable("keycloak_user_sync", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  userId:          integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  keycloakId:      varchar("keycloak_id", { length: 128 }),
+  syncAction:      varchar("sync_action", { length: 32 }).notNull(),
+  syncStatus:      varchar("sync_status", { length: 16 }).default("PENDING").notNull(),
+  errorMessage:    text("error_message"),
+  syncedAt:        timestamp("synced_at"),
+  createdAt:       timestamp("created_at").defaultNow().notNull(),
+});
+export type KeycloakUserSync = typeof keycloakUserSync.$inferSelect;
+
+// ─── Temporal Workflow Execution Log ─────────────────────────────────────────
+export const workflowExecutions = pgTable("workflow_executions", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  workflowType:    varchar("workflow_type", { length: 128 }).notNull(),
+  workflowId:      varchar("workflow_id", { length: 256 }).notNull(),
+  runId:           varchar("run_id", { length: 128 }),
+  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  status:          varchar("status", { length: 32 }).default("STARTED").notNull(),
+  input:           jsonb("input"),
+  result:          jsonb("result"),
+  errorMessage:    text("error_message"),
+  startedAt:       timestamp("started_at").defaultNow().notNull(),
+  completedAt:     timestamp("completed_at"),
+});
+export type WorkflowExecution = typeof workflowExecutions.$inferSelect;
+
+// ─── Fluvio Event Log ─────────────────────────────────────────────────────────
+export const fluvioEventLog = pgTable("fluvio_event_log", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  topic:           varchar("topic", { length: 256 }).notNull(),
+  eventKey:        varchar("event_key", { length: 256 }),
+  payload:         jsonb("payload").notNull(),
+  partition:       integer("partition"),
+  offset:          bigint("offset", { mode: "number" }),
+  producedAt:      timestamp("produced_at").defaultNow().notNull(),
+  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
+});
+export type FluvioEventLog = typeof fluvioEventLog.$inferSelect;
+
+// ─── Dapr Pub/Sub Log ─────────────────────────────────────────────────────────
+export const daprPubsubLog = pgTable("dapr_pubsub_log", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  pubsubName:      varchar("pubsub_name", { length: 128 }).notNull(),
+  topicName:       varchar("topic_name", { length: 256 }).notNull(),
+  payload:         jsonb("payload").notNull(),
+  status:          varchar("status", { length: 16 }).default("PUBLISHED").notNull(),
+  errorMessage:    text("error_message"),
+  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  publishedAt:     timestamp("published_at").defaultNow().notNull(),
+});
+export type DaprPubsubLog = typeof daprPubsubLog.$inferSelect;
+
+// ─── APISIX Route Config Snapshot ────────────────────────────────────────────
+export const apisixRouteSnapshots = pgTable("apisix_route_snapshots", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  routeId:         varchar("route_id", { length: 128 }).notNull(),
+  routeName:       varchar("route_name", { length: 256 }),
+  upstreamUrl:     varchar("upstream_url", { length: 512 }),
+  plugins:         jsonb("plugins"),
+  status:          varchar("status", { length: 16 }).default("ACTIVE").notNull(),
+  snapshotAt:      timestamp("snapshot_at").defaultNow().notNull(),
+  createdBy:       integer("created_by").references(() => users.id, { onDelete: "set null" }),
+});
+export type ApisixRouteSnapshot = typeof apisixRouteSnapshots.$inferSelect;
+
+// ─── Permify Policy Audit Log ─────────────────────────────────────────────────
+export const permifyPolicyLog = pgTable("permify_policy_log", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  action:          varchar("action", { length: 128 }).notNull(),
+  resource:        varchar("resource", { length: 256 }),
+  decision:        varchar("decision", { length: 16 }).notNull(),
+  reason:          text("reason"),
+  checkedAt:       timestamp("checked_at").defaultNow().notNull(),
+});
+export type PermifyPolicyLog = typeof permifyPolicyLog.$inferSelect;
+
+// ─── OpenSearch Index Event Log ───────────────────────────────────────────────
+export const opensearchIndexLog = pgTable("opensearch_index_log", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  indexName:       varchar("index_name", { length: 256 }).notNull(),
+  documentId:      varchar("document_id", { length: 256 }),
+  operation:       varchar("operation", { length: 16 }).notNull(),
+  status:          varchar("status", { length: 16 }).default("SUCCESS").notNull(),
+  errorMessage:    text("error_message"),
+  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  indexedAt:       timestamp("indexed_at").defaultNow().notNull(),
+});
+export type OpensearchIndexLog = typeof opensearchIndexLog.$inferSelect;
+
+// ─── Redis Cache Invalidation Log ────────────────────────────────────────────
+export const redisCacheLog = pgTable("redis_cache_log", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  cacheKey:        varchar("cache_key", { length: 512 }).notNull(),
+  operation:       varchar("operation", { length: 16 }).notNull(),
+  ttlSeconds:      integer("ttl_seconds"),
+  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  triggeredBy:     varchar("triggered_by", { length: 128 }),
+  executedAt:      timestamp("executed_at").defaultNow().notNull(),
+});
+export type RedisCacheLog = typeof redisCacheLog.$inferSelect;
+
+// ─── Middleware Health Check Log ──────────────────────────────────────────────
+export const middlewareHealthLog = pgTable("middleware_health_log", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  service:         varchar("service", { length: 64 }).notNull(),
+  status:          varchar("status", { length: 16 }).notNull(),
+  latencyMs:       integer("latency_ms"),
+  errorMessage:    text("error_message"),
+  checkedAt:       timestamp("checked_at").defaultNow().notNull(),
+});
+export type MiddlewareHealthLog = typeof middlewareHealthLog.$inferSelect;

@@ -5,6 +5,12 @@ import { z } from "zod";
 import { getDb } from "../db";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
+import { requireExchangeAdmin } from "../_core/permify";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishTradeSettled } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { ingestTrade } from "../lakehouse";
+import { cacheDel, CacheKeys } from "../cache";
 import {
   optionsContracts,
   optionsPositions,
@@ -260,6 +266,16 @@ export const optionsRouter = router({
         code: 1,
       }).catch(() => null);
 
+      // Middleware: Temporal + Dapr + Fluvio + Lakehouse + Redis
+      void (async () => {
+        try {
+          await triggerTemporalWorkflow("TradeSettlementWorkflow", { tradeId: position.id, userId: ctx.user.id, amount: totalCost, type: "options_premium" }, `options-${position.id}`);
+          await daprPublishTradeSettled({ settlementId: String(position.id), buyerUserId: ctx.user.id, sellerUserId: 0, symbol: contract.symbol, amount: totalCost, currency: "NGN" });
+          await publishFluvioEvent(FLUVIO_TOPICS.ORDER_PLACED, { type: "OPTIONS_POSITION_OPENED", positionId: position.id, userId: ctx.user.id, premium, totalCost });
+          void ingestTrade({ tradeId: String(position.id), buyOrderId: position.id, sellOrderId: 0, buyerUserId: ctx.user.id, sellerUserId: 0, symbol: contract.symbol, quantity: String(input.quantity), price: String(premium), totalValue: String(totalCost), currency: "NGN" });
+          cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        } catch { /* non-blocking */ }
+      })();
       await db.update(optionsContracts).set({ openInterest: sql`${optionsContracts.openInterest} + ${Math.round(input.quantity)}`, lastPrice: String(premium), updatedAt: new Date() }).where(eq(optionsContracts.id, input.contractId));
       return { position, premium, totalCost };
     }),

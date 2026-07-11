@@ -5,8 +5,11 @@ import { warehouseReceipts, auditLog } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
-import { ingestWarehouseReceipt } from "../lakehouse";
+import { ingestWarehouseReceipt, ingestReceiptPledge } from "../lakehouse";
 import { FundFlow } from "../fundFlow";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { daprPublishReceiptPledge } from "../dapr/daprClient";
+import { cacheDel, CacheKeys } from "../cache";
 
 export const receiptsRouter = router({
   // LIST warehouse receipts for current user
@@ -173,10 +176,19 @@ export const receiptsRouter = router({
       if (!result[0]) throw new TRPCError({ code: "NOT_FOUND" });
       if (result[0].status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: "Only ACTIVE receipts can be pledged" });
 
+      const pledgeReceipt = result[0];
       await db.update(warehouseReceipts)
         .set({ status: "PLEDGED", updatedAt: new Date() })
         .where(eq(warehouseReceipts.id, input.id));
-
+      // Middleware: Dapr + Fluvio + Lakehouse + Redis
+      void (async () => {
+        try {
+          await daprPublishReceiptPledge({ receiptId: String(input.id), userId: ctx.user.id, commodityType: pledgeReceipt.commodity, quantityMt: pledgeReceipt.quantity, warehouseId: Number(pledgeReceipt.warehouseId ?? 0) });
+          await publishFluvioEvent(FLUVIO_TOPICS.RECEIPT_PLEDGED, { receiptId: input.id, userId: ctx.user.id, commodityType: pledgeReceipt.commodity });
+          void ingestReceiptPledge({ pledgeId: String(input.id), userId: ctx.user.id, receiptId: String(input.id), commodityType: pledgeReceipt.commodity, quantityMt: pledgeReceipt.quantity, warehouseId: Number(pledgeReceipt.warehouseId ?? 0), status: "pledged" });
+          cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        } catch { /* non-blocking */ }
+      })();
       return { success: true };
     }),
 

@@ -11,6 +11,10 @@ import { corporateActions, users } from "../../drizzle/schema";
 import { eq, desc, and, or, ilike } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { writeAuditLog } from "../audit";
+import { triggerTemporalWorkflow } from "../temporal/temporalClient";
+import { daprPublishCorporateAction } from "../dapr/daprClient";
+import { publishFluvioEvent, FLUVIO_TOPICS } from "../fluvio/fluvioClient";
+import { cacheDel, CacheKeys } from "../cache";
 
 const ACTION_TYPE_VALUES = ["DIVIDEND", "STOCK_SPLIT", "RIGHTS_ISSUE", "BONUS_ISSUE", "MERGER", "DELISTING", "IPO"] as const;
 const STATUS_VALUES = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED"] as const;
@@ -222,14 +226,22 @@ export const corporateActionsRouter = router({
           )
         );
 
-      // Non-blocking owner notification
+      // Non-blocking owner notification + middleware
       try {
-        const rows = await db.select({ title: corporateActions.title, actionType: corporateActions.actionType, symbol: corporateActions.symbol }).from(corporateActions).where(eq(corporateActions.id, input.id)).limit(1);
+        const rows = await db.select({ title: corporateActions.title, actionType: corporateActions.actionType, symbol: corporateActions.symbol, exDate: corporateActions.exDate }).from(corporateActions).where(eq(corporateActions.id, input.id)).limit(1);
         if (rows[0]) {
           await notifyOwner({
             title: `✅ Corporate Action Approved: ${rows[0].symbol}`,
             content: `**${rows[0].title}** (${rows[0].actionType}) has been approved.${input.reviewNotes ? `\n\nNotes: ${input.reviewNotes}` : ""}`,
           });
+          void (async () => {
+            try {
+              await triggerTemporalWorkflow("CorporateActionWorkflow", { actionId: input.id, actionType: rows[0].actionType, symbol: rows[0].symbol }, `corp-action-${input.id}`);
+              await daprPublishCorporateAction({ actionId: String(input.id), actionType: rows[0].actionType, symbol: rows[0].symbol, exDate: rows[0].exDate?.toISOString() ?? new Date().toISOString() });
+              await publishFluvioEvent(FLUVIO_TOPICS.CORPORATE_ACTION, { actionId: input.id, actionType: rows[0].actionType, symbol: rows[0].symbol });
+              cacheDel(CacheKeys.portfolioSummary(0)).catch(() => {});
+            } catch { /* non-blocking */ }
+          })();
         }
       } catch { /* non-blocking */ }
       return { success: true };
