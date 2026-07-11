@@ -70,7 +70,7 @@ async function computeNetPositions(
         void createLedgerTransfer({
           debitAccountId: `settlement-buyer`,
           creditAccountId: `settlement-seller`,
-          amount: Math.round(Number(input.totalValue ?? 0) * 100),
+          amount: Math.round(Number(totalValue ?? 0) * 100),
           code: 1,
         }).catch(() => null);
 

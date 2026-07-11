@@ -224,7 +224,7 @@ export const marginRouter = router({
       void createLedgerTransfer({
         debitAccountId: `settlement-${ctx.user.id}`,
         creditAccountId: `margin-${ctx.user.id}`,
-        amount: Math.round(Number(input.amount ?? 0) * 100),
+        amount: Math.round(Number(eligibleValue ?? 0) * 100),
         code: 2,
       }).catch(() => null);
 

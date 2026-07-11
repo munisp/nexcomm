@@ -9,6 +9,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { writeAuditLog } from "../audit";
+import { createLedgerTransfer } from "../gatewayClient";
 
 export const inputFinancingRouter = router({
   // ── Loans ──────────────────────────────────────────────────────────────────

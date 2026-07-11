@@ -270,7 +270,7 @@ export const derivativesRouter = router({
       void createLedgerTransfer({
         debitAccountId: `settlement-${ctx.user.id}`,
         creditAccountId: `futures-margin-${ctx.user.id}`,
-        amount: Math.round(Number(input.marginPosted ?? 0) * 100),
+        amount: Math.round(Number(requiredMargin ?? 0) * 100),
         code: 2,
       }).catch(() => null);
 

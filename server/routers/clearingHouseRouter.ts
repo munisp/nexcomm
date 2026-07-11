@@ -269,9 +269,9 @@ export const clearingHouseRouter = router({
       }).returning();
       // TigerBeetle: margin call event (code 2 = margin_deposit)
       void createLedgerTransfer({
-        debitAccountId: `settlement-${input.userId ?? ctx.user.id}`,
+        debitAccountId: `settlement-${account.userId ?? ctx.user.id}`,
         creditAccountId: "nexcom-margin-call-escrow",
-        amount: Math.round(Number(input.amountRequired ?? 0) * 100),
+        amount: Math.round(Number(deficit ?? 0) * 100),
         code: 2,
       }).catch(() => null);
 

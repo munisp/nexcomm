@@ -124,8 +124,11 @@ export async function createLedgerTransfer(params: {
   debitAccountId: string;
   creditAccountId: string;
   amount: number;
-  /** 1=trade_settlement 2=margin_deposit 3=margin_release 4=fee 5=withdrawal 6=deposit */
-  code: 1 | 2 | 3 | 4 | 5 | 6;
+  /** 1=trade_settlement 2=margin_deposit 3=margin_release 4=fee 5=withdrawal 6=deposit
+   *  7=loan_disbursement 8=loan_repayment 9=dividend 10=coupon 11=corporate_action
+   *  12=cross_border 13=collateral_hold 14=collateral_release 15=liquidation
+   *  16=refund 17=stripe_topup 18=aml_freeze 19=aml_unfreeze 20=system_rebalance */
+  code: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
 }): Promise<LedgerTransfer | null> {
   return gatewayFetch<LedgerTransfer>("/api/v1/ledger/transfers", {
     method: "POST",
@@ -138,7 +141,7 @@ export async function createPendingLedgerTransfer(params: {
   debitAccountId: string;
   creditAccountId: string;
   amount: number;
-  code: 1 | 2 | 3 | 4 | 5 | 6;
+  code: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
 }): Promise<LedgerTransfer | null> {
   return gatewayFetch<LedgerTransfer>("/api/v1/ledger/transfers/pending", {
     method: "POST",

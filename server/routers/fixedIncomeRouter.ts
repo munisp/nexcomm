@@ -64,7 +64,7 @@ export const fixedIncomeRouter = router({
       void createLedgerTransfer({
         debitAccountId: `settlement-${ctx.user.id}`,
         creditAccountId: "nexcom-fixed-income-pool",
-        amount: Math.round(Number(input.totalValue ?? input.faceValue ?? 0) * 100),
+        amount: Math.round(Number(input.faceValueNgn ?? 0) * 100),
         code: 1,
       }).catch(() => null);
 

@@ -215,11 +215,12 @@ export const settlementsRouter = router({
         .update(settlements)
         .set({ status: "SETTLED", settlementDate: now, updatedAt: now })
         .where(sql`${settlements.id} = ANY(${ids})`);
-      // TigerBeetle: DVP settlement transfer (code 1 = trade_settlement)
+      // TigerBeetle: DVP settlement batch marker (code 1 = trade_settlement)
+      // Per-trade amounts handled in FundFlow.tradeFill
       void createLedgerTransfer({
         debitAccountId: `settlement-buyer`,
         creditAccountId: `settlement-seller`,
-        amount: Math.round(Number(input.totalValue ?? 0) * 100),
+        amount: ids.length,
         code: 1,
       }).catch(() => null);
 

@@ -256,7 +256,7 @@ export const optionsRouter = router({
       void createLedgerTransfer({
         debitAccountId: `settlement-${ctx.user.id}`,
         creditAccountId: "nexcom-options-premium-pool",
-        amount: Math.round(Number(input.premium ?? 0) * 100),
+        amount: Math.round(Number(premium ?? 0) * 100),
         code: 1,
       }).catch(() => null);
 

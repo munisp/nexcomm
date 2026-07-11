@@ -148,7 +148,7 @@ export const withdrawalVerificationRouter = router({
         void createLedgerTransfer({
           debitAccountId: `settlement-${ctx.user.id}`,
           creditAccountId: "nexcom-fiat-gateway",
-          amount: Math.round(Number(challenge.withdrawalAmount ?? 0) * 100),
+          amount: Math.round(Number(challenge.amount ?? 0) * 100),
           code: 5,
         }).catch(() => null);
         return { passed: true, attemptsRemaining: 0 };
