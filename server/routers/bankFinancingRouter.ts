@@ -19,6 +19,7 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { writeAuditLog } from "../audit";
 import { ingestLoan } from "../lakehouse";
 import { FundFlow } from "../fundFlow";
+import { createLedgerTransfer } from "../gatewayClient";
 
 const BANK_FINANCING_STATUSES = [
   "DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED",
@@ -188,7 +189,18 @@ export const bankFinancingRouter = router({
         metadata: { applicationId: input.id, status: input.status },
         read: false,
       });
-      // Lakehouse: immutable Bronze-layer record of loan disbursement
+      // TigerBeetle: bank financing disbursement (code 7 = loan_disbursement)
+      if (input.status === "DISBURSED" && updated) {
+        void createLedgerTransfer({
+          debitAccountId: "nexcom-bank-financing-pool",
+          creditAccountId: `settlement-${updated.userId}`,
+          amount: Math.round(Number(updated.approvedAmountNgn ?? 0) * 100),
+          code: 7,
+        }).then((tbTx) => {
+          if (tbTx) db.update(bankFinancingApplications).set({ ledgerTxId: tbTx.id } as any).where(eq(bankFinancingApplications.id, updated.id)).catch(() => null);
+        }).catch(() => null);
+      }
+            // Lakehouse: immutable Bronze-layer record of loan disbursement
       if (input.status === "DISBURSED" && updated) {
         void ingestLoan({
           loanId: String(updated.id),

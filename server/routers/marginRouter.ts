@@ -26,6 +26,7 @@ import { users } from "../../drizzle/schema";
 import { ingestMarginMovement } from "../lakehouse";
 import { writeAuditLog } from "../audit";
 import { FundFlow } from "../fundFlow";
+import { createLedgerTransfer } from "../gatewayClient";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -219,6 +220,14 @@ export const marginRouter = router({
         description: `Pledged warehouse receipt ${receipt.receiptNumber} as collateral`,
         performedBy: ctx.user.id,
       });
+      // TigerBeetle: margin deposit (code 2)
+      void createLedgerTransfer({
+        debitAccountId: `settlement-${ctx.user.id}`,
+        creditAccountId: `margin-${ctx.user.id}`,
+        amount: Math.round(Number(input.amount ?? 0) * 100),
+        code: 2,
+      }).catch(() => null);
+
 
       // Recalculate margin account
       await recalcMarginAccount(db, ctx.user.id);

@@ -45,6 +45,15 @@ export const inputFinancingRouter = router({
         notes: input.notes,
         status: "APPLIED",
       }).returning();
+      // TigerBeetle: loan application — record pending disbursement (code 7 = loan_disbursement)
+      void createLedgerTransfer({
+        debitAccountId: "nexcom-input-financing-pool",
+        creditAccountId: `settlement-${ctx.user.id}`,
+        amount: Math.round(Number(input.requestedValueNgn ?? 0) * 100),
+        code: 7,
+      }).then((tbTx) => {
+        if (tbTx && loan) db.update(inputFinancingLoans).set({ ledgerDisbursementTxId: tbTx.id } as any).where(eq(inputFinancingLoans.id, loan.id)).catch(() => null);
+      }).catch(() => null);
       return { success: true, loanId: loan.id };
     }),
 
@@ -64,6 +73,15 @@ export const inputFinancingRouter = router({
         method: input.method,
         reference: input.reference,
       });
+      // TigerBeetle: loan repayment (code 8 = loan_repayment)
+      void createLedgerTransfer({
+        debitAccountId: `settlement-${ctx.user.id}`,
+        creditAccountId: "nexcom-input-financing-pool",
+        amount: Math.round(Number(input.amountNgn ?? 0) * 100),
+        code: 8,
+      }).then((tbTx) => {
+        if (tbTx) db.update(inputFinancingLoans).set({ ledgerRepaymentTxId: tbTx.id } as any).where(eq(inputFinancingLoans.id, input.loanId)).catch(() => null);
+      }).catch(() => null);
       return { success: true };
     }),
 

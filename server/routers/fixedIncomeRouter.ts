@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createLedgerTransfer } from "../gatewayClient";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import {
@@ -59,6 +60,14 @@ export const fixedIncomeRouter = router({
           priceNgn: instr[0].lastPriceNgn ?? instr[0].faceValueNgn,
           yieldPct: instr[0].yieldPct,
         }).returning();
+      // TigerBeetle: bond purchase settlement (code 1 = trade_settlement)
+      void createLedgerTransfer({
+        debitAccountId: `settlement-${ctx.user.id}`,
+        creditAccountId: "nexcom-fixed-income-pool",
+        amount: Math.round(Number(input.totalValue ?? input.faceValue ?? 0) * 100),
+        code: 1,
+      }).catch(() => null);
+
         return { success: true, tradeId: trade.id };
       } catch (e: any) {
         throw new Error(e.message);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createLedgerTransfer } from "../gatewayClient";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -265,6 +266,14 @@ export const derivativesRouter = router({
         liquidationPrice: String(liquidationPrice),
         status: "OPEN",
       }).returning();
+      // TigerBeetle: futures initial margin hold (code 2 = margin_deposit)
+      void createLedgerTransfer({
+        debitAccountId: `settlement-${ctx.user.id}`,
+        creditAccountId: `futures-margin-${ctx.user.id}`,
+        amount: Math.round(Number(input.marginPosted ?? 0) * 100),
+        code: 2,
+      }).catch(() => null);
+
 
       await db.update(clearingAccounts)
         .set({

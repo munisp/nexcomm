@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { createLedgerTransfer } from "../gatewayClient";
 
 // ─── In-memory fallback stores ────────────────────────────────────────────────
 import { z } from "zod";
@@ -266,6 +267,14 @@ export const clearingHouseRouter = router({
         issuedBy: ctx.user.id,
         notes: input.notes ?? null,
       }).returning();
+      // TigerBeetle: margin call event (code 2 = margin_deposit)
+      void createLedgerTransfer({
+        debitAccountId: `settlement-${input.userId ?? ctx.user.id}`,
+        creditAccountId: "nexcom-margin-call-escrow",
+        amount: Math.round(Number(input.amountRequired ?? 0) * 100),
+        code: 2,
+      }).catch(() => null);
+
 
       // Record ISSUED event
       await db.insert(marginCallEvents).values({

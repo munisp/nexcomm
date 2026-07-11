@@ -4,6 +4,7 @@
  * Idempotent: creating a settlement for an orderId that already exists returns the existing record.
  */
 import { z } from "zod";
+import { createLedgerTransfer } from "../gatewayClient";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { settlements, orders } from "../../drizzle/schema";
@@ -214,6 +215,14 @@ export const settlementsRouter = router({
         .update(settlements)
         .set({ status: "SETTLED", settlementDate: now, updatedAt: now })
         .where(sql`${settlements.id} = ANY(${ids})`);
+      // TigerBeetle: DVP settlement transfer (code 1 = trade_settlement)
+      void createLedgerTransfer({
+        debitAccountId: `settlement-buyer`,
+        creditAccountId: `settlement-seller`,
+        amount: Math.round(Number(input.totalValue ?? 0) * 100),
+        code: 1,
+      }).catch(() => null);
+
       return { processed: ids.length };
     }),
 

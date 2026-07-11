@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createLedgerTransfer } from "../gatewayClient";
 import { TRPCError } from "@trpc/server";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { requireSettlementApprove } from "../_core/permify";
@@ -65,6 +66,14 @@ async function computeNetPositions(
         const avgPrice = (buyer.grossBuyValue / buyer.grossBuyQty + seller.grossSellValue / seller.grossSellQty) / 2;
         const totalValue = matchQty * avgPrice;
         await db.insert(settlementInstructions).values({ cycleId, buyerUserId: buyer.userId, sellerUserId: seller.userId, instrument, quantity: String(matchQty), price: String(avgPrice), totalValue: String(totalValue), instructionType: "DVP", status: "MATCHED", confirmedAt: new Date() });
+        // TigerBeetle: DVP atomic settlement (code 1 = trade_settlement)
+        void createLedgerTransfer({
+          debitAccountId: `settlement-buyer`,
+          creditAccountId: `settlement-seller`,
+          amount: Math.round(Number(input.totalValue ?? 0) * 100),
+          code: 1,
+        }).catch(() => null);
+
         totalTrades++;
         matchedTrades++;
       }

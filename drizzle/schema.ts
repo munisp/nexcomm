@@ -1258,6 +1258,7 @@ export const futuresContracts = pgTable("futures_contracts", {
   lastMarkPrice: numeric("last_mark_price", { precision: 20, scale: 8 }),
   status: varchar("status", { length: 16 }).notNull().default("ACTIVE"), // ACTIVE, EXPIRED, SETTLED
   createdBy: integer("created_by"),
+  ledgerTxId: varchar("ledger_tx_id", { length: 64 }),  // TigerBeetle initial margin transfer ID
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1278,6 +1279,7 @@ export const futuresPositions = pgTable("futures_positions", {
   status: varchar("status", { length: 16 }).notNull().default("OPEN"), // OPEN, CLOSED, LIQUIDATED
   openedAt: timestamp("opened_at").defaultNow().notNull(),
   closedAt: timestamp("closed_at"),
+  ledgerTxId: varchar("ledger_tx_id", { length: 64 }),  // TigerBeetle margin hold transfer ID
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 export type FuturesPosition = typeof futuresPositions.$inferSelect;
@@ -1331,6 +1333,7 @@ export const optionsContracts = pgTable("options_contracts", {
   openInterest: integer("open_interest").default(0).notNull(),
   status: optionStatusEnum("status").default("ACTIVE").notNull(),
   createdBy: integer("created_by"),
+  ledgerTxId: varchar("ledger_tx_id", { length: 64 }),  // TigerBeetle premium transfer ID
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -2520,6 +2523,8 @@ export const inputFinancingLoans = pgTable("input_financing_loans", {
   disbursedAt: timestamp("disbursed_at"),
   repaymentDueDate: timestamp("repayment_due_date"),
   notes: text("notes"),
+  ledgerDisbursementTxId: varchar("ledger_disbursement_tx_id", { length: 64 }),  // TigerBeetle disbursement transfer ID
+  ledgerRepaymentTxId: varchar("ledger_repayment_tx_id", { length: 64 }),  // TigerBeetle repayment transfer ID
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -3039,3 +3044,122 @@ export const refreshTokens = pgTable("refresh_tokens", {
 });
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
+
+// ============================================================
+// TigerBeetle Shadow Ledger — Transfer Log
+// ============================================================
+export const tbTransferLog = pgTable("tb_transfer_log", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  transferId:      varchar("transfer_id", { length: 64 }).notNull().unique(),  // TB transfer UUID
+  debitAccountId:  varchar("debit_account_id", { length: 64 }).notNull(),
+  creditAccountId: varchar("credit_account_id", { length: 64 }).notNull(),
+  amount:          bigint("amount", { mode: "number" }).notNull(),  // in minor units (kobo/cents)
+  currency:        varchar("currency", { length: 8 }).default("NGN").notNull(),
+  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  referenceId:     varchar("reference_id", { length: 64 }),  // orderId, depositId, loanId, etc.
+  referenceType:   varchar("reference_type", { length: 32 }), // "order", "deposit", "loan", etc.
+  code:            integer("code").notNull(),  // TB transfer code (1-12)
+  status:          varchar("status", { length: 16 }).default("COMMITTED").notNull(),
+  pendingId:       varchar("pending_id", { length: 64 }),  // for 2-phase transfers
+  correlationId:   varchar("correlation_id", { length: 64 }),
+  createdAt:       timestamp("created_at").defaultNow().notNull(),
+});
+export type TbTransferLog = typeof tbTransferLog.$inferSelect;
+export type InsertTbTransferLog = typeof tbTransferLog.$inferInsert;
+
+// ─── Loan Ledger Entries ──────────────────────────────────────────────────────
+export const loanLedgerEntries = pgTable("loan_ledger_entries", {
+  id:           bigserial("id", { mode: "number" }).primaryKey(),
+  loanId:       bigint("loan_id", { mode: "number" }).notNull(),
+  loanType:     varchar("loan_type", { length: 32 }).notNull(),  // "input_financing", "bank_financing"
+  entryType:    varchar("entry_type", { length: 32 }).notNull(), // "DISBURSEMENT", "REPAYMENT", "INTEREST", "PENALTY"
+  amount:       numeric("amount", { precision: 20, scale: 2 }).notNull(),
+  currency:     varchar("currency", { length: 8 }).default("NGN").notNull(),
+  tbTransferId: varchar("tb_transfer_id", { length: 64 }),
+  balanceAfter: numeric("balance_after", { precision: 20, scale: 2 }),
+  notes:        text("notes"),
+  createdAt:    timestamp("created_at").defaultNow().notNull(),
+});
+export type LoanLedgerEntry = typeof loanLedgerEntries.$inferSelect;
+
+// ─── Margin Ledger Entries ────────────────────────────────────────────────────
+export const marginLedgerEntries = pgTable("margin_ledger_entries", {
+  id:           bigserial("id", { mode: "number" }).primaryKey(),
+  userId:       integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  entryType:    varchar("entry_type", { length: 32 }).notNull(), // "DEPOSIT", "RELEASE", "LIQUIDATION", "CALL"
+  amount:       numeric("amount", { precision: 20, scale: 8 }).notNull(),
+  currency:     varchar("currency", { length: 8 }).default("USD").notNull(),
+  tbTransferId: varchar("tb_transfer_id", { length: 64 }),
+  relatedId:    varchar("related_id", { length: 64 }),  // marginCallId, positionId, etc.
+  createdAt:    timestamp("created_at").defaultNow().notNull(),
+});
+export type MarginLedgerEntry = typeof marginLedgerEntries.$inferSelect;
+
+// ─── Cross-Border Ledger Entries ──────────────────────────────────────────────
+export const crossBorderLedgerEntries = pgTable("cross_border_ledger_entries", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  transferId:      varchar("transfer_id", { length: 64 }).notNull(),  // Mojaloop transferId
+  userId:          integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sendAmount:      numeric("send_amount", { precision: 20, scale: 6 }).notNull(),
+  sendCurrency:    varchar("send_currency", { length: 8 }).notNull(),
+  receiveAmount:   numeric("receive_amount", { precision: 20, scale: 6 }),
+  receiveCurrency: varchar("receive_currency", { length: 8 }),
+  fxRate:          numeric("fx_rate", { precision: 20, scale: 8 }),
+  tbTransferId:    varchar("tb_transfer_id", { length: 64 }),
+  status:          varchar("status", { length: 16 }).default("PENDING").notNull(),
+  createdAt:       timestamp("created_at").defaultNow().notNull(),
+  settledAt:       timestamp("settled_at"),
+});
+export type CrossBorderLedgerEntry = typeof crossBorderLedgerEntries.$inferSelect;
+
+// ─── Receipt Ledger Entries ───────────────────────────────────────────────────
+export const receiptLedgerEntries = pgTable("receipt_ledger_entries", {
+  id:           bigserial("id", { mode: "number" }).primaryKey(),
+  receiptId:    integer("receipt_id").notNull(),
+  userId:       integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  entryType:    varchar("entry_type", { length: 32 }).notNull(), // "ISSUE", "PLEDGE", "REDEMPTION", "CANCEL"
+  valueUsd:     numeric("value_usd", { precision: 20, scale: 2 }),
+  tbTransferId: varchar("tb_transfer_id", { length: 64 }),
+  createdAt:    timestamp("created_at").defaultNow().notNull(),
+});
+export type ReceiptLedgerEntry = typeof receiptLedgerEntries.$inferSelect;
+
+// ─── Broker Ledger Entries ────────────────────────────────────────────────────
+export const brokerLedgerEntries = pgTable("broker_ledger_entries", {
+  id:           bigserial("id", { mode: "number" }).primaryKey(),
+  brokerId:     integer("broker_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  entryType:    varchar("entry_type", { length: 32 }).notNull(), // "COMMISSION", "REBATE", "SETTLEMENT"
+  amount:       numeric("amount", { precision: 20, scale: 6 }).notNull(),
+  currency:     varchar("currency", { length: 8 }).default("USD").notNull(),
+  tbTransferId: varchar("tb_transfer_id", { length: 64 }),
+  tradeId:      bigint("trade_id", { mode: "number" }),
+  createdAt:    timestamp("created_at").defaultNow().notNull(),
+});
+export type BrokerLedgerEntry = typeof brokerLedgerEntries.$inferSelect;
+
+// ─── Clearing Ledger Entries ──────────────────────────────────────────────────
+export const clearingLedgerEntries = pgTable("clearing_ledger_entries", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  marginCallId:    bigint("margin_call_id", { mode: "number" }),
+  userId:          integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  entryType:       varchar("entry_type", { length: 32 }).notNull(), // "INITIAL_MARGIN", "VARIATION_MARGIN", "LIQUIDATION"
+  amount:          numeric("amount", { precision: 20, scale: 8 }).notNull(),
+  currency:        varchar("currency", { length: 8 }).default("USD").notNull(),
+  tbTransferId:    varchar("tb_transfer_id", { length: 64 }),
+  createdAt:       timestamp("created_at").defaultNow().notNull(),
+});
+export type ClearingLedgerEntry = typeof clearingLedgerEntries.$inferSelect;
+
+// ─── Settlement Ledger Entries ────────────────────────────────────────────────
+export const settlementLedgerEntries = pgTable("settlement_ledger_entries", {
+  id:              bigserial("id", { mode: "number" }).primaryKey(),
+  settlementId:    bigint("settlement_id", { mode: "number" }),
+  buyerUserId:     integer("buyer_user_id").references(() => users.id, { onDelete: "set null" }),
+  sellerUserId:    integer("seller_user_id").references(() => users.id, { onDelete: "set null" }),
+  entryType:       varchar("entry_type", { length: 32 }).notNull(), // "DVP_DEBIT", "DVP_CREDIT", "FEE"
+  amount:          numeric("amount", { precision: 20, scale: 6 }).notNull(),
+  currency:        varchar("currency", { length: 8 }).default("USD").notNull(),
+  tbTransferId:    varchar("tb_transfer_id", { length: 64 }),
+  createdAt:       timestamp("created_at").defaultNow().notNull(),
+});
+export type SettlementLedgerEntry = typeof settlementLedgerEntries.$inferSelect;

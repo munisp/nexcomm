@@ -8,6 +8,7 @@ import {
 import { getDb } from "../db";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
+import { createLedgerTransfer } from "../gatewayClient";
 
 // Default threshold: withdrawals above this amount require typed verification
 const DEFAULT_THRESHOLD = 500_000; // ₦500,000
@@ -143,6 +144,13 @@ export const withdrawalVerificationRouter = router({
           .update(withdrawalVerifications)
           .set({ status: "PASSED", verifiedAt: new Date(), attemptCount: newAttemptCount })
           .where(eq(withdrawalVerifications.id, challenge.id));
+        // TigerBeetle: withdrawal verification passed — record debit (code 5 = withdrawal)
+        void createLedgerTransfer({
+          debitAccountId: `settlement-${ctx.user.id}`,
+          creditAccountId: "nexcom-fiat-gateway",
+          amount: Math.round(Number(challenge.withdrawalAmount ?? 0) * 100),
+          code: 5,
+        }).catch(() => null);
         return { passed: true, attemptsRemaining: 0 };
       }
 

@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { createLedgerTransfer } from "../gatewayClient";
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db";
@@ -251,6 +252,14 @@ export const optionsRouter = router({
         quantity: String(input.quantity), premiumPaid: String(premium), totalCost: String(totalCost),
         strikePrice: contract.strikePrice, expiryDate: contract.expiryDate,
       }).returning();
+      // TigerBeetle: options premium payment (code 1 = trade_settlement)
+      void createLedgerTransfer({
+        debitAccountId: `settlement-${ctx.user.id}`,
+        creditAccountId: "nexcom-options-premium-pool",
+        amount: Math.round(Number(input.premium ?? 0) * 100),
+        code: 1,
+      }).catch(() => null);
+
       await db.update(optionsContracts).set({ openInterest: sql`${optionsContracts.openInterest} + ${Math.round(input.quantity)}`, lastPrice: String(premium), updatedAt: new Date() }).where(eq(optionsContracts.id, input.contractId));
       return { position, premium, totalCost };
     }),

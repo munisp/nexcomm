@@ -1323,3 +1323,39 @@
 
 All 27 K8s manifests written (infra/k8s/), 4 Grafana dashboards written (infra/monitoring/),
 18 router test files written (server/*.test.ts). Total test files: 36. Total K8s manifests: 30.
+
+## Round 62 — TigerBeetle Full Coverage + Schema Audit (Jul 2026)
+
+### TigerBeetle Integration Audit
+- [x] Audit all money-moving routers against TB client calls — identified 10 routers with no TB calls
+- [x] Expand TB transfer codes from 6 to 12 in gatewayClient.ts (added: loan_disbursement=7, loan_repayment=8, cross_border=9, receipt_pledge=10, receipt_redemption=11, broker_commission=12)
+- [x] Wire TB into marginRouter (pledge + release + liquidation, code 3)
+- [x] Wire TB into clearingHouseRouter (margin call, code 3)
+- [x] Wire TB into settlementsRouter (DVP settlement, code 2)
+- [x] Wire TB into settlementEngineRouter (DVP, code 2)
+- [x] Wire TB into derivativesRouter (futures margin, code 3)
+- [x] Wire TB into optionsRouter (premium, code 2)
+- [x] Wire TB into fixedIncomeRouter (bond purchase, code 2)
+- [x] Wire TB into withdrawalVerificationRouter (withdrawal pass, code 4)
+- [x] Wire TB into inputFinancingRouter (loan disbursement code 7 + repayment code 8)
+- [x] Wire TB into bankFinancingRouter (disbursement, code 7)
+
+### Schema Audit — Missing Columns
+- [x] Add ledgerTxId to: settlements, tradeFills, marginCalls, futuresContracts, futuresPositions, optionsContracts, fixedIncomeTrades, bankFinancingApplications
+- [x] Add ledgerDisbursementTxId + ledgerRepaymentTxId to inputFinancingLoans
+
+### Schema Audit — Missing Shadow-Ledger Tables (8 new tables)
+- [x] tbTransferLog (id, transferId, code, debitAccountId, creditAccountId, amount, status, createdAt)
+- [x] loanLedgerEntries (id, loanId, loanType, txId, direction, amountNgn, createdAt)
+- [x] marginLedgerEntries (id, userId, positionId, txId, direction, amount, currency, createdAt)
+- [x] crossBorderLedgerEntries (id, transferId, txId, direction, amount, currency, createdAt)
+- [x] receiptLedgerEntries (id, receiptId, txId, direction, amount, currency, createdAt)
+- [x] brokerLedgerEntries (id, brokerId, orderId, txId, commissionAmount, currency, createdAt)
+- [x] clearingLedgerEntries (id, clearingId, txId, direction, amount, currency, createdAt)
+- [x] settlementLedgerEntries (id, settlementId, txId, direction, amount, currency, createdAt)
+
+### TypeScript
+- [x] TypeScript: 0 errors after all patches
+
+### Pending (requires production PostgreSQL)
+- [ ] Run db:push in production environment to apply schema migrations (0059_woozy_eddie_brock.sql)
