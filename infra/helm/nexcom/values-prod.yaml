@@ -1,0 +1,62 @@
+# Production overrides — applied on top of values.yaml
+# Usage: helm upgrade --install nexcom ./infra/helm/nexcom -f values.yaml -f values-prod.yaml
+
+global:
+  imageTag: "1.0.0"  # Pin to specific release tag in production
+  imagePullPolicy: Always
+
+nexcomExchange:
+  replicaCount: 5
+  hpa:
+    minReplicas: 5
+    maxReplicas: 20
+    cpuUtilization: 60
+    memoryUtilization: 75
+
+matchingEngine:
+  replicaCount: 4
+  hpa:
+    minReplicas: 4
+    maxReplicas: 12
+    cpuUtilization: 55
+
+tradingEngine:
+  replicaCount: 3
+
+riskManagement:
+  replicaCount: 3
+
+kycService:
+  replicaCount: 3
+
+amlAlertSubscriber:
+  replicaCount: 2
+
+notification:
+  replicaCount: 3
+
+userManagement:
+  replicaCount: 3
+
+temporalWorkers:
+  replicaCount: 4
+
+ingress:
+  hosts:
+    - host: nexcom.exchange
+      paths:
+        - path: /
+          pathType: Prefix
+          service: nexcom-exchange
+          port: 80
+    - host: api.nexcom.exchange
+      paths:
+        - path: /
+          pathType: Prefix
+          service: nexcom-exchange
+          port: 80
+  tls:
+    - secretName: nexcom-tls-prod
+      hosts:
+        - nexcom.exchange
+        - api.nexcom.exchange

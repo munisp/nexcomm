@@ -1,0 +1,22 @@
+apiVersion: v2
+name: nexcom
+description: >
+  NEXCOM Exchange — umbrella Helm chart packaging all 30 Kubernetes manifests
+  from infra/k8s/ into a single deployable release with environment-specific
+  value overrides.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - nexcom
+  - exchange
+  - commodities
+  - fintech
+  - africa
+home: https://nexcom.exchange
+maintainers:
+  - name: NEXCOM Platform Team
+    email: platform@nexcom.exchange
+annotations:
+  category: FinTech
+  licenses: Proprietary

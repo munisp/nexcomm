@@ -166,6 +166,7 @@ const menuSections: MenuSection[] = [
       { icon: Activity,            label: "Price Feed Admin",       path: "/admin/price-feed",    adminOnly: true },
       { icon: Network,              label: "Platform Health",        path: "/admin/platform-health", adminOnly: true },
       { icon: Server,                label: "Microservices Health",   path: "/admin/microservices",   adminOnly: true },
+      { icon: Activity,              label: "Middleware Health",       path: "/admin/middleware-health", adminOnly: true },
       { icon: MessageSquare,        label: "Warehouse Messages",     path: "/admin/warehouse-messages", adminOnly: true },
       { icon: Phone,                 label: "Channel Dashboard",      path: "/channel-dashboard",       adminOnly: true },
     ],

@@ -1,0 +1,278 @@
+---
+# NEXCOM Exchange — Prometheus AlertManager Rules: Temporal SLA + Fluvio Consumer Lag
+# Applied to: temporal-workers, fluvio-sidecar, nexcom-exchange
+#
+# Temporal workflows orchestrate: KYC, AML, loan disbursement, settlement,
+# corporate actions, and cooperative payouts.
+# Fluvio topics carry all real-time event streams between microservices.
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nexcom-temporal-fluvio-alerts
+  namespace: monitoring
+  labels:
+    app: nexcom-exchange
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # ── Temporal Workflow SLA ─────────────────────────────────────────────────
+    - name: nexcom.temporal_sla
+      interval: 30s
+      rules:
+        - alert: TemporalWorkflowSLABreach
+          expr: |
+            histogram_quantile(
+              0.95,
+              rate(temporal_workflow_endtoend_latency_seconds_bucket{
+                namespace="nexcom",
+                workflow_type=~"KycWorkflow|AmlWorkflow|SettlementWorkflow|LoanDisbursementWorkflow"
+              }[10m])
+            ) > 300
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+            service: temporal-workers
+            pagerduty: "true"
+          annotations:
+            summary: "Temporal workflow {{ $labels.workflow_type }} p95 latency exceeds 5 minutes"
+            description: >
+              The {{ $labels.workflow_type }} workflow is taking {{ $value | humanizeDuration }}
+              at p95. SLA threshold: 5 minutes.
+              Check temporal-workers pod logs and activity task queue depth.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/temporal-sla"
+            dashboard_url: "https://grafana.nexcom.exchange/d/temporal-workflows"
+
+        - alert: TemporalWorkflowFailureRateHigh
+          expr: |
+            rate(temporal_workflow_failed_total{namespace="nexcom"}[10m]) /
+            rate(temporal_workflow_completed_total{namespace="nexcom"}[10m]) > 0.02
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            service: temporal-workers
+          annotations:
+            summary: "Temporal workflow failure rate exceeds 2%"
+            description: >
+              {{ $value | humanizePercentage }} of Temporal workflows are failing.
+              Check temporal-workers logs for activity failures and retries.
+
+        - alert: TemporalWorkflowFailureRateCritical
+          expr: |
+            rate(temporal_workflow_failed_total{namespace="nexcom"}[10m]) /
+            rate(temporal_workflow_completed_total{namespace="nexcom"}[10m]) > 0.10
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+            service: temporal-workers
+            pagerduty: "true"
+          annotations:
+            summary: "Temporal workflow failure rate exceeds 10% — cascading failure risk"
+            description: >
+              {{ $value | humanizePercentage }} of Temporal workflows are failing.
+              This may indicate a database outage, Temporal server issue, or
+              misconfigured activity workers.
+
+        - alert: TemporalTaskQueueBacklog
+          expr: |
+            temporal_task_queue_backlog{namespace="nexcom"} > 500
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            service: temporal-workers
+          annotations:
+            summary: "Temporal task queue backlog is {{ $value }} tasks"
+            description: >
+              The Temporal task queue has {{ $value }} pending tasks.
+              Consider scaling up temporal-workers replicas.
+
+        - alert: TemporalWorkersDown
+          expr: |
+            up{job="temporal-workers"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+            service: temporal-workers
+            pagerduty: "true"
+          annotations:
+            summary: "Temporal workers are DOWN — all async workflows halted"
+            description: >
+              The temporal-workers service has been unreachable for 2 minutes.
+              KYC, AML, loan disbursement, and settlement workflows are suspended.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/temporal-workers-down"
+
+        - alert: TemporalKycWorkflowStuck
+          expr: |
+            temporal_workflow_running_count{
+              namespace="nexcom",
+              workflow_type="KycWorkflow"
+            } > 50
+          for: 30m
+          labels:
+            severity: warning
+            team: compliance
+            service: temporal-workers
+          annotations:
+            summary: "{{ $value }} KYC workflows have been running for more than 30 minutes"
+            description: >
+              An unusually high number of KYC workflows are in-flight.
+              This may indicate stuck workflows awaiting external signals
+              (document upload, manual review, Keycloak sync failure).
+
+    # ── Fluvio Consumer Lag ───────────────────────────────────────────────────
+    - name: nexcom.fluvio_consumer_lag
+      interval: 30s
+      rules:
+        - alert: FluvioConsumerLagHigh
+          expr: |
+            nexcom_fluvio_consumer_lag{
+              topic!~"nexcom.aml.alerts.dlq"
+            } > 1000
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            service: fluvio-sidecar
+          annotations:
+            summary: "Fluvio consumer lag on topic {{ $labels.topic }} is {{ $value }} messages"
+            description: >
+              Consumer group {{ $labels.consumer_group }} is {{ $value }} messages behind
+              on topic {{ $labels.topic }}.
+              This may cause delayed event processing and stale UI data.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/fluvio-lag"
+            dashboard_url: "https://grafana.nexcom.exchange/d/fluvio-topics"
+
+        - alert: FluvioConsumerLagCritical
+          expr: |
+            nexcom_fluvio_consumer_lag{
+              topic!~"nexcom.aml.alerts.dlq"
+            } > 10000
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+            service: fluvio-sidecar
+            pagerduty: "true"
+          annotations:
+            summary: "Fluvio consumer lag on {{ $labels.topic }} is critically high ({{ $value }})"
+            description: >
+              Consumer {{ $labels.consumer_group }} is {{ $value }} messages behind on
+              {{ $labels.topic }}. This is a critical backlog that may cause
+              data loss if the topic retention window expires.
+
+        - alert: FluvioTradeFilledTopicLag
+          expr: |
+            nexcom_fluvio_consumer_lag{topic="nexcom.trades.filled"} > 100
+          for: 3m
+          labels:
+            severity: warning
+            team: platform
+            service: fluvio-sidecar
+          annotations:
+            summary: "Trade fill event consumer is {{ $value }} messages behind"
+            description: >
+              The nexcom.trades.filled topic consumer is lagging. This delays
+              portfolio updates, settlement triggers, and P&L calculations.
+
+        - alert: FluvioSidecarDown
+          expr: |
+            up{job="fluvio-sidecar"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+            service: fluvio-sidecar
+            pagerduty: "true"
+          annotations:
+            summary: "Fluvio sidecar is DOWN — all event streaming halted"
+            description: >
+              The fluvio-sidecar service has been unreachable for 2 minutes.
+              All real-time event publishing (trades, AML, KYC, settlements) is suspended.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/fluvio-sidecar-down"
+
+        - alert: FluvioProducerErrorRateHigh
+          expr: |
+            rate(nexcom_fluvio_produce_errors_total[5m]) > 1
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            service: fluvio-sidecar
+          annotations:
+            summary: "Fluvio producer is generating {{ $value }} errors/sec"
+            description: >
+              The Fluvio producer is failing to publish events at a rate of
+              {{ $value }} errors/sec. Events may be lost if not retried.
+
+    # ── Middleware Health Composite ───────────────────────────────────────────
+    - name: nexcom.middleware_health
+      interval: 60s
+      rules:
+        - alert: MiddlewareHealthCheckFailing
+          expr: |
+            nexcom_middleware_health_check_success{
+              service=~"keycloak|tigerbeetle|postgres|redis|opensearch|permify|dapr|temporal|fluvio"
+            } == 0
+          for: 3m
+          labels:
+            severity: critical
+            team: platform
+            pagerduty: "true"
+          annotations:
+            summary: "Middleware health check failing for {{ $labels.service }}"
+            description: >
+              The health check for {{ $labels.service }} has been failing for 3 minutes.
+              This may cause cascading failures in dependent routers.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/middleware-health"
+
+        - alert: RedisConnectionPoolExhausted
+          expr: |
+            nexcom_redis_pool_waiting_count > 10
+          for: 2m
+          labels:
+            severity: warning
+            team: platform
+            service: nexcom-exchange
+          annotations:
+            summary: "Redis connection pool has {{ $value }} waiting connections"
+            description: >
+              The Redis connection pool is exhausted. Cache operations are queuing up,
+              which will increase API response times. Consider increasing pool size.
+
+        - alert: PostgreSQLConnectionPoolExhausted
+          expr: |
+            nexcom_pg_pool_waiting_count > 5
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+            service: nexcom-exchange
+            pagerduty: "true"
+          annotations:
+            summary: "PostgreSQL connection pool has {{ $value }} waiting connections"
+            description: >
+              The PostgreSQL connection pool is exhausted. All database operations
+              are queuing up. This will cause API timeouts and data loss risk.
+
+        - alert: TigerBeetleLatencyHigh
+          expr: |
+            histogram_quantile(
+              0.99,
+              rate(nexcom_tigerbeetle_transfer_duration_seconds_bucket[5m])
+            ) > 0.1
+          for: 3m
+          labels:
+            severity: warning
+            team: platform
+            service: nexcom-exchange
+          annotations:
+            summary: "TigerBeetle ledger transfer p99 latency exceeds 100ms"
+            description: >
+              TigerBeetle transfer operations are taking {{ $value | humanizeDuration }}
+              at p99. Expected: < 10ms. Check TigerBeetle cluster health.

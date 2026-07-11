@@ -1,0 +1,128 @@
+---
+# NEXCOM Exchange — AlertManager Configuration
+# Defines routing, inhibition, and receiver configurations.
+#
+# Deploy:
+#   kubectl create secret generic alertmanager-nexcom \
+#     --from-file=alertmanager.yaml=infra/prometheus/alertmanager.yaml \
+#     -n monitoring
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: "smtp.sendgrid.net:587"
+  smtp_from: "alerts@nexcom.exchange"
+  smtp_auth_username: "apikey"
+  smtp_auth_password: "${SENDGRID_API_KEY}"
+
+# ── Templates ──────────────────────────────────────────────────────────────────
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+# ── Routing ────────────────────────────────────────────────────────────────────
+route:
+  group_by: ["alertname", "service", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: default-receiver
+
+  routes:
+    # Critical + PagerDuty → immediate page
+    - match:
+        pagerduty: "true"
+      receiver: pagerduty-critical
+      continue: true
+
+    # Regulatory alerts → compliance team + PagerDuty
+    - match:
+        regulatory: "true"
+      receiver: compliance-team
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true
+
+    # AML alerts → compliance team
+    - match:
+        team: compliance
+      receiver: compliance-team
+      group_wait: 30s
+
+    # Platform critical → platform team
+    - match_re:
+        severity: "critical"
+        team: "platform"
+      receiver: platform-critical
+      group_wait: 10s
+
+    # Warnings → Slack only
+    - match:
+        severity: warning
+      receiver: slack-warnings
+      group_wait: 1m
+      repeat_interval: 8h
+
+# ── Inhibition Rules ───────────────────────────────────────────────────────────
+inhibit_rules:
+  # If a service is down, suppress all other alerts for that service
+  - source_match:
+      alertname: "MatchingEngineDown"
+    target_match_re:
+      alertname: "OrderFillLatency.*|OrderFillRateDrop"
+    equal: ["service"]
+
+  - source_match:
+      alertname: "TemporalWorkersDown"
+    target_match_re:
+      alertname: "TemporalWorkflow.*|TemporalKyc.*|TemporalTask.*"
+    equal: ["service"]
+
+  - source_match:
+      alertname: "FluvioSidecarDown"
+    target_match_re:
+      alertname: "FluvioConsumerLag.*|FluvioProducer.*|AMLDLQDepth.*"
+    equal: ["service"]
+
+# ── Receivers ─────────────────────────────────────────────────────────────────
+receivers:
+  - name: default-receiver
+    email_configs:
+      - to: "platform@nexcom.exchange"
+        send_resolved: true
+
+  - name: pagerduty-critical
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_ROUTING_KEY}"
+        send_resolved: true
+        description: "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}"
+        details:
+          firing: "{{ .Alerts.Firing | len }}"
+          resolved: "{{ .Alerts.Resolved | len }}"
+
+  - name: compliance-team
+    email_configs:
+      - to: "compliance@nexcom.exchange"
+        send_resolved: true
+        headers:
+          Subject: "[NEXCOM COMPLIANCE] {{ .GroupLabels.alertname }}"
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_COMPLIANCE_KEY}"
+        send_resolved: true
+
+  - name: platform-critical
+    email_configs:
+      - to: "platform@nexcom.exchange"
+        send_resolved: true
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_PLATFORM}"
+        channel: "#nexcom-alerts-critical"
+        send_resolved: true
+        title: "🚨 {{ .GroupLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
+
+  - name: slack-warnings
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_PLATFORM}"
+        channel: "#nexcom-alerts-warnings"
+        send_resolved: true
+        title: "⚠️ {{ .GroupLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}"

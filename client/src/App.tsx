@@ -150,6 +150,7 @@ const Ledger                     = lazy(() => import("./pages/Ledger"));
 const PolicyManagement           = lazy(() => import("./pages/PolicyManagement"));
 const CreditScore                = lazy(() => import("./pages/CreditScore"));
 const MicroservicesHealth        = lazy(() => import("./pages/MicroservicesHealth"));
+const MiddlewareHealth           = lazy(() => import("./pages/MiddlewareHealth"));
 const UserProfileDashboard       = lazy(() => import("./pages/UserProfileDashboard"));
 
 function PageLoader() {
@@ -305,6 +306,7 @@ function Router() {
         <Route path="/policy-management"                             component={PolicyManagement} />
         <Route path="/credit-score"                                   component={CreditScore} />
         <Route path="/admin/microservices"                            component={MicroservicesHealth} />
+        <Route path="/admin/middleware-health"                         component={MiddlewareHealth} />
         {/* 404 */}
         <Route                           component={NotFound} />
       </Switch>

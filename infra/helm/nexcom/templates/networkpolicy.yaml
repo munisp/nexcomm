@@ -1,0 +1,108 @@
+{{- if .Values.networkPolicy.enabled }}
+---
+# Default deny-all ingress within namespace — only allow from nexcom pods and ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexcom-default-deny
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nexcom.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Allow intra-namespace communication between all nexcom services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexcom-allow-internal
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nexcom.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexcom-exchange
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: nexcom-exchange
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: nexcom-exchange
+    # Allow DNS resolution
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow egress to external services (databases, Keycloak, Temporal, etc.)
+    - ports:
+        - port: 443
+        - port: 5432   # PostgreSQL
+        - port: 6379   # Redis
+        - port: 9200   # OpenSearch
+        - port: 7233   # Temporal
+        - port: 9003   # Fluvio
+        - port: 3500   # Dapr sidecar
+        - port: 8080   # Keycloak
+        - port: 3000   # Permify
+---
+# Allow ingress controller to reach nexcom-exchange
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexcom-allow-ingress-controller
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nexcom.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: nexcom-exchange
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 3000
+          protocol: TCP
+---
+# Allow Prometheus to scrape all nexcom pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexcom-allow-prometheus-scrape
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "nexcom.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexcom-exchange
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 3000
+          protocol: TCP
+{{- end }}

@@ -1,0 +1,319 @@
+# NEXCOM Exchange — Helm values
+# Override per environment: helm upgrade --install nexcom ./infra/helm/nexcom -f values-prod.yaml
+
+# ── Global settings ────────────────────────────────────────────────────────────
+global:
+  namespace: nexcom
+  imageRegistry: nexcom
+  imageTag: latest
+  imagePullPolicy: IfNotPresent
+  serviceAccountName: nexcom-service-account
+  secretName: nexcom-secrets
+
+  # Common resource defaults (overridable per service)
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  # Common probes
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 15
+      periodSeconds: 10
+    readiness:
+      path: /health
+      initialDelaySeconds: 10
+      periodSeconds: 5
+
+  # Dapr sidecar injection
+  dapr:
+    enabled: true
+    appPort: 3000
+
+  # Prometheus scraping
+  prometheus:
+    scrape: true
+    port: "3000"
+    path: /metrics
+
+# ── Per-service configuration ──────────────────────────────────────────────────
+
+nexcomExchange:
+  enabled: true
+  replicaCount: 3
+  image:
+    name: nexcom-exchange
+  port: 3000
+  hpa:
+    minReplicas: 3
+    maxReplicas: 9
+    cpuUtilization: 70
+    memoryUtilization: 80
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+matchingEngine:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: matching-engine
+  port: 8080
+  hpa:
+    minReplicas: 2
+    maxReplicas: 6
+    cpuUtilization: 65
+
+tradingEngine:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: trading-engine
+  port: 8081
+
+riskManagement:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: risk-management
+  port: 8082
+
+settlementEngine:
+  enabled: false  # handled by nexcom-exchange in MVP
+  replicaCount: 1
+  image:
+    name: settlement-engine
+  port: 8083
+
+kycService:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: kyc-service
+  port: 8084
+
+amlAlertSubscriber:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: aml-alert-subscriber
+  port: 8085
+
+analyticsEngine:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: analytics-engine
+  port: 8086
+
+analytics:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: analytics
+  port: 8087
+
+aiMl:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: ai-ml
+  port: 8088
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+
+blockchain:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: blockchain
+  port: 8089
+
+botLogic:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: bot-logic
+  port: 8090
+
+channelGateway:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: channel-gateway
+  port: 8091
+
+coreBanking:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: core-banking
+  port: 8092
+
+creditScoring:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: credit-scoring
+  port: 8093
+
+cryptoGuard:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: crypto-guard
+  port: 8094
+
+ddosGuard:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: ddos-guard
+  port: 8095
+
+fluvioSidecar:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: fluvio-sidecar
+  port: 9003
+
+fraudEngine:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: fraud-engine
+  port: 8096
+
+indices:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: indices
+  port: 8097
+
+ingestionEngine:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: ingestion-engine
+  port: 8098
+
+marketData:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: market-data
+  port: 8099
+
+middlewareHub:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: middleware-hub
+  port: 8100
+
+mojaloopAdapter:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: mojaloop-adapter
+  port: 8101
+
+notification:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: notification
+  port: 8102
+
+opensearchSync:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: opensearch-sync
+  port: 8103
+
+pbac:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: pbac
+  port: 8104
+
+temporalWorkers:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: temporal-workers
+  port: 8105
+
+userManagement:
+  enabled: true
+  replicaCount: 2
+  image:
+    name: user-management
+  port: 8106
+
+ussdEngine:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: ussd-engine
+  port: 8107
+
+# ── Ingress ────────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: nexcom.exchange
+      paths:
+        - path: /
+          pathType: Prefix
+          service: nexcom-exchange
+          port: 80
+    - host: api.nexcom.exchange
+      paths:
+        - path: /
+          pathType: Prefix
+          service: nexcom-exchange
+          port: 80
+  tls:
+    - secretName: nexcom-tls
+      hosts:
+        - nexcom.exchange
+        - api.nexcom.exchange
+
+# ── Namespace ──────────────────────────────────────────────────────────────────
+namespace:
+  create: true
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    environment: production
+
+# ── RBAC ──────────────────────────────────────────────────────────────────────
+rbac:
+  create: true
+
+# ── Network Policy ─────────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true

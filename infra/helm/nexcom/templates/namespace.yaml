@@ -1,0 +1,9 @@
+{{- if .Values.namespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.global.namespace }}
+  labels:
+    {{- toYaml .Values.namespace.labels | nindent 4 }}
+    {{- include "nexcom.labels" . | nindent 4 }}
+{{- end }}

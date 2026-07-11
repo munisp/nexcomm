@@ -1402,3 +1402,36 @@ All 27 K8s manifests written (infra/k8s/), 4 Grafana dashboards written (infra/m
 
 ### Pending (requires production PostgreSQL)
 - [ ] Run db:push in production environment to apply migration 0059_r63_middleware_tables.sql
+
+## Round 64 — Health Dashboard, Helm, Playwright, Prometheus (Jul 11 2026)
+
+### Middleware Health Dashboard — COMPLETE
+- [x] middlewareHealthRouter.ts — tRPC procedures: getHealthStatus, getHealthHistory, triggerHealthCheck
+- [x] MiddlewareHealth.tsx — admin page with live status cards for 11 services, history chart, refresh
+- [x] Route /admin/middleware-health registered in App.tsx + DashboardLayout nav item added
+
+### Helm Chart Packaging — COMPLETE
+- [x] infra/helm/nexcom/Chart.yaml (umbrella chart v1.0.0, 30 services)
+- [x] infra/helm/nexcom/values.yaml (all services with HPA, resources, ingress)
+- [x] infra/helm/nexcom/values-prod.yaml + values-staging.yaml (env overrides)
+- [x] infra/helm/nexcom/templates/_helpers.tpl, namespace.yaml, rbac.yaml
+- [x] infra/helm/nexcom/templates/deployments.yaml (generic Deployment+Service+HPA via range loop)
+- [x] infra/helm/nexcom/templates/ingress.yaml + networkpolicy.yaml
+
+### Playwright Smoke Tests — COMPLETE
+- [x] tests/e2e/auth.setup.ts — Manus OAuth authentication setup with storageState
+- [x] tests/e2e/smoke.spec.ts — 6 suites: Auth, Deposit, Order, Withdrawal, Middleware Health, Critical Navigation
+- [x] tests/e2e/.auth/user.json — auth state placeholder
+- [x] playwright.config.ts already existed — reused (testDir: ./tests/e2e)
+
+### Prometheus AlertManager Rules — COMPLETE
+- [x] infra/prometheus/alerts/fill-latency.yaml — OrderFillLatencyHigh/Critical, SettlementFailureRate, MatchingEngineDown
+- [x] infra/prometheus/alerts/aml-dlq.yaml — AMLDLQDepthHigh, AMLAlertSubscriberDown, SARFilingDelay, AccountFreezeFailure
+- [x] infra/prometheus/alerts/temporal-fluvio.yaml — TemporalWorkflowSLABreach, FluvioConsumerLagCritical, MiddlewareHealthCheckFailing, TigerBeetleLatencyHigh
+- [x] infra/prometheus/alertmanager.yaml — routing: PagerDuty, Slack, email; inhibition rules
+- [x] infra/prometheus/recording-rules.yaml — pre-computed metrics for Grafana dashboards
+
+### Delivery
+- [x] TypeScript: 0 errors (confirmed by node TSC check)
+- [x] Manus checkpoint saved (version r64)
+- [x] GitHub push to munisp/nexcomm main

@@ -1,0 +1,144 @@
+---
+# NEXCOM Exchange — Prometheus AlertManager Rules: AML Dead Letter Queue
+# Applied to: aml-alert-subscriber, nexcom-exchange (amlRouter)
+#
+# The AML pipeline uses Fluvio topics for event streaming. Failed events
+# are routed to a Dead Letter Queue (DLQ) topic: nexcom.aml.alerts.dlq
+#
+# These rules alert on DLQ depth, processing lag, and SAR filing delays.
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nexcom-aml-dlq-alerts
+  namespace: monitoring
+  labels:
+    app: nexcom-exchange
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # ── AML Dead Letter Queue ─────────────────────────────────────────────────
+    - name: nexcom.aml_dlq
+      interval: 30s
+      rules:
+        - alert: AMLDLQDepthHigh
+          expr: |
+            nexcom_fluvio_consumer_lag{topic="nexcom.aml.alerts.dlq"} > 10
+          for: 5m
+          labels:
+            severity: critical
+            team: compliance
+            service: aml-alert-subscriber
+            pagerduty: "true"
+            regulatory: "true"
+          annotations:
+            summary: "AML Dead Letter Queue has {{ $value }} unprocessed messages"
+            description: >
+              The AML DLQ topic (nexcom.aml.alerts.dlq) has {{ $value }} messages
+              that could not be processed. This may indicate failed AML flag creation,
+              SAR filing errors, or account freeze failures.
+              Immediate compliance team review required.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/aml-dlq"
+            dashboard_url: "https://grafana.nexcom.exchange/d/aml-pipeline"
+
+        - alert: AMLDLQNotEmpty
+          expr: |
+            nexcom_fluvio_consumer_lag{topic="nexcom.aml.alerts.dlq"} > 0
+          for: 15m
+          labels:
+            severity: warning
+            team: compliance
+            service: aml-alert-subscriber
+          annotations:
+            summary: "AML DLQ has been non-empty for 15 minutes"
+            description: >
+              {{ $value }} AML events remain unprocessed in the DLQ.
+              Review aml-alert-subscriber logs for processing errors.
+
+        - alert: AMLFlagProcessingLag
+          expr: |
+            nexcom_fluvio_consumer_lag{topic="nexcom.aml.alerts", consumer_group="aml-subscriber"} > 100
+          for: 3m
+          labels:
+            severity: warning
+            team: compliance
+            service: aml-alert-subscriber
+          annotations:
+            summary: "AML alert consumer is {{ $value }} messages behind"
+            description: >
+              The AML alert subscriber is lagging by {{ $value }} messages on topic
+              nexcom.aml.alerts. This may delay transaction monitoring and flag creation.
+
+        - alert: AMLAlertSubscriberDown
+          expr: |
+            up{job="aml-alert-subscriber"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: compliance
+            service: aml-alert-subscriber
+            pagerduty: "true"
+            regulatory: "true"
+          annotations:
+            summary: "AML alert subscriber is DOWN — transaction monitoring halted"
+            description: >
+              The aml-alert-subscriber service has been unreachable for 2 minutes.
+              All real-time AML transaction monitoring is suspended.
+              This is a regulatory compliance incident.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/aml-subscriber-down"
+
+    # ── AML Processing Metrics ────────────────────────────────────────────────
+    - name: nexcom.aml_processing
+      interval: 60s
+      rules:
+        - alert: AMLFlagCreationRateAnomaly
+          expr: |
+            rate(nexcom_aml_flags_created_total[1h]) >
+            (avg_over_time(rate(nexcom_aml_flags_created_total[1h])[7d:1h]) * 5)
+          for: 10m
+          labels:
+            severity: warning
+            team: compliance
+            service: nexcom-exchange
+          annotations:
+            summary: "AML flag creation rate is 5x above the 7-day average"
+            description: >
+              Unusual spike in AML flag creation: {{ $value }} flags/hour vs
+              normal baseline. This may indicate a coordinated fraud attempt
+              or a false-positive storm in the AML rules engine.
+
+        - alert: SARFilingDelay
+          expr: |
+            nexcom_sar_pending_count > 5
+          for: 24h
+          labels:
+            severity: critical
+            team: compliance
+            service: nexcom-exchange
+            regulatory: "true"
+            pagerduty: "true"
+          annotations:
+            summary: "{{ $value }} SAR filings have been pending for more than 24 hours"
+            description: >
+              Suspicious Activity Reports (SARs) must be filed within 30 days of
+              detection under NFIU regulations. {{ $value }} SARs are pending.
+              Compliance officer action required.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/sar-filing-delay"
+
+        - alert: AccountFreezeFailure
+          expr: |
+            rate(nexcom_aml_freeze_failures_total[10m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+            team: compliance
+            service: nexcom-exchange
+            pagerduty: "true"
+            regulatory: "true"
+          annotations:
+            summary: "AML account freeze operation failed"
+            description: >
+              An AML-triggered account freeze has failed. This is a regulatory
+              compliance incident — the account may still be able to transact.
+              Immediate manual freeze required.

@@ -1,0 +1,130 @@
+---
+# NEXCOM Exchange — Prometheus AlertManager Rules: Order Fill Latency
+# Applied to: matching-engine, trading-engine, nexcom-exchange
+#
+# Deploy:
+#   kubectl apply -f infra/prometheus/alerts/fill-latency.yaml -n monitoring
+#
+# Or via Helm PrometheusRule CRD if using kube-prometheus-stack.
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nexcom-fill-latency-alerts
+  namespace: monitoring
+  labels:
+    app: nexcom-exchange
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # ── Order Fill Latency ────────────────────────────────────────────────────
+    - name: nexcom.fill_latency
+      interval: 30s
+      rules:
+        - alert: OrderFillLatencyHigh
+          expr: |
+            histogram_quantile(
+              0.95,
+              rate(nexcom_order_fill_duration_seconds_bucket{job="matching-engine"}[5m])
+            ) > 0.5
+          for: 2m
+          labels:
+            severity: warning
+            team: platform
+            service: matching-engine
+          annotations:
+            summary: "Order fill p95 latency is above 500ms"
+            description: >
+              The 95th-percentile order fill latency for {{ $labels.job }} is
+              {{ $value | humanizeDuration }} (threshold: 500ms).
+              This may indicate matching-engine contention or database slowness.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/fill-latency"
+            dashboard_url: "https://grafana.nexcom.exchange/d/fill-latency"
+
+        - alert: OrderFillLatencyCritical
+          expr: |
+            histogram_quantile(
+              0.99,
+              rate(nexcom_order_fill_duration_seconds_bucket{job="matching-engine"}[5m])
+            ) > 2.0
+          for: 1m
+          labels:
+            severity: critical
+            team: platform
+            service: matching-engine
+            pagerduty: "true"
+          annotations:
+            summary: "Order fill p99 latency is above 2 seconds — SLA breach imminent"
+            description: >
+              The 99th-percentile order fill latency is {{ $value | humanizeDuration }}.
+              Immediate investigation required. SLA threshold is 2s.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/fill-latency-critical"
+
+        - alert: OrderFillRateDrop
+          expr: |
+            rate(nexcom_orders_filled_total{job="matching-engine"}[5m]) < 0.1
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            service: matching-engine
+          annotations:
+            summary: "Order fill rate has dropped below 0.1 fills/sec"
+            description: >
+              The matching engine is filling fewer than 0.1 orders per second over the
+              last 5 minutes. Current rate: {{ $value }} fills/sec.
+              This may indicate a stalled engine or no market activity.
+
+        - alert: MatchingEngineDown
+          expr: |
+            up{job="matching-engine"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: platform
+            service: matching-engine
+            pagerduty: "true"
+          annotations:
+            summary: "Matching engine is unreachable"
+            description: >
+              The Prometheus scrape target for matching-engine has been down for 1 minute.
+              All order matching is halted.
+            runbook_url: "https://wiki.nexcom.exchange/runbooks/matching-engine-down"
+
+    # ── Trade Settlement Latency ──────────────────────────────────────────────
+    - name: nexcom.settlement_latency
+      interval: 60s
+      rules:
+        - alert: SettlementLatencyHigh
+          expr: |
+            histogram_quantile(
+              0.95,
+              rate(nexcom_settlement_duration_seconds_bucket{job="nexcom-exchange"}[10m])
+            ) > 30
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            service: nexcom-exchange
+          annotations:
+            summary: "Settlement p95 latency exceeds 30 seconds"
+            description: >
+              DVP settlement is taking {{ $value | humanizeDuration }} at p95.
+              Expected: < 30s. Check TigerBeetle and PostgreSQL connectivity.
+
+        - alert: SettlementFailureRateHigh
+          expr: |
+            rate(nexcom_settlement_failures_total{job="nexcom-exchange"}[10m]) /
+            rate(nexcom_settlement_attempts_total{job="nexcom-exchange"}[10m]) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+            service: nexcom-exchange
+            pagerduty: "true"
+          annotations:
+            summary: "Settlement failure rate exceeds 5%"
+            description: >
+              {{ $value | humanizePercentage }} of settlements are failing.
+              This may indicate a TigerBeetle ledger issue or insufficient funds.

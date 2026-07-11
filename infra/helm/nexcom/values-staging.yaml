@@ -1,0 +1,57 @@
+# Staging overrides
+# Usage: helm upgrade --install nexcom-staging ./infra/helm/nexcom -f values.yaml -f values-staging.yaml
+
+global:
+  namespace: nexcom-staging
+  imageTag: "latest"
+  imagePullPolicy: Always
+
+nexcomExchange:
+  replicaCount: 2
+  hpa:
+    minReplicas: 2
+    maxReplicas: 4
+
+matchingEngine:
+  replicaCount: 1
+
+tradingEngine:
+  replicaCount: 1
+
+riskManagement:
+  replicaCount: 1
+
+kycService:
+  replicaCount: 1
+
+amlAlertSubscriber:
+  replicaCount: 1
+
+analyticsEngine:
+  replicaCount: 1
+
+aiMl:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+temporalWorkers:
+  replicaCount: 1
+
+ingress:
+  hosts:
+    - host: staging.nexcom.exchange
+      paths:
+        - path: /
+          pathType: Prefix
+          service: nexcom-exchange
+          port: 80
+  tls:
+    - secretName: nexcom-tls-staging
+      hosts:
+        - staging.nexcom.exchange

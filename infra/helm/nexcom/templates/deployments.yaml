@@ -1,0 +1,307 @@
+{{/*
+  Generic Deployment + Service + HPA template for all NEXCOM microservices.
+  Each service is driven by its values block. The nexcom-exchange service
+  gets special treatment (larger resources, HPA).
+*/}}
+
+{{- define "nexcom.deployment" -}}
+{{- $svc := .svc -}}
+{{- $g := .g -}}
+{{- $name := $svc.name -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $g.namespace }}
+  labels:
+    app: {{ $name }}
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/part-of: nexcom-exchange
+    app.kubernetes.io/version: {{ $g.imageTag | quote }}
+    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version }}
+spec:
+  replicas: {{ $svc.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+        app.kubernetes.io/name: {{ $name }}
+      annotations:
+        {{- if $g.dapr.enabled }}
+        dapr.io/enabled: "true"
+        dapr.io/app-id: {{ $name | quote }}
+        dapr.io/app-port: {{ $g.dapr.appPort | quote }}
+        {{- end }}
+        {{- if $g.prometheus.scrape }}
+        prometheus.io/scrape: {{ $g.prometheus.scrape | quote }}
+        prometheus.io/port: {{ $svc.port | toString | quote }}
+        prometheus.io/path: {{ $g.prometheus.path | quote }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ $g.serviceAccountName }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: {{ $name }}
+          image: {{ $g.imageRegistry }}/{{ $svc.image.name }}:{{ $g.imageTag }}
+          imagePullPolicy: {{ $g.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+              protocol: TCP
+          env:
+            - name: SERVICE_NAME
+              value: {{ $name | quote }}
+            - name: PORT
+              value: {{ $svc.port | toString | quote }}
+            - name: LOG_LEVEL
+              value: "info"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $g.secretName }}
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $g.secretName }}
+                  key: JWT_SECRET
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $g.secretName }}
+                  key: REDIS_URL
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $g.secretName }}
+                  key: KAFKA_BROKERS
+          resources:
+            {{- if $svc.resources }}
+            {{- toYaml $svc.resources | nindent 12 }}
+            {{- else }}
+            {{- toYaml $g.resources | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ $g.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ $g.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ $g.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ $g.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ $g.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ $g.probes.readiness.periodSeconds }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: {{ $name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ $g.namespace }}
+  labels:
+    app: {{ $name }}
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/part-of: nexcom-exchange
+spec:
+  selector:
+    app: {{ $name }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  type: ClusterIP
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}-pdb
+  namespace: {{ $g.namespace }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: {{ $name }}
+{{- if $svc.hpa }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}-hpa
+  namespace: {{ $g.namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $svc.hpa.minReplicas | default 1 }}
+  maxReplicas: {{ $svc.hpa.maxReplicas | default 3 }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.hpa.cpuUtilization | default 70 }}
+    {{- if $svc.hpa.memoryUtilization }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.hpa.memoryUtilization }}
+    {{- end }}
+{{- end }}
+{{- end }}
+
+{{/* ── Render all enabled services ─────────────────────────────────────────── */}}
+
+{{- $g := .Values.global }}
+{{- $ctx := . }}
+
+{{- if .Values.nexcomExchange.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.nexcomExchange (dict "name" "nexcom-exchange")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.matchingEngine.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.matchingEngine (dict "name" "matching-engine")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.tradingEngine.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.tradingEngine (dict "name" "trading-engine")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.riskManagement.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.riskManagement (dict "name" "risk-management")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.kycService.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.kycService (dict "name" "kyc-service")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.amlAlertSubscriber.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.amlAlertSubscriber (dict "name" "aml-alert-subscriber")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.analyticsEngine.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.analyticsEngine (dict "name" "analytics-engine")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.analytics.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.analytics (dict "name" "analytics")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.aiMl.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.aiMl (dict "name" "ai-ml")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.blockchain.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.blockchain (dict "name" "blockchain")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.botLogic.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.botLogic (dict "name" "bot-logic")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.channelGateway.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.channelGateway (dict "name" "channel-gateway")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.coreBanking.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.coreBanking (dict "name" "core-banking")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.creditScoring.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.creditScoring (dict "name" "credit-scoring")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.cryptoGuard.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.cryptoGuard (dict "name" "crypto-guard")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.ddosGuard.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.ddosGuard (dict "name" "ddos-guard")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.fluvioSidecar.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.fluvioSidecar (dict "name" "fluvio-sidecar")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.fraudEngine.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.fraudEngine (dict "name" "fraud-engine")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.indices.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.indices (dict "name" "indices")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.ingestionEngine.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.ingestionEngine (dict "name" "ingestion-engine")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.marketData.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.marketData (dict "name" "market-data")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.middlewareHub.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.middlewareHub (dict "name" "middleware-hub")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.mojaloopAdapter.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.mojaloopAdapter (dict "name" "mojaloop-adapter")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.notification.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.notification (dict "name" "notification")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.opensearchSync.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.opensearchSync (dict "name" "opensearch-sync")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.pbac.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.pbac (dict "name" "pbac")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.temporalWorkers.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.temporalWorkers (dict "name" "temporal-workers")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.userManagement.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.userManagement (dict "name" "user-management")) "g" $g "Chart" .Chart) }}
+{{- end }}
+
+{{- if .Values.ussdEngine.enabled }}
+{{- include "nexcom.deployment" (dict "svc" (merge .Values.ussdEngine (dict "name" "ussd-engine")) "g" $g "Chart" .Chart) }}
+{{- end }}

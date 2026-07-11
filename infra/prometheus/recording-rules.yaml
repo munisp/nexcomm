@@ -1,0 +1,101 @@
+---
+# NEXCOM Exchange — Prometheus Recording Rules
+# Pre-computes expensive queries for Grafana dashboards and alert evaluation.
+#
+# Deploy:
+#   kubectl apply -f infra/prometheus/recording-rules.yaml -n monitoring
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nexcom-recording-rules
+  namespace: monitoring
+  labels:
+    app: nexcom-exchange
+    prometheus: kube-prometheus
+    role: recording-rules
+spec:
+  groups:
+    - name: nexcom.fill_latency.recording
+      interval: 30s
+      rules:
+        - record: nexcom:order_fill_latency_p95:rate5m
+          expr: |
+            histogram_quantile(0.95,
+              rate(nexcom_order_fill_duration_seconds_bucket{job="matching-engine"}[5m]))
+
+        - record: nexcom:order_fill_latency_p99:rate5m
+          expr: |
+            histogram_quantile(0.99,
+              rate(nexcom_order_fill_duration_seconds_bucket{job="matching-engine"}[5m]))
+
+        - record: nexcom:order_fill_rate:rate5m
+          expr: |
+            rate(nexcom_orders_filled_total{job="matching-engine"}[5m])
+
+        - record: nexcom:settlement_latency_p95:rate10m
+          expr: |
+            histogram_quantile(0.95,
+              rate(nexcom_settlement_duration_seconds_bucket{job="nexcom-exchange"}[10m]))
+
+        - record: nexcom:settlement_failure_rate:rate10m
+          expr: |
+            rate(nexcom_settlement_failures_total{job="nexcom-exchange"}[10m]) /
+            rate(nexcom_settlement_attempts_total{job="nexcom-exchange"}[10m])
+
+    - name: nexcom.aml.recording
+      interval: 60s
+      rules:
+        - record: nexcom:aml_dlq_depth:current
+          expr: |
+            nexcom_fluvio_consumer_lag{topic="nexcom.aml.alerts.dlq"}
+
+        - record: nexcom:aml_flag_rate:rate1h
+          expr: |
+            rate(nexcom_aml_flags_created_total[1h])
+
+        - record: nexcom:aml_flag_rate_7d_avg:rate1h
+          expr: |
+            avg_over_time(rate(nexcom_aml_flags_created_total[1h])[7d:1h])
+
+    - name: nexcom.temporal.recording
+      interval: 30s
+      rules:
+        - record: nexcom:temporal_workflow_latency_p95:rate10m
+          expr: |
+            histogram_quantile(0.95,
+              rate(temporal_workflow_endtoend_latency_seconds_bucket{namespace="nexcom"}[10m]))
+
+        - record: nexcom:temporal_workflow_failure_rate:rate10m
+          expr: |
+            rate(temporal_workflow_failed_total{namespace="nexcom"}[10m]) /
+            rate(temporal_workflow_completed_total{namespace="nexcom"}[10m])
+
+        - record: nexcom:temporal_task_queue_backlog:current
+          expr: |
+            temporal_task_queue_backlog{namespace="nexcom"}
+
+    - name: nexcom.fluvio.recording
+      interval: 30s
+      rules:
+        - record: nexcom:fluvio_max_consumer_lag:current
+          expr: |
+            max by (topic) (nexcom_fluvio_consumer_lag{topic!~"nexcom.aml.alerts.dlq"})
+
+        - record: nexcom:fluvio_produce_error_rate:rate5m
+          expr: |
+            rate(nexcom_fluvio_produce_errors_total[5m])
+
+    - name: nexcom.middleware.recording
+      interval: 60s
+      rules:
+        - record: nexcom:middleware_health_score:current
+          expr: |
+            avg(nexcom_middleware_health_check_success{
+              service=~"keycloak|tigerbeetle|postgres|redis|opensearch|permify|dapr|temporal|fluvio"
+            })
+
+        - record: nexcom:tigerbeetle_transfer_latency_p99:rate5m
+          expr: |
+            histogram_quantile(0.99,
+              rate(nexcom_tigerbeetle_transfer_duration_seconds_bucket[5m]))
