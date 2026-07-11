@@ -3283,3 +3283,105 @@ export const middlewareHealthLog = pgTable("middleware_health_log", {
   checkedAt:       timestamp("checked_at").defaultNow().notNull(),
 });
 export type MiddlewareHealthLog = typeof middlewareHealthLog.$inferSelect;
+
+// ─── Round 66: Multi-tenancy Exchange Operator Tables ───────────────────────
+
+export const operatorStatusEnum = pgEnum("operator_status", ["PENDING", "ACTIVE", "SUSPENDED", "TERMINATED"]);
+export const operatorTierEnum = pgEnum("operator_tier", ["BASIC", "STANDARD", "PREMIUM", "ENTERPRISE"]);
+export const feeTypeEnum = pgEnum("fee_type", ["MAKER", "TAKER", "SETTLEMENT", "WITHDRAWAL", "DEPOSIT", "LISTING"]);
+export const settlementModelEnum = pgEnum("settlement_model", ["DVP", "FOP", "CASH_ONLY", "BILATERAL"]);
+
+export const exchangeOperators = pgTable("exchange_operators", {
+  id:                    serial("id").primaryKey(),
+  operatorCode:          varchar("operator_code", { length: 20 }).notNull().unique(),
+  legalName:             varchar("legal_name", { length: 255 }).notNull(),
+  tradingName:           varchar("trading_name", { length: 255 }),
+  registrationNumber:    varchar("registration_number", { length: 100 }),
+  regulatoryLicenseNo:   varchar("regulatory_license_no", { length: 100 }),
+  status:                operatorStatusEnum("status").default("PENDING").notNull(),
+  tier:                  operatorTierEnum("tier").default("BASIC").notNull(),
+  adminUserId:           integer("admin_user_id").references(() => users.id),
+  contactEmail:          varchar("contact_email", { length: 255 }).notNull(),
+  contactPhone:          varchar("contact_phone", { length: 50 }),
+  country:               varchar("country", { length: 3 }).default("NGA").notNull(),
+  logoUrl:               text("logo_url"),
+  websiteUrl:            text("website_url"),
+  onboardingStep:        integer("onboarding_step").default(1).notNull(),
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
+  activatedAt:           timestamp("activated_at"),
+  suspendedAt:           timestamp("suspended_at"),
+  suspensionReason:      text("suspension_reason"),
+  metadata:              jsonb("metadata"),
+  createdAt:             timestamp("created_at").defaultNow().notNull(),
+  updatedAt:             timestamp("updated_at").defaultNow().notNull(),
+});
+export type ExchangeOperator = typeof exchangeOperators.$inferSelect;
+
+export const operatorInstruments = pgTable("operator_instruments", {
+  id:             serial("id").primaryKey(),
+  operatorId:     integer("operator_id").references(() => exchangeOperators.id).notNull(),
+  instrumentId:   integer("instrument_id").references(() => instruments.id).notNull(),
+  isEnabled:      boolean("is_enabled").default(true).notNull(),
+  minOrderSize:   numeric("min_order_size", { precision: 18, scale: 6 }),
+  maxOrderSize:   numeric("max_order_size", { precision: 18, scale: 6 }),
+  maxDailyVolume: numeric("max_daily_volume", { precision: 24, scale: 6 }),
+  priceBandPct:   numeric("price_band_pct", { precision: 5, scale: 2 }),
+  tickSize:       numeric("tick_size", { precision: 18, scale: 8 }),
+  lotSize:        numeric("lot_size", { precision: 18, scale: 6 }),
+  listingDate:    timestamp("listing_date"),
+  delistingDate:  timestamp("delisting_date"),
+  createdAt:      timestamp("created_at").defaultNow().notNull(),
+  updatedAt:      timestamp("updated_at").defaultNow().notNull(),
+});
+export type OperatorInstrument = typeof operatorInstruments.$inferSelect;
+
+export const operatorFees = pgTable("operator_fees", {
+  id:          serial("id").primaryKey(),
+  operatorId:  integer("operator_id").references(() => exchangeOperators.id).notNull(),
+  feeType:     feeTypeEnum("fee_type").notNull(),
+  instrumentId: integer("instrument_id").references(() => instruments.id),
+  rateBps:     integer("rate_bps").notNull(),
+  minFeeNgn:   numeric("min_fee_ngn", { precision: 18, scale: 2 }).default("0"),
+  maxFeeNgn:   numeric("max_fee_ngn", { precision: 18, scale: 2 }),
+  isActive:    boolean("is_active").default(true).notNull(),
+  effectiveFrom: timestamp("effective_from").defaultNow().notNull(),
+  effectiveTo:   timestamp("effective_to"),
+  createdAt:   timestamp("created_at").defaultNow().notNull(),
+});
+export type OperatorFee = typeof operatorFees.$inferSelect;
+
+export const operatorSettlementRules = pgTable("operator_settlement_rules", {
+  id:                  serial("id").primaryKey(),
+  operatorId:          integer("operator_id").references(() => exchangeOperators.id).notNull(),
+  settlementModel:     settlementModelEnum("settlement_model").default("DVP").notNull(),
+  settlementCycleDays: integer("settlement_cycle_days").default(2).notNull(),
+  cutoffTimeUtc:       varchar("cutoff_time_utc", { length: 8 }).default("14:00:00").notNull(),
+  autoNetEnabled:      boolean("auto_net_enabled").default(true).notNull(),
+  failedTradePolicy:   varchar("failed_trade_policy", { length: 50 }).default("RETRY_ONCE").notNull(),
+  marginRequiredPct:   numeric("margin_required_pct", { precision: 5, scale: 2 }).default("10"),
+  custodianBankCode:   varchar("custodian_bank_code", { length: 20 }),
+  clearingHouseCode:   varchar("clearing_house_code", { length: 20 }),
+  isActive:            boolean("is_active").default(true).notNull(),
+  createdAt:           timestamp("created_at").defaultNow().notNull(),
+  updatedAt:           timestamp("updated_at").defaultNow().notNull(),
+});
+export type OperatorSettlementRule = typeof operatorSettlementRules.$inferSelect;
+
+// ─── Round 66: Distributed Tracing Snapshot Table ───────────────────────────
+
+export const traceSnapshots = pgTable("trace_snapshots", {
+  id:            serial("id").primaryKey(),
+  traceId:       varchar("trace_id", { length: 64 }).notNull(),
+  spanId:        varchar("span_id", { length: 32 }).notNull(),
+  parentSpanId:  varchar("parent_span_id", { length: 32 }),
+  operationName: varchar("operation_name", { length: 255 }).notNull(),
+  serviceName:   varchar("service_name", { length: 100 }).notNull(),
+  startTimeMs:   bigint("start_time_ms", { mode: "number" }).notNull(),
+  durationMs:    integer("duration_ms").notNull(),
+  statusCode:    varchar("status_code", { length: 20 }).default("OK").notNull(),
+  errorMessage:  text("error_message"),
+  attributes:    jsonb("attributes"),
+  events:        jsonb("events"),
+  capturedAt:    timestamp("captured_at").defaultNow().notNull(),
+});
+export type TraceSnapshot = typeof traceSnapshots.$inferSelect;

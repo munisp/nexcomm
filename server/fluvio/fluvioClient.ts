@@ -66,6 +66,8 @@ export const FLUVIO_TOPICS = {
 
   // Audit
   AUDIT_LOG: "nexcom.audit.log",
+  // System / operator lifecycle
+  SYSTEM_EVENTS: "nexcom.system.events",
 } as const;
 
 export type FluvioTopic = (typeof FLUVIO_TOPICS)[keyof typeof FLUVIO_TOPICS];
@@ -171,6 +173,7 @@ export async function ensureTopicsExist(): Promise<{
     [FLUVIO_TOPICS.RECEIPT_PLEDGED]: { partitions: 2, retentionMs: 2_592_000_000 },
     [FLUVIO_TOPICS.RECEIPT_REDEEMED]: { partitions: 2, retentionMs: 2_592_000_000 },
     [FLUVIO_TOPICS.AUDIT_LOG]: { partitions: 4, retentionMs: 31_536_000_000 },          // 365d
+    [FLUVIO_TOPICS.SYSTEM_EVENTS]: { partitions: 2, retentionMs: 2_592_000_000 },       // 30d
   };
 
   for (const [topic, config] of Object.entries(topicConfigs)) {

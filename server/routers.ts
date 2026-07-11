@@ -96,6 +96,8 @@ import { pbacRouter } from "./routers/pbacRouter";
 import { creditRouter } from "./routers/creditRouter";
 import { microservicesRouter } from "./routers/microservicesRouter";
 import { middlewareHealthRouter } from "./routers/middlewareHealthRouter";
+import { tracingRouter } from "./routers/tracingRouter";
+import { exchangeOperatorRouter } from "./routers/exchangeOperatorRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -192,6 +194,8 @@ export const appRouter = router({
   credit: creditRouter,
   microservices: microservicesRouter,
   middlewareHealth: middlewareHealthRouter,
+  tracing: tracingRouter,
+  exchangeOperator: exchangeOperatorRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure

@@ -1463,3 +1463,30 @@ All 27 K8s manifests written (infra/k8s/), 4 Grafana dashboards written (infra/m
 - [x] TypeScript: 0 errors (TSC watch: "Found 0 errors" at 7:30:28 PM)
 - [x] Manus checkpoint saved (version 044ef7b2)
 - [x] GitHub push to munisp/nexcomm main (commit f230df0)
+
+## Round 66 — Distributed Tracing UI, Regulatory Reporting, Multi-tenancy (Jul 11 2026)
+
+### Distributed Tracing UI
+- [ ] server/routers/tracingRouter.ts — tRPC procedures: getTraces, getTraceDetail, getServiceMap, getSlowOperations
+- [ ] client/src/pages/DistributedTracing.tsx — admin page with trace waterfall, service map, slow ops table
+- [ ] Wire route /admin/distributed-tracing in App.tsx + DashboardLayout nav item
+- [ ] APISIX route for /api/trpc/tracing.*
+
+### Regulatory Reporting Module
+- [ ] drizzle/schema.ts — regulatoryReports table (reportType, period, status, fileUrl, submittedAt)
+- [ ] server/routers/regulatoryReportingRouter.ts — generateReport, listReports, downloadReport, submitReport procedures
+- [ ] client/src/pages/RegulatoryReporting.tsx — admin page with report generation, download, submission status
+- [ ] Wire route /admin/regulatory-reporting in App.tsx + DashboardLayout nav item
+- [ ] PDF generation using jsPDF or pdfmake (server-side)
+
+### Multi-tenancy Exchange Operator Onboarding
+- [ ] drizzle/schema.ts — exchangeOperators, operatorInstruments, operatorFees, operatorSettlementRules tables
+- [ ] server/routers/exchangeOperatorRouter.ts — register, configure, listInstruments, setFees, setSettlementRules procedures
+- [ ] client/src/pages/ExchangeOperatorOnboarding.tsx — self-service onboarding wizard (4 steps)
+- [ ] Wire route /admin/exchange-operators in App.tsx + DashboardLayout nav item
+- [ ] APISIX route for /api/trpc/exchangeOperator.*
+
+### Delivery
+- [ ] TypeScript: 0 errors
+- [ ] Manus checkpoint saved
+- [ ] GitHub push to munisp/nexcomm main

@@ -151,6 +151,8 @@ const PolicyManagement           = lazy(() => import("./pages/PolicyManagement")
 const CreditScore                = lazy(() => import("./pages/CreditScore"));
 const MicroservicesHealth        = lazy(() => import("./pages/MicroservicesHealth"));
 const MiddlewareHealth           = lazy(() => import("./pages/MiddlewareHealth"));
+const DistributedTracing         = lazy(() => import("./pages/DistributedTracing"));
+const ExchangeOperatorOnboarding = lazy(() => import("./pages/ExchangeOperatorOnboarding"));
 const UserProfileDashboard       = lazy(() => import("./pages/UserProfileDashboard"));
 
 function PageLoader() {
@@ -307,6 +309,8 @@ function Router() {
         <Route path="/credit-score"                                   component={CreditScore} />
         <Route path="/admin/microservices"                            component={MicroservicesHealth} />
         <Route path="/admin/middleware-health"                         component={MiddlewareHealth} />
+        <Route path="/admin/distributed-tracing"                       component={DistributedTracing} />
+        <Route path="/admin/exchange-operators"                        component={ExchangeOperatorOnboarding} />
         {/* 404 */}
         <Route                           component={NotFound} />
       </Switch>
