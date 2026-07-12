@@ -154,6 +154,8 @@ const MiddlewareHealth           = lazy(() => import("./pages/MiddlewareHealth")
 const DistributedTracing         = lazy(() => import("./pages/DistributedTracing"));
 const ExchangeOperatorOnboarding = lazy(() => import("./pages/ExchangeOperatorOnboarding"));
 const SpotFx                     = lazy(() => import("./pages/SpotFx"));
+const CrossBorderFx              = lazy(() => import("./pages/CrossBorderFx"));
+const TemporalWorkflows          = lazy(() => import("./pages/TemporalWorkflows"));
 const UserProfileDashboard       = lazy(() => import("./pages/UserProfileDashboard"));
 
 function PageLoader() {
@@ -313,6 +315,8 @@ function Router() {
         <Route path="/admin/distributed-tracing"                       component={DistributedTracing} />
         <Route path="/admin/exchange-operators"                        component={ExchangeOperatorOnboarding} />
         <Route path="/spot-fx"                                         component={SpotFx} />
+        <Route path="/cross-border-fx"                                 component={CrossBorderFx} />
+        <Route path="/admin/temporal-workflows"                        component={TemporalWorkflows} />
         {/* 404 */}
         <Route                           component={NotFound} />
       </Switch>

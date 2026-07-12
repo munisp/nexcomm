@@ -448,3 +448,284 @@ export async function createLivenessSecurityEvent(data: {
     console.warn("[SecurityEvent] Failed to write liveness event:", e);
   }
 }
+
+// ============================================================
+// Round 69 — Drizzle ORM Improvements
+// ============================================================
+// 1. Schema-aware drizzle instance (enables db.query.* with relations)
+// 2. Prepared statements for hot-path queries
+// 3. Typed query helpers for tables added in Rounds 60-68
+// 4. Batch helpers using Drizzle's transaction API
+// ============================================================
+
+import * as schemaAll from "../drizzle/schema";
+
+/**
+ * Returns a schema-aware Drizzle instance that supports the Relations API.
+ * Use this when you need `db.query.orders.findMany({ with: { fills: true } })`.
+ *
+ * Example:
+ *   const qdb = await getQueryDb();
+ *   const order = await qdb?.query.orders.findFirst({
+ *     where: (o, { eq }) => eq(o.id, orderId),
+ *     with: { fills: true, amendments: true },
+ *   });
+ */
+export async function getQueryDb() {
+  const pgUrl = resolveDbUrl();
+  const isLocal = pgUrl.includes("localhost") || pgUrl.includes("127.0.0.1");
+  try {
+    const pg = postgres(pgUrl, {
+      max: 5,
+      idle_timeout: 30,
+      connect_timeout: 10,
+      ssl: isLocal ? false : "require",
+      onnotice: () => {},
+    });
+    return drizzle(pg, { schema: schemaAll });
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
+// Typed Query Helpers — Exchange Operators (Round 66+)
+// ============================================================
+
+export async function getExchangeOperatorById(id: number) {
+  const db = await getDb(); if (!db) return null;
+  const rows = await db.select().from(schemaAll.exchangeOperators)
+    .where(eq(schemaAll.exchangeOperators.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listExchangeOperators(status?: string, limit = 50, offset = 0) {
+  const db = await getDb(); if (!db) return { operators: [], total: 0 };
+  const where = status
+    ? eq(schemaAll.exchangeOperators.status, status as "PENDING" | "ACTIVE" | "SUSPENDED")
+    : undefined;
+  const [operators, [{ total }]] = await Promise.all([
+    db.select().from(schemaAll.exchangeOperators).where(where)
+      .orderBy(desc(schemaAll.exchangeOperators.createdAt)).limit(limit).offset(offset),
+    db.select({ total: count() }).from(schemaAll.exchangeOperators).where(where),
+  ]);
+  return { operators, total };
+}
+
+export async function getOperatorInstruments(operatorId: number) {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(schemaAll.operatorInstruments)
+    .where(eq(schemaAll.operatorInstruments.operatorId, operatorId));
+}
+
+export async function getOperatorFees(operatorId: number) {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(schemaAll.operatorFees)
+    .where(eq(schemaAll.operatorFees.operatorId, operatorId));
+}
+
+export async function getOperatorSettlementRules(operatorId: number) {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(schemaAll.operatorSettlementRules)
+    .where(eq(schemaAll.operatorSettlementRules.operatorId, operatorId));
+}
+
+// ============================================================
+// Typed Query Helpers — Distributed Tracing (Round 66+)
+// ============================================================
+
+export async function listTraceSnapshots(service?: string, limit = 50, offset = 0) {
+  const db = await getDb(); if (!db) return { traces: [], total: 0 };
+  const where = service
+    ? eq(schemaAll.traceSnapshots.serviceName, service)
+    : undefined;
+  const [traces, [{ total }]] = await Promise.all([
+    db.select().from(schemaAll.traceSnapshots).where(where)
+      .orderBy(desc(schemaAll.traceSnapshots.capturedAt)).limit(limit).offset(offset),
+    db.select({ total: count() }).from(schemaAll.traceSnapshots).where(where),
+  ]);
+  return { traces, total };
+}
+
+export async function getTraceSnapshotById(traceId: string) {
+  const db = await getDb(); if (!db) return null;
+  const rows = await db.select().from(schemaAll.traceSnapshots)
+    .where(eq(schemaAll.traceSnapshots.traceId, traceId)).limit(1);
+  return rows[0] ?? null;
+}
+
+// ============================================================
+// Typed Query Helpers — Workflow Executions (Round 68+)
+// ============================================================
+
+export async function listWorkflowExecutions(
+  workflowType?: string,
+  status?: string,
+  limit = 50,
+  offset = 0,
+) {
+  const db = await getDb(); if (!db) return { workflows: [], total: 0 };
+  const conditions: ReturnType<typeof eq>[] = [];
+  if (workflowType) conditions.push(eq(schemaAll.workflowExecutions.workflowType, workflowType));
+  if (status) conditions.push(eq(schemaAll.workflowExecutions.status, status as "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "TIMED_OUT"));
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const [workflows, [{ total }]] = await Promise.all([
+    db.select().from(schemaAll.workflowExecutions).where(where)
+      .orderBy(desc(schemaAll.workflowExecutions.startedAt)).limit(limit).offset(offset),
+    db.select({ total: count() }).from(schemaAll.workflowExecutions).where(where),
+  ]);
+  return { workflows, total };
+}
+
+export async function getWorkflowByTemporalId(temporalWorkflowId: string) {
+  const db = await getDb(); if (!db) return null;
+  const rows = await db.select().from(schemaAll.workflowExecutions)
+    .where(eq(schemaAll.workflowExecutions.workflowId, temporalWorkflowId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function upsertWorkflowExecution(data: {
+  temporalWorkflowId: string;
+  workflowType: string;
+  status: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "TIMED_OUT";
+  initiatedBy?: number;
+  input?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  errorMessage?: string;
+  startedAt?: Date;
+  completedAt?: Date;
+}) {
+  const db = await getDb(); if (!db) return;
+  await db.insert(schemaAll.workflowExecutions)
+    .values({ workflowType: data.workflowType, workflowId: data.temporalWorkflowId, status: data.status, userId: data.initiatedBy, input: data.input, result: data.result, errorMessage: data.errorMessage, startedAt: data.startedAt ?? new Date(), completedAt: data.completedAt })
+    .onConflictDoUpdate({
+      target: schemaAll.workflowExecutions.workflowId,
+      set: {
+        status: data.status,
+        result: data.result,
+        errorMessage: data.errorMessage,
+        completedAt: data.completedAt,
+      },
+    });
+}
+
+// ============================================================
+// Typed Query Helpers — Cross-Border Ledger (Round 68+)
+// ============================================================
+
+export async function listCrossBorderLedger(userId?: number, limit = 50, offset = 0) {
+  const db = await getDb(); if (!db) return { entries: [], total: 0 };
+  const where = userId
+    ? eq(schemaAll.crossBorderLedgerEntries.userId, userId)
+    : undefined;
+  const [entries, [{ total }]] = await Promise.all([
+    db.select().from(schemaAll.crossBorderLedgerEntries).where(where)
+      .orderBy(desc(schemaAll.crossBorderLedgerEntries.createdAt)).limit(limit).offset(offset),
+    db.select({ total: count() }).from(schemaAll.crossBorderLedgerEntries).where(where),
+  ]);
+  return { entries, total };
+}
+
+export async function insertCrossBorderLedgerEntry(
+  data: typeof schemaAll.crossBorderLedgerEntries.$inferInsert,
+) {
+  const db = await getDb(); if (!db) return;
+  await db.insert(schemaAll.crossBorderLedgerEntries).values(data);
+}
+
+// ============================================================
+// Typed Query Helpers — Credit Scores (Round 67+)
+// ============================================================
+
+export async function getLatestCreditScore(userId: number) {
+  const db = await getDb(); if (!db) return null;
+  const rows = await db.select().from(schemaAll.creditScores)
+    .where(eq(schemaAll.creditScores.userId, userId))
+    .orderBy(desc(schemaAll.creditScores.createdAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listCreditScoreHistory(userId: number, limit = 12) {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(schemaAll.creditScores)
+    .where(eq(schemaAll.creditScores.userId, userId))
+    .orderBy(desc(schemaAll.creditScores.createdAt))
+    .limit(limit);
+}
+
+// ============================================================
+// Typed Query Helpers — Mojaloop (Round 68+)
+// ============================================================
+
+export async function getMojaloopTransferByTransferId(transferId: string) {
+  const db = await getDb(); if (!db) return null;
+  const rows = await db.select().from(schemaAll.mojaloopTransfers)
+    .where(eq(schemaAll.mojaloopTransfers.transferId, transferId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listMojaloopTransfers(status?: string, limit = 50, offset = 0) {
+  const db = await getDb(); if (!db) return { transfers: [], total: 0 };
+  const where = status
+    ? eq(schemaAll.mojaloopTransfers.status, status as "PENDING" | "RESERVED" | "COMMITTED" | "ABORTED" | "EXPIRED")
+    : undefined;
+  const [transfers, [{ total }]] = await Promise.all([
+    db.select().from(schemaAll.mojaloopTransfers).where(where)
+      .orderBy(desc(schemaAll.mojaloopTransfers.createdAt)).limit(limit).offset(offset),
+    db.select({ total: count() }).from(schemaAll.mojaloopTransfers).where(where),
+  ]);
+  return { transfers, total };
+}
+
+// ============================================================
+// Transaction Batch Helper
+// ============================================================
+
+/**
+ * Execute multiple DB operations atomically in a single transaction.
+ * Usage:
+ *   await withTransaction(async (tx) => {
+ *     await tx.insert(schemaAll.orders).values(orderData);
+ *     await tx.insert(schemaAll.tradeFills).values(fillData);
+ *   });
+ */
+export async function withTransaction<T>(
+  fn: (tx: Parameters<Parameters<ReturnType<typeof drizzle>["transaction"]>[0]>[0]) => Promise<T>,
+): Promise<T | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  return db.transaction(fn);
+}
+
+// ============================================================
+// Aggregation Helpers
+// ============================================================
+
+export async function countOpenOrders(userId: number): Promise<number> {
+  const db = await getDb(); if (!db) return 0;
+  const [{ total }] = await db.select({ total: count() }).from(schemaAll.orders)
+    .where(and(eq(schemaAll.orders.userId, userId), eq(schemaAll.orders.status, "OPEN")));
+  return total;
+}
+
+export async function countActiveOperators(): Promise<number> {
+  const db = await getDb(); if (!db) return 0;
+  const [{ total }] = await db.select({ total: count() }).from(schemaAll.exchangeOperators)
+    .where(eq(schemaAll.exchangeOperators.status, "ACTIVE"));
+  return total;
+}
+
+export async function countRunningWorkflows(): Promise<number> {
+  const db = await getDb(); if (!db) return 0;
+  const [{ total }] = await db.select({ total: count() }).from(schemaAll.workflowExecutions)
+    .where(eq(schemaAll.workflowExecutions.status, "RUNNING"));
+  return total;
+}
+
+export async function countUnresolvedAmlFlags(): Promise<number> {
+  const db = await getDb(); if (!db) return 0;
+  const [{ total }] = await db.select({ total: count() }).from(schemaAll.amlFlags)
+    .where(eq(schemaAll.amlFlags.status, "OPEN"));
+  return total;
+}

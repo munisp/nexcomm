@@ -24,6 +24,7 @@ pub mod persistence;
 mod kafka;
 mod spot_fx;
 mod cross_currency;
+mod multi_currency;
 mod surveillance;
 mod types;
 
@@ -48,6 +49,7 @@ struct AppState {
     kafka: Arc<kafka::KafkaPublisher>,
     fx: Arc<spot_fx::SpotFxEngine>,
     cross_currency: Arc<cross_currency::CrossCurrencyEngine>,
+    multi_currency: Arc<std::sync::RwLock<multi_currency::MultiCurrencyEngine>>,
 }
 impl std::ops::Deref for AppState {
     type Target = ExchangeEngine;
@@ -91,11 +93,13 @@ async fn main() {
     ));
     let fx = Arc::new(spot_fx::SpotFxEngine::new());
     let cross_currency = Arc::new(cross_currency::CrossCurrencyEngine::new());
+    let multi_currency = multi_currency::new_shared_engine();
     let state = AppState {
         engine: engine.clone(),
         kafka: kafka_publisher.clone(),
         fx,
         cross_currency,
+        multi_currency,
     };
 
     let cors = CorsLayer::new()
@@ -247,6 +251,14 @@ async fn main() {
         .route("/api/v1/xccy/depth/:base/:quote", get(xccy_get_order_book))
         .route("/api/v1/xccy/arbitrage", get(xccy_detect_arbitrage))
         .route("/api/v1/xccy/arbitrage/log", get(xccy_arbitrage_log))
+
+        // ── Multi-Currency Atomic Swaps ─────────────────────────────────────
+        .route("/api/v1/mccy/pools", get(mccy_list_pools))
+        .route("/api/v1/mccy/quote", post(mccy_get_quote))
+        .route("/api/v1/mccy/swap", post(mccy_submit_swap))
+        .route("/api/v1/mccy/swap/:swap_id", get(mccy_get_swap))
+        .route("/api/v1/mccy/swaps/:user_id", get(mccy_get_user_swaps))
+        .route("/api/v1/mccy/routes", post(mccy_get_routes))
 
         .layer(RequestBodyLimitLayer::new(1024 * 1024)) // 1MB request body limit
         .layer(cors)
@@ -1647,4 +1659,84 @@ async fn xccy_arbitrage_log(
     State(engine): State<AppState>,
 ) -> Json<ApiResponse<Vec<cross_currency::ArbitrageOpportunity>>> {
     Json(ApiResponse::ok(engine.cross_currency.get_arbitrage_log(50)))
+}
+
+// ─── Multi-Currency Atomic Swap Handlers ─────────────────────────────────────
+
+async fn mccy_list_pools(
+    State(state): State<AppState>,
+) -> Json<serde_json::Value> {
+    let engine = state.multi_currency.read().unwrap();
+    let pools: Vec<&multi_currency::LiquidityPool> = engine.get_pools();
+    Json(serde_json::json!({ "pools": pools, "count": pools.len() }))
+}
+
+async fn mccy_get_quote(
+    State(state): State<AppState>,
+    Json(req): Json<multi_currency::QuoteRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let engine = state.multi_currency.read().unwrap();
+    match engine.quote_swap(&req.from, &req.to, req.amount) {
+        Some(quote) => Ok(Json(serde_json::json!({ "quote": quote }))),
+        None => Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({
+                "error": format!("No route found from {} to {}", req.from, req.to)
+            })),
+        )),
+    }
+}
+
+async fn mccy_submit_swap(
+    State(state): State<AppState>,
+    Json(req): Json<multi_currency::SwapRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let mut engine = state.multi_currency.write().unwrap();
+    let slippage = req.slippage_bps.unwrap_or(100.0);
+    match engine.submit_swap(
+        &req.user_id,
+        &req.from,
+        &req.to,
+        req.amount,
+        slippage,
+        &req.idempotency_key,
+    ) {
+        Ok(swap) => Ok(Json(serde_json::json!({ "swap": swap }))),
+        Err(e) => Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+async fn mccy_get_swap(
+    State(state): State<AppState>,
+    Path(swap_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let engine = state.multi_currency.read().unwrap();
+    match engine.get_swap(&swap_id) {
+        Some(swap) => Ok(Json(serde_json::json!({ "swap": swap }))),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "Swap not found" })),
+        )),
+    }
+}
+
+async fn mccy_get_user_swaps(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+) -> Json<serde_json::Value> {
+    let engine = state.multi_currency.read().unwrap();
+    let swaps: Vec<&multi_currency::MultiCurrencySwap> = engine.get_user_swaps(&user_id);
+    Json(serde_json::json!({ "swaps": swaps, "count": swaps.len() }))
+}
+
+async fn mccy_get_routes(
+    State(state): State<AppState>,
+    Json(req): Json<multi_currency::RoutesRequest>,
+) -> Json<serde_json::Value> {
+    let engine = state.multi_currency.read().unwrap();
+    let routes = engine.get_available_routes(&req.from, &req.to);
+    Json(serde_json::json!({ "routes": routes, "count": routes.len() }))
 }

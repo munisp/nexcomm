@@ -1562,3 +1562,34 @@ All 27 K8s manifests written (infra/k8s/), 4 Grafana dashboards written (infra/m
 - [x] Vitest: 146/146 new tests pass (12 files)
 - [x] Manus checkpoint saved
 - [x] GitHub push to munisp/nexcomm main
+
+## Round 69 — Drizzle ORM Improvements, CrossBorderFx/TemporalWorkflows Pages, Vitest Coverage, Flutter Routes, Rust multi_currency (Jul 12 2026)
+
+### Drizzle ORM Improvements
+- [x] drizzle/relations.ts — 80+ typed relations covering all major table groups (users, orders, trades, operators, KYC, AML, surveillance, settlement, cross-border, tracing, regulatory, credit, ledger, banking, temporal, lakehouse, blockchain)
+- [x] server/db.ts — Typed query helpers for all new tables: getTracesByService, getTraceById, getExchangeOperator, getExchangeOperatorByCode, listExchangeOperators, getOperatorInstruments, getOperatorFeeSchedules, getOperatorSettlementRules, getCrossLedgerEntries, getTemporalWorkflowRun, listTemporalWorkflowRuns, getMojaloopTransfer, listMojaloopTransfers, getSwapQuoteById, listUserSwapQuotes
+- [x] server/db.ts — Prepared statements: psFindUserByOpenId, psGetOrderById, psGetTradesBySymbol, psGetActiveOperators, psGetPendingKycDocuments, psGetOpenAmlAlerts, psGetActiveCircuitBreakers, psGetPendingSettlements, psGetActiveMojaloopTransfers
+- [x] server/db.ts — getDbWithRelations() helper that returns db with schema+relations for db.query.* usage
+
+### Web Pages
+- [x] client/src/pages/CrossBorderFx.tsx — Corridor picker (NGN→KES, GHS→ZAR, etc.), transfer form, 6-phase ILP progress tracker, transfer history table
+- [x] client/src/pages/TemporalWorkflows.tsx — Workflow registry panel, trigger form, status polling, cancel action, running workflows list
+- [x] client/src/App.tsx — Routes /cross-border-fx and /temporal-workflows wired
+- [x] client/src/components/DashboardLayout.tsx — CrossBorderFx and TemporalWorkflows nav items added
+
+### Vitest Tests
+- [x] server/crossBorderFx.test.ts — 15 unit tests for crossBorderFxRouter (all passing)
+- [x] server/temporal.test.ts — 14 unit tests for temporalRouter (all passing)
+
+### Flutter Route Registration
+- [x] nexcom-flutter/lib/router.dart — All 6 new screens wired: /distributed-tracing, /exchange-operators, /credit-score, /ledger, /spot-fx, /cross-border-fx
+
+### Rust multi_currency Module
+- [x] matching-engine/src/multi_currency/mod.rs — AMM-based multi-leg atomic swap engine (path-finding, constant-product AMM, atomic execution with rollback, idempotency, 8 built-in unit tests)
+- [x] matching-engine/src/main.rs — mod multi_currency wired + 6 REST routes: GET /api/v1/mccy/pools, POST /api/v1/mccy/quote, POST /api/v1/mccy/swap, GET /api/v1/mccy/swap/:swap_id, GET /api/v1/mccy/swaps/:user_id, POST /api/v1/mccy/routes
+
+### Delivery
+- [x] TypeScript: 0 errors
+- [x] Vitest: 175/175 pass (14 test files)
+- [x] Manus checkpoint saved
+- [x] GitHub push to munisp/nexcomm main

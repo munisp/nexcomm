@@ -22,6 +22,12 @@ import 'screens/notifications/notifications_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'screens/settings/push_notification_settings_screen.dart';
 import 'screens/banking/banking_screen.dart';
+import 'screens/distributed_tracing/distributed_tracing_screen.dart';
+import 'screens/exchange_operators/exchange_operators_screen.dart';
+import 'screens/credit_score/credit_score_screen.dart';
+import 'screens/ledger/ledger_screen.dart';
+import 'screens/spot_fx/spot_fx_screen.dart';
+import 'screens/cross_border_fx/cross_border_fx_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -134,6 +140,30 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/banking',
             builder: (context, state) => const BankingScreen(),
+          ),
+          GoRoute(
+            path: '/distributed-tracing',
+            builder: (context, state) => const DistributedTracingScreen(),
+          ),
+          GoRoute(
+            path: '/exchange-operators',
+            builder: (context, state) => const ExchangeOperatorsScreen(),
+          ),
+          GoRoute(
+            path: '/credit-score',
+            builder: (context, state) => const CreditScoreScreen(),
+          ),
+          GoRoute(
+            path: '/ledger',
+            builder: (context, state) => const LedgerScreen(),
+          ),
+          GoRoute(
+            path: '/spot-fx',
+            builder: (context, state) => const SpotFxScreen(),
+          ),
+          GoRoute(
+            path: '/cross-border-fx',
+            builder: (context, state) => const CrossBorderFxScreen(),
           ),
         ],
       ),
