@@ -98,6 +98,8 @@ import { microservicesRouter } from "./routers/microservicesRouter";
 import { middlewareHealthRouter } from "./routers/middlewareHealthRouter";
 import { tracingRouter } from "./routers/tracingRouter";
 import { exchangeOperatorRouter } from "./routers/exchangeOperatorRouter";
+import { crossBorderFxRouter } from "./routers/crossBorderFxRouter";
+import { temporalRouter } from "./routers/temporalRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -196,6 +198,8 @@ export const appRouter = router({
   middlewareHealth: middlewareHealthRouter,
   tracing: tracingRouter,
   exchangeOperator: exchangeOperatorRouter,
+  crossBorderFx: crossBorderFxRouter,
+  temporal: temporalRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure

@@ -135,6 +135,7 @@ const menuSections: MenuSection[] = [
     title: "Asset Classes",
     items: [
       { icon: Globe,           label: "Forex",          path: "/forex" },
+      { icon: CandlestickChart, label: "Spot FX",         path: "/spot-fx" },
       { icon: LineChart,       label: "Equities",       path: "/equities" },
       { icon: Zap,             label: "Digital Assets", path: "/digital-assets" },
       { icon: Activity,        label: "Indices",        path: "/indices" },

@@ -23,6 +23,7 @@ mod orderbook;
 pub mod persistence;
 mod kafka;
 mod spot_fx;
+mod cross_currency;
 mod surveillance;
 mod types;
 
@@ -46,6 +47,7 @@ struct AppState {
     engine: Arc<ExchangeEngine>,
     kafka: Arc<kafka::KafkaPublisher>,
     fx: Arc<spot_fx::SpotFxEngine>,
+    cross_currency: Arc<cross_currency::CrossCurrencyEngine>,
 }
 impl std::ops::Deref for AppState {
     type Target = ExchangeEngine;
@@ -88,10 +90,12 @@ async fn main() {
         },
     ));
     let fx = Arc::new(spot_fx::SpotFxEngine::new());
+    let cross_currency = Arc::new(cross_currency::CrossCurrencyEngine::new());
     let state = AppState {
         engine: engine.clone(),
         kafka: kafka_publisher.clone(),
         fx,
+        cross_currency,
     };
 
     let cors = CorsLayer::new()
@@ -232,6 +236,17 @@ async fn main() {
         .route("/api/v1/fx/trades/:pair_base/:pair_quote", get(fx_trades))
         .route("/api/v1/fx/stats/:pair_base/:pair_quote", get(fx_pair_stats))
         .route("/api/v1/fx/rates/update", post(fx_update_reference_rate))
+
+        // ── Cross-Currency ──────────────────────────────────────────────────
+        .route("/api/v1/xccy/pairs", get(xccy_list_pairs))
+        .route("/api/v1/xccy/rates", get(xccy_get_all_rates))
+        .route("/api/v1/xccy/rate/:base/:quote", get(xccy_get_rate))
+        .route("/api/v1/xccy/orders", post(xccy_submit_order))
+        .route("/api/v1/xccy/orders/:user_id", get(xccy_get_user_orders))
+        .route("/api/v1/xccy/fills/:user_id", get(xccy_get_user_fills))
+        .route("/api/v1/xccy/depth/:base/:quote", get(xccy_get_order_book))
+        .route("/api/v1/xccy/arbitrage", get(xccy_detect_arbitrage))
+        .route("/api/v1/xccy/arbitrage/log", get(xccy_arbitrage_log))
 
         .layer(RequestBodyLimitLayer::new(1024 * 1024)) // 1MB request body limit
         .layer(cors)
@@ -1519,4 +1534,117 @@ async fn fx_update_reference_rate(
         req.source.as_deref().unwrap_or("manual"),
     );
     Json(ApiResponse::ok(()))
+}
+
+// ─── Cross-Currency Handlers ─────────────────────────────────────────────────
+
+async fn xccy_list_pairs(
+    State(engine): State<AppState>,
+) -> Json<ApiResponse<Vec<cross_currency::CrossCurrencyPair>>> {
+    Json(ApiResponse::ok(engine.cross_currency.list_pairs()))
+}
+
+async fn xccy_get_all_rates(
+    State(engine): State<AppState>,
+) -> Json<ApiResponse<Vec<cross_currency::CrossRate>>> {
+    Json(ApiResponse::ok(engine.cross_currency.get_all_rates()))
+}
+
+#[derive(serde::Deserialize)]
+struct XccyPairPath {
+    base: String,
+    quote: String,
+}
+
+async fn xccy_get_rate(
+    State(engine): State<AppState>,
+    axum::extract::Path(p): axum::extract::Path<XccyPairPath>,
+) -> Result<Json<ApiResponse<cross_currency::CrossRate>>, StatusCode> {
+    let pair = format!("{}/{}", p.base, p.quote);
+    match engine.cross_currency.get_rate(&pair) {
+        Some(rate) => Ok(Json(ApiResponse::ok(rate))),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct XccyOrderRequest {
+    pair: String,
+    side: String,
+    order_type: String,
+    quantity: f64,
+    limit_price: Option<f64>,
+    user_id: String,
+    operator_id: Option<String>,
+    max_slippage_bps: Option<u32>,
+}
+
+async fn xccy_submit_order(
+    State(engine): State<AppState>,
+    Json(req): Json<XccyOrderRequest>,
+) -> Result<Json<ApiResponse<cross_currency::CrossCurrencyOrder>>, StatusCode> {
+    let side = match req.side.to_uppercase().as_str() {
+        "BUY" => cross_currency::CrossOrderSide::Buy,
+        "SELL" => cross_currency::CrossOrderSide::Sell,
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+    let order_type = match req.order_type.to_uppercase().as_str() {
+        "MARKET" => cross_currency::CrossOrderType::Market,
+        "LIMIT" => cross_currency::CrossOrderType::Limit,
+        "STOP_LIMIT" => cross_currency::CrossOrderType::StopLimit,
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+    match engine.cross_currency.submit_order(
+        &req.pair,
+        side,
+        order_type,
+        req.quantity,
+        req.limit_price,
+        &req.user_id,
+        req.operator_id.as_deref(),
+        req.max_slippage_bps.unwrap_or(50),
+    ) {
+        Ok(order) => Ok(Json(ApiResponse::ok(order))),
+        Err(e) => {
+            tracing::warn!("Cross-currency order rejected: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
+async fn xccy_get_user_orders(
+    State(engine): State<AppState>,
+    axum::extract::Path(user_id): axum::extract::Path<String>,
+) -> Json<ApiResponse<Vec<cross_currency::CrossCurrencyOrder>>> {
+    Json(ApiResponse::ok(engine.cross_currency.get_user_orders(&user_id, 100)))
+}
+
+async fn xccy_get_user_fills(
+    State(engine): State<AppState>,
+    axum::extract::Path(user_id): axum::extract::Path<String>,
+) -> Json<ApiResponse<Vec<cross_currency::CrossCurrencyFill>>> {
+    Json(ApiResponse::ok(engine.cross_currency.get_user_fills(&user_id, 100)))
+}
+
+async fn xccy_get_order_book(
+    State(engine): State<AppState>,
+    axum::extract::Path(p): axum::extract::Path<XccyPairPath>,
+) -> Result<Json<ApiResponse<cross_currency::CrossCurrencyOrderBook>>, StatusCode> {
+    let pair = format!("{}/{}", p.base, p.quote);
+    match engine.cross_currency.get_order_book(&pair, 10) {
+        Some(book) => Ok(Json(ApiResponse::ok(book))),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn xccy_detect_arbitrage(
+    State(engine): State<AppState>,
+) -> Json<ApiResponse<Vec<cross_currency::ArbitrageOpportunity>>> {
+    Json(ApiResponse::ok(engine.cross_currency.detect_arbitrage()))
+}
+
+async fn xccy_arbitrage_log(
+    State(engine): State<AppState>,
+) -> Json<ApiResponse<Vec<cross_currency::ArbitrageOpportunity>>> {
+    Json(ApiResponse::ok(engine.cross_currency.get_arbitrage_log(50)))
 }

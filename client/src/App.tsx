@@ -153,6 +153,7 @@ const MicroservicesHealth        = lazy(() => import("./pages/MicroservicesHealt
 const MiddlewareHealth           = lazy(() => import("./pages/MiddlewareHealth"));
 const DistributedTracing         = lazy(() => import("./pages/DistributedTracing"));
 const ExchangeOperatorOnboarding = lazy(() => import("./pages/ExchangeOperatorOnboarding"));
+const SpotFx                     = lazy(() => import("./pages/SpotFx"));
 const UserProfileDashboard       = lazy(() => import("./pages/UserProfileDashboard"));
 
 function PageLoader() {
@@ -311,6 +312,7 @@ function Router() {
         <Route path="/admin/middleware-health"                         component={MiddlewareHealth} />
         <Route path="/admin/distributed-tracing"                       component={DistributedTracing} />
         <Route path="/admin/exchange-operators"                        component={ExchangeOperatorOnboarding} />
+        <Route path="/spot-fx"                                         component={SpotFx} />
         {/* 404 */}
         <Route                           component={NotFound} />
       </Switch>
