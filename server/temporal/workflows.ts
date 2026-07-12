@@ -209,6 +209,65 @@ export const LOAN_DISBURSEMENT_WORKFLOW = {
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 5. CrossBorderFxWorkflow — Mojaloop ILP cross-border FX settlement
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CrossBorderFxInput {
+  transferId: string;
+  senderUserId: number;
+  receiverFsp: string;
+  receiverAccount: string;
+  amount: number;
+  sendCurrency: string;       // e.g. "NGN"
+  receiveCurrency: string;    // e.g. "USD"
+  note?: string;
+  idempotencyKey: string;
+}
+
+/**
+ * CrossBorderFxWorkflow
+ *
+ * Six-phase saga for cross-border FX settlement via Mojaloop ILP:
+ *   Phase 1 — Sanctions screening (OpenSanctions)
+ *   Phase 2 — ILP Quote (GET /quotes from Mojaloop)
+ *   Phase 3 — Reserve funds (TigerBeetle code-2 pending)
+ *   Phase 4 — Execute Mojaloop transfer (POST /transfers COMMITTED)
+ *   Phase 5 — Commit TigerBeetle transfer (code-12)
+ *   Phase 6 — Emit Fluvio + Lakehouse events
+ *
+ * Compensation: abort Mojaloop + reverse TigerBeetle reservation on any failure.
+ * Workflow ID pattern: "xborder-{transferId}"
+ */
+export const CROSS_BORDER_FX_WORKFLOW = {
+  name: "CrossBorderFxWorkflow",
+  taskQueue: "nexcom-cross-border",
+  activities: [
+    "sanctionsScreening",
+    "getILPQuote",
+    "reserveFunds",
+    "executeMojaloopTransfer",
+    "commitCrossBorderTransfer",
+    "emitCrossBorderCompleted",
+    "ingestCrossBorderToLakehouse",
+    // Compensation activities
+    "abortMojaloopTransfer",
+    "reverseFundsReservation",
+    "emitCrossBorderFailed",
+    "emitReconciliationAlert",
+  ],
+  timeoutSeconds: 300, // 5 minutes
+  retryPolicy: {
+    maximumAttempts: 3,
+    initialIntervalSeconds: 2,
+    backoffCoefficient: 2,
+    maximumIntervalSeconds: 60,
+    nonRetryableErrors: ["TRANSFER_REJECTED", "ACCOUNT_FROZEN", "SANCTIONS_BLOCKED"],
+  },
+  /** Idempotency key for workflow deduplication */
+  workflowIdFor: (input: CrossBorderFxInput) => `xborder-${input.transferId}`,
+} as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Registry — all workflows exported for gateway worker registration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -217,6 +276,7 @@ export const WORKFLOW_REGISTRY = {
   [KYC_REVIEW_WORKFLOW.name]: KYC_REVIEW_WORKFLOW,
   [SETTLEMENT_WORKFLOW.name]: SETTLEMENT_WORKFLOW,
   [LOAN_DISBURSEMENT_WORKFLOW.name]: LOAN_DISBURSEMENT_WORKFLOW,
+  [CROSS_BORDER_FX_WORKFLOW.name]: CROSS_BORDER_FX_WORKFLOW,
 } as const;
 
 export type WorkflowName = keyof typeof WORKFLOW_REGISTRY;

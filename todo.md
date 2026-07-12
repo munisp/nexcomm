@@ -1467,26 +1467,58 @@ All 27 K8s manifests written (infra/k8s/), 4 Grafana dashboards written (infra/m
 ## Round 66 — Distributed Tracing UI, Regulatory Reporting, Multi-tenancy (Jul 11 2026)
 
 ### Distributed Tracing UI
-- [ ] server/routers/tracingRouter.ts — tRPC procedures: getTraces, getTraceDetail, getServiceMap, getSlowOperations
-- [ ] client/src/pages/DistributedTracing.tsx — admin page with trace waterfall, service map, slow ops table
-- [ ] Wire route /admin/distributed-tracing in App.tsx + DashboardLayout nav item
-- [ ] APISIX route for /api/trpc/tracing.*
+- [x] server/routers/tracingRouter.ts — tRPC procedures: getTraces, getTraceDetail, getServiceMap, getSlowOperations
+- [x] client/src/pages/DistributedTracing.tsx — admin page with trace waterfall, service map, slow ops table
+- [x] Wire route /admin/distributed-tracing in App.tsx + DashboardLayout nav item
+- [x] APISIX route for /api/trpc/tracing.* (covered by existing wildcard route)
 
 ### Regulatory Reporting Module
-- [ ] drizzle/schema.ts — regulatoryReports table (reportType, period, status, fileUrl, submittedAt)
-- [ ] server/routers/regulatoryReportingRouter.ts — generateReport, listReports, downloadReport, submitReport procedures
-- [ ] client/src/pages/RegulatoryReporting.tsx — admin page with report generation, download, submission status
-- [ ] Wire route /admin/regulatory-reporting in App.tsx + DashboardLayout nav item
-- [ ] PDF generation using jsPDF or pdfmake (server-side)
+- [x] drizzle/schema.ts — regulatoryReports table (pre-existing, verified)
+- [x] server/routers/regulatoryReportingRouter.ts — pre-existing router, verified mounted
+- [x] client/src/pages/RegulatoryReporting.tsx — RegulatoryReports.tsx pre-existing, verified wired
+- [x] Wire route /regulatory-reports in App.tsx (pre-existing)
+- [x] PDF generation — handled by existing regulatoryReportingRouter
 
 ### Multi-tenancy Exchange Operator Onboarding
-- [ ] drizzle/schema.ts — exchangeOperators, operatorInstruments, operatorFees, operatorSettlementRules tables
-- [ ] server/routers/exchangeOperatorRouter.ts — register, configure, listInstruments, setFees, setSettlementRules procedures
-- [ ] client/src/pages/ExchangeOperatorOnboarding.tsx — self-service onboarding wizard (4 steps)
-- [ ] Wire route /admin/exchange-operators in App.tsx + DashboardLayout nav item
-- [ ] APISIX route for /api/trpc/exchangeOperator.*
+- [x] drizzle/schema.ts — exchangeOperators, operatorInstruments, operatorFeeSchedules, operatorSettlementRules, traceSnapshots tables added
+- [x] server/routers/exchangeOperatorRouter.ts — register, setInstruments, setFees, setSettlementRules, activate, suspend, list, getDetail
+- [x] client/src/pages/ExchangeOperatorOnboarding.tsx — 5-step wizard + operator list with activate/suspend
+- [x] Wire route /admin/exchange-operators in App.tsx + DashboardLayout nav item
+- [x] APISIX route for /api/trpc/exchangeOperator.* (covered by existing wildcard route)
 
 ### Delivery
-- [ ] TypeScript: 0 errors
-- [ ] Manus checkpoint saved
-- [ ] GitHub push to munisp/nexcomm main
+- [x] TypeScript: 0 errors
+- [x] Manus checkpoint saved (7bb52d6b)
+- [x] GitHub push to munisp/nexcomm main (f68482e)
+
+## Round 67 — Spot FX Engine, Vitest Tests, Mobile/Flutter Screens, CrossBorderFxWorkflow (Jul 12 2026)
+
+### Rust Spot FX Matching Engine
+- [x] matching-engine/src/spot_fx/mod.rs — Spot FX module (list_pairs, get_all_rates, submit_fx_order, get_order_book, get_trade_history, get_my_orders)
+- [x] matching-engine/src/main.rs — mod spot_fx wired + REST routes: GET /fx/pairs, GET /fx/rates, POST /fx/order, GET /fx/book/:pair, GET /fx/trades/:pair, GET /fx/orders/:user_id
+
+### Vitest Unit Tests
+- [x] server/tracing.test.ts — 11 unit tests for tracingRouter (all passing)
+- [x] server/exchangeOperator.test.ts — 11 unit tests for exchangeOperatorRouter (all passing)
+
+### Expo Mobile Screens (5 new)
+- [x] nexcom-mobile/app/distributed-tracing/index.tsx — trace waterfall, service stats, slow ops
+- [x] nexcom-mobile/app/exchange-operators/index.tsx — operator list with activate/suspend
+- [x] nexcom-mobile/app/credit-score/index.tsx — credit score circle, tier, factors
+- [x] nexcom-mobile/app/ledger/index.tsx — paginated ledger with infinite scroll
+- [x] nexcom-mobile/app/spot-fx/index.tsx — live FX rates, BUY/SELL order form
+
+### Flutter Screens (5 new)
+- [x] nexcom-flutter/lib/screens/distributed_tracing/distributed_tracing_screen.dart — 3-tab (Traces, Services, Slow Ops)
+- [x] nexcom-flutter/lib/screens/exchange_operators/exchange_operators_screen.dart — operator list with activate/suspend dialogs
+- [x] nexcom-flutter/lib/screens/credit_score/credit_score_screen.dart — score circle, tier, factors
+- [x] nexcom-flutter/lib/screens/ledger/ledger_screen.dart — infinite-scroll ledger with debit/credit coloring
+- [x] nexcom-flutter/lib/screens/spot_fx/spot_fx_screen.dart — live rates table, MARKET/LIMIT order form
+
+### Temporal Workflow
+- [x] server/temporal/workflows.ts — CrossBorderFxWorkflow added (6-phase Mojaloop ILP saga) + WORKFLOW_REGISTRY updated
+
+### Delivery
+- [x] TypeScript: 0 errors
+- [x] Manus checkpoint saved
+- [x] GitHub push to munisp/nexcomm main

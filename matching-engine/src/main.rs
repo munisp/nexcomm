@@ -22,6 +22,7 @@ mod options;
 mod orderbook;
 pub mod persistence;
 mod kafka;
+mod spot_fx;
 mod surveillance;
 mod types;
 
@@ -44,6 +45,7 @@ use types::*;
 struct AppState {
     engine: Arc<ExchangeEngine>,
     kafka: Arc<kafka::KafkaPublisher>,
+    fx: Arc<spot_fx::SpotFxEngine>,
 }
 impl std::ops::Deref for AppState {
     type Target = ExchangeEngine;
@@ -85,9 +87,11 @@ async fn main() {
             _ => NodeRole::Primary,
         },
     ));
+    let fx = Arc::new(spot_fx::SpotFxEngine::new());
     let state = AppState {
         engine: engine.clone(),
         kafka: kafka_publisher.clone(),
+        fx,
     };
 
     let cors = CorsLayer::new()
@@ -216,8 +220,19 @@ async fn main() {
         .route("/api/v1/fees/invoices/generate", post(fee_generate_invoice))
         .route("/api/v1/fees/listing", post(fee_charge_listing))
         .route("/api/v1/fees/tokenization", post(fee_charge_tokenization))
-        .route("/metrics", get(prometheus_metrics))
-        .route("/readiness", get(readiness_probe))
+        
+        // ── Spot FX ──────────────────────────────────────────────────────────
+        .route("/api/v1/fx/pairs", get(fx_list_pairs))
+        .route("/api/v1/fx/rates", get(fx_get_all_rates))
+        .route("/api/v1/fx/rate/:pair_base/:pair_quote", get(fx_get_rate))
+        .route("/api/v1/fx/cross/:base/:quote", get(fx_cross_rate))
+        .route("/api/v1/fx/orders", post(fx_submit_order))
+        .route("/api/v1/fx/orders/:pair_base/:pair_quote/:order_id/cancel", post(fx_cancel_order))
+        .route("/api/v1/fx/depth/:pair_base/:pair_quote", get(fx_depth))
+        .route("/api/v1/fx/trades/:pair_base/:pair_quote", get(fx_trades))
+        .route("/api/v1/fx/stats/:pair_base/:pair_quote", get(fx_pair_stats))
+        .route("/api/v1/fx/rates/update", post(fx_update_reference_rate))
+
         .layer(RequestBodyLimitLayer::new(1024 * 1024)) // 1MB request body limit
         .layer(cors)
         .with_state(state);
@@ -1399,4 +1414,109 @@ async fn fee_charge_tokenization(
         &req.asset_description,
     );
     Json(ApiResponse::ok(charge))
+}
+
+// ── Spot FX Handlers ─────────────────────────────────────────────────────────
+
+async fn fx_list_pairs(
+    State(engine): State<AppState>,
+) -> Json<ApiResponse<Vec<spot_fx::FxPair>>> {
+    Json(ApiResponse::ok(engine.fx.list_pairs()))
+}
+
+async fn fx_get_all_rates(
+    State(engine): State<AppState>,
+) -> Json<ApiResponse<Vec<spot_fx::FxRate>>> {
+    Json(ApiResponse::ok(engine.fx.get_all_rates()))
+}
+
+#[derive(serde::Deserialize)]
+struct FxPairPath {
+    pair_base: String,
+    pair_quote: String,
+}
+
+async fn fx_get_rate(
+    State(engine): State<AppState>,
+    axum::extract::Path(p): axum::extract::Path<FxPairPath>,
+) -> Json<ApiResponse<Option<spot_fx::FxRate>>> {
+    Json(ApiResponse::ok(engine.fx.get_rate(&p.pair_base, &p.pair_quote)))
+}
+
+#[derive(serde::Deserialize)]
+struct FxCrossPath {
+    base: String,
+    quote: String,
+}
+
+async fn fx_cross_rate(
+    State(engine): State<AppState>,
+    axum::extract::Path(p): axum::extract::Path<FxCrossPath>,
+) -> Json<ApiResponse<Option<spot_fx::FxRate>>> {
+    Json(ApiResponse::ok(engine.fx.cross_rate(&p.base, &p.quote)))
+}
+
+async fn fx_submit_order(
+    State(engine): State<AppState>,
+    Json(req): Json<spot_fx::FxOrderRequest>,
+) -> Json<ApiResponse<spot_fx::FxOrderResult>> {
+    let result = engine.fx.submit_order(req);
+    Json(ApiResponse::ok(result))
+}
+
+#[derive(serde::Deserialize)]
+struct FxCancelPath {
+    pair_base: String,
+    pair_quote: String,
+    order_id: String,
+}
+
+async fn fx_cancel_order(
+    State(engine): State<AppState>,
+    axum::extract::Path(p): axum::extract::Path<FxCancelPath>,
+) -> Json<ApiResponse<bool>> {
+    let ok = engine.fx.cancel_order(&p.pair_base, &p.pair_quote, &p.order_id);
+    Json(ApiResponse::ok(ok))
+}
+
+async fn fx_depth(
+    State(engine): State<AppState>,
+    axum::extract::Path(p): axum::extract::Path<FxPairPath>,
+) -> Json<ApiResponse<spot_fx::FxDepth>> {
+    Json(ApiResponse::ok(engine.fx.depth(&p.pair_base, &p.pair_quote)))
+}
+
+async fn fx_trades(
+    State(engine): State<AppState>,
+    axum::extract::Path(p): axum::extract::Path<FxPairPath>,
+) -> Json<ApiResponse<Vec<spot_fx::FxTrade>>> {
+    Json(ApiResponse::ok(engine.fx.recent_trades(&p.pair_base, &p.pair_quote, 50)))
+}
+
+async fn fx_pair_stats(
+    State(engine): State<AppState>,
+    axum::extract::Path(p): axum::extract::Path<FxPairPath>,
+) -> Json<ApiResponse<spot_fx::FxPairStats>> {
+    Json(ApiResponse::ok(engine.fx.pair_stats(&p.pair_base, &p.pair_quote)))
+}
+
+#[derive(serde::Deserialize)]
+struct FxRateUpdateRequest {
+    pair_base: String,
+    pair_quote: String,
+    rate: rust_decimal::Decimal,
+    source: Option<String>,
+}
+
+async fn fx_update_reference_rate(
+    State(engine): State<AppState>,
+    Json(req): Json<FxRateUpdateRequest>,
+) -> Json<ApiResponse<()>> {
+    engine.fx.update_reference_rate(
+        &req.pair_base,
+        &req.pair_quote,
+        req.rate,
+        req.source.as_deref().unwrap_or("manual"),
+    );
+    Json(ApiResponse::ok(()))
 }
