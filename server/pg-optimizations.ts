@@ -306,22 +306,22 @@ export async function batchInsertTrades(trades: TradeRecord[]): Promise<number> 
   if (trades.length === 0) return 0;
   const db = await getDb();
   if (!db) return 0;
-
-  // Build a single VALUES clause for all trades
-  const values = trades
-    .map(
-      (t) =>
-        `('${t.id}', '${t.orderId}', '${t.symbol}', ${t.buyerUserId}, ${t.sellerUserId}, '${t.price}', '${t.quantity}', '${t.fee}', '${t.tradeType}', '${t.executedAt.toISOString()}')`
-    )
-    .join(", ");
-
-  const result = await db.execute(sql`
-    INSERT INTO trades (id, order_id, symbol, buyer_user_id, seller_user_id, price, quantity, fee, trade_type, executed_at)
-    VALUES ${sql.raw(values)}
-    ON CONFLICT (id) DO NOTHING
-  `);
-
-  return (result as { rowCount?: number }).rowCount ?? trades.length;
+  // NEXCOM-R70-004: Use parameterised sql tagged template literals instead of
+  // sql.raw string interpolation to eliminate SQL injection risk.
+  let inserted = 0;
+  for (const t of trades) {
+    try {
+      await db.execute(
+        sql`INSERT INTO trades (id, order_id, symbol, buyer_user_id, seller_user_id, price, quantity, fee, trade_type, executed_at)
+            VALUES (${t.id}, ${t.orderId}, ${t.symbol}, ${t.buyerUserId}, ${t.sellerUserId}, ${t.price}, ${t.quantity}, ${t.fee}, ${t.tradeType}, ${t.executedAt})
+            ON CONFLICT (id) DO NOTHING`
+      );
+      inserted++;
+    } catch (e) {
+      console.warn("[batchInsertTrades] Insert error:", e);
+    }
+  }
+  return inserted;
 }
 
 // ─── 6. Table Partitioning DDL ────────────────────────────────────────────────

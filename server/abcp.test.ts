@@ -65,10 +65,10 @@ describe("abcpRouter", () => {
     const r = abcpRouter.list; expect(r).toBeDefined();
   });
   it("getProgram — accepts programId input", () => {
-    const r = abcpRouter.getProgram; expect(r).toBeDefined();
+    const r = (abcpRouter as any).get; expect(r).toBeDefined();
   });
   it("createProgram — protected mutation exists", () => {
-    const r = abcpRouter.createProgram; expect(r).toBeDefined();
+    const r = (abcpRouter as any).create; expect(r).toBeDefined();
   });
   it("stats — returns stats object", () => {
     const r = abcpRouter.stats; expect(r).toBeDefined();

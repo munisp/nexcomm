@@ -18,7 +18,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { orders, notifications, circuitBreakerEvents, savedOrders, orderAmendments } from "../../drizzle/schema";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, ilike, gte, lte, sql } from "drizzle-orm";
 import type { Order } from "../../drizzle/schema";
 import {
   submitOrder as rustSubmitOrder,
@@ -75,20 +75,45 @@ export const ordersRouter = router({
     .input(z.object({
       assetClass: z.enum(assetClasses).optional(),
       status: z.enum(orderStatuses).optional(),
+      symbol: z.string().max(32).optional(),
+      side: z.enum(["BUY", "SELL"]).optional(),
+      orderType: z.enum(["LIMIT", "MARKET", "STOP_LIMIT"]).optional(),
+      priceMin: z.number().positive().optional(),
+      priceMax: z.number().positive().optional(),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      sortBy: z.enum(["createdAt", "price", "quantity", "status", "symbol"]).default("createdAt"),
+      sortDir: z.enum(["asc", "desc"]).default("desc"),
       limit: z.number().min(1).max(200).default(50),
+      offset: z.number().min(0).default(0),
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return [] as Order[];
+      if (!db) return { orders: [] as Order[], total: 0 };
       const conditions = [eq(orders.userId, ctx.user.id)];
       if (input.assetClass) conditions.push(eq(orders.assetClass, input.assetClass));
-      if (input.status) conditions.push(eq(orders.status, input.status));
-      return db
-        .select()
-        .from(orders)
-        .where(and(...conditions))
-        .orderBy(desc(orders.createdAt))
-        .limit(input.limit);
+      if (input.status)     conditions.push(eq(orders.status, input.status));
+      if (input.symbol)     conditions.push(ilike(orders.symbol, `%${input.symbol}%`));
+      if (input.side)       conditions.push(eq(orders.side, input.side));
+      if (input.orderType)  conditions.push(eq(orders.orderType, input.orderType));
+      if (input.priceMin)   conditions.push(gte(orders.price, String(input.priceMin)));
+      if (input.priceMax)   conditions.push(lte(orders.price, String(input.priceMax)));
+      if (input.dateFrom)   conditions.push(gte(orders.createdAt, new Date(input.dateFrom)));
+      if (input.dateTo)     conditions.push(lte(orders.createdAt, new Date(input.dateTo + "T23:59:59Z")));
+      const sortColMap = {
+        createdAt: orders.createdAt,
+        price:     orders.price,
+        quantity:  orders.quantity,
+        status:    orders.status,
+        symbol:    orders.symbol,
+      };
+      const sortCol = sortColMap[input.sortBy];
+      const orderByClause = input.sortDir === "asc" ? asc(sortCol) : desc(sortCol);
+      const [rows, countRows] = await Promise.all([
+        db.select().from(orders).where(and(...conditions)).orderBy(orderByClause).limit(input.limit).offset(input.offset),
+        db.select({ count: sql<number>`count(*)::int` }).from(orders).where(and(...conditions)),
+      ]);
+      return { orders: rows, total: countRows[0]?.count ?? 0 };
     }),
 
   create: protectedProcedure

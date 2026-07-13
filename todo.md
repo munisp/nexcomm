@@ -1593,3 +1593,20 @@ All 27 K8s manifests written (infra/k8s/), 4 Grafana dashboards written (infra/m
 - [x] Vitest: 175/175 pass (14 test files)
 - [x] Manus checkpoint saved
 - [x] GitHub push to munisp/nexcomm main
+
+## Round 70
+
+- [x] Upgrade orders.list with advanced filtering (symbol, side, orderType, price range, date range), sorting (5 columns), and pagination
+- [x] Create DataFilterBar reusable component for server-side filtering/sorting UI
+- [x] Create SmartFormFill AI-powered component for form auto-fill from unstructured text
+- [x] Create smartFillRouter (AI extraction endpoint using LLM with structured JSON output)
+- [x] Integrate SmartFormFill into Trade.tsx order form
+- [x] Wire DataFilterBar into Orders.tsx with full filter/sort state management
+- [x] Fix Dashboard.tsx to handle new {orders, total} return shape from orders.list
+- [x] NEXCOM-R70-001: Add aiLimiter (20 req/min) to smartFill and aiMl endpoints
+- [x] NEXCOM-R70-002: Add kycAmlLimiter (30 req/min) to kyc and aml endpoints
+- [x] NEXCOM-R70-003: Add multiCurrencyLimiter (60 req/min) to multiCurrency and crossBorderFx endpoints
+- [x] NEXCOM-R70-004: Fix sql.raw injection in batchInsertTrades using parameterised queries
+- [x] NEXCOM-R70-005: Add JWT_SECRET minimum-length validation at startup
+- [x] Write SECURITY_REPORT_R70.md with full findings and remediation details
+- [x] Fix nexcom.test.ts and abcp.test.ts for new orders.list return shape

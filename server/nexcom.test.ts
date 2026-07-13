@@ -570,8 +570,9 @@ describe("orders router", () => {
   it("list returns empty array when DB unavailable", async () => {
     const ctx = makeCtx();
     const caller = appRouter.createCaller(ctx);
-    const result = await caller.orders.list({}).catch(() => []);
-    expect(Array.isArray(result)).toBe(true);
+    const result = await caller.orders.list({}).catch(() => ({ orders: [], total: 0 }));
+    const resultArr = (result as any).orders ?? result;
+    expect(Array.isArray(resultArr)).toBe(true);
   });
 
   it("list rejects unauthenticated requests", async () => {
@@ -850,8 +851,9 @@ describe("order fill notifications", () => {
   it("orders router is accessible to authenticated users", async () => {
     const ctx = makeCtx();
     const caller = appRouter.createCaller(ctx);
-    const result = await caller.orders.list({}).catch(() => []);
-    expect(Array.isArray(result)).toBe(true);
+    const result = await caller.orders.list({}).catch(() => ({ orders: [], total: 0 }));
+    const resultArr = (result as any).orders ?? result;
+    expect(Array.isArray(resultArr)).toBe(true);
   });
 
   it("orders.create rejects unauthenticated requests", async () => {

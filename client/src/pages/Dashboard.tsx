@@ -212,7 +212,8 @@ export default function Dashboard() {
   const { formatCurrency, t } = usePreferences();
   const { data: orderStats, isLoading: statsLoading } = trpc.orders.stats.useQuery(undefined, { enabled: isAuthenticated });
   const { data: portfolioSummary, isLoading: portfolioLoading } = trpc.portfolio.summary.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: recentOrders = [] } = trpc.orders.list.useQuery({ limit: 5 }, { enabled: isAuthenticated });
+  const { data: recentOrdersData } = trpc.orders.list.useQuery({ limit: 5 }, { enabled: isAuthenticated });
+  const recentOrders = recentOrdersData?.orders ?? [];
   const { data: receiptsData } = trpc.receipts.list.useQuery({ limit: 100 }, { enabled: isAuthenticated });
 
   useEffect(() => {

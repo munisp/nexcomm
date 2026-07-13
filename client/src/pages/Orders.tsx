@@ -31,6 +31,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
 import { useOfflineQueue } from "@/hooks/useOfflineQueue";
+import DataFilterBar from "@/components/DataFilterBar";
 
 type AssetClass = "COMMODITY" | "FOREX" | "EQUITY" | "DIGITAL_ASSET";
 type OrderStatus = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "REJECTED" | "EXPIRED";
@@ -583,11 +584,40 @@ export default function Orders() {
     try { localStorage.setItem(LS_KEY, JSON.stringify([...defaults])); } catch { /* ignore */ }
   };
 
+  // Advanced filter/sort state (R70)
+  const [filterValues, setFilterValues] = useState<Record<string, string | number | undefined>>({});
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+  const handleFilterChange = (key: string, value: string | number | undefined) => {
+    setFilterValues(prev => ({ ...prev, [key]: value }));
+    setPage(0);
+  };
+  const handleSortChange = (by: string, dir: "asc" | "desc") => { setSortBy(by); setSortDir(dir); setPage(0); };
+  const handleFilterReset = () => { setFilterValues({}); setPage(0); };
+
   // Live tRPC data
-  const { data: liveOrders, isLoading, refetch } = trpc.orders.list.useQuery(
-    { limit: 200 },
+  const { data: liveOrdersData, isLoading, refetch } = trpc.orders.list.useQuery(
+    {
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+      sortBy: sortBy as "createdAt" | "price" | "quantity" | "status" | "symbol",
+      sortDir,
+      symbol: filterValues.symbol as string | undefined,
+      side: filterValues.side as "BUY" | "SELL" | undefined,
+      orderType: filterValues.orderType as "LIMIT" | "MARKET" | "STOP_LIMIT" | undefined,
+      status: filterValues.status as "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "REJECTED" | "EXPIRED" | undefined,
+      assetClass: filterValues.assetClass as "COMMODITY" | "FOREX" | "EQUITY" | "DIGITAL_ASSET" | "INDEX" | undefined,
+      priceMin: filterValues.priceMin as number | undefined,
+      priceMax: filterValues.priceMax as number | undefined,
+      dateFrom: filterValues.dateFrom as string | undefined,
+      dateTo: filterValues.dateTo as string | undefined,
+    },
     { enabled: isAuthenticated }
   );
+  const liveOrders = liveOrdersData?.orders;
+  const totalServerCount = liveOrdersData?.total ?? 0;
   const cancelManyMutation = trpc.orders.cancelMany.useMutation({
     onSuccess: (res) => {
       toast.success(`${res.cancelled} order${res.cancelled !== 1 ? 's' : ''} cancelled${res.failed > 0 ? ` (${res.failed} failed)` : ''}`);
@@ -828,6 +858,62 @@ export default function Orders() {
           </div>
         </div>
 
+        {/* Advanced Filter Bar (R70) */}
+        {isAuthenticated && (
+          <DataFilterBar
+            className="mt-3"
+            fields={[
+              { key: "symbol", label: "Symbol", type: "text", placeholder: "e.g. CORN-NG-SPOT" },
+              { key: "side", label: "Side", type: "select", options: [{ label: "Buy", value: "BUY" }, { label: "Sell", value: "SELL" }] },
+              { key: "orderType", label: "Order Type", type: "select", options: [{ label: "Limit", value: "LIMIT" }, { label: "Market", value: "MARKET" }, { label: "Stop Limit", value: "STOP_LIMIT" }] },
+              { key: "priceMin", label: "Min Price", type: "number", placeholder: "0" },
+              { key: "priceMax", label: "Max Price", type: "number", placeholder: "∞" },
+              { key: "dateFrom", label: "From Date", type: "date" },
+              { key: "dateTo", label: "To Date", type: "date" },
+            ]}
+            sortOptions={[
+              { label: "Date", value: "createdAt" },
+              { label: "Symbol", value: "symbol" },
+              { label: "Price", value: "price" },
+              { label: "Quantity", value: "quantity" },
+              { label: "Status", value: "status" },
+            ]}
+            values={filterValues}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onFilterChange={handleFilterChange}
+            onSortChange={handleSortChange}
+            onReset={handleFilterReset}
+          />
+        )}
+        {/* Advanced Filter Bar (R70) */}
+        {isAuthenticated && (
+          <DataFilterBar
+            className="mt-3"
+            fields={[
+              { key: "symbol", label: "Symbol", type: "text", placeholder: "e.g. CORN-NG-SPOT" },
+              { key: "side", label: "Side", type: "select", options: [{ label: "Buy", value: "BUY" }, { label: "Sell", value: "SELL" }] },
+              { key: "orderType", label: "Order Type", type: "select", options: [{ label: "Limit", value: "LIMIT" }, { label: "Market", value: "MARKET" }, { label: "Stop Limit", value: "STOP_LIMIT" }] },
+              { key: "priceMin", label: "Min Price", type: "number", placeholder: "0" },
+              { key: "priceMax", label: "Max Price", type: "number", placeholder: "∞" },
+              { key: "dateFrom", label: "From Date", type: "date" },
+              { key: "dateTo", label: "To Date", type: "date" },
+            ]}
+            sortOptions={[
+              { label: "Date", value: "createdAt" },
+              { label: "Symbol", value: "symbol" },
+              { label: "Price", value: "price" },
+              { label: "Quantity", value: "quantity" },
+              { label: "Status", value: "status" },
+            ]}
+            values={filterValues}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onFilterChange={handleFilterChange}
+            onSortChange={handleSortChange}
+            onReset={handleFilterReset}
+          />
+        )}
         {["all","open","filled","cancelled"].map(tab => (
           <TabsContent key={tab} value={tab} className="mt-4">
             <div className="exchange-table">

@@ -220,6 +220,18 @@ async function startServer() {
   app.use("/api/trpc/banking.withdraw", transferLimiter);
   app.use("/api/trpc/banking.deposit", transferLimiter);
   app.use("/api/trpc/mojaloop", transferLimiter);
+  // AI endpoints: 20 requests/min per IP (NEXCOM-R70-001)
+  const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false, message: { error: "Too many AI requests — please wait before retrying." } });
+  app.use("/api/trpc/smartFill", aiLimiter);
+  app.use("/api/trpc/aiMl", aiLimiter);
+  // KYC/AML endpoints: 30 requests/min per IP (NEXCOM-R70-002)
+  const kycAmlLimiter = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many KYC/AML requests — please wait before retrying." } });
+  app.use("/api/trpc/kyc", kycAmlLimiter);
+  app.use("/api/trpc/aml", kycAmlLimiter);
+  // Multi-currency endpoints: 60 requests/min per IP (NEXCOM-R70-003)
+  const multiCurrencyLimiter = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false, message: { error: "Too many multi-currency requests — please wait before retrying." } });
+  app.use("/api/trpc/multiCurrency", multiCurrencyLimiter);
+  app.use("/api/trpc/crossBorderFx", multiCurrencyLimiter);
   // Stripe webhook MUST be registered before express.json() to preserve raw body for signature verification
   registerStripeWebhook(app);
 
@@ -227,6 +239,20 @@ async function startServer() {
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
+  // ── JWT secret minimum-length guard (NEXCOM-R70-005) ─────────────────────
+  const jwtSecret = process.env.JWT_SECRET ?? "";
+  if (jwtSecret.length < 32) {
+    const msg = `[Security] JWT_SECRET is only ${jwtSecret.length} chars — minimum 32 required.`;
+    if (process.env.NODE_ENV === "production") { console.error(msg); process.exit(1); }
+    else { console.warn(msg); }
+  }
+  // ── JWT secret minimum-length guard (NEXCOM-R70-005) ─────────────────────
+  const jwtSecret = process.env.JWT_SECRET ?? "";
+  if (jwtSecret.length < 32) {
+    const msg = `[Security] JWT_SECRET is only ${jwtSecret.length} chars — minimum 32 required.`;
+    if (process.env.NODE_ENV === "production") { console.error(msg); process.exit(1); }
+    else { console.warn(msg); }
+  }
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
 

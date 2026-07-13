@@ -29,6 +29,7 @@ import OrderBookDepthChart from "@/components/OrderBookDepthChart";
 import { TotpChallengeModal } from "@/components/TotpChallengeModal";
 import { usePreferences } from "@/contexts/PreferencesContext";
 import { useOfflineQueue } from "@/hooks/useOfflineQueue";
+import SmartFormFill from "@/components/SmartFormFill";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n: number, dp = 2) {
@@ -291,9 +292,10 @@ export default function Trade() {
     { limit: 10 },
     { enabled: !!isAuthenticated && bottomTab === "myorders", refetchInterval: 15_000 }
   );
+  const myOrdersList = myOrdersData?.orders ?? [];
   const mySymbolOrders = useMemo(
-    () => (myOrdersData ?? []).filter(o => o.symbol === selectedSymbol),
-    [myOrdersData, selectedSymbol]
+    () => myOrdersList.filter((o: { symbol: string }) => o.symbol === selectedSymbol),
+    [myOrdersList, selectedSymbol]
   );
   // Amend order dialog state
   const [amendTarget, setAmendTarget] = useState<{ id: number; price: string; quantity: string } | null>(null);
@@ -314,8 +316,9 @@ export default function Trade() {
       // Optimistic update: mark as CANCELLED in local cache
       await utils.orders.list.cancel();
       const prev = utils.orders.list.getData({ limit: 10 });
-      utils.orders.list.setData({ limit: 10 }, old =>
-        old ? old.map(o => o.id === orderId ? { ...o, status: "CANCELLED" as const } : o) : old
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      utils.orders.list.setData({ limit: 10 } as any, (old: any) =>
+        old ? { ...old, orders: (old.orders ?? []).map((o: { id: number }) => o.id === orderId ? { ...o, status: "CANCELLED" as const } : o) } : old
       );
       return { prev };
     },
@@ -724,7 +727,37 @@ export default function Trade() {
                   </div>
                 )}
 
-                <Button onClick={handleSubmitOrder}
+                <SmartFormFill
+                  fields={[
+                    { key: "side", label: "Side", type: "select", options: ["BUY", "SELL"] },
+                    { key: "orderType", label: "Order Type", type: "select", options: ["LIMIT", "MARKET", "STOP_LIMIT"] },
+                    { key: "quantity", label: "Quantity", type: "number" },
+                    { key: "price", label: "Price", type: "number" },
+                  ]}
+                  onFill={(vals) => {
+                    if (vals.side === "BUY" || vals.side === "SELL") setOrderSide(vals.side);
+                    if (vals.orderType && ["LIMIT","MARKET","STOP_LIMIT"].includes(vals.orderType)) setOrderType(vals.orderType as "LIMIT"|"MARKET"|"STOP_LIMIT");
+                    if (vals.quantity) setOrderQty(vals.quantity);
+                    if (vals.price) setOrderPrice(vals.price);
+                  }}
+                  placeholder='e.g. "Buy 500 bags of white maize at ₦85,000 per tonne, GTC limit order"'
+                />
+                                <SmartFormFill
+                  fields={[
+                    { key: "side", label: "Side", type: "select", options: ["BUY", "SELL"] },
+                    { key: "orderType", label: "Order Type", type: "select", options: ["LIMIT", "MARKET", "STOP_LIMIT"] },
+                    { key: "quantity", label: "Quantity", type: "number" },
+                    { key: "price", label: "Price", type: "number" },
+                  ]}
+                  onFill={(vals) => {
+                    if (vals.side === "BUY" || vals.side === "SELL") setOrderSide(vals.side);
+                    if (vals.orderType && ["LIMIT","MARKET","STOP_LIMIT"].includes(vals.orderType)) setOrderType(vals.orderType as "LIMIT"|"MARKET"|"STOP_LIMIT");
+                    if (vals.quantity) setOrderQty(vals.quantity);
+                    if (vals.price) setOrderPrice(vals.price);
+                  }}
+                  placeholder='e.g. "Buy 500 bags of white maize at ₦85,000 per tonne, GTC limit order"'
+                />
+                                <Button onClick={handleSubmitOrder}
                   className={`w-full h-10 font-semibold text-sm transition-all ${orderSide === "BUY" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-red-600 hover:bg-red-500 text-white"}`}>
                   {`${orderSide === "BUY" ? t("trade.buy") : t("trade.sell")} ${selectedCommodity.name}`}
                 </Button>
