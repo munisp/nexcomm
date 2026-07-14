@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import {
   ArrowRightLeft, Send, Clock, CheckCircle2, XCircle,
   RefreshCw, AlertTriangle, Globe, Banknote,
@@ -116,6 +117,8 @@ export default function CrossBorderFx() {
   };
 
   const transfers: Transfer[] = listData?.transfers ?? [];
+
+  if (listLoading) return <PageSkeleton cards={2} tableRows={6} tableCols={4} />;
 
   return (
     <div className="p-6 space-y-6">

@@ -27,7 +27,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageSkeleton } from "@/components/PageSkeleton";
-import {  ArrowLeft,
+import {
+  ArrowLeft,
   TrendingUp,
   TrendingDown,
   Download,
@@ -36,7 +37,9 @@ import {  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   BarChart3,
+  FileText,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const PAGE_SIZE = 50;
 
@@ -136,8 +139,37 @@ export default function TraderTradeHistory() {
           onClick={handleExport}
           disabled={!fills.length}
           className="p-1.5 rounded-lg hover:bg-blue-800 transition-colors disabled:opacity-40"
+          title="Export CSV"
         >
           <Download className="w-4 h-4 text-blue-300" />
+        </button>
+        <button
+          disabled={!fills.length}
+          title="Export PDF"
+          className="p-1.5 rounded-lg hover:bg-blue-800 transition-colors disabled:opacity-40"
+          onClick={async () => {
+            const { jsPDF } = await import("jspdf");
+            const autoTable = (await import("jspdf-autotable")).default;
+            const doc = new jsPDF({ orientation: "landscape" });
+            doc.setFontSize(13);
+            doc.text("NEXCOM Exchange \u2014 Trade History", 14, 16);
+            doc.setFontSize(8);
+            doc.text(`Generated: ${new Date().toLocaleString()}  |  Total fills: ${total}`, 14, 22);
+            autoTable(doc, {
+              startY: 27,
+              head: [["Date","Symbol","Side","Qty","Fill Price","Gross Value","Fee","Fill ID"]],
+              body: fills.map(f => [
+                formatDate(f.createdAt), f.symbol, f.side,
+                f.filledQty, f.fillPrice, f.grossValue, f.fee, f.id,
+              ]),
+              styles: { fontSize: 7 },
+              headStyles: { fillColor: [30, 58, 138] },
+            });
+            doc.save(`nexcom-trade-history-${new Date().toISOString().slice(0,10)}.pdf`);
+            toast.success("Trade history exported as PDF");
+          }}
+        >
+          <FileText className="w-4 h-4 text-blue-300" />
         </button>
       </div>
 

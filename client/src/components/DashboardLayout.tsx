@@ -97,6 +97,9 @@ import { PasskeyUpgradeBanner } from "./PasskeyUpgradeBanner";
 import { PasskeyLoginButton } from "./PasskeyLoginButton";
 import { Button } from "./ui/button";
 import { trpc } from "@/lib/trpc";
+import MarketAssistantWidget from "./MarketAssistantWidget";
+import { Moon, Sun } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 type MenuItem = {
   icon: React.ElementType;
@@ -289,6 +292,20 @@ const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 240;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 360;
+
+/** Inline dark/light mode toggle that syncs with ThemeContext */
+function DarkModeToggleItem() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+  return (
+    <DropdownMenuItem onClick={toggleTheme} className="cursor-pointer">
+      <span className="mr-2 h-4 w-4 flex items-center justify-center">
+        {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      </span>
+      <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
+    </DropdownMenuItem>
+  );
+}
 
 export default function DashboardLayout({
   children,
@@ -674,6 +691,8 @@ function DashboardLayoutContent({
                   )}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DarkModeToggleItem />
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
@@ -701,6 +720,7 @@ function DashboardLayoutContent({
         <PasskeyUpgradeBanner />
         <main className="flex-1 p-4 min-h-0">{children}</main>
       </SidebarInset>
+      <MarketAssistantWidget />
     </>
     </CommandPaletteProvider>
   );

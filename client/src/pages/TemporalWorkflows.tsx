@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import {
   Play, RefreshCw, XCircle, CheckCircle2,
   AlertTriangle, Zap, Activity, List, Send,
@@ -77,6 +78,8 @@ export default function TemporalWorkflows() {
     try { payload = JSON.parse(triggerInput); } catch { toast.error("Invalid JSON input"); return; }
     triggerMut.mutate({ workflowName: selectedWorkflowName, payload });
   };
+
+  if (registryLoading || listLoading) return <PageSkeleton cards={2} tableRows={8} tableCols={4} />;
 
   const workflows = listData ?? [];
   const running   = workflows.filter((w: { recentRuns: { status: string }[] }) =>

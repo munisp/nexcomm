@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, RefreshCw, TrendingUp, TrendingDown, DollarSign, ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ── Static FX pair catalogue (matching engine provides live rates) ─────────
 const FX_PAIRS = [

@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePreferences } from "@/contexts/PreferencesContext";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import {
   CRYPTO_ASSETS, CRYPTO_CATEGORIES, type CryptoAsset, type CryptoCategory,
   simulateCryptoTick,

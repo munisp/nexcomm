@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import {
   Shield, Package, Calendar, AlertCircle, CheckCircle2, Clock,
   Leaf, DollarSign, TrendingUp, FileText, Plus, RefreshCw, ChevronRight, ChevronLeft, Banknote

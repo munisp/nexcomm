@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ─── Ginger market live price ─────────────────────────────────────────────────
 const GINGER_SYMBOL = "GINGER-NG-SPOT";
@@ -215,7 +216,6 @@ function VideoEmbed() {
   const [activeVideo, setActiveVideo] = useState(0);
   const VIDEO_ID = VIDEOS[activeVideo].id;
   const embedUrl = `https://www.youtube.com/embed/${VIDEO_ID}?autoplay=1&rel=0&modestbranding=1`;
-
   return (
     <div className="border-y border-border bg-card/40">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-14">

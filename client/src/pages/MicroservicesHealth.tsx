@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import {
   Activity, Shield, Brain, Lock, Zap, Bell, Search,
   Network, Bot, RefreshCw, CheckCircle2, XCircle, AlertCircle,

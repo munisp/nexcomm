@@ -101,6 +101,7 @@ import { exchangeOperatorRouter } from "./routers/exchangeOperatorRouter";
 import { crossBorderFxRouter } from "./routers/crossBorderFxRouter";
 import { temporalRouter } from "./routers/temporalRouter";
 import { smartFillRouter } from "./routers/smartFillRouter";
+import { marketAssistantRouter } from "./routers/marketAssistantRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -202,6 +203,7 @@ export const appRouter = router({
   crossBorderFx: crossBorderFxRouter,
   temporal: temporalRouter,
   smartFill: smartFillRouter,
+  marketAssistant: marketAssistantRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure

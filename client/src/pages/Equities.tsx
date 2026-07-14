@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePreferences } from "@/contexts/PreferencesContext";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import {
   EQUITIES, EQUITY_EXCHANGES, EQUITY_SECTORS, type Equity, type EquityExchange,
   simulateEquityTick,

@@ -352,7 +352,7 @@ function PWAManager() {
 export default function App() {
   return (
     <ErrorBoundary pageName="NEXCOM Exchange">
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="dark" switchable={true}>
         <TooltipProvider>
           <Toaster richColors position="top-right" />
           <PWAManager />

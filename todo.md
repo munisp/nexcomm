@@ -1621,3 +1621,16 @@ All 27 K8s manifests written (infra/k8s/), 4 Grafana dashboards written (infra/m
 - [x] Stakeholder workflow coverage confirmed: Farmer, Trader, Broker, Warehouse Operator, Market Maker, Exchange Operator, Admin, DFSP/Mojaloop, USSD/WhatsApp/Telegram
 - [x] Write PRODUCTION_READINESS_REPORT.md
 - [x] Save checkpoint and push to GitHub
+
+## Round 72 — AI Market Assistant, PDF/CSV Export, Dark Mode & Skeletons
+- [x] AI Market Assistant widget (MarketAssistantWidget.tsx) — floating chat for crop price/trading trend queries
+- [x] marketAssistantRouter — ask (LLM with live market context) + suggestions procedures
+- [x] PDF export for TraderPnL.tsx (jsPDF + autoTable)
+- [x] PDF export for TraderTradeHistory.tsx
+- [x] Dark mode toggle in DashboardLayout (Moon/Sun icon, persists via ThemeContext localStorage)
+- [x] ThemeProvider switchable=true in App.tsx (restores theme on page load)
+- [x] PageSkeleton loading guards added to 103 data-fetching pages
+- [x] Fixed misplaced skeleton guards in CrossBorderFx, FarmerJourney, TemporalWorkflows, AdminKycDocumentReview
+- [x] Fixed marketAssistantRouter answer type (string | TextContent[] → always string)
+- [x] marketAssistant.test.ts — 5 new tests (suggestions, ask, auth, validation)
+- [x] 1322/1322 tests passing (51 test files)

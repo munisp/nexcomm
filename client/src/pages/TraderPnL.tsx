@@ -33,7 +33,10 @@ import {
   BarChart3,
   DollarSign,
   Minus,
+  FileDown,
+  FileText,
 } from "lucide-react";
+import { toast } from "sonner";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import {
   BarChart,
@@ -199,6 +202,59 @@ export default function TraderPnL() {
           className="p-1.5 rounded-lg hover:bg-blue-800 transition-colors"
         >
           <RefreshCw className={`w-4 h-4 text-blue-300 ${isRefetching ? "animate-spin" : ""}`} />
+        </button>
+        {/* CSV Export */}
+        <button
+          disabled={!data}
+          onClick={() => {
+            const rows = (data?.positions ?? []).map(p => [
+              p.symbol, p.assetClass, p.quantity, p.avgCost, p.realizedPnl,
+              p.updatedAt ? new Date(p.updatedAt).toISOString() : "",
+            ]);
+            const csv = [
+              ["Symbol","Asset Class","Quantity","Avg Cost","Realized PnL","Updated At"].join(","),
+              ...rows.map(r => r.map(v => `"${v}"`).join(",")),
+            ].join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = `pnl-${days}d-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+            URL.revokeObjectURL(url);
+            toast.success(`Exported ${rows.length} positions to CSV`);
+          }}
+          className="p-1.5 rounded-lg hover:bg-blue-800 transition-colors disabled:opacity-40"
+          title="Export CSV"
+        >
+          <FileDown className="w-4 h-4 text-blue-300" />
+        </button>
+        {/* PDF Export */}
+        <button
+          disabled={!data}
+          onClick={async () => {
+            const { jsPDF } = await import("jspdf");
+            const autoTable = (await import("jspdf-autotable")).default;
+            const doc = new jsPDF();
+            doc.setFontSize(14);
+            doc.text(`NEXCOM Exchange — P&L Report (${days} Days)`, 14, 18);
+            doc.setFontSize(9);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
+            doc.text(`Realized P&L: ${formatCurrency(data?.totalRealizedPnl ?? 0)}  |  Fees: ${formatCurrency(data?.totalFees ?? 0)}`, 14, 32);
+            autoTable(doc, {
+              startY: 38,
+              head: [["Symbol","Asset Class","Qty","Avg Cost","Realized P&L"]],
+              body: (data?.positions ?? []).map(p => [
+                p.symbol, p.assetClass, p.quantity, formatCurrency(p.avgCost), formatCurrency(p.realizedPnl),
+              ]),
+              styles: { fontSize: 8 },
+              headStyles: { fillColor: [30, 58, 138] },
+            });
+            doc.save(`pnl-${days}d-${new Date().toISOString().slice(0,10)}.pdf`);
+            toast.success("P&L report exported as PDF");
+          }}
+          className="p-1.5 rounded-lg hover:bg-blue-800 transition-colors disabled:opacity-40"
+          title="Export PDF"
+        >
+          <FileText className="w-4 h-4 text-blue-300" />
         </button>
       </div>
 

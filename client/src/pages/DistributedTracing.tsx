@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, RefreshCw, Activity, GitBranch, Clock, Search } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 function durationColor(ms: number) {
   if (ms < 100) return "bg-green-500/20 text-green-400 border-green-500/30";
@@ -90,6 +91,7 @@ export default function DistributedTracing() {
   const operations = serviceMap?.operations ?? [];
   const slowOps = slowOpsQuery.data?.operations ?? [];
 
+  if (tracesQuery.isLoading) return <PageSkeleton cards={2} tableRows={8} tableCols={4} />;
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

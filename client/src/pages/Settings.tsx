@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Globe, DollarSign, Palette, Clock, CheckCircle } from "lucide-react";
 import type { Currency, Language } from "@/lib/i18n";
+import { PageSkeleton } from "@/components/PageSkeleton";
 
 const CURRENCIES: { code: Currency; name: string; symbol: string; flag: string }[] = [
   { code: "NGN", name: "Nigerian Naira",        symbol: "₦",   flag: "🇳🇬" },

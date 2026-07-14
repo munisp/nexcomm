@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePreferences } from "@/contexts/PreferencesContext";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import {
   FX_PAIRS, FX_CATEGORIES, type FxPair, type FxCategory,
   simulateFxTick,
