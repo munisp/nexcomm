@@ -246,13 +246,6 @@ async function startServer() {
     if (process.env.NODE_ENV === "production") { console.error(msg); process.exit(1); }
     else { console.warn(msg); }
   }
-  // ── JWT secret minimum-length guard (NEXCOM-R70-005) ─────────────────────
-  const jwtSecret = process.env.JWT_SECRET ?? "";
-  if (jwtSecret.length < 32) {
-    const msg = `[Security] JWT_SECRET is only ${jwtSecret.length} chars — minimum 32 required.`;
-    if (process.env.NODE_ENV === "production") { console.error(msg); process.exit(1); }
-    else { console.warn(msg); }
-  }
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
 

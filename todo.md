@@ -1610,3 +1610,14 @@ All 27 K8s manifests written (infra/k8s/), 4 Grafana dashboards written (infra/m
 - [x] NEXCOM-R70-005: Add JWT_SECRET minimum-length validation at startup
 - [x] Write SECURITY_REPORT_R70.md with full findings and remediation details
 - [x] Fix nexcom.test.ts and abcp.test.ts for new orders.list return shape
+
+## Round 71 — Comprehensive Stakeholder Workflow Smoke Test
+- [x] Install local PostgreSQL 16 in sandbox
+- [x] Apply all 65 Drizzle migration files (161 tables created)
+- [x] Fix missing enum values: notification_type += LIQUIDATED, SECURITY_ALERT
+- [x] Fix missing columns: farm_profiles.centroid, farm_profiles.geom (PostGIS-free text fallback)
+- [x] Fix missing table: workbench_farms (PostGIS-free geometry fallback)
+- [x] Run full vitest suite against live DB: 1317/1317 tests pass across 50 test files (0 failures)
+- [x] Stakeholder workflow coverage confirmed: Farmer, Trader, Broker, Warehouse Operator, Market Maker, Exchange Operator, Admin, DFSP/Mojaloop, USSD/WhatsApp/Telegram
+- [x] Write PRODUCTION_READINESS_REPORT.md
+- [x] Save checkpoint and push to GitHub

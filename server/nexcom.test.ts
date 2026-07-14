@@ -81,6 +81,8 @@ vi.mock("./fundFlow", () => ({
     warehouseReceiptIssued: vi.fn().mockResolvedValue(undefined),
     marginTopUp: vi.fn().mockResolvedValue(undefined),
     marginLiquidation: vi.fn().mockResolvedValue(undefined),
+    orderPlaced: vi.fn().mockResolvedValue({ duplicate: false }),
+    orderCancelled: vi.fn().mockResolvedValue(undefined),
   },
 }));
 import { describe, expect, it, vi, beforeEach, beforeAll } from "vitest";
