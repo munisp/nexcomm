@@ -30,9 +30,27 @@ import { cacheGet, cacheSet } from "../cache";
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? "";
 
-export const stripeClient = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: "2024-06-20" as any,
-  typescript: true,
+// Lazy Stripe client — only instantiated when a key is present so that test
+// environments (which have no STRIPE_SECRET_KEY) can import this module without
+// throwing at module-load time.
+let _stripeClient: Stripe | null = null;
+export function getStripeClient(): Stripe {
+  if (!_stripeClient) {
+    if (!STRIPE_SECRET_KEY) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stripe is not configured" });
+    }
+    _stripeClient = new Stripe(STRIPE_SECRET_KEY, {
+      apiVersion: "2024-06-20" as any,
+      typescript: true,
+    });
+  }
+  return _stripeClient;
+}
+/** @deprecated use getStripeClient() */
+export const stripeClient = new Proxy({} as Stripe, {
+  get(_t, prop) {
+    return (getStripeClient() as any)[prop];
+  },
 });
 
 // ── Deposit amounts (USD) ─────────────────────────────────────────────────────
