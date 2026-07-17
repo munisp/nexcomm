@@ -2,8 +2,9 @@
  * Unit tests for amlRouter
  * Uses vi.mock to isolate DB, permify, and audit dependencies.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { amlRouter } from "./routers/amlRouter";
+import { _resetStorageClient } from "./storage";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -26,6 +27,7 @@ vi.mock("../_core/notification", () => ({
 
 vi.mock("./storage", () => ({
   storagePut: vi.fn().mockResolvedValue({ url: "https://s3.example.com/test.csv", key: "test.csv" }),
+  _resetStorageClient: vi.fn(),
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -40,6 +42,7 @@ const adminCtx = {
 
 describe("amlRouter", () => {
   beforeEach(() => { vi.clearAllMocks(); });
+  afterAll(() => { _resetStorageClient(); });
 
   it("exports a router object", () => {
     expect(amlRouter).toBeDefined();
