@@ -1,0 +1,75 @@
+{
+  "realm": "nexcom-admin",
+  "displayName": "NEXCOM Admin",
+  "displayNameHtml": "<strong>NEXCOM</strong> Admin Portal",
+  "enabled": true,
+  "loginTheme": "keycloak",
+  "accountTheme": "keycloak",
+
+  "_comment": "Admin realm — always-on MFA, stricter session limits",
+  "sslRequired": "all",
+  "registrationAllowed": false,
+  "verifyEmail": true,
+  "resetPasswordAllowed": true,
+
+  "accessTokenLifespan": 120,
+  "ssoSessionIdleTimeout": 900,
+  "ssoSessionMaxLifespan": 14400,
+  "refreshTokenMaxReuse": 0,
+
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 3600,
+  "failureFactor": 3,
+
+  "passwordPolicy": "length(16) and upperCase(2) and lowerCase(2) and digits(2) and specialChars(2) and notUsername and notEmail and passwordHistory(10) and forceExpiredPasswordChange(60)",
+
+  "roles": {
+    "realm": [
+      { "name": "platform-admin", "description": "Full platform administration access" },
+      { "name": "exchange-operator", "description": "Exchange operations: instruments, trading hours, circuit breakers" },
+      { "name": "compliance-officer", "description": "AML/KYC review and compliance reporting" },
+      { "name": "support-agent", "description": "Customer support — read-only user management" },
+      { "name": "auditor", "description": "Read-only access to all audit logs and reports" }
+    ]
+  },
+
+  "clients": [
+    {
+      "clientId": "nexcom-admin-dashboard",
+      "name": "NEXCOM Admin Dashboard",
+      "description": "Admin SPA — confidential client with PKCE",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_ADMIN_DASHBOARD_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "https://admin.nexcomexchange.com/*"
+      ],
+      "webOrigins": [
+        "https://admin.nexcomexchange.com"
+      ],
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "access.token.lifespan": "120",
+        "require.pushed.authorization.requests": "true"
+      },
+      "defaultClientScopes": ["openid", "profile", "email", "roles"]
+    }
+  ],
+
+  "eventsEnabled": true,
+  "eventsExpiration": 31536000,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "enabledEventTypes": [
+    "LOGIN", "LOGIN_ERROR", "LOGOUT",
+    "UPDATE_PASSWORD", "UPDATE_PROFILE",
+    "IMPERSONATE", "IMPERSONATE_ERROR",
+    "GRANT_CONSENT", "REVOKE_GRANT"
+  ]
+}

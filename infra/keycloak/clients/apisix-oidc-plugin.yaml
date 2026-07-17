@@ -1,0 +1,155 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# NEXCOM Exchange — APISix openid-connect Plugin Configuration for Keycloak
+#
+# This file documents the plugin configuration applied to APISix routes.
+# The actual route definitions live in infra/apisix/routes.yaml.
+# Apply via APISix Admin API or declarative YAML (adc sync).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Plugin: openid-connect (Keycloak JWT validation) ─────────────────────────
+#
+# Mode A: Bearer-only (API clients — mobile app, USSD gateway, Temporal workers)
+# JWT is validated locally using Keycloak JWKS. No redirect to login page.
+# Applied to: /api/trpc/*, /api/webhooks/*, /api/internal/*
+#
+openid_connect_bearer_only: &openid_connect_bearer_only
+  client_id: nexcom-apisix
+  client_secret: ${KEYCLOAK_APISIX_CLIENT_SECRET}
+  discovery: https://auth.nexcomexchange.com/realms/nexcom-exchange/.well-known/openid-configuration
+  bearer_only: true
+  realm: nexcom-exchange
+  # Validate JWT locally — no round-trip to Keycloak per request
+  use_jwks: true
+  jwks_uri: https://auth.nexcomexchange.com/realms/nexcom-exchange/protocol/openid-connect/certs
+  # Pass decoded user info to upstream as base64-encoded JSON header
+  set_userinfo_header: true
+  userinfo_header_name: X-Userinfo
+  # Pass raw access token for services that need to call other services
+  set_access_token_header: true
+  access_token_in_authorization_header: true
+  # Token introspection fallback (only if JWKS validation fails)
+  introspection_endpoint: https://auth.nexcomexchange.com/realms/nexcom-exchange/protocol/openid-connect/token/introspect
+  introspection_endpoint_auth_method: client_secret_post
+  # Cache introspection results for 60 seconds
+  token_signing_alg_values_expected: RS256
+  # Reject tokens without these claims
+  required_claims:
+    - sub
+    - email
+    - realm_access
+
+# Mode B: Browser redirect (web dashboard — human users)
+# Unauthenticated requests are redirected to Keycloak login page.
+# Applied to: /dashboard/*, /admin/* (web app routes)
+#
+openid_connect_browser: &openid_connect_browser
+  <<: *openid_connect_bearer_only
+  bearer_only: false
+  redirect_uri: https://nexcomexchange.com/api/auth/callback
+  scope: "openid profile email roles nexcom-profile"
+  response_type: code
+  # PKCE — required for FAPI compliance
+  use_pkce: true
+  # Session cookie settings
+  session:
+    secret: ${APISIX_SESSION_SECRET}
+    cookie:
+      samesite: Strict
+      httponly: true
+      secure: true
+      max_age: 1800
+
+# ── Plugin: JWT role enforcement ──────────────────────────────────────────────
+#
+# Applied on top of openid-connect to enforce role-based access per route.
+# Uses the realm_access.roles claim from the Keycloak JWT.
+#
+role_enforcement_trader:
+  plugin: jwt-auth
+  config:
+    key: nexcom-apisix
+    algorithm: RS256
+    # Custom validator — checks realm_access.roles contains 'trader' or 'broker' or 'market-maker'
+    # Implemented via serverless plugin (lua) in APISix
+    lua_validator: |
+      local payload = ngx.ctx.jwt_obj.payload
+      local roles = (payload.realm_access or {}).roles or {}
+      local allowed = {trader=true, broker=true, ["market-maker"]=true, admin=true}
+      for _, role in ipairs(roles) do
+        if allowed[role] then return true end
+      end
+      return false, "Insufficient role for trading operations"
+
+role_enforcement_admin:
+  plugin: jwt-auth
+  config:
+    lua_validator: |
+      local payload = ngx.ctx.jwt_obj.payload
+      local roles = (payload.realm_access or {}).roles or {}
+      for _, role in ipairs(roles) do
+        if role == "admin" then return true end
+      end
+      return false, "Admin role required"
+
+# ── Step-up authentication trigger ───────────────────────────────────────────
+#
+# Applied to high-value routes (withdrawals, large orders).
+# If the JWT's acr claim does not include 'urn:nexcom:step-up',
+# redirect to Keycloak step-up flow.
+#
+step_up_enforcement:
+  plugin: serverless-pre-function
+  config:
+    phase: access
+    functions:
+      - |
+        local function check_step_up(conf, ctx)
+          local payload = ngx.ctx.jwt_obj and ngx.ctx.jwt_obj.payload
+          if not payload then
+            return 401, {message = "Authentication required"}
+          end
+          local acr = payload.acr or ""
+          if acr ~= "urn:nexcom:step-up" and acr ~= "urn:nexcom:high-assurance" then
+            -- Redirect to Keycloak step-up flow
+            local redirect_uri = ngx.var.scheme .. "://" .. ngx.var.host .. ngx.var.request_uri
+            local step_up_url = "https://auth.nexcomexchange.com/realms/nexcom-exchange/protocol/openid-connect/auth"
+              .. "?client_id=nexcom-apisix"
+              .. "&response_type=code"
+              .. "&scope=openid"
+              .. "&acr_values=urn:nexcom:step-up"
+              .. "&redirect_uri=" .. ngx.escape_uri(redirect_uri)
+            ngx.header["Location"] = step_up_url
+            return 302
+          end
+        end
+        return check_step_up
+
+# ── Route-level plugin assignments ────────────────────────────────────────────
+#
+# Summary of which plugin configuration applies to which route groups.
+# Full route definitions are in infra/apisix/routes.yaml.
+#
+route_plugin_matrix:
+  # Public market data — no auth
+  - routes: ["/api/trpc/marketData.*", "/api/health", "/api/trpc/public.*"]
+    plugins: []
+
+  # Authenticated API — bearer-only JWT validation
+  - routes: ["/api/trpc/*"]
+    plugins: [openid_connect_bearer_only]
+
+  # Trading operations — bearer-only + trader role enforcement
+  - routes: ["/api/trpc/orders.*", "/api/trpc/portfolio.*", "/api/trpc/trading.*"]
+    plugins: [openid_connect_bearer_only, role_enforcement_trader]
+
+  # High-value operations — bearer-only + step-up ACR enforcement
+  - routes: ["/api/trpc/withdrawals.*", "/api/trpc/largeOrders.*", "/api/trpc/kycApproval.*"]
+    plugins: [openid_connect_bearer_only, step_up_enforcement]
+
+  # Admin operations — bearer-only + admin role enforcement
+  - routes: ["/api/trpc/admin.*", "/api/trpc/exchange.*"]
+    plugins: [openid_connect_bearer_only, role_enforcement_admin]
+
+  # Web dashboard — browser redirect flow
+  - routes: ["/dashboard/*", "/admin/*"]
+    plugins: [openid_connect_browser]

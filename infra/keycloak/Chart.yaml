@@ -1,0 +1,27 @@
+apiVersion: v2
+name: nexcom-keycloak
+description: |
+  Keycloak Identity and Access Management for the NEXCOM Commodity Exchange.
+  Wraps the Bitnami Keycloak chart and adds NEXCOM-specific realm imports,
+  client configurations, role mappings, and authentication flow overrides.
+type: application
+version: 1.0.0
+appVersion: "26.7.0"
+
+dependencies:
+  - name: keycloak
+    version: "24.4.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    alias: keycloak
+
+maintainers:
+  - name: NEXCOM Platform Engineering
+    email: platform@nexcomexchange.com
+
+keywords:
+  - keycloak
+  - iam
+  - oidc
+  - oauth2
+  - fapi
+  - nexcom

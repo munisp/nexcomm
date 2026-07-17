@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# NEXCOM Exchange — Keycloak Production Overrides
+# Apply on top of values.yaml:
+#   helm upgrade --install nexcom-keycloak ./infra/keycloak \
+#     -f infra/keycloak/values.yaml \
+#     -f infra/keycloak/values-prod.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+keycloak:
+  replicaCount: 3
+
+  hostname:
+    hostname: auth.nexcomexchange.com
+    adminHostname: auth-admin.nexcomexchange.com
+
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "4000m"
+      memory: "4Gi"
+
+  extraEnvVars:
+    - name: JAVA_OPTS_APPEND
+      value: "-Xms1g -Xmx3g -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:+UseStringDeduplication"
+    - name: KC_LOG_LEVEL
+      value: "INFO"
+    - name: KC_METRICS_ENABLED
+      value: "true"
+    - name: KC_HEALTH_ENABLED
+      value: "true"
+    # FAPI compliance: require PKCE and PAR
+    - name: KC_FEATURES
+      value: "par,fapi,dpop,step-up-authentication,client-policies,declarative-user-profile"
+
+  # Production database connection pool
+  externalDatabase:
+    host: nexcom-pg-primary
+    port: 5432
+    database: keycloak
+    user: keycloak
+    existingSecret: nexcom-keycloak-db-secret
+    existingSecretPasswordKey: password
+
+  # Production affinity: spread across availability zones
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+          topologyKey: topology.kubernetes.io/zone

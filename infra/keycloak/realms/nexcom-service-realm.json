@@ -1,0 +1,90 @@
+{
+  "realm": "nexcom-service",
+  "displayName": "NEXCOM Service Accounts",
+  "enabled": true,
+  "sslRequired": "all",
+  "registrationAllowed": false,
+
+  "_comment": "Machine-to-machine realm for internal service accounts only. No human users.",
+  "accessTokenLifespan": 60,
+  "ssoSessionIdleTimeout": 300,
+  "ssoSessionMaxLifespan": 3600,
+
+  "bruteForceProtected": true,
+  "failureFactor": 3,
+
+  "roles": {
+    "realm": [
+      { "name": "temporal-worker", "description": "Temporal workflow worker" },
+      { "name": "channel-gateway", "description": "USSD/WhatsApp/Telegram channel gateway" },
+      { "name": "mojaloop-adapter", "description": "Mojaloop DFSP adapter" },
+      { "name": "price-feed", "description": "Market data price feed service" },
+      { "name": "aml-engine", "description": "AML/compliance monitoring engine" },
+      { "name": "credit-scoring", "description": "Credit scoring Rust service" },
+      { "name": "analytics-engine", "description": "Analytics and reporting service" }
+    ]
+  },
+
+  "clients": [
+    {
+      "clientId": "temporal-worker",
+      "name": "Temporal Worker",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_TEMPORAL_WORKER_SECRET}",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "serviceAccountRoles": ["temporal-worker"]
+    },
+    {
+      "clientId": "channel-gateway",
+      "name": "Channel Gateway",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_CHANNEL_GATEWAY_SECRET}",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "serviceAccountRoles": ["channel-gateway"]
+    },
+    {
+      "clientId": "mojaloop-adapter",
+      "name": "Mojaloop Adapter",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_MOJALOOP_SECRET}",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "serviceAccountRoles": ["mojaloop-adapter"]
+    },
+    {
+      "clientId": "price-feed",
+      "name": "Price Feed Service",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_PRICE_FEED_SECRET}",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "serviceAccountRoles": ["price-feed"]
+    },
+    {
+      "clientId": "aml-engine",
+      "name": "AML Engine",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_AML_ENGINE_SECRET}",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "serviceAccountRoles": ["aml-engine"]
+    }
+  ],
+
+  "eventsEnabled": true,
+  "eventsExpiration": 7776000,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true
+}

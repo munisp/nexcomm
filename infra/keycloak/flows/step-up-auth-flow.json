@@ -1,0 +1,91 @@
+{
+  "_comment": "Step-up authentication flow for high-value operations on NEXCOM Exchange.",
+  "_usage": "Triggered when tRPC server requests acr_values=urn:nexcom:step-up in the token request.",
+  "_trigger_example": "GET /realms/nexcom-exchange/protocol/openid-connect/auth?acr_values=urn:nexcom:step-up&...",
+
+  "alias": "nexcom-step-up",
+  "description": "Step-up MFA flow for high-value operations: withdrawals, large trades, KYC approval",
+  "providerId": "basic-flow",
+  "topLevel": true,
+  "builtIn": false,
+
+  "authenticationExecutions": [
+    {
+      "authenticator": "auth-cookie",
+      "requirement": "ALTERNATIVE",
+      "priority": 10,
+      "userSetupAllowed": false,
+      "autheticatorFlow": false
+    },
+    {
+      "requirement": "ALTERNATIVE",
+      "priority": 20,
+      "flowAlias": "nexcom-step-up-forms",
+      "userSetupAllowed": false,
+      "autheticatorFlow": true
+    }
+  ],
+
+  "subFlows": [
+    {
+      "alias": "nexcom-step-up-forms",
+      "description": "Username/password + mandatory second factor",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "flowAlias": "nexcom-second-factor",
+          "autheticatorFlow": true
+        }
+      ]
+    },
+    {
+      "alias": "nexcom-second-factor",
+      "description": "TOTP or WebAuthn — user chooses preferred second factor",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-otp-form",
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": true
+        },
+        {
+          "authenticator": "webauthn-authenticator",
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "userSetupAllowed": true
+        }
+      ]
+    }
+  ],
+
+  "_acr_mapping": {
+    "urn:nexcom:step-up": "nexcom-step-up",
+    "urn:nexcom:high-assurance": "nexcom-step-up"
+  },
+
+  "_client_policy": {
+    "name": "nexcom-high-value-policy",
+    "description": "Enforce step-up auth for operations above threshold",
+    "conditions": [
+      {
+        "condition": "client-roles",
+        "configuration": {
+          "roles": ["trader", "broker", "market-maker"]
+        }
+      }
+    ],
+    "profiles": ["nexcom-fapi-profile"]
+  }
+}

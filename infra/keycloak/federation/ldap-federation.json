@@ -1,0 +1,102 @@
+{
+  "_comment": "LDAP User Federation configuration for enterprise broker and DFSP clients.",
+  "_usage": "Import via Keycloak Admin API: POST /admin/realms/nexcom-exchange/components",
+  "_note": "One federation config per enterprise client. This is the template — duplicate and customise per client.",
+
+  "name": "enterprise-ldap-template",
+  "providerId": "ldap",
+  "providerType": "org.keycloak.storage.UserStorageProvider",
+  "config": {
+    "enabled": ["true"],
+    "priority": ["0"],
+    "importEnabled": ["true"],
+    "editMode": ["READ_ONLY"],
+    "syncRegistrations": ["false"],
+
+    "vendor": ["other"],
+    "usernameLDAPAttribute": ["sAMAccountName"],
+    "rdnLDAPAttribute": ["cn"],
+    "uuidLDAPAttribute": ["objectGUID"],
+    "userObjectClasses": ["person", "organizationalPerson", "user"],
+
+    "connectionUrl": ["ldaps://ldap.enterprise-client.com:636"],
+    "usersDn": ["ou=Users,dc=enterprise-client,dc=com"],
+    "authType": ["simple"],
+    "bindDn": ["cn=keycloak-bind,ou=ServiceAccounts,dc=enterprise-client,dc=com"],
+    "bindCredential": ["${LDAP_BIND_PASSWORD}"],
+
+    "searchScope": ["2"],
+    "validatePasswordPolicy": ["false"],
+    "trustEmail": ["false"],
+    "useTruststoreSpi": ["ldapsOnly"],
+    "connectionPooling": ["true"],
+    "connectionTimeout": ["5000"],
+    "readTimeout": ["10000"],
+
+    "pagination": ["true"],
+    "batchSizeForSync": ["1000"],
+    "fullSyncPeriod": ["-1"],
+    "changedSyncPeriod": ["3600"]
+  },
+
+  "mappers": [
+    {
+      "name": "username",
+      "providerId": "user-attribute-ldap-mapper",
+      "config": {
+        "ldap.attribute": ["sAMAccountName"],
+        "user.model.attribute": ["username"],
+        "read.only": ["true"],
+        "always.read.value.from.ldap": ["false"],
+        "is.mandatory.in.ldap": ["true"]
+      }
+    },
+    {
+      "name": "email",
+      "providerId": "user-attribute-ldap-mapper",
+      "config": {
+        "ldap.attribute": ["mail"],
+        "user.model.attribute": ["email"],
+        "read.only": ["true"],
+        "always.read.value.from.ldap": ["false"],
+        "is.mandatory.in.ldap": ["false"]
+      }
+    },
+    {
+      "name": "first name",
+      "providerId": "user-attribute-ldap-mapper",
+      "config": {
+        "ldap.attribute": ["givenName"],
+        "user.model.attribute": ["firstName"],
+        "read.only": ["true"],
+        "always.read.value.from.ldap": ["false"],
+        "is.mandatory.in.ldap": ["false"]
+      }
+    },
+    {
+      "name": "last name",
+      "providerId": "user-attribute-ldap-mapper",
+      "config": {
+        "ldap.attribute": ["sn"],
+        "user.model.attribute": ["lastName"],
+        "read.only": ["true"],
+        "always.read.value.from.ldap": ["false"],
+        "is.mandatory.in.ldap": ["false"]
+      }
+    },
+    {
+      "name": "nexcom-role-mapper",
+      "providerId": "role-ldap-mapper",
+      "config": {
+        "roles.dn": ["ou=NexcomRoles,dc=enterprise-client,dc=com"],
+        "role.name.ldap.attribute": ["cn"],
+        "role.object.classes": ["groupOfNames"],
+        "membership.ldap.attribute": ["member"],
+        "membership.attribute.type": ["DN"],
+        "mode": ["READ_ONLY"],
+        "user.roles.retrieve.strategy": ["LOAD_ROLES_BY_MEMBER_ATTRIBUTE"],
+        "use.realm.roles.mapping": ["true"]
+      }
+    }
+  ]
+}

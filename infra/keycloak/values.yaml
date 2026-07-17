@@ -1,0 +1,148 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# NEXCOM Exchange — Keycloak Helm Values
+# Chart: bitnami/keycloak v24.4.0  |  Keycloak: 26.7.0
+#
+# Usage:
+#   helm dependency update ./infra/keycloak
+#   helm upgrade --install nexcom-keycloak ./infra/keycloak \
+#     -n nexcom-iam --create-namespace \
+#     -f infra/keycloak/values.yaml \
+#     -f infra/keycloak/values-prod.yaml \
+#     --set keycloak.auth.adminPassword="${KC_ADMIN_PASSWORD}"
+# ─────────────────────────────────────────────────────────────────────────────
+
+keycloak:
+  # ── Image ──────────────────────────────────────────────────────────────────
+  image:
+    registry: quay.io
+    repository: keycloak/keycloak
+    tag: "26.7.0"
+    pullPolicy: IfNotPresent
+
+  # ── Admin credentials (override in values-prod.yaml via sealed secret) ────
+  auth:
+    adminUser: admin
+    adminPassword: ""  # Injected via --set or external secret
+
+  # ── HTTP / HTTPS ───────────────────────────────────────────────────────────
+  # Caddy handles TLS termination; Keycloak runs on plain HTTP internally.
+  # proxy=edge tells Keycloak to trust X-Forwarded-For / X-Forwarded-Proto
+  # headers set by Caddy.
+  httpEnabled: true
+  httpsEnabled: false
+  proxyHeaders: edge
+  production: true
+
+  # ── Hostname (set in values-prod.yaml) ────────────────────────────────────
+  hostname:
+    hostname: auth.nexcomexchange.com
+    adminHostname: auth-admin.nexcomexchange.com
+    strict: true
+    strictBackchannel: true
+
+  # ── Replicas ───────────────────────────────────────────────────────────────
+  replicaCount: 2
+  podDisruptionBudget:
+    create: true
+    minAvailable: 1
+
+  # ── Resources ──────────────────────────────────────────────────────────────
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+
+  # ── JVM tuning ─────────────────────────────────────────────────────────────
+  extraEnvVars:
+    - name: JAVA_OPTS_APPEND
+      value: "-Xms512m -Xmx1536m -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
+    # Disable Keycloak's built-in theme caching in dev; enable in prod
+    - name: KC_SPI_THEME_STATIC_MAX_AGE
+      value: "2592000"
+    # Token lifespan tuning (overridden per-realm via realm import)
+    - name: KC_SPI_ACCESS_TOKEN_LIFESPAN
+      value: "300"       # 5 minutes
+    - name: KC_SPI_SSO_SESSION_MAX_LIFESPAN
+      value: "36000"     # 10 hours
+
+  # ── Database (PostgreSQL) ──────────────────────────────────────────────────
+  # Keycloak uses the same PostgreSQL cluster as NEXCOM, in a dedicated schema.
+  postgresql:
+    enabled: false  # Use external PostgreSQL (nexcom-pg)
+  externalDatabase:
+    host: nexcom-pg
+    port: 5432
+    database: keycloak
+    user: keycloak
+    existingSecret: nexcom-keycloak-db-secret
+    existingSecretPasswordKey: password
+
+  # ── Cache (Infinispan / JGroups) ───────────────────────────────────────────
+  # Kubernetes DNS-based discovery for Infinispan cluster
+  cache:
+    enabled: true
+    stackName: kubernetes
+    stackFile: ""
+
+  # ── Service ────────────────────────────────────────────────────────────────
+  service:
+    type: ClusterIP
+    ports:
+      http: 8080
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/path: "/metrics"
+      prometheus.io/port: "9000"
+
+  # ── Ingress (managed by Caddy, not Kubernetes ingress controller) ──────────
+  ingress:
+    enabled: false  # Caddy reverse_proxy handles routing
+
+  # ── Metrics ────────────────────────────────────────────────────────────────
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+      labels:
+        release: prometheus
+
+  # ── Realm imports via ConfigMap ────────────────────────────────────────────
+  # Keycloak's --import-realm flag reads JSON files from /opt/keycloak/data/import/
+  # We mount realm JSON files as a ConfigMap volume.
+  extraVolumes:
+    - name: realm-imports
+      configMap:
+        name: nexcom-keycloak-realms
+    - name: themes
+      configMap:
+        name: nexcom-keycloak-themes
+        optional: true
+
+  extraVolumeMounts:
+    - name: realm-imports
+      mountPath: /opt/keycloak/data/import
+      readOnly: true
+    - name: themes
+      mountPath: /opt/keycloak/themes/nexcom
+      readOnly: true
+
+  extraArgs: "--import-realm"
+
+  # ── Pod security ───────────────────────────────────────────────────────────
+  podSecurityContext:
+    enabled: true
+    fsGroup: 1001
+    runAsNonRoot: true
+
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]

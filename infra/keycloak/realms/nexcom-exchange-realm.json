@@ -1,0 +1,357 @@
+{
+  "realm": "nexcom-exchange",
+  "displayName": "NEXCOM Exchange",
+  "displayNameHtml": "<strong>NEXCOM</strong> Exchange",
+  "enabled": true,
+  "loginTheme": "nexcom",
+  "accountTheme": "nexcom",
+  "emailTheme": "nexcom",
+  "adminTheme": "keycloak",
+
+  "_comment_fapi": "FAPI 1 Advanced Final compliance settings",
+  "sslRequired": "all",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "rememberMe": false,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+
+  "_comment_tokens": "Short-lived tokens for financial platform security",
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": true,
+  "offlineSessionMaxLifespan": 5184000,
+  "clientSessionIdleTimeout": 300,
+  "clientSessionMaxLifespan": 36000,
+  "refreshTokenMaxReuse": 0,
+
+  "_comment_brute_force": "Brute force protection for financial platform",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+
+  "_comment_password": "Password policy for financial platform",
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and notEmail and passwordHistory(5) and forceExpiredPasswordChange(90)",
+
+  "_comment_roles": "Realm-level roles mapping to NEXCOM stakeholder model",
+  "roles": {
+    "realm": [
+      {
+        "name": "farmer",
+        "description": "Agricultural producer — can create crop listings, deposit commodities, and view own orders"
+      },
+      {
+        "name": "trader",
+        "description": "Market participant — can place orders, view order book, manage portfolio"
+      },
+      {
+        "name": "broker",
+        "description": "Licensed broker — can trade on behalf of clients, access broker dashboard"
+      },
+      {
+        "name": "warehouse-operator",
+        "description": "Accredited warehouse — can issue and manage warehouse receipts"
+      },
+      {
+        "name": "market-maker",
+        "description": "Liquidity provider — can place two-sided quotes, access market-maker dashboard"
+      },
+      {
+        "name": "dfsp-partner",
+        "description": "Digital Financial Service Provider — Mojaloop network participant"
+      },
+      {
+        "name": "compliance-officer",
+        "description": "Compliance and AML officer — read-only access to compliance reports and audit logs"
+      },
+      {
+        "name": "exchange-operator",
+        "description": "Exchange operations staff — can manage instruments, trading hours, and circuit breakers"
+      },
+      {
+        "name": "admin",
+        "description": "Platform administrator — full access to all features and admin dashboard"
+      },
+      {
+        "name": "service-account",
+        "description": "Internal service accounts — used by Temporal workers, channel gateway, etc."
+      }
+    ]
+  },
+
+  "_comment_groups": "Groups for organisational structure",
+  "groups": [
+    {
+      "name": "Farmers",
+      "realmRoles": ["farmer"]
+    },
+    {
+      "name": "Traders",
+      "realmRoles": ["trader"]
+    },
+    {
+      "name": "Brokers",
+      "realmRoles": ["broker", "trader"]
+    },
+    {
+      "name": "WarehouseOperators",
+      "realmRoles": ["warehouse-operator"]
+    },
+    {
+      "name": "MarketMakers",
+      "realmRoles": ["market-maker", "trader"]
+    },
+    {
+      "name": "DFSPPartners",
+      "realmRoles": ["dfsp-partner"]
+    },
+    {
+      "name": "ComplianceOfficers",
+      "realmRoles": ["compliance-officer"]
+    },
+    {
+      "name": "ExchangeOperators",
+      "realmRoles": ["exchange-operator"]
+    },
+    {
+      "name": "Administrators",
+      "realmRoles": ["admin"]
+    }
+  ],
+
+  "_comment_clients": "OIDC clients — see infra/keycloak/clients/ for full configs",
+  "clients": [
+    {
+      "clientId": "nexcom-apisix",
+      "name": "NEXCOM APISix Gateway",
+      "description": "APISix openid-connect plugin — validates JWTs for all API routes",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_APISIX_CLIENT_SECRET}",
+      "redirectUris": [
+        "https://nexcomexchange.com/*",
+        "https://app.nexcomexchange.com/*"
+      ],
+      "webOrigins": [
+        "https://nexcomexchange.com",
+        "https://app.nexcomexchange.com"
+      ],
+      "bearerOnly": false,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300",
+        "pkce.code.challenge.method": "S256",
+        "require.pushed.authorization.requests": "true",
+        "use.refresh.tokens": "true",
+        "client.session.idle.timeout": "300",
+        "client.session.max.lifespan": "36000",
+        "tls.client.certificate.bound.access.tokens": "false",
+        "display.on.consent.screen": "false"
+      },
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "optionalClientScopes": ["address", "phone", "offline_access"]
+    },
+    {
+      "clientId": "nexcom-web-app",
+      "name": "NEXCOM Web Application",
+      "description": "React SPA — public client, uses PKCE",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "https://nexcomexchange.com/*",
+        "https://app.nexcomexchange.com/*",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "https://nexcomexchange.com",
+        "https://app.nexcomexchange.com",
+        "http://localhost:3000"
+      ],
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "access.token.lifespan": "300"
+      },
+      "defaultClientScopes": ["openid", "profile", "email", "roles"]
+    },
+    {
+      "clientId": "nexcom-mobile-app",
+      "name": "NEXCOM Mobile Application",
+      "description": "React Native / Expo mobile app — public client, uses PKCE",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "nexcom://auth/callback",
+        "exp://localhost:8081/*"
+      ],
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": ["openid", "profile", "email", "roles"]
+    },
+    {
+      "clientId": "nexcom-ussd-gateway",
+      "name": "NEXCOM USSD Gateway",
+      "description": "USSD/SMS channel gateway — confidential client, client credentials flow",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_USSD_CLIENT_SECRET}",
+      "bearerOnly": false,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "serviceAccountRoles": ["service-account"]
+    },
+    {
+      "clientId": "nexcom-temporal-worker",
+      "name": "NEXCOM Temporal Workers",
+      "description": "Temporal workflow workers — confidential client, client credentials flow",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_TEMPORAL_CLIENT_SECRET}",
+      "bearerOnly": false,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "serviceAccountRoles": ["service-account"]
+    },
+    {
+      "clientId": "nexcom-mojaloop-adapter",
+      "name": "NEXCOM Mojaloop Adapter",
+      "description": "Mojaloop DFSP integration — confidential client",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_MOJALOOP_CLIENT_SECRET}",
+      "bearerOnly": false,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "serviceAccountRoles": ["service-account", "dfsp-partner"]
+    }
+  ],
+
+  "_comment_scopes": "Custom protocol mappers for NEXCOM claims",
+  "clientScopes": [
+    {
+      "name": "nexcom-profile",
+      "description": "NEXCOM-specific user profile claims",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "kyc-status",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "kyc_status",
+            "claim.name": "kyc_status",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "account-tier",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "account_tier",
+            "claim.name": "account_tier",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "nexcom-user-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "nexcom_user_id",
+            "claim.name": "nexcom_user_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+
+  "_comment_auth_flows": "Authentication flows — see infra/keycloak/flows/",
+  "authenticationFlows": [],
+
+  "_comment_events": "Event logging for SIEM/audit trail",
+  "eventsEnabled": true,
+  "eventsExpiration": 7776000,
+  "enabledEventTypes": [
+    "LOGIN", "LOGIN_ERROR", "LOGOUT", "LOGOUT_ERROR",
+    "REGISTER", "REGISTER_ERROR",
+    "TOKEN_EXCHANGE", "TOKEN_EXCHANGE_ERROR",
+    "REFRESH_TOKEN", "REFRESH_TOKEN_ERROR",
+    "CLIENT_LOGIN", "CLIENT_LOGIN_ERROR",
+    "CODE_TO_TOKEN", "CODE_TO_TOKEN_ERROR",
+    "UPDATE_PASSWORD", "UPDATE_PASSWORD_ERROR",
+    "UPDATE_PROFILE", "UPDATE_PROFILE_ERROR",
+    "UPDATE_EMAIL", "UPDATE_EMAIL_ERROR",
+    "VERIFY_EMAIL", "VERIFY_EMAIL_ERROR",
+    "RESET_PASSWORD", "RESET_PASSWORD_ERROR",
+    "REMOVE_TOTP", "UPDATE_TOTP",
+    "GRANT_CONSENT", "REVOKE_GRANT",
+    "SEND_RESET_PASSWORD", "SEND_VERIFY_EMAIL",
+    "IDENTITY_PROVIDER_LOGIN", "IDENTITY_PROVIDER_LOGIN_ERROR",
+    "IMPERSONATE", "IMPERSONATE_ERROR"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+
+  "_comment_email": "SMTP configuration (override in values-prod.yaml)",
+  "smtpServer": {
+    "host": "${SMTP_HOST}",
+    "port": "587",
+    "from": "noreply@nexcomexchange.com",
+    "fromDisplayName": "NEXCOM Exchange",
+    "replyTo": "support@nexcomexchange.com",
+    "replyToDisplayName": "NEXCOM Support",
+    "envelopeFrom": "noreply@nexcomexchange.com",
+    "ssl": "false",
+    "starttls": "true",
+    "auth": "true",
+    "user": "${SMTP_USER}",
+    "password": "${SMTP_PASSWORD}"
+  }
+}

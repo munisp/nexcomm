@@ -102,7 +102,7 @@ async function searchOpenSearch(
       },
     });
 
-    const hits = (response.body?.hits?.hits ?? []) as Array<{
+    const hits = ((response.body?.hits?.hits ?? []) as unknown) as Array<{
       _index: string;
       _id: string;
       _score: number;

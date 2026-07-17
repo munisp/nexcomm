@@ -1,0 +1,34 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# NEXCOM Exchange — CODEOWNERS
+# Defines required reviewers for specific paths.
+# Syntax: <pattern> <owner> [<owner>...]
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Default owner for everything not matched below
+*                                   @munisp
+
+# Infrastructure — requires platform engineering review
+infra/                              @munisp
+infrastructure/                     @munisp
+.github/workflows/                  @munisp
+
+# Security-critical paths — require security review
+infra/keycloak/                     @munisp
+infra/caddy/                        @munisp
+infra/openappsec/                   @munisp
+infra/security/                     @munisp
+server/_core/                       @munisp
+
+# Database schema — requires DBA review
+drizzle/schema.ts                   @munisp
+drizzle/migrations/                 @munisp
+
+# Financial logic — requires senior engineer review
+server/routers/tradingRouter.ts     @munisp
+server/routers/settlementRouter.ts  @munisp
+server/routers/amlRouter.ts         @munisp
+server/routers/stripeRouter.ts      @munisp
+
+# Compliance and KYC
+server/routers/kycRouter.ts         @munisp
+server/routers/complianceRouter.ts  @munisp
