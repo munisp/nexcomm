@@ -3385,3 +3385,20 @@ export const traceSnapshots = pgTable("trace_snapshots", {
   capturedAt:    timestamp("captured_at").defaultNow().notNull(),
 });
 export type TraceSnapshot = typeof traceSnapshots.$inferSelect;
+
+// ============================================================
+// User Files (MinIO / S3 file manager)
+// ============================================================
+export const userFiles = pgTable("user_files", {
+  id:          serial("id").primaryKey(),
+  userId:      integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  fileName:    varchar("file_name", { length: 512 }).notNull(),
+  fileKey:     varchar("file_key", { length: 1024 }).notNull().unique(),
+  fileUrl:     text("file_url").notNull(),
+  mimeType:    varchar("mime_type", { length: 128 }).notNull(),
+  sizeBytes:   integer("size_bytes").notNull(),
+  folder:      varchar("folder", { length: 128 }).default("general").notNull(),
+  uploadedAt:  timestamp("uploaded_at").defaultNow().notNull(),
+});
+export type UserFile = typeof userFiles.$inferSelect;
+export type InsertUserFile = typeof userFiles.$inferInsert;
