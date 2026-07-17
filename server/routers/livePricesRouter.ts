@@ -100,7 +100,7 @@ export const livePricesRouter = router({
       return { success: true, updated, fallback };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      throw new Error(`Price feed refresh failed: ${msg}`);
+      throw new TRPCError({ code: "BAD_GATEWAY", message: `Price feed refresh failed: ${msg}` });
     }
   }),
   /**
