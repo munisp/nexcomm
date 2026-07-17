@@ -88,6 +88,7 @@ import {
   Server,
   BadgeCheck,
   GitBranch,
+  FolderOpen,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -282,6 +283,7 @@ const menuSections: MenuSection[] = [
   {
     title: "Developer",
     items: [
+      { icon: FolderOpen,  label: "My Files",             path: "/files" },
       { icon: Code2,      label: "API Reference",        path: "/docs/api" },
       { icon: BookMarked, label: "Push Notifications",   path: "/settings/push-notifications" },
     ],
