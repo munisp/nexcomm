@@ -317,6 +317,75 @@ export const profileRouter = router({
       };
     }),
 
+
+  // GET Keycloak roles for the current user
+  getKeycloakRoles: protectedProcedure.query(async ({ ctx }) => {
+    const { ENV } = await import("../_core/env");
+    const keycloakUrl = ENV.keycloakUrl;
+    const realm = ENV.keycloakRealm;
+    const clientId = ENV.keycloakClientId;
+    const clientSecret = ENV.keycloakClientSecret;
+    if (!keycloakUrl || !realm || !clientId || !clientSecret) {
+      return { roles: [], source: "unavailable" as const };
+    }
+    try {
+      const tokenRes = await fetch(
+        `${keycloakUrl}/realms/${realm}/protocol/openid-connect/token`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "client_credentials",
+            client_id: clientId,
+            client_secret: clientSecret,
+          }),
+        }
+      );
+      if (!tokenRes.ok) return { roles: [], source: "error" as const };
+      const { access_token } = await tokenRes.json() as { access_token: string };
+      const identifier = ctx.user.email ?? ctx.user.openId;
+      const userRes = await fetch(
+        `${keycloakUrl}/admin/realms/${realm}/users?briefRepresentation=true&exact=true&username=${encodeURIComponent(identifier)}`,
+        { headers: { Authorization: `Bearer ${access_token}` } }
+      );
+      if (!userRes.ok) return { roles: [], source: "error" as const };
+      const kcUsers = await userRes.json() as Array<{ id: string }>;
+      if (!kcUsers.length) return { roles: [], source: "not_found" as const };
+      const kcUserId = kcUsers[0].id;
+      const rolesRes = await fetch(
+        `${keycloakUrl}/admin/realms/${realm}/users/${kcUserId}/role-mappings/realm`,
+        { headers: { Authorization: `Bearer ${access_token}` } }
+      );
+      if (!rolesRes.ok) return { roles: [], source: "error" as const };
+      const roleMappings = await rolesRes.json() as Array<{ name: string; description?: string }>;
+      return {
+        roles: roleMappings
+          .filter((r) => !r.name.startsWith("default-roles"))
+          .map((r) => ({ name: r.name, description: r.description ?? "" })),
+        source: "keycloak" as const,
+      };
+    } catch {
+      return { roles: [], source: "error" as const };
+    }
+  }),
+
+  // UPDATE avatar URL in profile metadata
+  updateAvatar: protectedProcedure
+    .input(z.object({ avatarUrl: z.string().url().max(2048) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: true };
+      const existing = await db.select({ id: profiles.id, metadata: profiles.metadata }).from(profiles).where(eq(profiles.userId, ctx.user.id)).limit(1);
+      const currentMeta = (existing[0]?.metadata as Record<string, unknown>) ?? {};
+      const newMeta = { ...currentMeta, avatarUrl: input.avatarUrl };
+      if (existing.length > 0) {
+        await db.update(profiles).set({ metadata: newMeta, updatedAt: new Date() }).where(eq(profiles.userId, ctx.user.id));
+      } else {
+        await db.insert(profiles).values({ userId: ctx.user.id, metadata: newMeta });
+      }
+      return { success: true, avatarUrl: input.avatarUrl };
+    }),
+
   // PROMOTE user to admin
   promoteToAdmin: protectedProcedure
     .input(z.object({ userId: z.number().int().positive() }))
