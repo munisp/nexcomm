@@ -220,3 +220,22 @@ export async function storageList(
     lastModified: obj.LastModified,
   }));
 }
+
+/**
+ * Generate a presigned PUT URL so the browser can upload directly to S3/MinIO.
+ * @param relKey      Relative key (will be normalised)
+ * @param contentType MIME type of the file
+ * @param expiresIn   Seconds until the URL expires (default 900 = 15 min)
+ */
+export async function getPresignedUploadUrl(
+  relKey: string,
+  contentType: string,
+  expiresIn = 900
+): Promise<string> {
+  const cmd = new PutObjectCommand({
+    Bucket: getBucket(),
+    Key: normalizeKey(relKey),
+    ContentType: contentType,
+  });
+  return getSignedUrl(getS3(), cmd, { expiresIn });
+}
