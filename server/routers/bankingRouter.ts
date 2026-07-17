@@ -344,7 +344,7 @@ export const bankingRouter = router({
         .limit(1);
 
       if (!farmer) {
-        throw new Error("Farmer profile not found. Please complete your farmer onboarding first.");
+        throw new TRPCError({ code: "NOT_FOUND", message: "Farmer profile not found. Please complete your farmer onboarding first." });
       }
 
       // Calculate premium estimate (simplified actuarial formula)
@@ -514,9 +514,9 @@ export const bankingRouter = router({
         .where(eq(farmerProfiles.id, input.farmerId))
         .limit(1);
 
-      if (!farmer) throw new Error(`Farmer ${input.farmerId} not found`);
+      if (!farmer) throw new TRPCError({ code: "NOT_FOUND", message: `Farmer ${input.farmerId} not found` });
       if (farmer.kycStatus !== "APPROVED") {
-        throw new Error(`Farmer KYC status is ${farmer.kycStatus}, not APPROVED`);
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Farmer KYC status is ${farmer.kycStatus}, not APPROVED` });
       }
 
       // Create escrow account via CBS if CORE_BANKING_URL is configured
@@ -726,7 +726,7 @@ export const bankingRouter = router({
       const db = await getDb();
             if (!db) return { success: true };
       const [loan] = await db.select().from(inputFinancingLoans).where(eq(inputFinancingLoans.id, input.loanId));
-      if (!loan) throw new Error("Loan not found");
+      if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
       const repaymentDueDate = new Date();
       repaymentDueDate.setMonth(repaymentDueDate.getMonth() + (loan.tenorMonths ?? 6));
       await db.transaction(async (tx) => {
@@ -783,7 +783,7 @@ export const bankingRouter = router({
       const db = await getDb();
             if (!db) return { success: true };
       const [loan] = await db.select().from(inputFinancingLoans).where(eq(inputFinancingLoans.id, input.loanId));
-      if (!loan) throw new Error("Loan not found");
+      if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
       await db.transaction(async (tx) => {
         await tx.update(inputFinancingLoans)
           .set({ status: "WRITTEN_OFF", notes: `REJECTED: ${input.reason}`, updatedAt: new Date() })
@@ -860,7 +860,7 @@ export const bankingRouter = router({
             if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
       const [loan] = await db.select().from(inputFinancingLoans)
         .where(eq(inputFinancingLoans.id, input.loanId));
-      if (!loan) throw new Error("Loan not found");
+      if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
       const newRepaid = Number(loan.repaidValueNgn ?? 0) + input.amountNgn;
       const disbursed = Number(loan.disbursedValueNgn ?? loan.requestedValueNgn);
       const newStatus = newRepaid >= disbursed ? "REPAID" : "REPAYING";
