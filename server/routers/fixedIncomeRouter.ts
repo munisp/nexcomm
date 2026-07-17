@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createLedgerTransfer } from "../gatewayClient";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
@@ -60,7 +61,7 @@ export const fixedIncomeRouter = router({
       try {
         const instr = await db.select().from(fixedIncomeInstruments)
           .where(eq(fixedIncomeInstruments.id, input.instrumentId)).limit(1);
-        if (!instr[0]) throw new Error("Instrument not found");
+        if (!instr[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Instrument not found" });
         const [trade] = await db.insert(fixedIncomeTrades).values({
           instrumentId: input.instrumentId,
           buyerUserId: ctx.user.id,
@@ -88,7 +89,7 @@ export const fixedIncomeRouter = router({
         })();
         return { success: true, tradeId: trade.id };
       } catch (e: any) {
-        throw new Error(e.message);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e instanceof Error ? e.message : String(e) });
       }
     }),
 
