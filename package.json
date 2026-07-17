@@ -106,7 +106,7 @@
     "input-otp": "^1.4.2",
     "ioredis": "^5.10.1",
     "isomorphic-dompurify": "^3.8.0",
-    "jose": "6.1.0",
+    "jose": "^6.2.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "kafkajs": "^2.2.4",
