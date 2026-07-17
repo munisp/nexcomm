@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { priceAlerts, livePrices } from "../../drizzle/schema";
 import { notifyOwner } from "../_core/notification";
@@ -154,7 +155,7 @@ export const priceAlertsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const userId = ctx.user.id;
 
@@ -171,7 +172,7 @@ export const priceAlertsRouter = router({
         .limit(1);
 
       if (existing.length > 0) {
-        throw new Error(`You already have an active ${input.condition} alert for ${input.symbol}`);
+        throw new TRPCError({ code: "CONFLICT", message: `You already have an active ${input.condition} alert for ${input.symbol}` });
       }
 
       const [created] = await db
@@ -194,7 +195,7 @@ export const priceAlertsRouter = router({
     .input(z.object({ ids: z.array(z.number()).min(1).max(100) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const userId = ctx.user.id;
       // Verify ownership of all alerts before deleting
       const owned = await db
@@ -203,7 +204,7 @@ export const priceAlertsRouter = router({
         .where(and(eq(priceAlerts.userId, userId)));
       const ownedIds = new Set(owned.map(r => r.id));
       const toDelete = input.ids.filter(id => ownedIds.has(id));
-      if (toDelete.length === 0) throw new Error("No matching alerts found");
+      if (toDelete.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "No matching alerts found" });
       await db.delete(priceAlerts).where(inArray(priceAlerts.id, toDelete));
       return { deleted: toDelete.length };
     }),
@@ -248,7 +249,7 @@ export const priceAlertsRouter = router({
         .from(priceAlerts)
         .where(and(eq(priceAlerts.id, input.id), eq(priceAlerts.userId, ctx.user.id)))
         .limit(1);
-      if (!existing) throw new Error("Alert not found");
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Alert not found" });
       const updates: Record<string, unknown> = {};
       if (input.condition !== undefined) updates.condition = input.condition;
       if (input.targetPrice !== undefined) updates.targetPrice = String(input.targetPrice);
@@ -266,7 +267,7 @@ export const priceAlertsRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const userId = ctx.user.id;
 
@@ -276,7 +277,7 @@ export const priceAlertsRouter = router({
         .where(and(eq(priceAlerts.id, input.id), eq(priceAlerts.userId, userId)))
         .limit(1);
 
-      if (!alert) throw new Error("Alert not found or not authorized");
+      if (!alert) throw new TRPCError({ code: "NOT_FOUND", message: "Alert not found or not authorized" });
 
       await db.delete(priceAlerts).where(eq(priceAlerts.id, input.id));
       return { success: true };
