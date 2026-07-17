@@ -1,13 +1,17 @@
 import { describe, it, expect } from "vitest";
-// Skip this test in CI/sandbox environments where PostgreSQL is not available.
-// The test requires a live PostgreSQL connection on 127.0.0.1:5432.
-const PG_AVAILABLE = process.env.NEXCOM_PG_URL?.includes("localhost") === false
-  || process.env.CI !== "true";
 import postgres from "postgres";
 
+/**
+ * Integration test: verifies the NEXCOM_PG_URL PostgreSQL connection has ≥138 tables.
+ * Skipped when CI=true or when the DB URL is not a local PostgreSQL instance.
+ */
+const pgUrl = process.env.NEXCOM_PG_URL ?? "";
+const isLocalPg = pgUrl.includes("localhost") || pgUrl.includes("127.0.0.1");
+const skipReason = !isLocalPg || process.env.CI === "true";
+
 describe("NEXCOM_PG_URL connection", () => {
-  it.skipIf(process.env.CI === "true")("connects to local PostgreSQL and finds 140+ tables", async () => {
-    const url = process.env.NEXCOM_PG_URL ?? "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom";
+  it.skipIf(skipReason)("connects to local PostgreSQL and finds 140+ tables", async () => {
+    const url = pgUrl;
     const sql = postgres(url, { max: 1, idle_timeout: 5 });
     try {
       const result = await sql`
