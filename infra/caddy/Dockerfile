@@ -1,28 +1,32 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # NEXCOM Exchange — Custom Caddy Build
 # Builds a Caddy binary with:
-#   - Coraza WAF (OWASP CRS compatible)
-#   - caddy-l4 (L4 TCP/UDP routing)
-#   - CrowdSec bouncer + AppSec
-#   - caddy-security (OIDC/JWT)
+#   - Coraza WAF (OWASP CRS compatible) — requires Caddy >= 2.11.2
+#   - caddy-l4 (L4 TCP/UDP routing)    — requires Caddy >= 2.11.4
+#   - caddy-security (OIDC/JWT/forward-auth)
 #   - caddy-ratelimit
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Stage 1: Build custom Caddy with xcaddy
-FROM caddy:2.9.0-builder AS builder
+FROM caddy:2.11.4-builder AS builder
 
-RUN xcaddy build v2.9.0 \
-    --with github.com/corazawaf/coraza-caddy/v2@v2.3.0 \
-    --with github.com/mholt/caddy-l4@v0.0.0-20250101000000-latest \
-    --with github.com/hslatman/caddy-crowdsec-bouncer/http@v0.9.0 \
-    --with github.com/hslatman/caddy-crowdsec-bouncer/appsec@v0.9.0 \
-    --with github.com/hslatman/caddy-crowdsec-bouncer/layer4@v0.9.0 \
+RUN xcaddy build v2.11.4 \
+    --with github.com/corazawaf/coraza-caddy/v2 \
+    --with github.com/mholt/caddy-l4 \
     --with github.com/greenpau/caddy-security@v1.1.28 \
-    --with github.com/mholt/caddy-ratelimit@v0.0.0-20250101000000-latest
+    --with github.com/mholt/caddy-ratelimit \
+    --with github.com/caddy-dns/cloudflare
+
+# NOTE: caddy-l4.json provides the Layer 4 TCP/UDP routing configuration.
+# Load it alongside the Caddyfile at startup:
+#   caddy run --config /etc/caddy/caddy-l4.json
+# Then POST the Caddyfile config via the Admin API, or use the combined
+# JSON config approach (merge both into one caddy.json).
 
 # Stage 2: Download OWASP CRS rules
 FROM alpine:3.20 AS crs-downloader
 RUN apk add --no-cache curl tar && \
+    mkdir -p /tmp/crs && \
     curl -fsSL https://github.com/coreruleset/coreruleset/archive/refs/tags/v4.7.0.tar.gz \
     | tar -xz --strip-components=1 -C /tmp/crs && \
     mkdir -p /etc/caddy/coraza && \
@@ -30,7 +34,7 @@ RUN apk add --no-cache curl tar && \
     cp /tmp/crs/crs-setup.conf.example /etc/caddy/coraza/
 
 # Stage 3: Final image
-FROM caddy:2.9.0-alpine
+FROM caddy:2.11.4-alpine
 
 # Copy custom Caddy binary
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
@@ -47,6 +51,9 @@ COPY coraza.conf /etc/caddy/coraza/coraza.conf
 
 # Default Caddyfile (overridden by ConfigMap in Kubernetes)
 COPY Caddyfile /etc/caddy/Caddyfile
+
+# Layer 4 JSON config (loaded alongside Caddyfile)
+COPY caddy-l4.json /etc/caddy/caddy-l4.json
 
 EXPOSE 80 443 443/udp 2019 2775 9093 6380 5433 2222
 
