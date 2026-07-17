@@ -25,7 +25,20 @@
  * });
  * ```
  */
-import { ENV } from "./env";
+import OpenAI, { toFile } from "openai";
+
+// Direct OpenAI Whisper client — no Manus proxy
+function createWhisperClient(): OpenAI {
+  const baseURL = process.env.LLM_BASE_URL ?? undefined;
+  const apiKey = process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY ?? "no-key";
+  return new OpenAI({ apiKey, baseURL });
+}
+let _whisperClient: OpenAI | null = null;
+function getWhisperClient(): OpenAI {
+  if (!_whisperClient) _whisperClient = createWhisperClient();
+  return _whisperClient;
+}
+export function _resetWhisperClient() { _whisperClient = null; }
 
 export type TranscribeOptions = {
   audioUrl: string; // URL to the audio file (e.g., S3 URL)
@@ -75,18 +88,12 @@ export async function transcribeAudio(
 ): Promise<TranscriptionResponse | TranscriptionError> {
   try {
     // Step 1: Validate environment configuration
-    if (!ENV.forgeApiUrl) {
+    const apiKey = process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY;
+    if (!apiKey || apiKey === "no-key") {
       return {
         error: "Voice transcription service is not configured",
         code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_URL is not set"
-      };
-    }
-    if (!ENV.forgeApiKey) {
-      return {
-        error: "Voice transcription service authentication is missing",
-        code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_KEY is not set"
+        details: "Set OPENAI_API_KEY or LLM_API_KEY to enable voice transcription"
       };
     }
 
@@ -142,36 +149,28 @@ export async function transcribeAudio(
     );
     formData.append("prompt", prompt);
 
-    // Step 4: Call the transcription service
-    const baseUrl = ENV.forgeApiUrl.endsWith("/")
-      ? ENV.forgeApiUrl
-      : `${ENV.forgeApiUrl}/`;
-    
-    const fullUrl = new URL(
-      "v1/audio/transcriptions",
-      baseUrl
-    ).toString();
-
-    const response = await fetch(fullUrl, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${ENV.forgeApiKey}`,
-        "Accept-Encoding": "identity",
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
+    // Step 4: Call OpenAI Whisper API directly via SDK
+    const client = getWhisperClient();
+    const audioFile = await toFile(audioBlob, filename, { type: mimeType });
+    let whisperResponse: WhisperResponse;
+    try {
+      const result = await client.audio.transcriptions.create({
+        file: audioFile,
+        model: "whisper-1",
+        response_format: "verbose_json",
+        prompt,
+        ...(options.language ? { language: options.language } : {}),
+      });
+      whisperResponse = result as unknown as WhisperResponse;
+    } catch (err) {
       return {
         error: "Transcription service request failed",
         code: "TRANSCRIPTION_FAILED",
-        details: `${response.status} ${response.statusText}${errorText ? `: ${errorText}` : ""}`
+        details: err instanceof Error ? err.message : String(err)
       };
     }
 
     // Step 5: Parse and return the transcription result
-    const whisperResponse = await response.json() as WhisperResponse;
     
     // Validate response structure
     if (!whisperResponse.text || typeof whisperResponse.text !== 'string') {
