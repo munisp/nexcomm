@@ -157,6 +157,7 @@ const SpotFx                     = lazy(() => import("./pages/SpotFx"));
 const CrossBorderFx              = lazy(() => import("./pages/CrossBorderFx"));
 const TemporalWorkflows          = lazy(() => import("./pages/TemporalWorkflows"));
 const UserProfileDashboard       = lazy(() => import("./pages/UserProfileDashboard"));
+const FileManager                = lazy(() => import("./pages/FileManager"));
 
 function PageLoader() {
   return (
@@ -205,6 +206,7 @@ function Router() {
         {/* Analytics & account */}
         <Route path="/analytics"         component={Analytics} />
         <Route path="/profile"           component={UserProfileDashboard} />
+        <Route path="/files"             component={FileManager} />
         <Route path="/account"           component={Account} />
         <Route path="/notifications"     component={Notifications} />
         <Route path="/alerts"            component={PriceAlerts} />
