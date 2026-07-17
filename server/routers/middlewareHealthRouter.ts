@@ -5,6 +5,7 @@
  * Temporal, Redis, Lakehouse, OpenAppsec, Fluvio
  */
 import { protectedProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getDb } from "../db";
 import { middlewareHealthLog } from "../../drizzle/schema";
@@ -19,7 +20,7 @@ const MIDDLEWARE_SERVICES = [
   { name: "postgresql",    label: "PostgreSQL",          healthUrl: null /* checked via DB query */ },
   { name: "apisix",        label: "APISIX Gateway",     healthUrl: `${ENV.gatewayServiceUrl ?? "http://apisix:9080"}/apisix/admin/health` },
   { name: "permify",       label: "Permify AuthZ",      healthUrl: `${ENV.permifyUrl ?? "http://permify:3476"}/healthz` },
-  { name: "dapr",          label: "Dapr Sidecar",       healthUrl: "http://localhost:3500/v1.0/healthz" },
+  { name: "dapr",          label: "Dapr Sidecar",       healthUrl: `${ENV.daprHttpUrl ?? "http://localhost:3500"}/v1.0/healthz` },
   { name: "temporal",      label: "Temporal Workflow",  healthUrl: `${ENV.temporalUrl ?? "http://temporal:7233"}/health` },
   { name: "redis",         label: "Redis Cache",        healthUrl: null /* checked via Redis client */ },
   { name: "lakehouse",     label: "Lakehouse / S3",     healthUrl: `${ENV.forgeApiUrl ?? "http://lakehouse:9000"}/health` },
@@ -190,7 +191,7 @@ export const middlewareHealthRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database unavailable");
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
       const targets = input.service === "all"
         ? [...MIDDLEWARE_SERVICES]
