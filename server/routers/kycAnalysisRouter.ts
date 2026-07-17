@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 /**
  * KYC Document Analysis Router
  * Calls the Python microservice (PaddleOCR + VLM + Docling) and persists results.
@@ -37,7 +38,7 @@ async function callKycService(payload: {
     signal: AbortSignal.timeout(60_000),
   });
   if (!resp.ok) {
-    throw new Error(`KYC service returned HTTP ${resp.status}`);
+    throw new TRPCError({ code: "BAD_GATEWAY", message: `KYC service returned HTTP ${resp.status}` });
   }
   return resp.json() as Promise<{
     success: boolean;
@@ -112,7 +113,7 @@ export const kycAnalysisRouter = router({
 
       // Persist to DB
       const dbConn = await getDb();
-      if (!dbConn) throw new Error("Database unavailable");
+      if (!dbConn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
       // Check KYC confidence threshold setting
       const [thresholdRow] = await dbConn
@@ -377,7 +378,7 @@ export const kycAnalysisRouter = router({
         .from(reKycFlags)
         .where(eq(reKycFlags.id, input.flagId))
         .limit(1);
-      if (!flag) throw new Error("Flag not found");
+      if (!flag) throw new TRPCError({ code: "NOT_FOUND", message: "Flag not found" });
 
       // 1. In-app notification (primary channel)
       await db.insert(notifications).values({
@@ -565,7 +566,7 @@ export const kycAnalysisRouter = router({
         })
         .where(eq(kycQueue.id, input.kycQueueId))
         .returning();
-      if (!updated) throw new Error("KYC record not found");
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "KYC record not found" });
 
       // Auto-provision TigerBeetle ledger accounts on KYC approval (fire-and-forget)
       if (input.decision === "APPROVED") {
