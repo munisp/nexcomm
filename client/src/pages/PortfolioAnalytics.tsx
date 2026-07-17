@@ -251,7 +251,7 @@ export default function PortfolioAnalytics() {
                   <Tooltip
                     contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8 }}
                     labelStyle={{ color: "#94a3b8" }}
-                    formatter={(v: number) => fmt(v)}
+                    formatter={((v: number) => fmt(v)) as any}
                   />
                   <Legend />
                   <Area type="monotone" dataKey="Total Equity" stroke="#3b82f6" fill="url(#equityGrad)" strokeWidth={2} />

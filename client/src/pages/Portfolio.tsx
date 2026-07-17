@@ -271,7 +271,7 @@ export default function Portfolio() {
                   <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={50} />
                   <Tooltip
                     contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: 12 }}
-                    formatter={(value: number) => [`$${value.toLocaleString()}`, "Portfolio Value"]}
+                    formatter={((value: number) => [`$${value.toLocaleString()}`, "Portfolio Value"]) as any}
                     labelFormatter={label => `Date: ${label}`}
                   />
                   <ReferenceLine y={pnlHistory[0]?.totalCost ?? 0} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" />

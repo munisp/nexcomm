@@ -365,7 +365,7 @@ export default function TraderPnL() {
                         <Tooltip
                           contentStyle={{ background: "#1e3a5f", border: "1px solid #1e40af", borderRadius: 6 }}
                           labelStyle={{ color: "#93c5fd", fontSize: 11 }}
-                          formatter={(value: number) => [formatCurrency(value), "Net Flow"]}
+                          formatter={((value: number) => [formatCurrency(value), "Net Flow"]) as any}
                         />
                         <ReferenceLine y={0} stroke="#3b82f6" strokeDasharray="3 3" />
                         <Bar dataKey="net" radius={[3, 3, 0, 0]}>

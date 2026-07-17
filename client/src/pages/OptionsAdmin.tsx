@@ -114,7 +114,7 @@ function GreeksVisualiser({ contracts }: { contracts: ContractRow[] }) {
             <YAxis tick={{ fontSize: 10 }} />
             <Tooltip
               contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 11 }}
-              formatter={(v: number, name: string) => [v.toFixed(4), name]}
+              formatter={((v: number, name: string) => [v.toFixed(4), name]) as any}
               labelFormatter={v => `Spot: ₦${Number(v).toLocaleString()}`}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />

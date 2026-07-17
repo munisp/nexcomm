@@ -191,7 +191,7 @@ export default function CropReports() {
                   <XAxis dataKey="year" stroke="#6b7280" tick={{ fill: "#9ca3af", fontSize: 12 }} />
                   <YAxis stroke="#6b7280" tick={{ fill: "#9ca3af", fontSize: 12 }} tickFormatter={v => `${v}M`} />
                   <Tooltip contentStyle={{ background: "#111827", border: "1px solid #374151", color: "#fff" }}
-                    formatter={(v: any, name: string) => [`${v}M MT`, name.charAt(0).toUpperCase() + name.slice(1)]} />
+                    formatter={((v: any, name: string) => [`${v}M MT`, name.charAt(0).toUpperCase() + name.slice(1)]) as any} />
                   <Legend />
                   <Line type="monotone" dataKey="maize" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4 }} name="Maize" />
                   <Line type="monotone" dataKey="soybean" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} name="Soybean" />
@@ -215,7 +215,7 @@ export default function CropReports() {
                   <XAxis type="number" stroke="#6b7280" tick={{ fill: "#9ca3af", fontSize: 12 }} tickFormatter={v => `${v}M`} />
                   <YAxis type="category" dataKey="state" stroke="#6b7280" tick={{ fill: "#9ca3af", fontSize: 12 }} width={60} />
                   <Tooltip contentStyle={{ background: "#111827", border: "1px solid #374151", color: "#fff" }}
-                    formatter={(v: any) => [`${v}M MT`, "Production"]} />
+                    formatter={((v: any) => [`${v}M MT`, "Production"]) as any} />
                   <Bar dataKey="volume" fill="#f97316" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>

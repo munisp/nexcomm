@@ -619,10 +619,10 @@ export default function Mojaloop() {
                           borderRadius: 8,
                           fontSize: 12,
                         }}
-                        formatter={(value: number, name: string) => [
+                        formatter={((value: number, name: string) => [
                           `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
                           name === "committed" ? "Committed" : "Aborted",
-                        ]}
+                        ]) as any}
                       />
                       <Area
                         type="monotone"
