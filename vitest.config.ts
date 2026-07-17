@@ -15,6 +15,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
+    globalSetup: ["./server/vitest.setup.ts"],
     env: {
       // Suppress owner notifications (emails/alerts) during test runs.
       NODE_ENV: "test",
