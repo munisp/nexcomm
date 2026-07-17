@@ -1,4 +1,28 @@
-import { ENV } from "./env";
+import OpenAI from "openai";
+
+// ── OpenAI-compatible client ──────────────────────────────────────────────────
+// Supports OpenAI, Ollama (LLM_BASE_URL=http://localhost:11434/v1),
+// Azure, vLLM, or any OpenAI-compatible endpoint.
+function createClient(): OpenAI {
+  const baseURL = process.env.LLM_BASE_URL ?? undefined;
+  const apiKey =
+    process.env.LLM_API_KEY ??
+    process.env.OPENAI_API_KEY ??
+    "no-key"; // Ollama doesn't require a real key
+  return new OpenAI({ apiKey, baseURL });
+}
+let _client: OpenAI | null = null;
+function getClient(): OpenAI {
+  if (!_client) _client = createClient();
+  return _client;
+}
+export function _resetLLMClient() { _client = null; }
+
+const DEFAULT_MODEL =
+  process.env.LLM_DEFAULT_MODEL ??
+  process.env.OPENAI_MODEL ??
+  "gpt-4o-mini";
+
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -209,16 +233,9 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
-
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-};
+// Kept for backward compat — not used in new implementation
+const _resolveApiUrl = () => "";
+const _assertApiKey = () => {};
 
 const normalizeResponseFormat = ({
   responseFormat,
@@ -266,8 +283,7 @@ const normalizeResponseFormat = ({
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
-
+  const client = getClient();
   const {
     messages,
     tools,
@@ -279,27 +295,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     response_format,
   } = params;
 
-  const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
-    messages: messages.map(normalizeMessage),
-  };
+  const model = DEFAULT_MODEL;
 
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
-  }
+  const openaiMessages = messages.map(
+    normalizeMessage
+  ) as OpenAI.Chat.ChatCompletionMessageParam[];
 
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
-  );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
-  }
+  const openaiTools =
+    tools && tools.length > 0
+      ? (tools as OpenAI.Chat.ChatCompletionTool[])
+      : undefined;
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
-  }
+  const normalizedToolChoice = normalizeToolChoice(toolChoice || tool_choice, tools);
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
@@ -308,25 +315,15 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     output_schema,
   });
 
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
+  const requestParams: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
+    model,
+    messages: openaiMessages,
+    stream: false,
+  };
+  if (openaiTools) requestParams.tools = openaiTools;
+  if (normalizedToolChoice) requestParams.tool_choice = normalizedToolChoice as OpenAI.Chat.ChatCompletionToolChoiceOption;
+  if (normalizedResponseFormat) (requestParams as any).response_format = normalizedResponseFormat;
 
-  const response = await fetch(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
-    );
-  }
-
-  return (await response.json()) as InvokeResult;
+  const response = await client.chat.completions.create(requestParams);
+  return response as unknown as InvokeResult;
 }
