@@ -99,7 +99,7 @@
     "express-slow-down": "^3.1.0",
     "express-validator": "^7.3.2",
     "framer-motion": "^12.23.22",
-    "helmet": "^8.1.0",
+    "helmet": "^8.3.0",
     "hpp": "^0.2.3",
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
