@@ -32,7 +32,7 @@ import { sendOtpEmail } from "../_core/email";
 import { sdk } from "../_core/sdk";
 import { getSessionCookieOptions } from "../_core/cookies";
 // Inlined from @shared/const
-const APP_ID = process.env.VITE_APP_ID || '';
+const APP_ID = process.env.KEYCLOAK_CLIENT_ID || process.env.VITE_APP_ID || '';
 import { writeAuditLog } from "../audit";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
