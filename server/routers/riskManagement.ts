@@ -204,7 +204,7 @@ export const riskManagementRouter = router({
   adminGetUserRisk: protectedProcedure
     .input(z.object({ userId: z.number() }))
     .query(async ({ ctx, input }) => {
-      if (ctx.user.role !== "admin") throw new Error("Forbidden");
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
       try {
         const data = await rmFetch(`/api/v1/risk/summary/${input.userId}`);
         return { ...(data as object), source: "risk-service" };
