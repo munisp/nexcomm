@@ -1,17 +1,18 @@
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
-// Generate login URL at runtime so redirect URI reflects the current origin.
-export const getLoginUrl = () => {
-  const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
-  const appId = import.meta.env.VITE_APP_ID;
-  const redirectUri = `${window.location.origin}/api/oauth/callback`;
-  const state = btoa(redirectUri);
-
-  const url = new URL(`${oauthPortalUrl}/app-auth`);
-  url.searchParams.set("appId", appId);
-  url.searchParams.set("redirectUri", redirectUri);
+/**
+ * Generate the login URL at runtime.
+ *
+ * Redirects to the self-hosted /api/auth/login endpoint, which then
+ * redirects the user to Keycloak (or any configured OIDC provider).
+ * No Manus OAuth portal dependency.
+ */
+export const getLoginUrl = (returnPath?: string) => {
+  const callbackUri = `${window.location.origin}/api/oauth/callback`;
+  const state = btoa(callbackUri);
+  const url = new URL(`${window.location.origin}/api/auth/login`);
+  url.searchParams.set("redirectUri", callbackUri);
   url.searchParams.set("state", state);
-  url.searchParams.set("type", "signIn");
-
+  if (returnPath) url.searchParams.set("returnPath", returnPath);
   return url.toString();
 };
