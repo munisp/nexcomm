@@ -51,6 +51,8 @@ import { bootstrapPermify } from "../permify-bootstrap";
 import { startTemporalWorker } from "../temporal/worker";
 import { createNexcomIndices } from "../opensearch";
 import { purgeExpiredRefreshTokens } from "../refreshTokens";
+import { bootstrapKeycloak } from "../keycloak-bootstrap";
+import { ensureBucket } from "../storage";
 import daprEventHandler from "../routes/daprEventHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -409,6 +411,10 @@ async function startServer() {
   // Permify RBAC schema bootstrap: writes NEXCOM schema + seeds owner as exchange#admin.
   // Gracefully degrades if Permify is unreachable.
   bootstrapPermify().catch(err => console.warn("[Permify Bootstrap] Startup error:", err));
+  // Keycloak realm + client bootstrap (gracefully degrades when Keycloak is unavailable)
+  bootstrapKeycloak().catch(err => console.warn("[Keycloak Bootstrap] Startup error:", err));
+  // Ensure S3/MinIO bucket exists (gracefully degrades when MinIO is unavailable)
+  ensureBucket().catch(err => console.warn("[Storage] Bucket ensure error:", err));
   startTemporalWorker().catch(err => console.warn("[Temporal] Startup error:", err));
   // Bootstrap OpenSearch indices (gracefully degrades if OpenSearch is unavailable)
   createNexcomIndices().catch(err => console.warn("[OpenSearch] Index bootstrap error:", err));
