@@ -3,12 +3,12 @@
  * Shows: account details, order stats, order history (paginated + filtered),
  * open positions, recent fills, active alerts count, watchlist count.
  */
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Pencil, Save, X as XIcon } from "lucide-react";
+import { Pencil, Save, X as XIcon, Shield, Camera } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -146,9 +146,33 @@ export default function UserProfileDashboard() {
   const profile = dash?.profile;
   const stats = dash?.orderStats;
 
+  // Keycloak roles
+  const { data: kcRoles, isLoading: rolesLoading } = trpc.profile.getKeycloakRoles.useQuery();
+  // Avatar
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   // Edit mode state
   const [editMode, setEditMode] = useState(false);
   const utils = trpc.useUtils();
+  const updateAvatar = trpc.profile.updateAvatar.useMutation({
+    onSuccess: (d) => {
+      toast.success("Avatar updated.");
+      if (d.avatarUrl) setAvatarPreview(d.avatarUrl);
+      utils.profile.dashboard.invalidate();
+    },
+    onError: (err) => toast.error(`Avatar update failed: ${err.message}`),
+  });
+  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAvatarPreview(dataUrl);
+      updateAvatar.mutate({ avatarUrl: dataUrl.slice(0, 2048) });
+    };
+    reader.readAsDataURL(file);
+  };
 
   const form = useForm<ProfileEditForm>({
     values: {
@@ -191,6 +215,40 @@ export default function UserProfileDashboard() {
           <p className="text-sm text-muted-foreground">
             Account overview and trading history
           </p>
+        </div>
+      </div>
+
+      {/* ── Avatar header ──────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-5 pb-2">
+        <div className="relative group">
+          <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-border">
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="avatar" className="h-full w-full object-cover" />
+            ) : (
+              <User className="h-9 w-9 text-primary" />
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => avatarInputRef.current?.click()}
+            className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-1 shadow hover:bg-primary/90 transition-colors"
+            title="Change avatar"
+          >
+            <Camera className="h-3.5 w-3.5" />
+          </button>
+          <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFile} />
+        </div>
+        <div>
+          <p className="text-lg font-semibold">
+            {profile?.firstName && profile?.lastName
+              ? `${profile.firstName} ${profile.lastName}`
+              : user?.name ?? "—"}
+          </p>
+          <p className="text-sm text-muted-foreground">{user?.email ?? ""}</p>
+          <div className="flex gap-1.5 mt-1">
+            <Badge variant={user?.role === "admin" ? "default" : "outline"} className="text-xs">{user?.role ?? "user"}</Badge>
+            <Badge variant="secondary" className="text-xs">{profile?.accountType ?? "TRADER"}</Badge>
+          </div>
         </div>
       </div>
 
@@ -292,6 +350,35 @@ export default function UserProfileDashboard() {
                 <span className="font-medium">{fmtDate(user?.createdAt)}</span>
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Identity & Keycloak Roles ──────────────────────────────────────── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="h-4 w-4 text-primary" />
+            Identity &amp; Roles
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rolesLoading ? (
+            <div className="flex gap-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-6 w-20" />)}</div>
+          ) : kcRoles?.source === "keycloak" && kcRoles.roles.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {kcRoles.roles.map((r) => (
+                <Badge key={r.name} variant="secondary" className="text-xs gap-1">
+                  <Shield className="h-3 w-3" />
+                  {r.name}
+                  {r.description && <span className="text-muted-foreground ml-1">— {r.description}</span>}
+                </Badge>
+              ))}
+            </div>
+          ) : kcRoles?.source === "unavailable" ? (
+            <p className="text-sm text-muted-foreground">Keycloak is not configured — roles are managed via the platform role field.</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">No additional Keycloak roles assigned to this account.</p>
           )}
         </CardContent>
       </Card>
