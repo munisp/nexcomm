@@ -249,7 +249,7 @@ export async function bootstrapPermify(): Promise<void> {
   console.log(`[Permify Bootstrap] Schema written (version: ${schemaVersion})`);
 
   // Seed the platform owner as exchange admin
-  const ownerOpenId = process.env.OWNER_OPEN_ID;
+  const ownerOpenId = process.env.OWNER_OPEN_ID ?? process.env.OWNER_EMAIL;
   if (ownerOpenId) {
     const ok = await writeRelationship(
       "exchange", "nexcom",
