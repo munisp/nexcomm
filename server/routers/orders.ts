@@ -480,7 +480,7 @@ export const ordersRouter = router({
           )
         )
         .returning();
-      if (!updated) throw new Error("Order not found or already closed");
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found or already closed" });
 
       // ── Notify Rust Matching Engine of cancellation ───────────────────────
       // Extract the Rust engine UUID from the order notes if available
