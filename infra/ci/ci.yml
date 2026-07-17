@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Node.js)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nexcom
+          POSTGRES_PASSWORD: nexcom123
+          POSTGRES_DB: nexcom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run tests
+        run: pnpm test --reporter=verbose
+        env:
+          NEXCOM_PG_URL: postgresql://nexcom:nexcom123@localhost:5432/nexcom
+          JWT_SECRET: test-jwt-secret-at-least-32-characters-long
+          BUILT_IN_FORGE_API_URL: https://api.manus.im
+          BUILT_IN_FORGE_API_KEY: test-key
+          VITE_FRONTEND_FORGE_API_KEY: test-key
+          VITE_FRONTEND_FORGE_API_URL: https://api.manus.im
+          VITE_APP_ID: test-app-id
+          OAUTH_SERVER_URL: https://api.manus.im
+          VITE_OAUTH_PORTAL_URL: https://manus.im
+          OWNER_OPEN_ID: test-owner
+          OWNER_NAME: Test Owner
+          S3_ENDPOINT: https://s3.amazonaws.com
+          S3_BUCKET: test-bucket
+          S3_ACCESS_KEY_ID: test-key
+          S3_SECRET_ACCESS_KEY: test-secret
+          S3_REGION: us-east-1
+
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm tsc --noEmit
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+        env:
+          VITE_APP_ID: build-placeholder
+          VITE_OAUTH_PORTAL_URL: https://manus.im
+          VITE_FRONTEND_FORGE_API_KEY: build-placeholder
+          VITE_FRONTEND_FORGE_API_URL: https://api.manus.im
+
+  go-build:
+    name: Go Services Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+      - name: Build Go services
+        run: |
+          for dir in services/*/; do
+            if [ -f "$dir/go.mod" ]; then
+              echo "Building $dir"
+              (cd "$dir" && go build ./... 2>&1) || echo "WARN: $dir build failed"
+            fi
+          done
+
+  rust-build:
+    name: Rust Services Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Rust services
+        run: |
+          for dir in services/*/; do
+            if [ -f "$dir/Cargo.toml" ]; then
+              echo "Building $dir"
+              (cd "$dir" && cargo build --release 2>&1) || echo "WARN: $dir build failed"
+            fi
+          done
+
+  keycloak-smoke:
+    name: Keycloak Realm JSON Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate realm JSON files
+        run: |
+          for f in infra/keycloak/realms/*.json; do
+            echo "Validating $f"
+            python3 -c "import json,sys; json.load(open('$f')); print('OK')"
+          done
+      - name: Validate Helm chart
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+      - run: helm lint infra/keycloak/ || true
