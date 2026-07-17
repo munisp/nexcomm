@@ -15,7 +15,7 @@ import { writeAuditLog } from "../audit";
 
 // ── Middleware service definitions ────────────────────────────────────────────
 const MIDDLEWARE_SERVICES = [
-  { name: "keycloak",      label: "Keycloak IAM",       healthUrl: `${ENV.oAuthServerUrl ?? "http://keycloak:8080"}/health/ready` },
+  { name: "keycloak",      label: "Keycloak IAM",       healthUrl: `${ENV.keycloakUrl}/health/ready` },
   { name: "tigerbeetle",   label: "TigerBeetle Ledger", healthUrl: `${ENV.gatewayServiceUrl ?? "http://tigerbeetle-gateway:4000"}/health` },
   { name: "postgresql",    label: "PostgreSQL",          healthUrl: null /* checked via DB query */ },
   { name: "apisix",        label: "APISIX Gateway",     healthUrl: `${ENV.gatewayServiceUrl ?? "http://apisix:9080"}/apisix/admin/health` },
@@ -23,7 +23,7 @@ const MIDDLEWARE_SERVICES = [
   { name: "dapr",          label: "Dapr Sidecar",       healthUrl: `${ENV.daprHttpUrl ?? "http://localhost:3500"}/v1.0/healthz` },
   { name: "temporal",      label: "Temporal Workflow",  healthUrl: `${ENV.temporalUrl ?? "http://temporal:7233"}/health` },
   { name: "redis",         label: "Redis Cache",        healthUrl: null /* checked via Redis client */ },
-  { name: "lakehouse",     label: "Lakehouse / S3",     healthUrl: `${ENV.forgeApiUrl ?? "http://lakehouse:9000"}/health` },
+  { name: "lakehouse",     label: "MinIO / S3 Storage", healthUrl: null /* checked via AWS SDK HeadBucket */ },
   { name: "openappsec",    label: "OpenAppsec WAF",     healthUrl: "http://openappsec:8090/health" },
   { name: "fluvio",        label: "Fluvio Streaming",   healthUrl: "http://fluvio:9003/health" },
 ];
@@ -48,6 +48,18 @@ async function pingService(service: MiddlewareService): Promise<{
       if (!db) throw new Error("DB unavailable");
       await db.execute(sql`SELECT 1`);
       return { service: service.name, label: service.label, status: "healthy", latencyMs: Date.now() - start };
+    } catch (err) {
+      return { service: service.name, label: service.label, status: "down", latencyMs: Date.now() - start, error: String(err) };
+    }
+  }
+
+  // MinIO / S3: check via AWS SDK HeadBucket
+  if (service.name === "lakehouse") {
+    try {
+      const { pingStorage } = await import("../storage");
+      const ok = await pingStorage();
+      if (ok) return { service: service.name, label: service.label, status: "healthy", latencyMs: Date.now() - start };
+      return { service: service.name, label: service.label, status: "down", latencyMs: Date.now() - start, error: "HeadBucket failed" };
     } catch (err) {
       return { service: service.name, label: service.label, status: "down", latencyMs: Date.now() - start, error: String(err) };
     }
