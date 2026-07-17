@@ -1,179 +1,127 @@
-import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+/**
+ * NEXCOM Exchange — Auth SDK (self-hosted, no Manus dependencies)
+ *
+ * Replaces the Manus WebDevAuthPublicService gRPC-web proxy with a direct
+ * Keycloak OIDC flow.  Cookie-based sessions continue to use the same
+ * HS256 JWT format so existing sessions remain valid after the migration.
+ *
+ * Auth flow:
+ *   1. /api/auth/login  → redirect to Keycloak authorisation endpoint
+ *   2. Keycloak         → redirect to /api/oauth/callback?code=…&state=…
+ *   3. /api/oauth/callback → exchange code for tokens, upsert user, set cookie
+ *
+ * No Manus dependencies.
+ */
+
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
-import axios, { type AxiosInstance } from "axios";
-import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { ENV } from "./env";
-import type {
-  ExchangeTokenRequest,
-  ExchangeTokenResponse,
-  GetUserInfoResponse,
-  GetUserInfoWithJwtRequest,
-  GetUserInfoWithJwtResponse,
-} from "./types/manusTypes";
-// Utility function
+
+// ── Utilities ──────────────────────────────────────────────────────────────────
+
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
+function parseCookieHeader(header: string | undefined): Map<string, string> {
+  if (!header) return new Map();
+  return new Map(
+    header.split(";").map(pair => {
+      const idx = pair.indexOf("=");
+      if (idx < 0) return [pair.trim(), ""] as [string, string];
+      return [pair.slice(0, idx).trim(), decodeURIComponent(pair.slice(idx + 1).trim())] as [string, string];
+    })
+  );
+}
+
+// ── Session payload ────────────────────────────────────────────────────────────
+
 export type SessionPayload = {
+  /** User's unique identifier (Keycloak sub or internal UUID) */
   openId: string;
+  /** Client ID — kept for backward compatibility with existing sessions */
   appId: string;
   name: string;
 };
 
-const EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
-const GET_USER_INFO_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfo`;
-const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfoWithJwt`;
+// ── Keycloak OIDC helpers ──────────────────────────────────────────────────────
 
-class OAuthService {
-  constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
-    }
-  }
-
-  private decodeState(state: string): string {
-    const redirectUri = atob(state);
-    return redirectUri;
-  }
-
-  async getTokenByCode(
-    code: string,
-    state: string
-  ): Promise<ExchangeTokenResponse> {
-    const payload: ExchangeTokenRequest = {
-      clientId: ENV.appId,
-      grantType: "authorization_code",
-      code,
-      redirectUri: this.decodeState(state),
-    };
-
-    const { data } = await this.client.post<ExchangeTokenResponse>(
-      EXCHANGE_TOKEN_PATH,
-      payload
-    );
-
-    return data;
-  }
-
-  async getUserInfoByToken(
-    token: ExchangeTokenResponse
-  ): Promise<GetUserInfoResponse> {
-    const { data } = await this.client.post<GetUserInfoResponse>(
-      GET_USER_INFO_PATH,
-      {
-        accessToken: token.accessToken,
-      }
-    );
-
-    return data;
-  }
+export function getKeycloakBaseUrl(): string {
+  return `${ENV.keycloakUrl}/realms/${ENV.keycloakRealm}`;
 }
 
-const createOAuthHttpClient = (): AxiosInstance =>
-  axios.create({
-    baseURL: ENV.oAuthServerUrl,
-    timeout: AXIOS_TIMEOUT_MS,
+export function getAuthorizationUrl(redirectUri: string, state: string): string {
+  const url = new URL(`${getKeycloakBaseUrl()}/protocol/openid-connect/auth`);
+  url.searchParams.set("client_id", ENV.keycloakClientId);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", "openid profile email");
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("state", state);
+  return url.toString();
+}
+
+export async function exchangeCodeForTokens(code: string, redirectUri: string): Promise<{
+  access_token: string;
+  refresh_token?: string;
+  id_token?: string;
+  expires_in: number;
+}> {
+  const tokenUrl = `${getKeycloakBaseUrl()}/protocol/openid-connect/token`;
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: ENV.keycloakClientId,
+    client_secret: ENV.keycloakClientSecret,
+    code,
+    redirect_uri: redirectUri,
   });
+  const resp = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    throw new Error(`Keycloak token exchange failed (${resp.status}): ${detail}`);
+  }
+  return resp.json();
+}
+
+export async function getUserInfoFromToken(accessToken: string): Promise<{
+  sub: string;
+  name?: string;
+  preferred_username?: string;
+  email?: string;
+  email_verified?: boolean;
+}> {
+  const userInfoUrl = `${getKeycloakBaseUrl()}/protocol/openid-connect/userinfo`;
+  const resp = await fetch(userInfoUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    throw new Error(`Keycloak userinfo failed (${resp.status}): ${detail}`);
+  }
+  return resp.json();
+}
+
+// ── SDKServer ──────────────────────────────────────────────────────────────────
 
 class SDKServer {
-  private readonly client: AxiosInstance;
-  private readonly oauthService: OAuthService;
-
-  constructor(client: AxiosInstance = createOAuthHttpClient()) {
-    this.client = client;
-    this.oauthService = new OAuthService(this.client);
-  }
-
-  private deriveLoginMethod(
-    platforms: unknown,
-    fallback: string | null | undefined
-  ): string | null {
-    if (fallback && fallback.length > 0) return fallback;
-    if (!Array.isArray(platforms) || platforms.length === 0) return null;
-    const set = new Set<string>(
-      platforms.filter((p): p is string => typeof p === "string")
-    );
-    if (set.has("REGISTERED_PLATFORM_EMAIL")) return "email";
-    if (set.has("REGISTERED_PLATFORM_GOOGLE")) return "google";
-    if (set.has("REGISTERED_PLATFORM_APPLE")) return "apple";
-    if (
-      set.has("REGISTERED_PLATFORM_MICROSOFT") ||
-      set.has("REGISTERED_PLATFORM_AZURE")
-    )
-      return "microsoft";
-    if (set.has("REGISTERED_PLATFORM_GITHUB")) return "github";
-    const first = Array.from(set)[0];
-    return first ? first.toLowerCase() : null;
-  }
-
-  /**
-   * Exchange OAuth authorization code for access token
-   * @example
-   * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
-   */
-  async exchangeCodeForToken(
-    code: string,
-    state: string
-  ): Promise<ExchangeTokenResponse> {
-    return this.oauthService.getTokenByCode(code, state);
-  }
-
-  /**
-   * Get user information using access token
-   * @example
-   * const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
-   */
-  async getUserInfo(accessToken: string): Promise<GetUserInfoResponse> {
-    const data = await this.oauthService.getUserInfoByToken({
-      accessToken,
-    } as ExchangeTokenResponse);
-    const loginMethod = this.deriveLoginMethod(
-      (data as any)?.platforms,
-      (data as any)?.platform ?? data.platform ?? null
-    );
-    return {
-      ...(data as any),
-      platform: loginMethod,
-      loginMethod,
-    } as GetUserInfoResponse;
-  }
-
-  private parseCookies(cookieHeader: string | undefined) {
-    if (!cookieHeader) {
-      return new Map<string, string>();
-    }
-
-    const parsed = parseCookieHeader(cookieHeader);
-    return new Map(Object.entries(parsed));
-  }
-
   private getSessionSecret() {
-    const secret = ENV.cookieSecret;
-    return new TextEncoder().encode(secret);
+    return new TextEncoder().encode(ENV.cookieSecret);
   }
 
-  /**
-   * Create a session token for a Manus user openId
-   * @example
-   * const sessionToken = await sdk.createSessionToken(userInfo.openId);
-   */
   async createSessionToken(
     openId: string,
     options: { expiresInMs?: number; name?: string } = {}
   ): Promise<string> {
     return this.signSession(
-      {
-        openId,
-        appId: ENV.appId,
-        name: options.name || "",
-      },
+      { openId, appId: ENV.keycloakClientId, name: options.name ?? "" },
       options
     );
   }
@@ -186,7 +134,6 @@ class SDKServer {
     const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
     const secretKey = this.getSessionSecret();
-
     return new SignJWT({
       openId: payload.openId,
       appId: payload.appId,
@@ -204,62 +151,25 @@ class SDKServer {
       console.warn("[Auth] Missing session cookie");
       return null;
     }
-
     try {
       const secretKey = this.getSessionSecret();
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
       const { openId, appId, name } = payload as Record<string, unknown>;
-
-      if (
-        !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
-        !isNonEmptyString(name)
-      ) {
+      if (!isNonEmptyString(openId) || !isNonEmptyString(appId) || !isNonEmptyString(name)) {
         console.warn("[Auth] Session payload missing required fields");
         return null;
       }
-
-      return {
-        openId,
-        appId,
-        name,
-      };
+      return { openId, appId, name };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
       return null;
     }
   }
 
-  async getUserInfoWithJwt(
-    jwtToken: string
-  ): Promise<GetUserInfoWithJwtResponse> {
-    const payload: GetUserInfoWithJwtRequest = {
-      jwtToken,
-      projectId: ENV.appId,
-    };
-
-    const { data } = await this.client.post<GetUserInfoWithJwtResponse>(
-      GET_USER_INFO_WITH_JWT_PATH,
-      payload
-    );
-
-    const loginMethod = this.deriveLoginMethod(
-      (data as any)?.platforms,
-      (data as any)?.platform ?? data.platform ?? null
-    );
-    return {
-      ...(data as any),
-      platform: loginMethod,
-      loginMethod,
-    } as GetUserInfoWithJwtResponse;
-  }
-
   async authenticateRequest(req: Request): Promise<User> {
-    // ── Keycloak Bearer token path (enterprise SSO / API clients) ─────────────
-    // If an Authorization: Bearer <token> header is present, attempt Keycloak
-    // token introspection first. Falls through to cookie auth on failure.
+    // ── Keycloak Bearer token path (API clients / SSO) ─────────────────────
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith("Bearer ")) {
       const bearerToken = authHeader.slice(7);
@@ -267,24 +177,18 @@ class SDKServer {
         const { verifyKeycloakToken } = await import("../keycloak/keycloakClient");
         const claims = await verifyKeycloakToken(bearerToken);
         if (claims) {
-          // Map Keycloak claims → NEXCOM user
-          // nexcomUserId attribute is set by syncUserToKeycloak
           const nexcomUserId = claims.nexcomUserId
             ? parseInt(claims.nexcomUserId, 10)
             : null;
-
           if (nexcomUserId && !isNaN(nexcomUserId)) {
             const user = await db.getUserById(nexcomUserId);
             if (user) {
-              // Update last sign-in asynchronously
               setImmediate(() =>
                 db.upsertUser({ openId: user.openId, lastSignedIn: new Date() }).catch(() => {})
               );
               return user;
             }
           }
-
-          // Fallback: look up by email from Keycloak claims
           if (claims.email) {
             const userByEmail = await db.getUserByEmail(claims.email);
             if (userByEmail) {
@@ -300,46 +204,35 @@ class SDKServer {
       }
     }
 
-    // ── Cookie-based Manus OAuth path (primary) ──────────────────────────────
-    const cookies = this.parseCookies(req.headers.cookie);
+    // ── Cookie-based session path (primary) ───────────────────────────────
+    const cookies = parseCookieHeader(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
-
     if (!session) {
       throw ForbiddenError("Invalid session cookie");
     }
 
-    const sessionUserId = session.openId;
     const signedInAt = new Date();
-    let user = await db.getUserByOpenId(sessionUserId);
+    let user = await db.getUserByOpenId(session.openId);
 
-    // If user not in DB, sync from OAuth server automatically
     if (!user) {
+      // User not in DB — create a minimal record from session data
       try {
-        const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
         await db.upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
+          openId: session.openId,
+          name: session.name || null,
           lastSignedIn: signedInAt,
         });
-        user = await db.getUserByOpenId(userInfo.openId);
+        user = await db.getUserByOpenId(session.openId);
       } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
+        console.error("[Auth] Failed to create user from session:", error);
         throw ForbiddenError("Failed to sync user info");
       }
     }
 
-    if (!user) {
-      throw ForbiddenError("User not found");
-    }
+    if (!user) throw ForbiddenError("User not found");
 
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
-
+    await db.upsertUser({ openId: user.openId, lastSignedIn: signedInAt });
     return user;
   }
 }
