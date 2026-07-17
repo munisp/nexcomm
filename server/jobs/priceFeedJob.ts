@@ -51,9 +51,8 @@ async function fetchYahooPrice(yahooSymbol: string): Promise<{
       },
     }) as Record<string, unknown>;
 
-    const jsonData = result?.jsonData;
-    const parsed = typeof jsonData === "string" ? JSON.parse(jsonData) : jsonData as Record<string, unknown>;
-    const meta = (parsed as Record<string, unknown>)?.chart as Record<string, unknown>;
+    // Direct Yahoo Finance response — no jsonData wrapper
+    const meta = (result as Record<string, unknown>)?.chart as Record<string, unknown>;
     const chartResult = (meta?.result as unknown[])?.[0] as Record<string, unknown>;
     const chartMeta = chartResult?.meta as Record<string, unknown>;
 
