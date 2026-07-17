@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
@@ -131,8 +132,8 @@ export const inputFinancingRouter = router({
       if (!db) return { success: true };
       const [loan] = await db.select().from(inputFinancingLoans)
         .where(and(eq(inputFinancingLoans.id, input.loanId), eq(inputFinancingLoans.farmerId, ctx.user.id)));
-      if (!loan) throw new Error("Loan not found");
-      if (loan.status !== "APPLIED") throw new Error("Only APPLIED loans can be cancelled");
+      if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+      if (loan.status !== "APPLIED") throw new TRPCError({ code: "BAD_REQUEST", message: "Only APPLIED loans can be cancelled" });
       await db.update(inputFinancingLoans).set({ status: "WRITTEN_OFF", updatedAt: new Date() })
         .where(eq(inputFinancingLoans.id, input.loanId));
       await writeAuditLog({ userId: ctx.user.id, action: "CANCEL_LOAN", resource: "input_financing_loan", resourceId: String(input.loanId), details: {} });
@@ -226,7 +227,7 @@ export const fieldAgentRouter = router({
       if (!db) return { success: true };
       const agent = await db.select().from(fieldAgents)
         .where(eq(fieldAgents.userId, ctx.user.id)).limit(1);
-      if (!agent[0]) throw new Error("Not registered as field agent");
+      if (!agent[0]) throw new TRPCError({ code: "FORBIDDEN", message: "Not registered as field agent" });
       await db.insert(fieldVisits).values({
         agentId: agent[0].id,
         farmerId: input.farmerId,
