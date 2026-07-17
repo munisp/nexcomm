@@ -1,0 +1,125 @@
+version: 2
+
+updates:
+  # ── Node.js / pnpm (main app) ─────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Lagos
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      # Group all Drizzle ORM updates together
+      drizzle:
+        patterns:
+          - "drizzle-*"
+      # Group all tRPC updates together
+      trpc:
+        patterns:
+          - "@trpc/*"
+      # Group all Radix UI / shadcn updates together
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      # Group all Vite / build tool updates together
+      build-tools:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "esbuild"
+          - "typescript"
+      # Group all testing framework updates
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "playwright"
+          - "@playwright/*"
+    ignore:
+      # Ignore major version bumps on core framework packages — review manually
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "express"
+        update-types: ["version-update:semver-major"]
+
+  # ── Go services ──────────────────────────────────────────────────────────
+  - package-ecosystem: gomod
+    directory: /services/channel-gateway
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - go
+
+  - package-ecosystem: gomod
+    directory: /services/mojaloop-adapter
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - go
+
+  - package-ecosystem: gomod
+    directory: /services/indices-service
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - go
+
+  - package-ecosystem: gomod
+    directory: /services/market-data
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - go
+
+  # ── Rust services ─────────────────────────────────────────────────────────
+  - package-ecosystem: cargo
+    directory: /services/ussd-engine
+    schedule:
+      interval: weekly
+      day: tuesday
+    labels:
+      - dependencies
+      - rust
+
+  - package-ecosystem: cargo
+    directory: /services/credit-scoring
+    schedule:
+      interval: weekly
+      day: tuesday
+    labels:
+      - dependencies
+      - rust
+
+  - package-ecosystem: cargo
+    directory: /services/blockchain-bridge
+    schedule:
+      interval: weekly
+      day: tuesday
+    labels:
+      - dependencies
+      - rust
+
+  # ── GitHub Actions ────────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: wednesday
+    labels:
+      - dependencies
+      - github-actions
