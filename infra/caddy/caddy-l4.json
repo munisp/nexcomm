@@ -1,0 +1,95 @@
+{
+  "apps": {
+    "layer4": {
+      "servers": {
+        "smpp": {
+          "listen": ["0.0.0.0:2775"],
+          "routes": [
+            {
+              "match": [{"tls": {"sni": ["ussd.nexcomexchange.com"]}}],
+              "handle": [
+                {
+                  "handler": "tls",
+                  "connection_policies": [{"alpn": ["smpp"]}]
+                },
+                {
+                  "handler": "proxy",
+                  "upstreams": [{"dial": ["ussd-engine:2775"]}]
+                }
+              ]
+            }
+          ]
+        },
+        "kafka": {
+          "listen": ["0.0.0.0:9093"],
+          "routes": [
+            {
+              "match": [{"remote_ip": {"ranges": ["{env.INTERNAL_NETWORK}"]}}],
+              "handle": [
+                {
+                  "handler": "tls",
+                  "connection_policies": [{"alpn": ["kafka"]}]
+                },
+                {
+                  "handler": "proxy",
+                  "upstreams": [
+                    {"dial": ["kafka-broker-0:9093"]},
+                    {"dial": ["kafka-broker-1:9093"]},
+                    {"dial": ["kafka-broker-2:9093"]}
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "redis": {
+          "listen": ["0.0.0.0:6380"],
+          "routes": [
+            {
+              "match": [{"remote_ip": {"ranges": ["{env.INTERNAL_NETWORK}"]}}],
+              "handle": [
+                {"handler": "tls"},
+                {
+                  "handler": "proxy",
+                  "upstreams": [{"dial": ["redis-master:6379"]}]
+                }
+              ]
+            }
+          ]
+        },
+        "postgres": {
+          "listen": ["0.0.0.0:5433"],
+          "routes": [
+            {
+              "match": [{"remote_ip": {"ranges": ["{env.INTERNAL_NETWORK}"]}}],
+              "handle": [
+                {
+                  "handler": "tls",
+                  "connection_policies": [{"alpn": ["postgresql"]}]
+                },
+                {
+                  "handler": "proxy",
+                  "upstreams": [{"dial": ["nexcom-pg-primary:5432"]}]
+                }
+              ]
+            }
+          ]
+        },
+        "ssh_bastion": {
+          "listen": ["0.0.0.0:2222"],
+          "routes": [
+            {
+              "match": [{"remote_ip": {"ranges": ["{env.ADMIN_CIDR}"]}}],
+              "handle": [
+                {
+                  "handler": "proxy",
+                  "upstreams": [{"dial": ["bastion:22"]}]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
