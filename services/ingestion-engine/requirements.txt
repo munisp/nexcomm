@@ -33,7 +33,7 @@ geopandas==1.0.1
 shapely==2.0.6
 
 # Ray (distributed ML)
-ray[default]==2.40.0
+ray[default]==2.56.0
 
 # DataFusion (analytical queries)
 datafusion==43.1.0
