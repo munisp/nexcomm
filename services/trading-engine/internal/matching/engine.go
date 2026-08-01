@@ -58,8 +58,10 @@ type Order struct {
 	Status          OrderStatus     `json:"status"`
 	TimeInForce     string          `json:"time_in_force"`
 	ClientOrderID   string          `json:"client_order_id,omitempty"`
-	CreatedAt       time.Time       `json:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+	ReserveTransferID  string          `json:"reserve_transfer_id,omitempty"` // TigerBeetle pending transfer
+	AccountID          string          `json:"account_id,omitempty"`           // Gateway account ID for balance checks
 }
 
 // RemainingQuantity returns the unfilled portion of the order
@@ -131,6 +133,31 @@ func (e *Engine) PlaceOrder(ctx context.Context, order *Order) (*Order, error) {
 	order.Status = StatusOpen
 	order.CreatedAt = time.Now().UTC()
 	order.UpdatedAt = order.CreatedAt
+
+	// ── Pre-trade margin/balance check ────────────────────────────────────────
+	// For BUY LIMIT orders: verify the buyer has sufficient settlement balance.
+	// Fail-open: if gateway is unavailable (balance == -1), order proceeds.
+	if order.Side == SideBuy && !order.Price.IsZero() {
+		priceFloat, _ := order.Price.Float64()
+		qtyFloat, _ := order.Quantity.Float64()
+		requiredCents := int64(priceFloat * qtyFloat * 100 * 1.1) // 110% margin requirement
+		accountID := order.AccountID
+		if accountID == "" {
+			accountID = order.UserID
+		}
+		balance, balErr := e.mw.GetUserBalance(ctx, accountID)
+		if balErr == nil && balance >= 0 && balance < requiredCents {
+			order.Status = StatusRejected
+			return order, fmt.Errorf("insufficient balance: required %d cents, available %d cents", requiredCents, balance)
+		}
+		// Reserve funds via TigerBeetle pending transfer
+		if balance >= 0 && requiredCents > 0 {
+			reserveID, _ := e.mw.ReserveFunds(ctx, accountID, requiredCents, order.ID)
+			if reserveID != "" {
+				order.ReserveTransferID = reserveID
+			}
+		}
+	}
 
 	// Store the order
 	e.orders[order.ID] = order
@@ -221,6 +248,14 @@ func (e *Engine) CancelOrder(ctx context.Context, orderID string) error {
 	book.RemoveOrder(order)
 	order.Status = StatusCancelled
 	order.UpdatedAt = time.Now().UTC()
+
+	// Release reserved funds on cancellation
+	if order.ReserveTransferID != "" {
+		go func(transferID string) {
+			_ = e.mw.ReleaseFunds(context.Background(), transferID)
+		}(order.ReserveTransferID)
+		order.ReserveTransferID = ""
+	}
 
 	e.logger.Info("Order cancelled", zap.String("order_id", orderID))
 	return nil

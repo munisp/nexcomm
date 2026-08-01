@@ -209,6 +209,45 @@ func (s *Server) SetupRoutes() *gin.Engine {
 
 			// Middleware status
 			protected.GET("/middleware/status", s.middlewareStatus)
+			// ── Ledger API — TigerBeetle double-entry fund-flow endpoints ──────────────
+			// These routes are called by gatewayClient.ts (Node.js) for all fund-flow
+			// scenarios. Every handler is atomic at the TigerBeetle level.
+			ledger := protected.Group("/ledger")
+			{
+				// Account management
+				ledger.POST("/accounts", s.ledgerCreateAccount)
+				ledger.GET("/accounts/:user_id", s.ledgerGetAccounts)
+				ledger.GET("/accounts/:user_id/balance", s.ledgerGetBalance)
+				ledger.GET("/accounts/:user_id/summary", s.ledgerGetBalanceSummary)
+				ledger.POST("/accounts/batch-summary", s.ledgerBatchBalanceSummary)
+				ledger.POST("/accounts/freeze", s.ledgerFreezeAccount)
+				ledger.POST("/accounts/unfreeze", s.ledgerUnfreezeAccount)
+				// Transfer operations
+				ledger.POST("/transfers", s.ledgerCreateTransfer)
+				ledger.POST("/transfers/pending", s.ledgerCreatePendingTransfer)
+				ledger.POST("/transfers/:id/commit", s.ledgerCommitTransfer)
+				ledger.POST("/transfers/:id/void", s.ledgerVoidTransfer)
+				ledger.GET("/transfers/:user_id", s.ledgerGetTransfers)
+				// Loan operations
+				ledger.POST("/loan/repay", s.ledgerLoanRepay)
+				// Corporate actions
+				ledger.POST("/corporate/dividend", s.ledgerCorporateDividend)
+				ledger.POST("/corporate/coupon", s.ledgerCorporateCoupon)
+				// Collateral management
+				ledger.POST("/collateral/hold", s.ledgerCollateralHold)
+				ledger.POST("/collateral/:hold_id/release", s.ledgerCollateralRelease)
+				// Margin operations
+				ledger.POST("/margin/liquidate", s.ledgerMarginLiquidate)
+				// Payment operations
+				ledger.POST("/refund", s.ledgerRefund)
+				ledger.POST("/stripe/topup", s.ledgerStripeTopup)
+				// System operations
+				ledger.POST("/system/rebalance", s.ledgerSystemRebalance)
+			}
+			// Settlement endpoint (top-level, called by fundFlow.ts)
+			protected.POST("/settlement/settle", s.ledgerSettle)
+			// Mojaloop cross-border transfer
+			protected.POST("/mojaloop/transfer", s.ledgerMojaloopTransfer)
 
 			// Matching Engine proxy routes
 			me := protected.Group("/matching-engine")

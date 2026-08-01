@@ -265,3 +265,80 @@ func (c *Client) postJSON(ctx context.Context, url string, payload any) error {
 	}
 	return nil
 }
+
+// GetUserBalance fetches the user's settlement account balance from the gateway.
+// Returns balance in cents (int64). Returns -1 on error (fail-open for availability).
+func (c *Client) GetUserBalance(ctx context.Context, userID string) (int64, error) {
+url := fmt.Sprintf("%s/api/v1/ledger/accounts/%s/balance", c.gatewayURL, userID)
+req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+if err != nil {
+return -1, err
+}
+resp, err := c.httpClient.Do(req)
+if err != nil {
+c.logger.Warn("GetUserBalance: gateway unavailable", zap.String("user_id", userID), zap.Error(err))
+return -1, nil // fail-open: allow order if gateway is down
+}
+defer resp.Body.Close()
+if resp.StatusCode != http.StatusOK {
+return -1, fmt.Errorf("gateway returned %d", resp.StatusCode)
+}
+var result struct {
+Balance int64 `json:"balance"`
+}
+if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+return -1, err
+}
+return result.Balance, nil
+}
+
+// ReserveFunds creates a pending TigerBeetle transfer to reserve funds for an order.
+// Returns the transfer ID on success. Returns "" on error (fail-open).
+func (c *Client) ReserveFunds(ctx context.Context, userID string, amountCents int64, orderID string) (string, error) {
+payload := map[string]interface{}{
+"debit_account_id":  "user-settlement-" + userID,
+"credit_account_id": "exchange-clearing",
+"amount":            amountCents,
+"code":              2, // TransferMarginDeposit — pending hold
+"reference":         "order-reserve-" + orderID,
+}
+url := c.gatewayURL + "/api/v1/ledger/transfers/pending"
+body, _ := json.Marshal(payload)
+req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+if err != nil {
+return "", err
+}
+req.Header.Set("Content-Type", "application/json")
+resp, err := c.httpClient.Do(req)
+if err != nil {
+c.logger.Warn("ReserveFunds: gateway unavailable", zap.String("order_id", orderID), zap.Error(err))
+return "", nil // fail-open
+}
+defer resp.Body.Close()
+if resp.StatusCode != http.StatusCreated {
+return "", fmt.Errorf("reserve funds failed: status %d", resp.StatusCode)
+}
+var result struct {
+ID string `json:"id"`
+}
+if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+return "", err
+}
+return result.ID, nil
+}
+
+// ReleaseFunds voids a pending TigerBeetle transfer (releases reserved funds).
+func (c *Client) ReleaseFunds(ctx context.Context, transferID string) error {
+url := fmt.Sprintf("%s/api/v1/ledger/transfers/%s/void", c.gatewayURL, transferID)
+req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+if err != nil {
+return err
+}
+resp, err := c.httpClient.Do(req)
+if err != nil {
+c.logger.Warn("ReleaseFunds: gateway unavailable", zap.String("transfer_id", transferID), zap.Error(err))
+return nil // fail-open
+}
+defer resp.Body.Close()
+return nil
+}

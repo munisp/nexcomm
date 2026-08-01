@@ -149,3 +149,82 @@ export async function queryTemporalWorkflow<T>(
     return null;
   }
 }
+
+/**
+ * listWorkflowExecutions — List recent workflow executions from Temporal.
+ * Falls back to empty array if Temporal is unavailable.
+ */
+export async function listWorkflowExecutions(params: {
+  workflowType?: string;
+  limit?: number;
+}): Promise<Array<{
+  workflowId: string;
+  runId: string;
+  workflowType: string;
+  status: string;
+  startTime: string;
+  closeTime?: string;
+}>> {
+  const client = await getTemporalClient();
+  if (!client) return [];
+  try {
+    const limit = params.limit ?? 20;
+    const query = params.workflowType
+      ? `WorkflowType = "${params.workflowType}"`
+      : undefined;
+    const results: Array<{
+      workflowId: string;
+      runId: string;
+      workflowType: string;
+      status: string;
+      startTime: string;
+      closeTime?: string;
+    }> = [];
+    const iterator = client.workflow.list({ query, pageSize: limit });
+    for await (const execution of iterator) {
+      results.push({
+        workflowId: execution.workflowId,
+        runId: execution.runId ?? "",
+        workflowType: execution.type ?? "",
+        status: execution.status?.name ?? "UNKNOWN",
+        startTime: execution.startTime?.toISOString() ?? new Date().toISOString(),
+        closeTime: execution.closeTime?.toISOString(),
+      });
+      if (results.length >= limit) break;
+    }
+    return results;
+  } catch (err) {
+    console.warn("[Temporal] listWorkflowExecutions failed:", (err as Error).message);
+    return [];
+  }
+}
+
+/**
+ * describeWorkflowExecution — Get details of a specific workflow execution.
+ */
+export async function describeWorkflowExecution(workflowId: string, runId?: string): Promise<{
+  workflowId: string;
+  runId: string;
+  status: string;
+  startTime: string;
+  closeTime?: string;
+  historyLength: number;
+} | null> {
+  const client = await getTemporalClient();
+  if (!client) return null;
+  try {
+    const handle = client.workflow.getHandle(workflowId, runId);
+    const desc = await handle.describe();
+    return {
+      workflowId: desc.workflowId,
+      runId: desc.runId,
+      status: desc.status?.name ?? "UNKNOWN",
+      startTime: desc.startTime?.toISOString() ?? new Date().toISOString(),
+      closeTime: desc.closeTime?.toISOString(),
+      historyLength: desc.historyLength ?? 0,
+    };
+  } catch (err) {
+    console.warn("[Temporal] describeWorkflowExecution failed:", (err as Error).message);
+    return null;
+  }
+}

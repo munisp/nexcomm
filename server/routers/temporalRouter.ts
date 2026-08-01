@@ -26,6 +26,8 @@ import {
   triggerTemporalWorkflow,
   signalTemporalWorkflow,
   queryTemporalWorkflow,
+  listWorkflowExecutions,
+  describeWorkflowExecution,
 } from "../temporal/temporalClient";
 import { WORKFLOW_REGISTRY, type WorkflowName } from "../temporal/workflows";
 
@@ -124,8 +126,8 @@ export const temporalRouter = router({
   }),
 
   /**
-   * Admin: list recent workflow runs (metadata only — no Temporal SDK list API in this env).
-   * Returns a synthetic list of known workflow IDs from audit logs.
+   * Admin: list recent workflow runs from the Temporal server.
+   * Falls back to registry metadata if Temporal is unavailable.
    */
   listWorkflows: adminProcedure
     .input(
@@ -135,18 +137,38 @@ export const temporalRouter = router({
       })
     )
     .query(async ({ input }) => {
-      // In production, this would call Temporal's list workflow executions API.
-      // For now, return the registry with placeholder run counts.
+      // Fetch real workflow executions from Temporal server
+      const executions = await listWorkflowExecutions({
+        workflowType: input.workflowName,
+        limit: input.limit,
+      });
+      // Merge with registry metadata for rich response
       const registry = Object.entries(WORKFLOW_REGISTRY).map(([, wf]) => ({
         workflowName: wf.name,
         taskQueue: wf.taskQueue,
         description: ((wf as Record<string, unknown>).description as string) ?? null,
-        recentRuns: [] as { workflowId: string; status: string; startedAt: string }[],
+        recentRuns: executions
+          .filter(e => !input.workflowName || e.workflowType === wf.name)
+          .map(e => ({
+            workflowId: e.workflowId,
+            runId: e.runId,
+            status: e.status,
+            startedAt: e.startTime,
+            closedAt: e.closeTime ?? null,
+          })),
       }));
-
       if (input.workflowName) {
         return registry.filter((r) => r.workflowName === input.workflowName);
       }
       return registry.slice(0, input.limit);
+    }),
+
+  /**
+   * Get detailed status of a specific workflow execution.
+   */
+  getWorkflowDetail: protectedProcedure
+    .input(z.object({ workflowId: z.string().min(1), runId: z.string().optional() }))
+    .query(async ({ input }) => {
+      return describeWorkflowExecution(input.workflowId, input.runId);
     }),
 });
