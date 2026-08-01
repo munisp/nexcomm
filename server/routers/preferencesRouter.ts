@@ -73,20 +73,48 @@ export const preferencesRouter = router({
       }
     }),
 
-  /** List supported currencies with exchange rates vs NGN */
+  /** List supported currencies with live exchange rates vs NGN from middleware-hub */
   currencies: protectedProcedure.query(async () => {
-    // Exchange rates relative to NGN (base currency)
-    // In production these would come from a live FX API
-    return [
-      { code: "NGN", name: "Nigerian Naira",       symbol: "₦",  rateToNGN: 1 },
-      { code: "USD", name: "US Dollar",             symbol: "$",  rateToNGN: 1620 },
-      { code: "EUR", name: "Euro",                  symbol: "€",  rateToNGN: 1750 },
-      { code: "GBP", name: "British Pound",         symbol: "£",  rateToNGN: 2050 },
-      { code: "GHS", name: "Ghanaian Cedi",         symbol: "₵",  rateToNGN: 112 },
-      { code: "KES", name: "Kenyan Shilling",       symbol: "KSh",rateToNGN: 12.5 },
-      { code: "ZAR", name: "South African Rand",    symbol: "R",  rateToNGN: 88 },
-      { code: "XOF", name: "West African CFA Franc",symbol: "CFA",rateToNGN: 2.65 },
-    ];
+    // Reference rates used as fallback when the live FX API is unavailable
+    const REFERENCE_RATES: Record<string, { name: string; symbol: string; rateToNGN: number }> = {
+      NGN: { name: "Nigerian Naira",        symbol: "₦",   rateToNGN: 1 },
+      USD: { name: "US Dollar",             symbol: "$",   rateToNGN: 1620 },
+      EUR: { name: "Euro",                  symbol: "€",   rateToNGN: 1750 },
+      GBP: { name: "British Pound",         symbol: "£",   rateToNGN: 2050 },
+      GHS: { name: "Ghanaian Cedi",         symbol: "₵",   rateToNGN: 112 },
+      KES: { name: "Kenyan Shilling",       symbol: "KSh", rateToNGN: 12.5 },
+      ZAR: { name: "South African Rand",    symbol: "R",   rateToNGN: 88 },
+      XOF: { name: "West African CFA Franc",symbol: "CFA", rateToNGN: 2.65 },
+    };
+    try {
+      // Fetch live rates from the middleware-hub FX endpoint
+      // which proxies the CBN official exchange rate API
+      const MIDDLEWARE_URL = process.env.MIDDLEWARE_HUB_URL ?? "http://middleware-hub:8013";
+      const res = await fetch(`${MIDDLEWARE_URL}/api/v1/fx/rates?base=NGN`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const data = await res.json() as { rates?: Record<string, number> };
+        if (data.rates && typeof data.rates === "object") {
+          return Object.entries(REFERENCE_RATES).map(([code, meta]) => ({
+            code,
+            name: meta.name,
+            symbol: meta.symbol,
+            rateToNGN: data.rates![code] ?? meta.rateToNGN,
+            live: true,
+          }));
+        }
+      }
+    } catch {
+      // Fall through to reference rates
+    }
+    return Object.entries(REFERENCE_RATES).map(([code, meta]) => ({
+      code,
+      name: meta.name,
+      symbol: meta.symbol,
+      rateToNGN: meta.rateToNGN,
+      live: false,
+    }));
   }),
 
   /** Get notification preferences */

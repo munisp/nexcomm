@@ -67,19 +67,64 @@ class FluvioConsumerGroup:
         logger.info("Fluvio consumer group stopped")
 
     async def _consume_topic(self, topic: str) -> None:
-        """Consume messages from a single Fluvio topic."""
+        """Consume messages from a single Fluvio topic via fluvio-python SDK or HTTP proxy."""
         logger.info("Consumer started for topic: %s", topic)
+        # Try fluvio-python SDK first
+        try:
+            from fluvio import Fluvio, Offset  # type: ignore
+            fluvio = await Fluvio.connect()
+            consumer = await fluvio.partition_consumer(topic, 0)
+            logger.info("[Fluvio] SDK consumer connected for topic: %s", topic)
+            async for record in consumer.stream(Offset.end()):
+                if not self.running:
+                    break
+                try:
+                    value = json.loads(record.value_string())
+                    value["_fluvio_topic"] = topic
+                    value["_fluvio_offset"] = record.offset()
+                    self._buffer[topic].append(value)
+                    self.stats[topic]["bytes"] += len(record.value())
+                    if len(self._buffer[topic]) >= self.batch_size:
+                        await self._flush_buffer(topic)
+                except Exception as e:
+                    self.stats[topic]["errors"] += 1
+                    logger.error("[Fluvio] Message parse error on %s: %s", topic, e)
+            return
+        except ImportError:
+            logger.info("[Fluvio] fluvio-python not installed — using HTTP proxy fallback")
+        except Exception as exc:
+            logger.warning("[Fluvio] SDK connection failed for %s (%s) — using HTTP proxy", topic, exc)
+
+        # HTTP proxy fallback: poll the fluvio-proxy service
+        FLUVIO_HTTP_URL = os.getenv("FLUVIO_HTTP_URL", "http://fluvio-proxy:8090")
+        last_offset = self.stats[topic].get("last_offset", 0)
         while self.running:
             try:
-                # In production: connect to Fluvio cluster and consume
-                # For now, simulate periodic consumption
-                await asyncio.sleep(1)
-                # Process any buffered messages
-                if len(self._buffer[topic]) >= self.batch_size:
-                    await self._flush_buffer(topic)
+                import aiohttp  # type: ignore
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{FLUVIO_HTTP_URL}/api/v1/consume/{topic}",
+                        params={"offset": last_offset, "max_records": self.batch_size},
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            records = data.get("records", [])
+                            for rec in records:
+                                value = rec.get("value", {})
+                                if isinstance(value, str):
+                                    value = json.loads(value)
+                                value["_fluvio_topic"] = topic
+                                value["_fluvio_offset"] = rec.get("offset", last_offset)
+                                self._buffer[topic].append(value)
+                                last_offset = rec.get("offset", last_offset) + 1
+                            self.stats[topic]["last_offset"] = last_offset
+                            if len(self._buffer[topic]) >= self.batch_size:
+                                await self._flush_buffer(topic)
+                await asyncio.sleep(0.5)  # 500ms polling interval
             except Exception as e:
                 self.stats[topic]["errors"] += 1
-                logger.error("Error consuming from %s: %s", topic, e)
+                logger.error("[Fluvio] HTTP proxy error for %s: %s", topic, e)
                 await asyncio.sleep(5)
 
     async def _flush_loop(self) -> None:

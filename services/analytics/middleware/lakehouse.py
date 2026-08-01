@@ -1,150 +1,234 @@
 """
 Lakehouse client for the NEXCOM Analytics service.
-Integrates Delta Lake, Apache Spark, Apache Flink, Apache Sedona,
-Ray, and Apache DataFusion for comprehensive data platform capabilities.
-
-Architecture:
-  Storage Layer:   Delta Lake (Parquet + transaction log) on object storage
-  Batch Processing: Apache Spark for ETL, aggregations, historical analysis
-  Stream Processing: Apache Flink for real-time analytics, CEP
-  Geospatial:      Apache Sedona for spatial queries, route optimization
-  ML/AI:           Ray for distributed training and inference
-  Query Engine:    Apache DataFusion for fast analytical queries
-
-Data Layout:
-  /data/lakehouse/
-    ├── bronze/          # Raw data (Kafka topics, external feeds)
-    │   ├── market_data/ # Raw tick data (Parquet, partitioned by date)
-    │   ├── trades/      # Raw trade events
-    │   └── external/    # External data feeds (weather, news, satellite)
-    ├── silver/          # Cleaned, enriched data
-    │   ├── ohlcv/       # Aggregated OHLCV candles
-    │   ├── positions/   # Position snapshots
-    │   └── user_activity/ # User activity logs
-    ├── gold/            # Business-ready datasets
-    │   ├── analytics/   # Pre-computed analytics
-    │   ├── reports/     # Generated reports
-    │   └── ml_features/ # Feature store for ML models
-    └── geospatial/      # Geospatial data
-        ├── production_regions/ # Commodity production polygons
-        ├── trade_routes/       # Logistics routes
-        └── weather_data/       # Weather grid data
+Uses delta-rs (deltalake Python package) for Delta Lake reads/writes,
+Apache DataFusion for fast analytical queries, and PyArrow for data processing.
+Falls back gracefully when optional heavy dependencies (Spark, Flink, Ray) are absent.
 """
-
 import logging
+import os
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+LAKEHOUSE_BASE_PATH = os.getenv("LAKEHOUSE_BASE_PATH", "/data/lakehouse")
 
 
 class LakehouseClient:
     """Unified interface to the Lakehouse data platform."""
 
     def __init__(self):
-        self._connected = True
+        self._connected = False
+        self._delta_available = False
+        self._datafusion_available = False
         self._spark_initialized = False
         self._flink_initialized = False
         self._sedona_initialized = False
         self._ray_initialized = False
-        self._datafusion_initialized = False
-        logger.info("[Lakehouse] Initializing data platform components")
+        self._datafusion_ctx = None
         self._initialize_components()
 
-    def _initialize_components(self):
-        """Initialize all Lakehouse components."""
-        # In production: initialize actual clients
-        # self._init_spark()
-        # self._init_flink()
-        # self._init_sedona()
-        # self._init_ray()
-        # self._init_datafusion()
-        self._spark_initialized = True
-        self._flink_initialized = True
-        self._sedona_initialized = True
-        self._ray_initialized = True
-        self._datafusion_initialized = True
-        logger.info("[Lakehouse] All components initialized")
+    def _initialize_components(self) -> None:
+        """Initialize available Lakehouse components."""
+        # delta-rs (lightweight, no JVM required)
+        try:
+            import deltalake  # type: ignore  # noqa: F401
+            self._delta_available = True
+            logger.info("[Lakehouse] delta-rs available")
+        except ImportError:
+            logger.warning("[Lakehouse] deltalake not installed — Delta Lake writes use PyArrow fallback")
 
-    def _init_spark(self):
-        """Initialize Apache Spark with Delta Lake support."""
-        # from pyspark.sql import SparkSession
-        # self.spark = SparkSession.builder \
-        #     .appName("NEXCOM Analytics") \
-        #     .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
-        #     .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
-        #     .config("spark.jars.packages", "org.apache.sedona:sedona-spark-3.5_2.12:1.5.1") \
-        #     .getOrCreate()
-        self._spark_initialized = True
-        logger.info("[Lakehouse/Spark] Initialized with Delta Lake")
+        # Apache DataFusion (fast analytical queries, no JVM)
+        try:
+            import datafusion  # type: ignore
+            self._datafusion_ctx = datafusion.SessionContext()
+            self._datafusion_available = True
+            logger.info("[Lakehouse/DataFusion] Query engine initialized")
+        except ImportError:
+            logger.warning("[Lakehouse] datafusion not installed — SQL queries use PyArrow fallback")
 
-    def _init_flink(self):
-        """Initialize Apache Flink for stream processing."""
-        # from pyflink.datastream import StreamExecutionEnvironment
-        # self.flink_env = StreamExecutionEnvironment.get_execution_environment()
-        # self.flink_env.set_parallelism(4)
-        self._flink_initialized = True
-        logger.info("[Lakehouse/Flink] Stream processing initialized")
+        # Apache Spark (optional, requires JVM)
+        try:
+            from pyspark.sql import SparkSession  # type: ignore
+            self.spark = (
+                SparkSession.builder
+                .appName("NEXCOM Analytics")
+                .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+                .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+                .config("spark.master", os.getenv("SPARK_MASTER", "local[*]"))
+                .getOrCreate()
+            )
+            self._spark_initialized = True
+            logger.info("[Lakehouse/Spark] Initialized with Delta Lake")
+        except Exception:
+            logger.info("[Lakehouse/Spark] Not available (JVM/PySpark not installed)")
 
-    def _init_sedona(self):
-        """Initialize Apache Sedona for geospatial queries."""
-        # from sedona.spark import SedonaContext
-        # self.sedona = SedonaContext.create(self.spark)
-        self._sedona_initialized = True
-        logger.info("[Lakehouse/Sedona] Geospatial engine initialized")
+        # Apache Flink (optional)
+        try:
+            from pyflink.datastream import StreamExecutionEnvironment  # type: ignore
+            self.flink_env = StreamExecutionEnvironment.get_execution_environment()
+            self.flink_env.set_parallelism(int(os.getenv("FLINK_PARALLELISM", "4")))
+            self._flink_initialized = True
+            logger.info("[Lakehouse/Flink] Stream processing initialized")
+        except Exception:
+            logger.info("[Lakehouse/Flink] Not available")
 
-    def _init_ray(self):
-        """Initialize Ray for distributed ML."""
-        # import ray
-        # ray.init(address="auto")
-        self._ray_initialized = True
-        logger.info("[Lakehouse/Ray] Distributed compute initialized")
+        # Apache Sedona (optional, requires Spark)
+        if self._spark_initialized:
+            try:
+                from sedona.spark import SedonaContext  # type: ignore
+                self.sedona = SedonaContext.create(self.spark)
+                self._sedona_initialized = True
+                logger.info("[Lakehouse/Sedona] Geospatial engine initialized")
+            except Exception:
+                logger.info("[Lakehouse/Sedona] Not available")
 
-    def _init_datafusion(self):
-        """Initialize Apache DataFusion for fast analytical queries."""
-        # import datafusion
-        # self.datafusion_ctx = datafusion.SessionContext()
-        self._datafusion_initialized = True
-        logger.info("[Lakehouse/DataFusion] Query engine initialized")
+        # Ray (optional distributed ML)
+        try:
+            import ray  # type: ignore
+            if not ray.is_initialized():
+                ray.init(address=os.getenv("RAY_ADDRESS", "auto"), ignore_reinit_error=True)
+            self._ray_initialized = True
+            logger.info("[Lakehouse/Ray] Distributed compute initialized")
+        except Exception:
+            logger.info("[Lakehouse/Ray] Not available")
+
+        self._connected = True
+        logger.info("[Lakehouse] Initialization complete (delta=%s, datafusion=%s, spark=%s)",
+                    self._delta_available, self._datafusion_available, self._spark_initialized)
 
     def spark_sql(self, query: str) -> list[dict]:
         """Execute a Spark SQL query against Delta Lake tables."""
-        logger.info(f"[Lakehouse/Spark] Executing: {query[:100]}...")
-        # In production: return self.spark.sql(query).toPandas().to_dict(orient="records")
-        return []
+        if self._spark_initialized:
+            try:
+                df = self.spark.sql(query)
+                return df.toPandas().to_dict(orient="records")
+            except Exception as exc:
+                logger.error("[Lakehouse/Spark] Query failed: %s", exc)
+        # Fallback to DataFusion
+        return self.datafusion_query(query)
+
+    def datafusion_query(self, query: str) -> list[dict]:
+        """Execute a DataFusion analytical query against Parquet files."""
+        if self._datafusion_available and self._datafusion_ctx is not None:
+            try:
+                result = self._datafusion_ctx.sql(query)
+                return result.collect()[0].to_pydict() if result else []
+            except Exception as exc:
+                logger.error("[Lakehouse/DataFusion] Query failed: %s", exc)
+        # Fallback: PyArrow parquet scan
+        return self._pyarrow_query(query)
+
+    def _pyarrow_query(self, query: str) -> list[dict]:
+        """Minimal PyArrow-based query fallback (SELECT * FROM table LIMIT n)."""
+        try:
+            import re
+            import pyarrow.parquet as pq
+            import pyarrow.dataset as ds
+            # Extract table name from simple SELECT queries
+            m = re.search(r"FROM\s+(\S+)", query, re.IGNORECASE)
+            if not m:
+                return []
+            table_name = m.group(1).replace(".", "/")
+            path = f"{LAKEHOUSE_BASE_PATH}/bronze/{table_name}"
+            if not os.path.exists(path):
+                path = f"{LAKEHOUSE_BASE_PATH}/gold/{table_name}"
+            if not os.path.exists(path):
+                return []
+            dataset = ds.dataset(path, format="parquet")
+            limit_m = re.search(r"LIMIT\s+(\d+)", query, re.IGNORECASE)
+            limit = int(limit_m.group(1)) if limit_m else 1000
+            table = dataset.head(limit)
+            return table.to_pydict()
+        except Exception as exc:
+            logger.error("[Lakehouse/PyArrow] Query failed: %s", exc)
+            return []
+
+    def write_delta(self, table_path: str, records: list[dict], mode: str = "append") -> int:
+        """Write records to a Delta Lake table."""
+        if not records:
+            return 0
+        full_path = f"{LAKEHOUSE_BASE_PATH}/{table_path}"
+        os.makedirs(full_path, exist_ok=True)
+        if self._delta_available:
+            try:
+                import pyarrow as pa
+                from deltalake import write_deltalake  # type: ignore
+                table = pa.Table.from_pylist(records)
+                write_deltalake(full_path, table, mode=mode)
+                logger.debug("[Lakehouse/Delta] Wrote %d records to %s", len(records), full_path)
+                return len(records)
+            except Exception as exc:
+                logger.error("[Lakehouse/Delta] Write failed: %s", exc)
+        # Fallback: PyArrow Parquet write
+        return self._write_parquet(full_path, records)
+
+    def _write_parquet(self, path: str, records: list[dict]) -> int:
+        """Write records as Parquet files (Bronze layer fallback)."""
+        try:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+            import time
+            table = pa.Table.from_pylist(records)
+            filename = f"{path}/part-{int(time.time() * 1000)}.parquet"
+            pq.write_table(table, filename, compression="snappy")
+            logger.debug("[Lakehouse/Parquet] Wrote %d records to %s", len(records), filename)
+            return len(records)
+        except Exception as exc:
+            logger.error("[Lakehouse/Parquet] Write failed: %s", exc)
+            return 0
 
     def flink_process(self, stream_name: str, processor: Any) -> None:
         """Register a Flink stream processor."""
-        logger.info(f"[Lakehouse/Flink] Registering processor for stream: {stream_name}")
+        if self._flink_initialized:
+            logger.info("[Lakehouse/Flink] Registering processor for stream: %s", stream_name)
+        else:
+            logger.debug("[Lakehouse/Flink] Not available — skipping stream: %s", stream_name)
 
     def sedona_spatial_query(self, query: str) -> list[dict]:
         """Execute a Sedona spatial SQL query."""
-        logger.info(f"[Lakehouse/Sedona] Executing spatial query: {query[:100]}...")
+        if self._sedona_initialized:
+            try:
+                df = self.sedona.sql(query)
+                return df.toPandas().to_dict(orient="records")
+            except Exception as exc:
+                logger.error("[Lakehouse/Sedona] Query failed: %s", exc)
         return []
 
     def ray_submit(self, func: Any, *args, **kwargs) -> Any:
         """Submit a task to Ray for distributed execution."""
-        logger.info("[Lakehouse/Ray] Submitting distributed task")
-        # In production: return ray.get(ray.remote(func).remote(*args, **kwargs))
-        return None
-
-    def datafusion_query(self, query: str) -> list[dict]:
-        """Execute a DataFusion analytical query."""
-        logger.info(f"[Lakehouse/DataFusion] Executing: {query[:100]}...")
-        return []
+        if self._ray_initialized:
+            try:
+                import ray  # type: ignore
+                return ray.get(ray.remote(func).remote(*args, **kwargs))
+            except Exception as exc:
+                logger.error("[Lakehouse/Ray] Task failed: %s", exc)
+        # Fallback: run locally
+        return func(*args, **kwargs)
 
     def is_connected(self) -> bool:
         return self._connected
 
     def status(self) -> dict:
-        """Return status of all Lakehouse components."""
         return {
+            "delta_available": self._delta_available,
+            "datafusion": self._datafusion_available,
             "spark": self._spark_initialized,
             "flink": self._flink_initialized,
             "sedona": self._sedona_initialized,
             "ray": self._ray_initialized,
-            "datafusion": self._datafusion_initialized,
         }
 
     def close(self) -> None:
+        if self._spark_initialized:
+            try:
+                self.spark.stop()
+            except Exception:
+                pass
+        if self._ray_initialized:
+            try:
+                import ray  # type: ignore
+                ray.shutdown()
+            except Exception:
+                pass
         self._connected = False
         logger.info("[Lakehouse] All components shut down")

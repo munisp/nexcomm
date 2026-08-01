@@ -391,8 +391,30 @@ export const ledgerRouter = router({
         if (!job) break; // Queue empty
 
         try {
-          // In production, delegates to the Rust settlement engine
-          await new Promise(resolve => setTimeout(resolve, 2));
+          // Delegate to the Rust settlement engine via HTTP
+          const SETTLEMENT_URL = process.env.SETTLEMENT_ENGINE_URL ?? "http://settlement-engine:8005";
+          const payload = typeof job.payload === "string" ? JSON.parse(job.payload) : job.payload;
+          const res = await fetch(`${SETTLEMENT_URL}/api/v1/settle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              job_id:         job.id,
+              trade_id:       payload?.tradeId ?? payload?.trade_id,
+              buyer_id:       payload?.buyerId ?? payload?.buyer_id,
+              seller_id:      payload?.sellerId ?? payload?.seller_id,
+              symbol:         payload?.symbol,
+              quantity_kg:    payload?.quantityKg ?? payload?.quantity_kg,
+              price_ngn:      payload?.priceNgn ?? payload?.price_ngn,
+              gross_amount:   payload?.grossAmount ?? payload?.gross_amount,
+              currency:       payload?.currency ?? "NGN",
+              idempotency_key: payload?.idempotencyKey ?? payload?.idempotency_key ?? job.id,
+            }),
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Settlement engine returned ${res.status}: ${errText}`);
+          }
           await completeJob(job.id, "completed");
           processed++;
         } catch (error) {

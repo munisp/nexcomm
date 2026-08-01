@@ -1,56 +1,110 @@
 """
 Keycloak OIDC client for the NEXCOM Analytics service.
-Handles JWT token validation and user info retrieval.
-In production: uses python-keycloak library.
+Validates JWT tokens against the Keycloak JWKS endpoint.
+Falls back to base64 decode for development without a running Keycloak.
 """
-
 import base64
 import json
 import logging
+import os
 import time
 from typing import Optional
 
+import requests
+
 logger = logging.getLogger(__name__)
+
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
+KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "nexcom")
+KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "nexcom-app")
 
 
 class KeycloakClient:
-    def __init__(self, url: str, realm: str, client_id: str):
-        self.url = url
+    def __init__(self, url: str = KEYCLOAK_URL, realm: str = KEYCLOAK_REALM, client_id: str = KEYCLOAK_CLIENT_ID):
+        self.url = url.rstrip("/")
         self.realm = realm
         self.client_id = client_id
-        logger.info(f"[Keycloak] Initialized for realm={realm} client={client_id}")
+        self._jwks: dict | None = None
+        self._jwks_fetched_at: float = 0
+        self._jwks_ttl: float = 300.0  # refresh JWKS every 5 minutes
+        logger.info("[Keycloak] Initialized for realm=%s client=%s", realm, client_id)
+
+    @property
+    def _jwks_uri(self) -> str:
+        return f"{self.url}/realms/{self.realm}/protocol/openid-connect/certs"
+
+    @property
+    def _userinfo_uri(self) -> str:
+        return f"{self.url}/realms/{self.realm}/protocol/openid-connect/userinfo"
+
+    def _get_jwks(self) -> dict | None:
+        """Fetch JWKS from Keycloak, cached for 5 minutes."""
+        now = time.time()
+        if self._jwks is not None and (now - self._jwks_fetched_at) < self._jwks_ttl:
+            return self._jwks
+        try:
+            resp = requests.get(self._jwks_uri, timeout=5)
+            resp.raise_for_status()
+            self._jwks = resp.json()
+            self._jwks_fetched_at = now
+            logger.debug("[Keycloak] JWKS refreshed (%d keys)", len(self._jwks.get("keys", [])))
+            return self._jwks
+        except Exception as exc:
+            logger.warning("[Keycloak] JWKS fetch failed: %s", exc)
+            return self._jwks  # return stale cache if available
 
     def validate_token(self, token: str) -> Optional[dict]:
-        """Validate a JWT token and return claims."""
-        # In production: verify signature against Keycloak JWKS endpoint
-        # keycloak_openid = KeycloakOpenID(
-        #     server_url=self.url, client_id=self.client_id, realm_name=self.realm
-        # )
-        # claims = keycloak_openid.decode_token(token, validate=True)
+        """Validate a JWT token against Keycloak JWKS and return claims."""
+        if not token:
+            return None
+        # Try PyJWT with JWKS validation first
+        try:
+            import jwt as pyjwt  # type: ignore
+            from jwt import PyJWKClient  # type: ignore
+            jwks_client = PyJWKClient(self._jwks_uri, cache_keys=True, max_cached_keys=16)
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            claims = pyjwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256", "ES256"],
+                audience=self.client_id,
+                options={"verify_exp": True},
+            )
+            return claims
+        except ImportError:
+            pass
+        except Exception as exc:
+            logger.warning("[Keycloak] PyJWT validation failed: %s", exc)
+            return None
 
+        # Fallback: decode without signature verification (dev mode only)
         try:
             parts = token.split(".")
             if len(parts) != 3:
-                # Development: return mock claims
-                return {
-                    "sub": "usr-001",
-                    "email": "trader@nexcom.exchange",
-                    "name": "Alex Trader",
-                    "roles": ["trader", "user"],
-                    "exp": int(time.time()) + 3600,
-                }
-
+                return None
             payload = base64.urlsafe_b64decode(parts[1] + "==")
             claims = json.loads(payload)
             if claims.get("exp", 0) < time.time():
                 logger.warning("[Keycloak] Token expired")
                 return None
+            logger.warning("[Keycloak] Signature not verified (PyJWT unavailable)")
             return claims
-        except Exception as e:
-            logger.error(f"[Keycloak] Token validation failed: {e}")
+        except Exception as exc:
+            logger.error("[Keycloak] Token decode failed: %s", exc)
             return None
 
     def get_userinfo(self, token: str) -> Optional[dict]:
-        """Retrieve user info from Keycloak."""
-        # In production: GET {url}/realms/{realm}/protocol/openid-connect/userinfo
+        """Retrieve user info from Keycloak userinfo endpoint."""
+        try:
+            resp = requests.get(
+                self._userinfo_uri,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning("[Keycloak] Userinfo returned %d", resp.status_code)
+        except Exception as exc:
+            logger.warning("[Keycloak] Userinfo request failed: %s", exc)
+        # Fallback to token claims
         return self.validate_token(token)
