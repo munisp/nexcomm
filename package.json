@@ -164,7 +164,7 @@
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.3",
-    "add": "^2.0.6",
+    "add": "^2.0.9",
     "autoprefixer": "^10.5.4",
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.28.1",
