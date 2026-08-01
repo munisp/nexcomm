@@ -1163,3 +1163,73 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ─── Journey Orchestrator (Go — Temporal Worker + HTTP API for all 20 journeys) ─
+  journey-orchestrator-worker:
+    build:
+      context: journey-orchestrator
+      dockerfile: Dockerfile
+    container_name: nexcom-journey-worker
+    environment:
+      MODE: worker
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: nexcom
+      PORTAL_URL: http://portal:3000
+      GATEWAY_URL: http://gateway:8200
+      MATCHING_ENGINE_URL: http://matching-engine:8080
+      SETTLEMENT_ENGINE_URL: http://settlement-engine:8005
+      TRADING_ENGINE_URL: http://trading-engine:8001
+      KYC_SERVICE_URL: http://kyc-service:8003
+      RISK_SERVICE_URL: http://risk-management:8004
+      ANALYTICS_SERVICE_URL: http://analytics:8006
+      AI_ML_SERVICE_URL: http://ai-ml:8007
+      NOTIFICATION_SERVICE_URL: http://notification:8008
+      INGESTION_SERVICE_URL: http://ingestion-engine:8009
+      BLOCKCHAIN_SERVICE_URL: http://blockchain:8010
+      ANALYTICS_ENGINE_URL: http://analytics-engine:8011
+      USER_MANAGEMENT_URL: http://user-management:8012
+      CREDIT_SCORING_URL: http://credit-scoring:8089
+      USSD_ENGINE_URL: http://ussd-engine:8020
+      MIDDLEWARE_HUB_URL: http://middleware-hub:8013
+      MOJALOOP_HUB_URL: http://mojaloop-adapter:4001
+      FLUVIO_HTTP_URL: http://fluvio-proxy:8090
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+    networks: [nexcom]
+    restart: unless-stopped
+    depends_on:
+      - temporal
+      - kafka
+      - redis
+      - portal
+      - gateway
+      - matching-engine
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8015/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  journey-orchestrator-api:
+    build:
+      context: journey-orchestrator
+      dockerfile: Dockerfile
+    container_name: nexcom-journey-api
+    environment:
+      MODE: api
+      JOURNEY_API_PORT: "8015"
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: nexcom
+    ports:
+      - "8015:8015"
+    networks: [nexcom]
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8015/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

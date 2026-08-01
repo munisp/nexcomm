@@ -147,6 +147,137 @@ TOPIC_CONFIG: dict[str, dict[str, Any]] = {
         "partition_key": lambda r: r.get("currency", "UNKNOWN"),
         "description": "Mojaloop FSPIOP quote accepted (quote callback received)",
     },
+    # ── Journey Orchestrator Events (all 20 journeys) ──────────────────────────
+    "nexcom.users.onboarded": {
+        "table_path": "users/onboarding_events",
+        "partition_key": lambda r: r.get("farm_location", "UNKNOWN"),
+        "description": "Journey 1: Farmer onboarding completed",
+    },
+    "nexcom.compliance.kyc_reviews": {
+        "table_path": "compliance/kyc_reviews",
+        "partition_key": lambda r: r.get("decision", "UNKNOWN"),
+        "description": "Journey 2: KYC/AML review completed",
+    },
+    "nexcom.warehouse.receipts_issued": {
+        "table_path": "warehouse/receipts",
+        "partition_key": lambda r: r.get("commodity", "UNKNOWN"),
+        "description": "Journey 3: Warehouse receipt issued",
+    },
+    "nexcom.listings.created": {
+        "table_path": "exchange/listings",
+        "partition_key": lambda r: r.get("symbol", "UNKNOWN"),
+        "description": "Journey 4: Commodity listing created",
+    },
+    "nexcom.listings.new": {
+        "table_path": "exchange/listings",
+        "partition_key": lambda r: r.get("symbol", "UNKNOWN"),
+        "description": "Journey 4: New listing Fluvio event",
+    },
+    "nexcom.trades.executed": {
+        "table_path": "exchange/trades",
+        "partition_key": lambda r: r.get("symbol", "UNKNOWN"),
+        "description": "Journey 5: Spot trade executed",
+    },
+    "nexcom.trades.live": {
+        "table_path": "exchange/trades_live",
+        "partition_key": lambda r: r.get("symbol", "UNKNOWN"),
+        "description": "Journey 5/7: Real-time trade event",
+    },
+    "nexcom.futures.orders": {
+        "table_path": "exchange/futures_orders",
+        "partition_key": lambda r: r.get("contract", "UNKNOWN"),
+        "description": "Journey 7: Futures order executed",
+    },
+    "nexcom.risk.margin_calls": {
+        "table_path": "clearing/margin_calls",
+        "partition_key": lambda r: r.get("outcome", "UNKNOWN"),
+        "description": "Journey 8: Margin call resolved",
+    },
+    "nexcom.crossborder.transfers": {
+        "table_path": "payments/crossborder_transfers",
+        "partition_key": lambda r: r.get("receive_currency", "UNKNOWN"),
+        "description": "Journey 9: Cross-border FX transfer completed",
+    },
+    "nexcom.crossborder.completed": {
+        "table_path": "payments/crossborder_transfers",
+        "partition_key": lambda r: r.get("receive_currency", "UNKNOWN"),
+        "description": "Journey 9: Cross-border FX Fluvio event",
+    },
+    "nexcom.funds.DEPOSIT": {
+        "table_path": "payments/deposits",
+        "partition_key": lambda r: r.get("channel", "UNKNOWN"),
+        "description": "Journey 10: Deposit completed",
+    },
+    "nexcom.funds.WITHDRAWAL": {
+        "table_path": "payments/withdrawals",
+        "partition_key": lambda r: r.get("channel", "UNKNOWN"),
+        "description": "Journey 10: Withdrawal completed",
+    },
+    "nexcom.ussd.trades": {
+        "table_path": "channels/ussd_trades",
+        "partition_key": lambda r: r.get("symbol", "UNKNOWN"),
+        "description": "Journey 11: USSD mobile trade executed",
+    },
+    "nexcom.ussd.orders": {
+        "table_path": "channels/ussd_orders",
+        "partition_key": lambda r: r.get("symbol", "UNKNOWN"),
+        "description": "Journey 11: USSD order submitted",
+    },
+    "nexcom.ussd.repayments": {
+        "table_path": "banking/loan_repayments",
+        "partition_key": lambda r: "repayment",
+        "description": "USSD loan repayment event",
+    },
+    "nexcom.loans.applications": {
+        "table_path": "banking/loan_applications",
+        "partition_key": lambda r: r.get("decision", "UNKNOWN"),
+        "description": "Journey 12: Loan application processed",
+    },
+    "nexcom.loans.disbursements": {
+        "table_path": "banking/loan_disbursements",
+        "partition_key": lambda r: "disbursed",
+        "description": "Journey 13: Loan disbursed",
+    },
+    "nexcom.corporate_actions.processed": {
+        "table_path": "exchange/corporate_actions",
+        "partition_key": lambda r: r.get("action_type", "UNKNOWN"),
+        "description": "Journey 14: Corporate action processed",
+    },
+    "nexcom.surveillance.alerts": {
+        "table_path": "compliance/surveillance_alerts",
+        "partition_key": lambda r: r.get("severity", "UNKNOWN"),
+        "description": "Journey 15: Market surveillance alert",
+    },
+    "nexcom.compliance.audits": {
+        "table_path": "compliance/audits",
+        "partition_key": lambda r: r.get("audit_type", "UNKNOWN"),
+        "description": "Journey 16: Compliance audit completed",
+    },
+    "nexcom.brokers.onboarded": {
+        "table_path": "users/broker_onboarding",
+        "partition_key": lambda r: "broker",
+        "description": "Journey 17: Broker onboarding completed",
+    },
+    "nexcom.marketmaker.quotes": {
+        "table_path": "exchange/market_maker_quotes",
+        "partition_key": lambda r: r.get("symbol", "UNKNOWN"),
+        "description": "Journey 18: Market maker quote submitted",
+    },
+    "nexcom.marketdata.quotes": {
+        "table_path": "exchange/market_maker_quotes",
+        "partition_key": lambda r: r.get("symbol", "UNKNOWN"),
+        "description": "Journey 18: Market data quote Fluvio event",
+    },
+    "nexcom.regulatory.submissions": {
+        "table_path": "compliance/regulatory_submissions",
+        "partition_key": lambda r: r.get("regulator", "UNKNOWN"),
+        "description": "Journey 19: Regulatory report submitted",
+    },
+    "nexcom.platform.health": {
+        "table_path": "operations/platform_health",
+        "partition_key": lambda r: str(r.get("overall_healthy", "unknown")),
+        "description": "Journey 20: Platform health check completed",
+    },
 }
 
 ALL_TOPICS = list(TOPIC_CONFIG.keys())

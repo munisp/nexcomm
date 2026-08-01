@@ -129,6 +129,7 @@ const BlockchainTokenization    = lazy(() => import("./pages/BlockchainTokenizat
 const AiMlDashboard             = lazy(() => import("./pages/AiMlDashboard"));
 const RiskManagement            = lazy(() => import("./pages/RiskManagement"));
 const LakehouseDashboard        = lazy(() => import("./pages/LakehouseDashboard"));
+const JourneysDashboard         = lazy(() => import("./pages/JourneysDashboard"));
 const Mojaloop                  = lazy(() => import("./pages/Mojaloop"));
 const MojaloopOnboard           = lazy(() => import("./pages/MojaloopOnboard"));
 const MojaloopReconciliation    = lazy(() => import("./pages/MojaloopReconciliation"));
@@ -158,6 +159,7 @@ const CrossBorderFx              = lazy(() => import("./pages/CrossBorderFx"));
 const TemporalWorkflows          = lazy(() => import("./pages/TemporalWorkflows"));
 const UserProfileDashboard       = lazy(() => import("./pages/UserProfileDashboard"));
 const FileManager                = lazy(() => import("./pages/FileManager"));
+
 
 function PageLoader() {
   return (
@@ -292,6 +294,7 @@ function Router() {
         <Route path="/ai-ml"                                  component={AiMlDashboard} />
         <Route path="/risk-management"                        component={RiskManagement} />
         <Route path="/lakehouse"                               component={LakehouseDashboard} />
+        <Route path="/journeys"                                component={JourneysDashboard} />
         <Route path="/mojaloop"                                component={Mojaloop} />
         <Route path="/mojaloop/onboard"                        component={MojaloopOnboard} />
         <Route path="/mojaloop/reconciliation"                 component={MojaloopReconciliation} />

@@ -103,6 +103,7 @@ import { temporalRouter } from "./routers/temporalRouter";
 import { smartFillRouter } from "./routers/smartFillRouter";
 import { marketAssistantRouter } from "./routers/marketAssistantRouter";
 import { fileManagerRouter } from "./routers/fileManagerRouter";
+import { journeyRouter } from "./routers/journeyRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -206,6 +207,7 @@ export const appRouter = router({
   smartFill: smartFillRouter,
   marketAssistant: marketAssistantRouter,
   fileManager: fileManagerRouter,
+  journey: journeyRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure
