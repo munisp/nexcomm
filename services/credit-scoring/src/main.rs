@@ -26,6 +26,7 @@
 
 use actix_cors::Cors;
 use actix_web::{get, middleware, post, web, App, HttpResponse, HttpServer, Responder};
+use sqlx::PgPool;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -170,11 +171,15 @@ struct ErrorResponse {
 
 struct ScoringEngine {
     config: Config,
+    db: Option<PgPool>,
 }
 
 impl ScoringEngine {
     fn new(config: Config) -> Self {
-        Self { config }
+        Self { config, db: None }
+    }
+    fn with_db(config: Config, db: PgPool) -> Self {
+        Self { config, db: Some(db) }
     }
 
     /// Score repayment history (max 350 points)
@@ -566,13 +571,69 @@ async fn score_farmer(
         decision = %result.decision,
         "Score computed"
     );
+    // Persist score to credit_scores table
+    if let Some(ref pool) = engine.db {
+        let farmer_id_val = result.farmer_id as i32;
+        let score_val = result.score;
+        let band_val = result.score_band.clone();
+        let max_loan_val = result.max_loan_amount_ngn;
+        let rate_val = result.interest_rate_premium_bps as f64 / 100.0;
+        let factors_json = serde_json::to_value(&result.factors).unwrap_or(serde_json::Value::Null);
+        let _ = sqlx::query(
+            r#"INSERT INTO credit_scores (user_id, farmer_id, model, score, band, max_loan_ngn, interest_rate_pct, factors, valid_until, created_at, updated_at)
+               VALUES (0, $1, 'NEXCOM_AGRI_V1', $2, $3, $4, $5, $6, NOW() + INTERVAL '90 days', NOW(), NOW())"#
+        )
+        .bind(farmer_id_val)
+        .bind(score_val)
+        .bind(band_val)
+        .bind(max_loan_val)
+        .bind(rate_val)
+        .bind(factors_json)
+        .execute(pool)
+        .await;
+    }
     HttpResponse::Ok().json(result)
 }
 
 #[get("/api/v1/score/{farmer_id}")]
-async fn get_score(_farmer_id: web::Path<i64>) -> impl Responder {
-    // In production this would query the scores table in the database
-    // For now return a 404 indicating no cached score
+async fn get_score(
+    engine: web::Data<ScoringEngine>,
+    farmer_id: web::Path<i64>,
+) -> impl Responder {
+    let fid = farmer_id.into_inner();
+    // Query the credit_scores table for the most recent score for this farmer
+    if let Some(ref pool) = engine.db {
+        let row = sqlx::query!(
+            r#"SELECT score, band, max_loan_ngn::float8 as max_loan_ngn,
+                      interest_rate_pct::float8 as interest_rate_pct,
+                      factors, valid_until, created_at
+               FROM credit_scores
+               WHERE farmer_id = $1
+               ORDER BY created_at DESC
+               LIMIT 1"#,
+            fid as i32
+        )
+        .fetch_optional(pool)
+        .await;
+        match row {
+            Ok(Some(r)) => {
+                return HttpResponse::Ok().json(serde_json::json!({
+                    "farmer_id": fid,
+                    "score": r.score,
+                    "band": r.band,
+                    "max_loan_ngn": r.max_loan_ngn.unwrap_or(0.0),
+                    "interest_rate_pct": r.interest_rate_pct.unwrap_or(0.0),
+                    "factors": r.factors,
+                    "valid_until": r.valid_until,
+                    "created_at": r.created_at,
+                }));
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!("DB query for credit score failed: {}", e);
+            }
+        }
+    }
     HttpResponse::NotFound().json(ErrorResponse {
         error: "No cached score found. Submit a scoring request first.".to_string(),
         code: "SCORE_NOT_FOUND".to_string(),
@@ -758,7 +819,16 @@ async fn main() -> std::io::Result<()> {
     let port = config.port;
     info!("Starting NEXCOM Credit Scoring Engine on port {}", port);
 
-    let engine = web::Data::new(ScoringEngine::new(config));
+    // Connect to PostgreSQL (non-fatal — scoring still works without DB persistence)
+    let db_pool = sqlx::PgPool::connect(&config.db_url).await.ok();
+    if db_pool.is_none() {
+        tracing::warn!("PostgreSQL not available — score persistence disabled");
+    }
+    let engine = web::Data::new(if let Some(pool) = db_pool {
+        ScoringEngine::with_db(config, pool)
+    } else {
+        ScoringEngine::new(config)
+    });
 
     HttpServer::new(move || {
         let cors = Cors::default()

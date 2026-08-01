@@ -569,11 +569,26 @@ async fn handle_order_confirm(
                 .await
                 {
                     Ok(order_id) => {
+                        // Submit to matching engine (fire-and-forget)
+                        let engine_order_id = state.fund_flow.submit_order(
+                            user_id,
+                            o.symbol.as_deref().unwrap_or(""),
+                            &o.side,
+                            o.quantity.unwrap_or(0.0),
+                            None, // Market order — no limit price
+                            order_id,
+                        ).await;
+                        // Emit Kafka event
                         state.kafka.emit_order_placed(user_id, &o.side, o.symbol.as_deref().unwrap_or(""), o.quantity.unwrap_or(0.0), order_id).await.ok();
                         session.current_menu = "MAIN".to_string();
+                        let engine_ref = engine_order_id
+                            .as_deref()
+                            .map(|id| format!("\nEngine: {}", &id[..8.min(id.len())]))
+                            .unwrap_or_default();
                         Ok(MenuResponse::End(format!(
-                            "Order placed!\nRef: #{}\n{} {} {}MT\n\nYou will receive an SMS confirmation.\nDial *347*99# to check status.",
+                            "Order placed!\nRef: #{}{}\n{} {} {}MT\n\nYou will receive an SMS confirmation.\nDial *347*99# to check status.",
                             order_id,
+                            engine_ref,
                             o.side,
                             o.symbol.as_deref().unwrap_or(""),
                             o.quantity.unwrap_or(0.0)
@@ -1162,6 +1177,9 @@ async fn handle_loan_repay_pin(
             let amount = pr.amount_ngn.unwrap_or(0.0);
             let provider = pr.provider.as_deref().unwrap_or("MTN MoMo");
             let phone = session.phone_number.clone();
+            // Call TigerBeetle via gateway for actual fund transfer (fire-and-forget)
+            let reference_for_flow = format!("USSD-REP-{}-{}", loan_id, chrono::Utc::now().timestamp_millis());
+            let _ = state.fund_flow.repay_loan(user_id, loan_id, amount, &reference_for_flow).await;
             match db::make_repayment(&state.db, user_id, loan_id, amount, provider, &phone).await {
                 Ok(reference) => {
                     let _ = state.kafka.send(

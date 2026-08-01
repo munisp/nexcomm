@@ -22,6 +22,7 @@ mod options;
 mod orderbook;
 pub mod persistence;
 mod kafka;
+mod settlement_client;
 mod spot_fx;
 mod cross_currency;
 mod multi_currency;
@@ -47,6 +48,7 @@ use types::*;
 struct AppState {
     engine: Arc<ExchangeEngine>,
     kafka: Arc<kafka::KafkaPublisher>,
+    settlement: Arc<settlement_client::SettlementClient>,
     fx: Arc<spot_fx::SpotFxEngine>,
     cross_currency: Arc<cross_currency::CrossCurrencyEngine>,
     multi_currency: Arc<std::sync::RwLock<multi_currency::MultiCurrencyEngine>>,
@@ -94,9 +96,11 @@ async fn main() {
     let fx = Arc::new(spot_fx::SpotFxEngine::new());
     let cross_currency = Arc::new(cross_currency::CrossCurrencyEngine::new());
     let multi_currency = multi_currency::new_shared_engine();
+    let settlement = Arc::new(settlement_client::SettlementClient::new());
     let state = AppState {
         engine: engine.clone(),
         kafka: kafka_publisher.clone(),
+        settlement,
         fx,
         cross_currency,
         multi_currency,
@@ -364,6 +368,26 @@ async fn submit_order(
     State(engine): State<AppState>,
     Json(req): Json<NewOrderRequest>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
+    // ── Pre-trade balance check ──────────────────────────────────────────────
+    // For BUY LIMIT orders, verify the buyer has sufficient settlement balance.
+    // Fail-open: if gateway is unavailable (balance == -1), order proceeds.
+    if req.side == Side::Buy {
+        if let Some(price) = req.price {
+            if price > 0.0 {
+                let required_cents = (price * req.quantity * 100.0 * 1.1) as i64;
+                if required_cents > 0 {
+                    let balance = engine.settlement.get_balance(&req.account_id).await;
+                    if balance >= 0 && balance < required_cents {
+                        return Ok(Json(ApiResponse::<serde_json::Value>::err(format!(
+                            "Insufficient balance: required {} cents, available {} cents",
+                            required_cents, balance
+                        ))));
+                    }
+                }
+            }
+        }
+    }
+
     let order = Order::new(
         req.client_order_id,
         req.account_id,
@@ -423,6 +447,26 @@ async fn submit_order(
                     timestamp_us: kafka::now_us(),
                     node_id: std::env::var("NODE_ID").unwrap_or_else(|_| "nexcom-primary".to_string()),
                 }));
+
+                // ── Fund-Flow: TigerBeetle settlement + Fluvio + Temporal + Lakehouse ──
+                // Fire-and-forget for each trade fill. Never blocks the hot path.
+                for trade in &trades {
+                    let gross_amount = (trade.quantity as f64 / 1_000_000.0) * from_price(trade.price);
+                    let fee_amount = gross_amount * 0.001; // 0.1% platform fee
+                    engine.settlement.process_fill(settlement_client::TradeFill {
+                        trade_id: trade.id.to_string(),
+                        symbol: trade.symbol.clone(),
+                        buyer_account_id: trade.buyer_account.clone(),
+                        seller_account_id: trade.seller_account.clone(),
+                        quantity: trade.quantity as f64 / 1_000_000.0,
+                        price: from_price(trade.price),
+                        gross_amount,
+                        fee_amount,
+                        currency: "NGN".to_string(),
+                        executed_at_us: kafka::now_us(),
+                        idempotency_key: trade.id.to_string(),
+                    });
+                }
             }
             let response = serde_json::json!({
                 "order": {
@@ -465,6 +509,14 @@ async fn cancel_order(
     let uuid = uuid::Uuid::parse_str(&order_id).map_err(|_| StatusCode::BAD_REQUEST)?;
     match engine.cancel_order(&symbol, uuid, "system") {
         Ok(order) => {
+            // Release any reserved funds (TigerBeetle pending transfer void)
+            if let Some(reserve_id) = order.reserve_transfer_id.as_deref() {
+                if !reserve_id.is_empty() {
+                    let settlement = engine.settlement.clone();
+                    let rid = reserve_id.to_string();
+                    tokio::spawn(async move { settlement.release_funds(&rid).await });
+                }
+            }
             engine.kafka.publish(kafka::MatchingEvent::OrderCancelled(kafka::OrderCancelledEvent {
                 order_id: order.id.to_string(),
                 account_id: order.account_id.clone(),

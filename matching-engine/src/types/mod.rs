@@ -175,6 +175,10 @@ pub struct Order {
     pub expire_at: Option<DateTime<Utc>>,
     /// Nanosecond-precision timestamp for sequencing.
     pub sequence: u64,
+    /// TigerBeetle pending transfer ID for fund reservation (BUY orders only).
+    /// Voided on order cancellation to release reserved funds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reserve_transfer_id: Option<String>,
 }
 
 impl Order {
@@ -209,6 +213,7 @@ impl Order {
             updated_at: now,
             expire_at: None,
             sequence: now.timestamp_nanos_opt().unwrap_or(0) as u64,
+            reserve_transfer_id: None,
         }
     }
 

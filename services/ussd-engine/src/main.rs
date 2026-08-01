@@ -20,6 +20,7 @@
  */
 
 mod db;
+mod fund_flow;
 mod kafka;
 mod menu;
 mod metrics;
@@ -41,6 +42,7 @@ use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::db::DbPool;
+use crate::fund_flow::FundFlowClient;
 use crate::kafka::KafkaProducer;
 use crate::menu::{handle_input, MenuResponse};
 use crate::metrics::register_metrics;
@@ -69,6 +71,7 @@ pub struct AppState {
     pub db: DbPool,
     pub sessions: SessionStore,
     pub kafka: Arc<KafkaProducer>,
+    pub fund_flow: Arc<FundFlowClient>,
 }
 
 #[tokio::main]
@@ -97,7 +100,8 @@ async fn main() -> anyhow::Result<()> {
     info!("Connecting to Kafka...");
     let kafka = Arc::new(kafka::KafkaProducer::new(&kafka_brokers));
 
-    let state = AppState { db, sessions, kafka };
+    let fund_flow = Arc::new(FundFlowClient::new());
+    let state = AppState { db, sessions, kafka, fund_flow };
 
     // Prometheus metrics endpoint on :8021
     let metrics_handle = tokio::spawn(metrics::serve_metrics(8021));
