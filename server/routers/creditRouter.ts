@@ -82,7 +82,7 @@ export const creditRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [row] = await db.insert(creditScores).values({
         userId: input.userId,
         farmerId: input.farmerId,
@@ -165,7 +165,7 @@ export const creditRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [row] = await db.insert(collateralRegistry).values({
         ownerId: ctx.user.id,
         loanId: input.loanId,
@@ -289,7 +289,7 @@ export const creditRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const rows = await db.insert(loanRepaymentSchedules).values(
         input.installments.map(inst => ({
           loanId: input.loanId,
@@ -369,7 +369,7 @@ export const creditRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [row] = await db.insert(cropInsurancePolicies).values({
         farmerId: input.farmerId,
         userId: ctx.user.id,
@@ -512,7 +512,7 @@ export const creditRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [row] = await db.insert(loanLifecycleEvents).values({
         loanId: input.loanId,
         eventType: input.eventType,

@@ -91,7 +91,7 @@ export const settlementsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       // Idempotency check: return existing settlement if already created
       const existing = await db

@@ -221,7 +221,7 @@ export const ussdRouter = router({
         throw new TRPCError({ code: "FORBIDDEN" });
       }
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       await db
         .insert(ussdPins)

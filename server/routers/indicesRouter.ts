@@ -138,7 +138,7 @@ export const indicesRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (input.currentValue !== undefined) updates.currentValue = String(input.currentValue);
       if (input.changePercent !== undefined) updates.changePercent = String(input.changePercent);

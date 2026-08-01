@@ -70,7 +70,7 @@ async function recalcMarginAccount(db: Awaited<ReturnType<typeof getDb>>, userId
 
 /** Ensure a margin account exists for the user, creating one if needed */
 async function ensureMarginAccount(db: Awaited<ReturnType<typeof getDb>>, userId: number) {
-    if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+    if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
   const existing = await db
     .select()

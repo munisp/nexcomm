@@ -74,7 +74,7 @@ export const temporalRouter = router({
     }
 
     const workflowId =
-      input.workflowId ?? `${wfName.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      input.workflowId ?? `${wfName.toLowerCase()}-${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
 
     await triggerTemporalWorkflow(wfName, input.payload, workflowId);
 

@@ -216,7 +216,7 @@ export const telegramRouter = router({
   // ─── Protected: Initiate Account Link ────────────────────────────────────────
   linkAccount: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+        if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
     const code = crypto.randomBytes(3).toString("hex").toUpperCase();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
@@ -298,7 +298,7 @@ export const telegramRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       const updateData: Record<string, unknown> = { updatedAt: new Date() };
       if (input.alertsEnabled !== undefined) updateData.alertsEnabled = input.alertsEnabled;
@@ -340,7 +340,7 @@ export const telegramRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [alert] = await db
         .insert(priceAlerts)
         .values({

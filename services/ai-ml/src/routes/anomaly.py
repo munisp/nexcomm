@@ -90,19 +90,13 @@ def _extract_isolation_features(symbol: str) -> np.ndarray:
 
 def _isolation_forest_score(features: np.ndarray) -> float:
     """
-    Compute anomaly score using Isolation Forest logic.
-    Production: load pre-trained sklearn IsolationForest from model registry.
+    Compute anomaly score using the trained scikit-learn IsolationForest model.
     Score in [0, 1] where higher = more anomalous.
+    Features: [price_return_1h, volume_ratio, buy_sell_ratio, rsi_14_norm,
+               macd_signal, order_cancel_rate, large_order_ratio, spread_bps_norm]
     """
-    # Normalised Mahalanobis-like distance from expected feature distribution
-    # Expected means and stds from training data
-    means = np.array([0.0, 1.1, 1.05, 50.0, 0.0, 0.05, 0.15, 0.1])
-    stds  = np.array([0.01, 0.2, 0.1, 15.0, 1.0, 0.04, 0.1, 0.15])
-    z_scores = np.abs((features - means) / (stds + 1e-9))
-    # Isolation Forest: anomaly score is inversely related to average path length
-    # Approximate: score = 1 - exp(-mean(z^2)/2)
-    score = 1.0 - math.exp(-float(np.mean(z_scores ** 2)) / 2.0)
-    return min(1.0, score)
+    from src.models.isolation_forest import score_features
+    return score_features(features)
 
 
 # ─── GNN-style Graph Anomaly Detection ───────────────────────────────────────

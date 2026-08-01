@@ -372,7 +372,7 @@ export const kycAnalysisRouter = router({
     .input(z.object({ flagId: z.number().int().positive() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [flag] = await db
         .select()
         .from(reKycFlags)

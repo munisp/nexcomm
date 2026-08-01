@@ -208,7 +208,7 @@ export const whatsappRouter = router({
     .input(z.object({ phoneNumber: z.string().min(10).max(20) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       const token = crypto.randomBytes(4).toString("hex").toUpperCase();
       const waId = input.phoneNumber.replace(/\D/g, "");

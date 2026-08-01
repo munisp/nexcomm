@@ -427,6 +427,13 @@
       "when": 1783799903044,
       "tag": "0060_r66_operator_tracing",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785595203404,
+      "tag": "0061_curious_the_anarchist",
+      "breakpoints": true
     }
   ]
 }

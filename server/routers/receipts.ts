@@ -85,7 +85,7 @@ export const receiptsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       const targetUserId = (ctx.user.role === "admin" && input.userId) ? input.userId : ctx.user.id;
       const { randomUUID } = await import('crypto');

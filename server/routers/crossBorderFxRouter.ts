@@ -68,7 +68,7 @@ export const crossBorderFxRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
 
-    const transferId = `xbfx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const transferId = `xbfx-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
     const workflowId = `xborder-${transferId}`;
 
     // Persist the transfer record in crossBorderLedgerEntries

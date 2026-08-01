@@ -27,7 +27,7 @@ export const watchlistRouter = router({
     .input(z.object({ symbol: z.string().min(1).max(32) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       // Check if already exists
       const existing = await db
         .select()

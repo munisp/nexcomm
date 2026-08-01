@@ -357,24 +357,7 @@ export const securityRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const _id = Math.floor(Math.random() * 900_000) + 100_000;
-        return {
-          id: _id,
-          userId: input.userId ?? null,
-          eventType: input.eventType,
-          severity: input.severity,
-          status: "OPEN" as const,
-          title: input.title,
-          description: input.description,
-          ipAddress: input.ipAddress ?? null,
-          metadata: null,
-          resolvedAt: null,
-          resolvedBy: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-      }
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       const [event] = await db
         .insert(securityEvents)

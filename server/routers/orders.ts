@@ -887,7 +887,7 @@ export const ordersRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Provide at least one of quantity or price" });
       }
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       // Fetch only the user's own amendable orders that match the requested IDs
       const rows = await db
@@ -986,7 +986,7 @@ export const ordersRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [row] = await db
         .insert(savedOrders)
         .values({

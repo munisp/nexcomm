@@ -129,14 +129,7 @@ export const portfolioRouter = router({
   // ── recordEquitySnapshot ──────────────────────────────────────────────────
   recordEquitySnapshot: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) {
-      const now = new Date();
-      return {
-        id: Math.floor(Math.random() * 900_000) + 100_000,
-        userId: ctx.user.id, snapshotDate: now, spotPnl: "0", futuresPnl: "0",
-        optionsPnl: "0", cashBalance: "0", totalEquity: "0", createdAt: now,
-      };
-    }
+    if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
     const summary = await computePortfolioSummary(ctx.user.id);
     const [snap] = await db
@@ -310,10 +303,7 @@ export const portfolioRouter = router({
     .input(z.object({ userId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) {
-        const now = new Date();
-        return { id: Math.floor(Math.random() * 900_000) + 100_000, userId: input.userId, snapshotDate: now, spotPnl: "0", futuresPnl: "0", optionsPnl: "0", cashBalance: "0", totalEquity: "0", createdAt: now };
-      }
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       const summary = await computePortfolioSummary(input.userId);
       const [snap] = await db

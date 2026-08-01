@@ -1,3 +1,4 @@
+import { randomUUID as _uuid } from "crypto";
 import {
   bigint,
   bigserial,
@@ -3402,3 +3403,59 @@ export const userFiles = pgTable("user_files", {
 });
 export type UserFile = typeof userFiles.$inferSelect;
 export type InsertUserFile = typeof userFiles.$inferInsert;
+// ─── Added missing types from router imports ──────────────────────────────
+export type typeSecurityEvent = typeof securityEvents.$inferSelect;
+
+// ─── Double-Entry Ledger Tables ───────────────────────────────────────────────
+// These tables implement the 1B payments/day double-entry accounting architecture.
+// See server/pg-optimizations.ts (DOUBLE_ENTRY_DDL) for the full DDL with triggers.
+
+export const ledgerAccountTypeEnum = pgEnum("ledger_account_type", [
+  "TRADING", "SETTLEMENT", "MARGIN", "FEE", "ESCROW", "INSURANCE", "RESERVE",
+]);
+
+export const ledgerAccounts = pgTable("ledger_accounts", {
+  id: text("id").primaryKey().$defaultFn(() => _uuid()),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  accountType: text("account_type").notNull(),
+  currency: text("currency").notNull().default("NGN"),
+  balance: numeric("balance", { precision: 30, scale: 8 }).notNull().default("0"),
+  pendingDebit: numeric("pending_debit", { precision: 30, scale: 8 }).notNull().default("0"),
+  pendingCredit: numeric("pending_credit", { precision: 30, scale: 8 }).notNull().default("0"),
+  status: text("status").notNull().default("active"),
+  version: bigint("version", { mode: "number" }).notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type LedgerAccount = typeof ledgerAccounts.$inferSelect;
+export type InsertLedgerAccount = typeof ledgerAccounts.$inferInsert;
+
+export const ledgerEntries = pgTable("ledger_entries", {
+  id: text("id").notNull(),
+  journalId: text("journal_id").notNull(),
+  accountId: text("account_id").notNull().references(() => ledgerAccounts.id),
+  entryType: text("entry_type").notNull(),
+  amount: numeric("amount", { precision: 30, scale: 8 }).notNull(),
+  currency: text("currency").notNull().default("NGN"),
+  referenceType: text("reference_type").notNull(),
+  referenceId: text("reference_id").notNull(),
+  description: text("description"),
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type LedgerEntry = typeof ledgerEntries.$inferSelect;
+export type InsertLedgerEntry = typeof ledgerEntries.$inferInsert;
+
+export const ledgerJobs = pgTable("ledger_jobs", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  jobType: text("job_type").notNull(),
+  payload: jsonb("payload").notNull().default({}),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+});
+export type LedgerJob = typeof ledgerJobs.$inferSelect;

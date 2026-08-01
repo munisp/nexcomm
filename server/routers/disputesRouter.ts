@@ -474,7 +474,7 @@ export const disputesRouter = router({
   adminCheckSlaBreach: adminProcedure
     .mutation(async ({ ctx }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       const now = new Date();
       // Find unresolved disputes past SLA deadline that haven't been flagged yet

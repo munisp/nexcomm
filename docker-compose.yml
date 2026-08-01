@@ -20,6 +20,7 @@ volumes:
   temporal_data:         # Temporal workflow persistence (PostgreSQL-backed)
   permify_data:          # Permify RBAC policy store
   apisix_data:           # APISIX etcd config store
+  model_registry_data:   # AI/ML model registry — persists trained scikit-learn models
 
 services:
   # ─── Infrastructure ────────────────────────────────────────────────────────
@@ -333,6 +334,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - lakehouse_data:/data/lakehouse   # Read Gold layer feature store
+      - model_registry_data:/tmp/nexcom_models  # Persist trained ML models
     environment:
       PORT: "8007"
       KAFKA_BROKERS: kafka:9092
@@ -346,7 +348,7 @@ services:
       ingestion-engine:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8007/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8007/healthz || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

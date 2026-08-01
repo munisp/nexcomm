@@ -4,6 +4,7 @@
  * Tracks monthly volume, client counts, ratings, and compliance scores.
  */
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { participantPerformanceMetrics } from "../../drizzle/schema";
@@ -107,7 +108,7 @@ export const participantPerformanceRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       await db
         .insert(participantPerformanceMetrics)

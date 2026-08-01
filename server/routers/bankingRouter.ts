@@ -332,7 +332,7 @@ export const bankingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       const userId = ctx.user.id;
 
@@ -506,7 +506,7 @@ export const bankingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       const [farmer] = await db
         .select()
@@ -574,7 +574,7 @@ export const bankingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const farmerRow = await db
         .select({ id: farmerProfiles.id })
         .from(farmerProfiles)
@@ -624,7 +624,7 @@ export const bankingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const claimRef = `CLM-${ctx.user.id}-${Date.now()}`;
       await db.insert(notifications).values({
         userId: ctx.user.id,
@@ -857,7 +857,7 @@ export const bankingRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [loan] = await db.select().from(inputFinancingLoans)
         .where(eq(inputFinancingLoans.id, input.loanId));
       if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
@@ -933,7 +933,7 @@ export const bankingRouter = router({
 
   requestCreditCheck: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) { const _id = Math.floor(Math.random() * 900_000) + 100_000; return { success: true, id: _id }; }
+        if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
     const loans = await db.select().from(inputFinancingLoans)
       .where(eq(inputFinancingLoans.farmerId, ctx.user.id));
     const defaults = loans.filter(l => l.status === "DEFAULTED").length;

@@ -135,92 +135,105 @@ def _extract_user_features(user_id: str) -> dict:
 
 def _gradient_boosting_score(features: dict) -> tuple[int, int, int, int]:
     """
-    Gradient Boosting risk scoring (LightGBM-style).
-    Production: lgb.Booster.predict(feature_matrix) from model registry.
-
+    Gradient Boosting risk scoring using the trained scikit-learn model.
     Returns (overall_score, credit_score, counterparty_score, behavioural_score)
     All scores in [0, 100] where higher = higher risk.
     """
-    # Feature importance weights (from trained LightGBM feature importance)
-    w = {
-        "margin_utilisation": 0.12,
-        "max_drawdown_pct": 0.10,
-        "settlement_on_time_rate": -0.09,  # negative: higher rate = lower risk
-        "order_cancel_rate": 0.08,
-        "concentration_top1_pct": 0.07,
-        "jurisdiction_risk_score": 0.07,
-        "pep_flag": 0.06,
-        "adverse_media_flag": 0.05,
-        "regulatory_actions_count": 0.05,
-        "kyc_level": -0.05,  # higher KYC = lower risk
-        "avg_counterparty_risk": 0.05,
-        "win_rate": -0.04,  # higher win rate = lower risk
-        "settlement_failures_90d": 0.04,
-        "market_volatility_regime": 0.04,
-        "network_centrality": 0.03,
-        "account_age_days": -0.03,  # older account = lower risk
-        "night_trading_ratio": 0.03,
-        "large_order_ratio": 0.03,
-        "avg_settlement_delay_hours": 0.02,
-        "sharpe_ratio": -0.02,
-    }
+    from src.models.gradient_boosting import predict_risk, FEATURE_NAMES
+    import numpy as np
 
-    # Normalise features to [0, 1]
-    norm = {
-        "margin_utilisation": features["margin_utilisation"],
-        "max_drawdown_pct": min(1.0, features["max_drawdown_pct"] / 0.5),
-        "settlement_on_time_rate": features["settlement_on_time_rate"],
-        "order_cancel_rate": min(1.0, features["order_cancel_rate"] / 0.8),
-        "concentration_top1_pct": features["concentration_top1_pct"],
-        "jurisdiction_risk_score": features["jurisdiction_risk_score"],
-        "pep_flag": 1.0 if features["pep_flag"] else 0.0,
-        "adverse_media_flag": 1.0 if features["adverse_media_flag"] else 0.0,
-        "regulatory_actions_count": min(1.0, features["regulatory_actions_count"] / 5.0),
-        "kyc_level": features["kyc_level"] / 4.0,
-        "avg_counterparty_risk": features["avg_counterparty_risk"],
-        "win_rate": features["win_rate"],
-        "settlement_failures_90d": min(1.0, features["settlement_failures_90d"] / 10.0),
-        "market_volatility_regime": features["market_volatility_regime"],
-        "network_centrality": features["network_centrality"] * 2,
-        "account_age_days": min(1.0, features["account_age_days"] / 1000.0),
-        "night_trading_ratio": features["night_trading_ratio"] * 2.5,
-        "large_order_ratio": features["large_order_ratio"] * 3,
-        "avg_settlement_delay_hours": min(1.0, features["avg_settlement_delay_hours"] / 48.0),
-        "sharpe_ratio": max(0.0, min(1.0, (features["sharpe_ratio"] + 1) / 3.0)),
-    }
+    # Build 47-feature vector from the features dict
+    # Normalise all values to [0, 1] range
+    def norm(val, lo, hi):
+        return max(0.0, min(1.0, (val - lo) / (hi - lo + 1e-9)))
 
-    raw_score = 0.5  # intercept
-    for feat, weight in w.items():
-        raw_score += weight * norm.get(feat, 0.5)
+    feature_vec = np.array([
+        # Behavioural (10)
+        norm(features.get("trade_frequency_daily", 5), 0, 50),
+        norm(features.get("avg_order_size_usd", 10000), 1000, 500000),
+        features.get("order_cancel_rate", 0.08),
+        norm(features.get("avg_holding_period_hours", 24), 0, 720),
+        norm(features.get("cross_commodity_count", 3), 1, 12),
+        features.get("night_trading_ratio", 0.1),
+        features.get("large_order_ratio", 0.05),
+        features.get("order_amendment_rate", 0.05),
+        features.get("self_trade_rate", 0.001),
+        features.get("api_usage_ratio", 0.5),
+        # PnL (8)
+        norm(features.get("pnl_30d_usd", 0), -50000, 50000),
+        norm(features.get("pnl_90d_usd", 0), -150000, 150000),
+        features.get("win_rate", 0.5),
+        norm(features.get("avg_win_usd", 2000), 0, 20000),
+        norm(features.get("avg_loss_usd", 1500), 0, 15000),
+        features.get("max_drawdown_pct", 0.1),
+        norm(features.get("sharpe_ratio", 0.8), -2, 4),
+        norm(features.get("sortino_ratio", 1.2), -2, 5),
+        # Margin & exposure (9)
+        features.get("margin_utilisation", 0.3),
+        norm(features.get("current_exposure_usd", 100000), 0, 5000000),
+        norm(features.get("var_95_usd", 5000), 0, 200000),
+        norm(features.get("expected_shortfall_usd", 8000), 0, 300000),
+        norm(features.get("open_positions_count", 3), 0, 20),
+        features.get("concentration_top1_pct", 0.3),
+        features.get("concentration_top3_pct", 0.6),
+        norm(features.get("leverage_ratio", 1.5), 1, 10),
+        norm(features.get("unrealised_pnl_usd", 0), -100000, 100000),
+        # Settlement (6)
+        features.get("settlement_on_time_rate", 0.95),
+        norm(features.get("settlement_failures_90d", 0), 0, 10),
+        norm(features.get("avg_settlement_delay_hours", 2), 0, 48),
+        norm(features.get("total_settled_usd", 1000000), 0, 50000000),
+        features.get("settlement_dispute_rate", 0.01),
+        norm(features.get("failed_settlement_value_usd", 0), 0, 1000000),
+        # Account (5)
+        norm(features.get("account_age_days", 365), 0, 2000),
+        features.get("kyc_level", 2) / 4.0,
+        features.get("jurisdiction_risk_score", 0.2),
+        float(features.get("pep_flag", False)),
+        float(features.get("adverse_media_flag", False)),
+        # Network (4)
+        norm(features.get("counterparty_count", 10), 0, 100),
+        features.get("avg_counterparty_risk", 0.2),
+        features.get("network_centrality", 0.1),
+        features.get("clustering_coefficient", 0.3),
+        # Market (5)
+        features.get("market_volatility_regime", 0.3),
+        features.get("sector_correlation", 0.5),
+        features.get("commodity_concentration", 0.4),
+        norm(features.get("regulatory_actions_count", 0), 0, 5),
+        float(features.get("watchlist_flag", False)),
+    ], dtype=float)
 
-    overall = int(max(0, min(100, raw_score * 100)))
+    result = predict_risk(feature_vec)
+    overall = result["risk_score"]
 
-    # Sub-scores
+    # Compute sub-scores from probabilities
+    proba = result["probabilities"]
+    risk_weight = proba["LOW"] * 15 + proba["MEDIUM"] * 40 + proba["HIGH"] * 70 + proba["CRITICAL"] * 90
+
+    # Credit score: settlement + account features
     credit_raw = (
-        0.3 * norm["settlement_on_time_rate"]
-        + 0.25 * (1 - norm["margin_utilisation"])
-        + 0.2 * norm["kyc_level"]
-        + 0.15 * (1 - norm["settlement_failures_90d"])
-        + 0.1 * norm["account_age_days"]
+        (1 - features.get("settlement_on_time_rate", 0.95)) * 0.4 +
+        features.get("jurisdiction_risk_score", 0.2) * 0.3 +
+        float(features.get("pep_flag", False)) * 0.3
     )
-    credit_score = int(max(0, min(100, (1 - credit_raw) * 100)))
+    credit_score = int(min(100, max(0, credit_raw * 100)))
 
-    counterparty_raw = (
-        0.4 * norm["avg_counterparty_risk"]
-        + 0.3 * norm["jurisdiction_risk_score"]
-        + 0.2 * (norm["pep_flag"] + norm["adverse_media_flag"]) / 2
-        + 0.1 * norm["network_centrality"]
+    # Counterparty score: network + exposure features
+    cp_raw = (
+        features.get("avg_counterparty_risk", 0.2) * 0.5 +
+        features.get("network_centrality", 0.1) * 0.3 +
+        features.get("concentration_top1_pct", 0.3) * 0.2
     )
-    counterparty_score = int(max(0, min(100, counterparty_raw * 100)))
+    counterparty_score = int(min(100, max(0, cp_raw * 100)))
 
-    behavioural_raw = (
-        0.3 * norm["order_cancel_rate"]
-        + 0.25 * norm["concentration_top1_pct"]
-        + 0.2 * norm["night_trading_ratio"]
-        + 0.15 * norm["large_order_ratio"]
-        + 0.1 * norm["market_volatility_regime"]
+    # Behavioural score: trading behaviour features
+    beh_raw = (
+        features.get("order_cancel_rate", 0.08) * 0.4 +
+        features.get("large_order_ratio", 0.05) * 0.3 +
+        features.get("night_trading_ratio", 0.1) * 0.3
     )
-    behavioural_score = int(max(0, min(100, behavioural_raw * 100)))
+    behavioural_score = int(min(100, max(0, beh_raw * 100)))
 
     return overall, credit_score, counterparty_score, behavioural_score
 
