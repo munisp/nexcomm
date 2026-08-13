@@ -1,0 +1,204 @@
+# Sample GitHub Actions workflow for repositories using the Generic Codebase Assurance Prompt.
+# This workflow is a release blocker, not an autonomous code editor. A coding agent or
+# developer remediates the branch; this workflow independently verifies that no known
+# finding remains unaddressed before merge or release.
+name: Self-Fixing Assurance Release Blocker
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-fixing-assurance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.4.1"
+  LEDGER_FILE: assurance/remediation-ledger.json
+  ASSURANCE_REPORT: assurance/reports/assurance-gate-report.json
+
+jobs:
+  policy-and-ledger:
+    name: Policy and Remediation-Ledger Closure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # For a production policy, pin all third-party actions to reviewed immutable SHAs.
+      - name: Check out the immutable pull-request revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Install the locked dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the repository assurance detector
+        run: node scripts/assurance-gate.mjs --output "$ASSURANCE_REPORT"
+
+      - name: Require that all ledger findings are verified fixed
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const ledgerFile = process.env.LEDGER_FILE;
+          const reportFile = process.env.ASSURANCE_REPORT;
+          const fail = (message) => { console.error(`BLOCKED: ${message}`); process.exitCode = 1; };
+
+          if (!fs.existsSync(ledgerFile)) {
+            fail(`missing mandatory remediation ledger: ${ledgerFile}`);
+          } else {
+            let ledger;
+            try { ledger = JSON.parse(fs.readFileSync(ledgerFile, "utf8")); }
+            catch (error) { fail(`ledger is not valid JSON: ${error.message}`); }
+            const records = Array.isArray(ledger) ? ledger : ledger?.findings;
+            if (!Array.isArray(records)) {
+              fail("ledger must be an array or an object containing a findings array");
+            } else {
+              const validStates = new Set([
+                "DISCOVERED", "TRIAGED", "IMPLEMENTING", "REGRESSION_PROVEN",
+                "RETESTING", "VERIFIED_FIXED", "EXTERNAL_BLOCKED"
+              ]);
+              const invalid = records.filter((record) => !record?.id || !validStates.has(record?.state));
+              const unresolved = records.filter((record) => record?.state !== "VERIFIED_FIXED");
+              if (invalid.length) fail(`${invalid.length} ledger record(s) have no stable ID or valid lifecycle state`);
+              if (unresolved.length) {
+                console.error("Unresolved remediation ledger entries:");
+                for (const record of unresolved.slice(0, 100)) console.error(`- ${record.id}: ${record.state}`);
+                fail(`${unresolved.length} finding(s) are not VERIFIED_FIXED`);
+              }
+            }
+          }
+
+          if (!fs.existsSync(reportFile)) {
+            fail(`missing assurance report: ${reportFile}`);
+          } else {
+            let report;
+            try { report = JSON.parse(fs.readFileSync(reportFile, "utf8")); }
+            catch (error) { fail(`assurance report is not valid JSON: ${error.message}`); }
+            const total = Number(report?.summary?.total ?? report?.findings?.length ?? 0);
+            if (report?.decision !== "RELEASEABLE") fail(`assurance decision is ${report?.decision ?? "missing"}, not RELEASEABLE`);
+            if (total !== 0) fail(`assurance report contains ${total} finding(s)`);
+          }
+
+          if (process.exitCode) process.exit(process.exitCode);
+          console.log("Remediation ledger and assurance report both prove zero outstanding findings.");
+          NODE
+
+      - name: Upload policy and ledger evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assurance-policy-and-ledger-${{ github.sha }}
+          path: |
+            ${{ env.ASSURANCE_REPORT }}
+            ${{ env.LEDGER_FILE }}
+            assurance/feature-claims.json
+            assurance/compliance-control-matrix.json
+            assurance/audit-trail-policy.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  build-and-real-evidence:
+    name: Build, Real Dependencies, and End-to-End Evidence
+    needs: policy-and-ledger
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: release-assurance
+    steps:
+      - name: Check out the immutable pull-request revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Install the locked dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Run static checks, unit tests, and build
+        run: |
+          set -euo pipefail
+          pnpm run check
+          pnpm run test
+          pnpm run build
+
+      - name: Create an isolated real-dependency environment
+        env:
+          ASSURANCE_E2E_COMMAND: ${{ vars.ASSURANCE_E2E_COMMAND }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ASSURANCE_E2E_COMMAND:-}" ]; then
+            echo "BLOCKED: set the reviewed repository variable ASSURANCE_E2E_COMMAND."
+            echo "It must create only non-production database/cache/broker/identity/provider-sandbox dependencies, apply migrations, seed synthetic data, start the exact revision, wait for readiness, and preserve logs."
+            exit 1
+          fi
+          bash -euo pipefail -c "$ASSURANCE_E2E_COMMAND"
+
+      - name: Run public-interface end-to-end evidence
+        env:
+          BASE_URL: ${{ vars.ASSURANCE_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_URL:-}" ]; then
+            echo "BLOCKED: set ASSURANCE_BASE_URL to the isolated non-production application endpoint."
+            exit 1
+          fi
+          pnpm run test:e2e
+
+      - name: Re-run the assurance detector after integration evidence
+        run: |
+          set -euo pipefail
+          node scripts/assurance-gate.mjs --output "$ASSURANCE_REPORT"
+          node -e 'const r=require("./assurance/reports/assurance-gate-report.json"); if(r.decision!=="RELEASEABLE" || Number(r.summary?.total||0)!==0) process.exit(1)'
+
+      - name: Upload build, integration, and E2E evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assurance-real-evidence-${{ github.sha }}
+          path: |
+            dist/
+            test-results/
+            playwright-report/
+            assurance/reports/
+            assurance/remediation-ledger.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Repository configuration required outside this file:
+# 1. Protect main/release branches and require BOTH job names above before merge.
+# 2. Restrict the release-assurance environment and require independent approvers.
+# 3. Store test/sandbox credentials in protected GitHub secrets, never source/variables/logs.
+# 4. Set ASSURANCE_E2E_COMMAND and ASSURANCE_BASE_URL only for isolated non-production systems.
+# 5. Provide scripts/assurance-gate.mjs and assurance/remediation-ledger.json using the states
+#    validated above. The workflow will block instead of accepting missing evidence.

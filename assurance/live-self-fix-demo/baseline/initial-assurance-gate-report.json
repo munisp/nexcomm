@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "gate": "mission-critical-assurance",
+  "evaluatedAt": "2026-08-13T14:08:19.894Z",
+  "repositoryRoot": "/home/ubuntu/nexcomm/assurance/live-self-fix-demo",
+  "revision": "HEAD",
+  "fixtureRun": false,
+  "decision": "BLOCKED",
+  "summary": {
+    "blocker": 2,
+    "critical": 1,
+    "high": 2,
+    "medium": 0,
+    "low": 0,
+    "total": 5
+  },
+  "findings": [
+    {
+      "id": "FEATURE-CLAIM-MANIFEST-MISSING",
+      "severity": "BLOCKER",
+      "message": "Missing feature-claim manifest. Claimed capabilities cannot be traced to evidence.",
+      "file": null,
+      "line": null,
+      "evidence": null,
+      "fingerprint": "7d66d0093db97c3d"
+    },
+    {
+      "id": "AUDIT-TRAIL-POLICY-MISSING",
+      "severity": "BLOCKER",
+      "message": "Audit-trail policy/evidence file is missing.",
+      "file": null,
+      "line": null,
+      "evidence": null,
+      "fingerprint": "7db4ab38cedd728f"
+    },
+    {
+      "id": "SENSITIVE-LOGGING",
+      "severity": "CRITICAL",
+      "message": "Potential secret, token, password, authorization value, or cookie is written to application logs.",
+      "file": "src/payment-service.js",
+      "line": 5,
+      "evidence": "console.log(\"authorization",
+      "fingerprint": "e214edefe3d964fd"
+    },
+    {
+      "id": "MOCKED-RELEASE-EVIDENCE",
+      "severity": "HIGH",
+      "message": "Mock, stub, or monkey-patch detected in a test. It is not acceptable as real integration or end-to-end release evidence.",
+      "file": "tests/payment-service.test.js",
+      "line": 3,
+      "evidence": "vi.mock",
+      "fingerprint": "0e9c5211008d36b3"
+    },
+    {
+      "id": "MOCKED-RELEASE-EVIDENCE",
+      "severity": "HIGH",
+      "message": "Mock, stub, or monkey-patch detected in a test. It is not acceptable as real integration or end-to-end release evidence.",
+      "file": "tests/payment-service.test.js",
+      "line": 4,
+      "evidence": "mockResolvedValue",
+      "fingerprint": "20dd3e224538be71"
+    }
+  ],
+  "checkedTodoClaims": 2,
+  "verifiedClaims": 0,
+  "filesScanned": 4
+}

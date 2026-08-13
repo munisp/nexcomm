@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": 1,
+  "applicability": {
+    "soc2": "pending qualified compliance determination",
+    "gdpr": "pending qualified privacy/compliance determination",
+    "financial-services": "pending jurisdiction- and licence-specific legal/compliance determination"
+  },
+  "controls": [
+    {
+      "id": "SOC2-SCOPE-001",
+      "profile": "soc2",
+      "control": "Document the scope, system boundaries, control owner, evidence population, and test procedure for each applicable Trust Services Criterion.",
+      "owner": "UNASSIGNED",
+      "evidence": "",
+      "retention": "",
+      "status": "blocked"
+    },
+    {
+      "id": "GDPR-SCOPE-001",
+      "profile": "gdpr",
+      "control": "Document the processing inventory, lawful basis, data-subject rights workflow, retention/deletion evidence, and required processor/transfer/DPIA decisions.",
+      "owner": "UNASSIGNED",
+      "evidence": "",
+      "retention": "",
+      "status": "blocked"
+    },
+    {
+      "id": "FIN-SCOPE-001",
+      "profile": "financial-services",
+      "control": "Document applicable jurisdictions, licences, recordkeeping, reconciliation, segregation-of-duties, transaction-control, and regulatory-reporting obligations.",
+      "owner": "UNASSIGNED",
+      "evidence": "",
+      "retention": "",
+      "status": "blocked"
+    }
+  ],
+  "legalNotice": "This engineering control matrix is not legal advice and cannot establish regulatory compliance or a SOC 2 attestation. Qualified legal/compliance personnel must determine scope, legal obligations, and evidence retention."
+}

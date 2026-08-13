@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "policyVersion": "1.0.0",
+  "strictNoTestDoubles": true,
+  "featureManifest": "assurance/feature-claims.json",
+  "complianceMatrix": "assurance/compliance-control-matrix.json",
+  "auditPolicy": "assurance/audit-trail-policy.json",
+  "requireAuditPolicy": true,
+  "requiredComplianceProfiles": [
+    "soc2",
+    "gdpr",
+    "financial-services"
+  ],
+  "ignore": [
+    "assurance/validation-sample-intentionally-flawed",
+    "assurance/reports"
+  ]
+}

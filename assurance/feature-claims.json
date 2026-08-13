@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": 1,
+  "claims": [],
+  "guidance": "Every checked TODO, roadmap, release-note, or production-completion claim must be represented here. A claim may be verified only after the stated implementation paths and unit, integration, E2E, fault-injection, security, and audit evidence have executed successfully at lastVerifiedCommit. This intentionally empty register blocks release until the platform’s asserted features are independently evidenced."
+}

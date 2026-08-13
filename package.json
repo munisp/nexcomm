@@ -12,6 +12,7 @@
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "db:seed": "node scripts/seed.mjs",
+    "seed:assurance": "node scripts/seed-assurance-data.mjs",
     "db:setup": "pnpm db:push && pnpm db:seed",
     "db:reset": "drizzle-kit drop && pnpm db:push && pnpm db:seed",
     "test:e2e": "playwright test",
@@ -21,7 +22,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "audit:security": "pnpm audit --audit-level=high",
-    "ci": "pnpm run check && pnpm run test && pnpm run audit:security"
+    "assurance:gate": "node scripts/assurance-gate.mjs",
+    "ci": "pnpm run assurance:gate && pnpm run check && pnpm run test && pnpm run audit:security"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

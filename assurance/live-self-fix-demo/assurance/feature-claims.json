@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "claims": [
+    {
+      "id": "DEMO-PAYMENT-IDEMPOTENCY-001",
+      "source": { "file": "todo.md", "line": 3 },
+      "claim": "Payments are secured, idempotent, and safe to retry.",
+      "status": "verified",
+      "lastVerifiedCommit": "HEAD",
+      "implementation": ["src/payment-service.js", "tests/payment-service.test.js"],
+      "evidence": {
+        "unit": "tests/payment-service.test.js: invalid input and conflict tests",
+        "integration": "tests/payment-service.test.js: real filesystem persistence",
+        "e2e": "tests/payment-service.test.js: public FileBackedPaymentService interface",
+        "faultInjection": "tests/payment-service.test.js: concurrent duplicate requests",
+        "security": "src/payment-service.js: mandatory validation and no secret logging",
+        "audit": "assurance/audit-trail-policy.json"
+      }
+    },
+    {
+      "id": "DEMO-PAYMENT-NO-MOCKS-002",
+      "source": { "file": "todo.md", "line": 4 },
+      "claim": "Payment execution is verified against real behavior without mocks or partial implementations.",
+      "status": "verified",
+      "lastVerifiedCommit": "HEAD",
+      "implementation": ["src/payment-service.js", "tests/payment-service.test.js"],
+      "evidence": {
+        "unit": "tests/payment-service.test.js: Node native test runner",
+        "integration": "tests/payment-service.test.js: temporary filesystem store",
+        "e2e": "tests/payment-service.test.js: public service API",
+        "faultInjection": "tests/payment-service.test.js: parallel duplicate operation",
+        "security": "assurance-gate-report.json: strict no-test-doubles scan",
+        "audit": "assurance/audit-trail-policy.json"
+      }
+    }
+  ]
+}
