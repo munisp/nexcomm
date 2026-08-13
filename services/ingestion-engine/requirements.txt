@@ -40,7 +40,7 @@ datafusion==43.1.0
 
 # HTTP client
 httpx==0.28.1
-aiohttp==3.11.11
+aiohttp==3.14.3
 
 # Data processing
 pyarrow==18.1.0
