@@ -1,0 +1,9 @@
+{
+  "name": "strict-no-mocks-idempotent-transfer-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/transfer.test.ts",
+    "assurance:gate": "node ../../scripts/assurance-gate.mjs --root . --output assurance-gate-report.json"
+  }
+}

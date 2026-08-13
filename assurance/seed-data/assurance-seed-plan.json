@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "seedRunId": "assurance-seed-v1",
+  "generatedAt": "2026-01-15T09:30:00.000Z",
+  "environmentRule": "Synthetic test data only; never production customer, payment, token, credential, KYC-document, or live-provider data.",
+  "domains": {
+    "identityAndRoles": {
+      "users": 6,
+      "profiles": 6,
+      "kycQueue": 3
+    },
+    "marketReference": {
+      "instruments": 3,
+      "warehouses": 2,
+      "watchlists": 3,
+      "priceAlerts": 4
+    },
+    "physicalOperations": {
+      "warehouseReceipts": 4,
+      "depositRequests": 2,
+      "deliveryOrders": 1
+    },
+    "tradingAndSettlement": {
+      "orders": 4,
+      "settlements": 2,
+      "notifications": 4,
+      "portfolioSnapshots": 10
+    },
+    "bankingAndLedger": {
+      "bankAccounts": 3,
+      "bankTransactions": 3,
+      "shadowLedgerTransfers": 2,
+      "ledgerAccounts": 2,
+      "balancedLedgerEntries": 2
+    },
+    "auditAndWorkflow": {
+      "auditEvents": 5,
+      "workflowExecutions": 3
+    }
+  },
+  "fixtures": {
+    "users": [
+      {
+        "key": "farmer-01",
+        "openId": "assurance-farmer-01",
+        "name": "Test Ada Nwosu",
+        "email": "ada.nwosu@testing.invalid",
+        "role": "farmer",
+        "accountType": "FARMER",
+        "state": "Kaduna"
+      },
+      {
+        "key": "farmer-02",
+        "openId": "assurance-farmer-02",
+        "name": "Test Bayo Okafor",
+        "email": "bayo.okafor@testing.invalid",
+        "role": "farmer",
+        "accountType": "FARMER",
+        "state": "Nasarawa"
+      },
+      {
+        "key": "trader-01",
+        "openId": "assurance-trader-01",
+        "name": "Test Chika Bello",
+        "email": "chika.bello@testing.invalid",
+        "role": "trader",
+        "accountType": "TRADER",
+        "state": "Lagos"
+      },
+      {
+        "key": "broker-01",
+        "openId": "assurance-broker-01",
+        "name": "Test Damilola Yusuf",
+        "email": "damilola.yusuf@testing.invalid",
+        "role": "broker",
+        "accountType": "BROKER",
+        "state": "Abuja"
+      },
+      {
+        "key": "operator-01",
+        "openId": "assurance-operator-01",
+        "name": "Test Efe Danjuma",
+        "email": "efe.danjuma@testing.invalid",
+        "role": "user",
+        "accountType": "WAREHOUSE_OPERATOR",
+        "state": "Kano"
+      },
+      {
+        "key": "admin-01",
+        "openId": "assurance-admin-01",
+        "name": "Test Governance Officer",
+        "email": "governance.officer@testing.invalid",
+        "role": "admin",
+        "accountType": "TRADER",
+        "state": "Abuja"
+      }
+    ],
+    "instruments": [
+      {
+        "symbol": "TST-MAIZE-NG",
+        "name": "Test Nigerian Maize Spot",
+        "assetClass": "COMMODITY",
+        "baseCurrency": "NGN",
+        "quoteCurrency": "NGN",
+        "lotSize": "1",
+        "minLotSize": "1",
+        "tickSize": "0.01",
+        "settlementDays": 2
+      },
+      {
+        "symbol": "TST-GINGER-NG",
+        "name": "Test Nigerian Ginger Spot",
+        "assetClass": "COMMODITY",
+        "baseCurrency": "NGN",
+        "quoteCurrency": "NGN",
+        "lotSize": "1",
+        "minLotSize": "1",
+        "tickSize": "0.01",
+        "settlementDays": 2
+      },
+      {
+        "symbol": "TST-ABCP-NGN",
+        "name": "Test Agricultural Commercial Paper",
+        "assetClass": "FIXED_INCOME",
+        "baseCurrency": "NGN",
+        "quoteCurrency": "NGN",
+        "lotSize": "1000",
+        "minLotSize": "1000",
+        "tickSize": "0.01",
+        "settlementDays": 1
+      }
+    ],
+    "warehouses": [
+      {
+        "code": "TST-KAD-01",
+        "name": "Test Kaduna Grain Hub",
+        "state": "Kaduna",
+        "city": "Kaduna",
+        "capacityMt": "12000",
+        "availableCapacityMt": "7800",
+        "supportedCommodities": [
+          "MAIZE",
+          "GINGER",
+          "SOYBEAN"
+        ]
+      },
+      {
+        "code": "TST-ABJ-01",
+        "name": "Test Abuja Commodity Depot",
+        "state": "FCT",
+        "city": "Abuja",
+        "capacityMt": "8500",
+        "availableCapacityMt": "5100",
+        "supportedCommodities": [
+          "GINGER",
+          "SESAME"
+        ]
+      }
+    ]
+  },
+  "applyGuard": "Run only with --apply, ALLOW_TEST_SEED=I_UNDERSTAND_THIS_IS_NON_PRODUCTION, NODE_ENV not production, and a localhost database URL.",
+  "execution": {
+    "mode": "dry-run",
+    "result": "No database connection made. Use --apply with explicit test-only acknowledgement to seed a local development/test database."
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": 1,
+  "status": "blocked",
+  "scope": "Pending system and jurisdictional audit-event inventory.",
+  "integrityMechanism": "",
+  "accessControl": "",
+  "retention": "",
+  "restoreTestEvidence": "",
+  "exportTestEvidence": "",
+  "requiredEventFields": [
+    "eventId",
+    "operationId",
+    "correlationId",
+    "occurredAtUtc",
+    "ingestedAtUtc",
+    "actor",
+    "delegatedAuthority",
+    "role",
+    "tenantOrAccount",
+    "action",
+    "targetEntity",
+    "targetVersion",
+    "beforeAfterReference",
+    "decisionOrApprovalReference",
+    "result",
+    "errorCode",
+    "sourceContext",
+    "releaseRevision"
+  ],
+  "guidance": "The status must remain blocked until qualified owners define the immutable/tamper-evident storage design, access model, retention requirements, restoration procedure, and export/retrieval tests. A table named audit_log alone is not evidence of immutable auditability."
+}

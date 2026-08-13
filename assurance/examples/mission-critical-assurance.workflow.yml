@@ -1,0 +1,130 @@
+name: Mission-Critical Assurance Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mission-critical-assurance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  PNPM_VERSION: "10.4.1"
+  NODE_VERSION: "22"
+
+jobs:
+  policy:
+    name: Policy, Completeness, Compliance, and Security Gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the immutable revision under review
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Verify frozen dependency graph
+        run: pnpm install --frozen-lockfile
+
+      - name: Enforce mission-critical assurance policy
+        run: node scripts/assurance-gate.mjs --output assurance/reports/assurance-gate-report.json
+
+      - name: Upload assurance evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assurance-policy-evidence-${{ github.sha }}
+          path: assurance/reports/
+          if-no-files-found: warn
+          retention-days: 90
+
+  verification:
+    name: Build, Real Dependencies, and End-to-End Evidence
+    needs: policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: release-assurance
+    steps:
+      - name: Check out the immutable revision under review
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Static checks, unit tests, and dependency audit
+        run: pnpm run ci
+
+      - name: Build the deployable artifact
+        run: pnpm run build
+
+      - name: Install browser binaries for end-to-end tests
+        run: pnpm exec playwright install --with-deps chromium firefox
+
+      - name: Create and validate the isolated real-dependency environment
+        env:
+          ASSURANCE_E2E_COMMAND: ${{ vars.ASSURANCE_E2E_COMMAND }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ASSURANCE_E2E_COMMAND:-}" ]; then
+            echo "BLOCKED: Repository variable ASSURANCE_E2E_COMMAND is required."
+            echo "It must create an isolated test environment with real database, broker, cache, identity, payment sandbox, migrations, and a running application before E2E verification."
+            exit 1
+          fi
+          bash -euo pipefail -c "$ASSURANCE_E2E_COMMAND"
+
+      - name: Run public-interface end-to-end tests
+        env:
+          BASE_URL: ${{ vars.ASSURANCE_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_URL:-}" ]; then
+            echo "BLOCKED: Repository variable ASSURANCE_BASE_URL must identify the isolated application endpoint."
+            exit 1
+          fi
+          pnpm run test:e2e
+
+      - name: Upload build, E2E, and test evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assurance-verification-evidence-${{ github.sha }}
+          path: |
+            dist/
+            playwright-report/
+            test-results/
+            assurance/reports/
+          if-no-files-found: warn
+          retention-days: 90

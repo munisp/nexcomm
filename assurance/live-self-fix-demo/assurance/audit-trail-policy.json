@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "status": "verified",
+  "scope": "Local payment-service assurance demonstration only; not a production audit-log implementation.",
+  "integrityMechanism": "The example uses atomic replacement for durable operation state. Production audit evidence must use the enterprise audit-log design documented separately.",
+  "accessControl": "The test workspace is created in an OS temporary directory and removed after each Node test.",
+  "retention": "Synthetic local test records exist only for the test execution and contain no real personal, account, or payment data.",
+  "restoreTestEvidence": "tests/payment-service.test.js reads the durable operation state through service behavior during retry and conflict tests.",
+  "exportTestEvidence": "The demonstration has no production audit export; this control is explicitly limited to local fixture evidence."
+}

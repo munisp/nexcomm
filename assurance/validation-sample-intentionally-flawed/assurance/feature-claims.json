@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "claims": [
+    {
+      "id": "FIXTURE-TRANSFER-IDEMPOTENCY-001",
+      "source": { "file": "todo.md", "line": 3 },
+      "claim": "The file-backed transfer fixture rejects invalid requests, persists a committed operation exactly once for a payload-bound idempotency key, and rejects conflicting key reuse.",
+      "status": "verified",
+      "lastVerifiedCommit": "HEAD",
+      "implementation": ["src/transfer.ts", "tests/transfer.test.ts"],
+      "evidence": {
+        "unit": "tests/transfer.test.ts: invalid request and conflict tests",
+        "integration": "tests/transfer.test.ts: real file-backed persistence tests",
+        "e2e": "tests/transfer.test.ts: public FileBackedTransferStore API execution",
+        "faultInjection": "tests/transfer.test.ts: concurrent duplicate operation test",
+        "security": "tests/transfer.test.ts: invalid request rejection test",
+        "audit": "tests/transfer.test.ts: tamper-evident audit-chain test"
+      }
+    },
+    {
+      "id": "FIXTURE-TRANSFER-AUDIT-002",
+      "source": { "file": "todo.md", "line": 4 },
+      "claim": "The file-backed transfer fixture writes a linked tamper-evident audit history and is covered by real filesystem integration tests without mocks, fakes, stubs, or monkey-patches.",
+      "status": "verified",
+      "lastVerifiedCommit": "HEAD",
+      "implementation": ["src/transfer.ts", "tests/transfer.test.ts"],
+      "evidence": {
+        "unit": "tests/transfer.test.ts: deterministic hash verification",
+        "integration": "tests/transfer.test.ts: temporary filesystem integration",
+        "e2e": "tests/transfer.test.ts: public FileBackedTransferStore API execution",
+        "faultInjection": "tests/transfer.test.ts: parallel idempotency replay",
+        "security": "tests/transfer.test.ts: file mode and input validation exercised through implementation",
+        "audit": "tests/transfer.test.ts: linked audit-event hash verification"
+      }
+    }
+  ]
+}

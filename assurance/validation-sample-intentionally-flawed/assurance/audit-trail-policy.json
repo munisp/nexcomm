@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "status": "verified",
+  "scope": "FileBackedTransferStore test fixture committed transfers.",
+  "integrityMechanism": "Each JSONL audit event stores the SHA-256 hash of its canonical event payload and the preceding event hash.",
+  "accessControl": "The fixture creates persistence and audit files with owner-only mode 0600 inside a temporary test directory.",
+  "retention": "Temporary test data is retained only for the individual test and is removed in afterEach cleanup.",
+  "restoreTestEvidence": "tests/transfer.test.ts reads persisted operations and audit events through a newly completed operation path during each test.",
+  "exportTestEvidence": "tests/transfer.test.ts exports audit events through readAuditEvents and verifies their serialized integrity fields."
+}

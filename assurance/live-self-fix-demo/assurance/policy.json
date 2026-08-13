@@ -1,0 +1,9 @@
+{
+  "policyVersion": "1.0.0",
+  "strictNoTestDoubles": true,
+  "featureManifest": "assurance/feature-claims.json",
+  "auditPolicy": "assurance/audit-trail-policy.json",
+  "requireAuditPolicy": true,
+  "requiredComplianceProfiles": [],
+  "ignore": ["assurance-gate-report.json", "baseline/"]
+}

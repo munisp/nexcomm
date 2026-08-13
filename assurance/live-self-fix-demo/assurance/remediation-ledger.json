@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "commit": "HEAD",
+    "report": "baseline/initial-assurance-gate-report.json",
+    "initialDecision": "BLOCKED",
+    "initialFindingCount": 5
+  },
+  "findings": [
+    {
+      "id": "DEMO-FEATURE-CLAIM-MANIFEST-MISSING",
+      "detectorId": "FEATURE-CLAIM-MANIFEST-MISSING",
+      "severity": "BLOCKER",
+      "state": "VERIFIED_FIXED",
+      "rootCause": "Completion claims had no evidence-backed manifest.",
+      "fix": "Added two revision-pinned claim records with implementation and execution evidence.",
+      "regressionEvidence": "assurance/feature-claims.json and final assurance-gate report",
+      "verificationCommit": "HEAD"
+    },
+    {
+      "id": "DEMO-AUDIT-TRAIL-POLICY-MISSING",
+      "detectorId": "AUDIT-TRAIL-POLICY-MISSING",
+      "severity": "BLOCKER",
+      "state": "VERIFIED_FIXED",
+      "rootCause": "The policy required audit evidence but no scoped audit policy existed.",
+      "fix": "Added a scope-limited local audit policy and linked evidence without making a production compliance claim.",
+      "regressionEvidence": "assurance/audit-trail-policy.json and final assurance-gate report",
+      "verificationCommit": "HEAD"
+    },
+    {
+      "id": "DEMO-SENSITIVE-LOGGING-001",
+      "detectorId": "SENSITIVE-LOGGING",
+      "severity": "CRITICAL",
+      "state": "VERIFIED_FIXED",
+      "rootCause": "A hard-coded secret-like value was emitted under an authorization log label.",
+      "fix": "Removed hard-coded secret-like value and all sensitive logging; added validated request handling with no secret configuration path in the local fixture.",
+      "regressionEvidence": "final assurance-gate report shows no SENSITIVE-LOGGING finding",
+      "verificationCommit": "HEAD"
+    },
+    {
+      "id": "DEMO-MOCKED-RELEASE-EVIDENCE-001",
+      "detectorId": "MOCKED-RELEASE-EVIDENCE",
+      "severity": "HIGH",
+      "state": "VERIFIED_FIXED",
+      "rootCause": "A test double asserted an artificial successful payment response rather than service behavior.",
+      "fix": "Replaced mocked test with Node-native real filesystem integration tests for retry, conflict, validation, and concurrency.",
+      "regressionEvidence": "node --test tests/payment-service.test.js and final assurance-gate report",
+      "verificationCommit": "HEAD"
+    },
+    {
+      "id": "DEMO-MOCKED-RELEASE-EVIDENCE-002",
+      "detectorId": "MOCKED-RELEASE-EVIDENCE",
+      "severity": "HIGH",
+      "state": "VERIFIED_FIXED",
+      "rootCause": "The mocked behavior and assertion supplied no real durable operation evidence.",
+      "fix": "Removed the mocked assertion and added a true duplicate-operation count assertion against a temporary filesystem store.",
+      "regressionEvidence": "node --test tests/payment-service.test.js and final assurance-gate report",
+      "verificationCommit": "HEAD"
+    }
+  ]
+}

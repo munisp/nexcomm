@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "gate": "mission-critical-assurance",
+  "evaluatedAt": "2026-08-13T10:22:08.501Z",
+  "repositoryRoot": "/home/ubuntu/nexcomm/assurance/validation-sample-intentionally-flawed",
+  "revision": "HEAD",
+  "fixtureRun": false,
+  "decision": "RELEASEABLE",
+  "summary": {
+    "blocker": 0,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "total": 0
+  },
+  "findings": [],
+  "checkedTodoClaims": 2,
+  "verifiedClaims": 2,
+  "filesScanned": 8
+}
