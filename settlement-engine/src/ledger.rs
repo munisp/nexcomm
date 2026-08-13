@@ -1,15 +1,10 @@
-// TigerBeetle Ledger Integration
-// Provides double-entry bookkeeping for all financial transactions.
-// Attempts real TCP connection to TigerBeetle; falls back to in-memory ledger.
-
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use std::sync::Mutex;
+use serde::{Deserialize, Serialize};
 use std::net::TcpStream;
 use std::time::Duration;
 
-/// Account in the TigerBeetle ledger
+/// Account metadata returned only after the configured ledger adapter confirms
+/// creation. Balances must be obtained from TigerBeetle, never process memory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LedgerAccount {
     pub id: String,
@@ -32,7 +27,6 @@ pub enum AccountType {
     Escrow,
 }
 
-/// Transfer between two accounts in the ledger
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LedgerTransfer {
     pub id: String,
@@ -47,7 +41,6 @@ pub struct LedgerTransfer {
     pub timestamp: DateTime<Utc>,
 }
 
-/// Balance response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Balance {
     pub account_id: String,
@@ -57,16 +50,12 @@ pub struct Balance {
     pub currency: String,
 }
 
-/// TigerBeetle client with real TCP connection + in-memory fallback.
-/// Attempts to connect to TigerBeetle on initialization.
-/// If unavailable, operates in fallback mode with in-memory double-entry ledger.
+/// Strict TigerBeetle adapter. It does not implement a local double-entry
+/// ledger or fabricate balances when the real ledger is unavailable.
 pub struct TigerBeetleClient {
     address: String,
     http_client: reqwest::Client,
     connected: bool,
-    fallback_mode: bool,
-    accounts: Mutex<HashMap<String, LedgerAccount>>,
-    transfers: Mutex<Vec<LedgerTransfer>>,
 }
 
 impl TigerBeetleClient {
@@ -75,53 +64,52 @@ impl TigerBeetleClient {
             .timeout(Duration::from_secs(5))
             .build()
             .unwrap_or_default();
-
-        // Attempt real TCP connection to TigerBeetle
-        let (connected, fallback_mode) = match TcpStream::connect_timeout(
-            &address.parse().unwrap_or_else(|_| "127.0.0.1:3000".parse().unwrap()),
+        let connected = TcpStream::connect_timeout(
+            &address
+                .parse()
+                .unwrap_or_else(|_| "127.0.0.1:3000".parse().unwrap()),
             Duration::from_secs(3),
-        ) {
-            Ok(_stream) => {
-                tracing::info!(address = address, "Connected to TigerBeetle");
-                (true, false)
-            }
-            Err(e) => {
-                tracing::warn!(
-                    address = address,
-                    error = %e,
-                    "TigerBeetle unavailable, using in-memory ledger fallback"
-                );
-                (false, true)
-            }
-        };
-
+        )
+        .is_ok();
+        if connected {
+            tracing::info!(address = address, "TigerBeetle endpoint reachable");
+        } else {
+            tracing::error!(
+                address = address,
+                "TigerBeetle unavailable; settlement requests will fail"
+            );
+        }
         Self {
             address: address.to_string(),
             http_client,
             connected,
-            fallback_mode,
-            accounts: Mutex::new(HashMap::new()),
-            transfers: Mutex::new(Vec::new()),
         }
     }
 
-    /// Check if connected to real TigerBeetle
     pub fn is_connected(&self) -> bool {
         self.connected
     }
-
-    /// Check if operating in fallback mode
     pub fn is_fallback(&self) -> bool {
-        self.fallback_mode
+        false
     }
 
-    /// Create a new account in TigerBeetle (or in-memory fallback)
+    fn require_connection(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.connected {
+            Ok(())
+        } else {
+            Err("TigerBeetle is unavailable; no ledger fallback is permitted".into())
+        }
+    }
+
+    /// This service expects a real TigerBeetle-compatible adapter at the
+    /// configured address. A non-success response is a transaction failure.
     pub async fn create_account(
         &self,
         user_id: &str,
         currency: &str,
         account_type: AccountType,
     ) -> Result<LedgerAccount, Box<dyn std::error::Error>> {
+        self.require_connection()?;
         let account = LedgerAccount {
             id: uuid::Uuid::new_v4().to_string(),
             user_id: user_id.to_string(),
@@ -133,45 +121,18 @@ impl TigerBeetleClient {
             credits_posted: 0,
             created_at: Utc::now(),
         };
-
-        if self.connected && !self.fallback_mode {
-            let url = format!("http://{}/accounts", self.address);
-            match self.http_client.post(&url)
-                .json(&serde_json::json!({
-                    "id": account.id,
-                    "user_data_128": user_id,
-                    "ledger": 1,
-                    "code": 1,
-                    "flags": 0,
-                }))
-                .send()
-                .await
-            {
-                Ok(resp) if resp.status().is_success() => {
-                    tracing::info!(
-                        account_id = %account.id,
-                        "[REAL] Created TigerBeetle account"
-                    );
-                }
-                Ok(resp) => {
-                    tracing::warn!(status = %resp.status(), "[REAL] TigerBeetle non-success");
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "[REAL] TigerBeetle account creation failed");
-                }
-            }
-        } else {
-            tracing::info!(account_id = %account.id, "[FALLBACK] In-memory ledger account");
+        let url = format!("http://{}/accounts", self.address);
+        let response = self.http_client.post(&url).json(&serde_json::json!({"id": account.id, "user_data_128": user_id, "ledger": 1, "code": 1, "flags": 0})).send().await?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "TigerBeetle account creation returned HTTP {}",
+                response.status()
+            )
+            .into());
         }
-
-        if let Ok(mut accounts) = self.accounts.lock() {
-            accounts.insert(account.id.clone(), account.clone());
-        }
-
         Ok(account)
     }
 
-    /// Create a two-phase transfer (pending -> posted)
     pub async fn create_transfer(
         &self,
         debit_account_id: &str,
@@ -179,6 +140,10 @@ impl TigerBeetleClient {
         amount: u64,
         reference: &str,
     ) -> Result<LedgerTransfer, Box<dyn std::error::Error>> {
+        self.require_connection()?;
+        if amount == 0 {
+            return Err("ledger transfer amount must be positive".into());
+        }
         let transfer = LedgerTransfer {
             id: uuid::Uuid::new_v4().to_string(),
             debit_account_id: debit_account_id.to_string(),
@@ -191,104 +156,35 @@ impl TigerBeetleClient {
             flags: 0,
             timestamp: Utc::now(),
         };
-
-        if self.connected && !self.fallback_mode {
-            let url = format!("http://{}/transfers", self.address);
-            match self.http_client.post(&url)
-                .json(&serde_json::json!({
-                    "id": transfer.id,
-                    "debit_account_id": debit_account_id,
-                    "credit_account_id": credit_account_id,
-                    "amount": amount,
-                    "user_data_128": reference,
-                    "code": 1,
-                    "ledger": 1,
-                    "flags": 0,
-                }))
-                .send()
-                .await
-            {
-                Ok(resp) if resp.status().is_success() => {
-                    tracing::info!(transfer_id = %transfer.id, "[REAL] TigerBeetle transfer");
-                }
-                Ok(resp) => {
-                    tracing::warn!(status = %resp.status(), "[REAL] TigerBeetle transfer non-success");
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "[REAL] TigerBeetle transfer failed");
-                }
-            }
-        } else {
-            tracing::info!(transfer_id = %transfer.id, amount = amount, "[FALLBACK] In-memory transfer");
+        let url = format!("http://{}/transfers", self.address);
+        let response = self.http_client.post(&url).json(&serde_json::json!({"id": transfer.id, "debit_account_id": debit_account_id, "credit_account_id": credit_account_id, "amount": amount, "user_data_128": reference, "code": 1, "ledger": 1, "flags": 0})).send().await?;
+        if !response.status().is_success() {
+            return Err(format!("TigerBeetle transfer returned HTTP {}", response.status()).into());
         }
-
-        // Update in-memory balances
-        if let Ok(mut accounts) = self.accounts.lock() {
-            if let Some(debit_acct) = accounts.get_mut(debit_account_id) {
-                debit_acct.debits_posted += amount;
-            }
-            if let Some(credit_acct) = accounts.get_mut(credit_account_id) {
-                credit_acct.credits_posted += amount;
-            }
-        }
-
-        if let Ok(mut transfers) = self.transfers.lock() {
-            transfers.push(transfer.clone());
-        }
-
         Ok(transfer)
     }
 
-    /// Get account balance
+    /// The raw TigerBeetle protocol does not provide this HTTP JSON contract.
+    /// Returning a fabricated zero balance is forbidden; deploy the native
+    /// adapter before enabling balance reads in this service.
     pub async fn get_balance(
         &self,
-        account_id: &str,
+        _account_id: &str,
     ) -> Result<Balance, Box<dyn std::error::Error>> {
-        if let Ok(accounts) = self.accounts.lock() {
-            if let Some(account) = accounts.get(account_id) {
-                let available = account.credits_posted.saturating_sub(account.debits_posted);
-                let pending = account.credits_pending.saturating_sub(account.debits_pending);
-                let total = available + pending;
-                return Ok(Balance {
-                    account_id: account_id.to_string(),
-                    available: available.to_string(),
-                    pending: pending.to_string(),
-                    total: total.to_string(),
-                    currency: account.currency.clone(),
-                });
-            }
-        }
-
-        Ok(Balance {
-            account_id: account_id.to_string(),
-            available: "0".to_string(),
-            pending: "0".to_string(),
-            total: "0".to_string(),
-            currency: "USD".to_string(),
-        })
+        self.require_connection()?;
+        Err("TigerBeetle balance lookup requires the native client adapter".into())
     }
 
-    /// Get all accounts for a user
     pub async fn get_user_accounts(
         &self,
-        user_id: &str,
+        _user_id: &str,
     ) -> Result<Vec<LedgerAccount>, Box<dyn std::error::Error>> {
-        if let Ok(accounts) = self.accounts.lock() {
-            let user_accounts: Vec<LedgerAccount> = accounts
-                .values()
-                .filter(|a| a.user_id == user_id)
-                .cloned()
-                .collect();
-            return Ok(user_accounts);
-        }
-        Ok(vec![])
+        self.require_connection()?;
+        Err("TigerBeetle account discovery requires the durable account directory".into())
     }
 
-    /// Get all transfers (for reconciliation)
     pub async fn get_transfers(&self) -> Result<Vec<LedgerTransfer>, Box<dyn std::error::Error>> {
-        if let Ok(transfers) = self.transfers.lock() {
-            return Ok(transfers.clone());
-        }
-        Ok(vec![])
+        self.require_connection()?;
+        Err("TigerBeetle reconciliation requires the native client adapter".into())
     }
 }

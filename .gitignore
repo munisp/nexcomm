@@ -13,6 +13,10 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.staging
+.env.staging.*
+!.env.staging.template
+.local/
 
 # IDE and editor files
 .vscode/
@@ -113,3 +117,17 @@ temp/
 client/public/__manus__/version.json
 .project-config.json
 .manus/
+
+# Local assurance, scanner, and rendered-manifest evidence
+# Recreate these through the documented scripts; do not commit run-specific output.
+test-results/
+.audit*
+.assurance*
+.security*
+.github_preflight*
+.git_changeset*
+.git_commit_candidate_inventory*
+
+# Python bytecode
+__pycache__/
+*.py[cod]

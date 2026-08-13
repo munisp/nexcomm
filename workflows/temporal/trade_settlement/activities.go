@@ -49,10 +49,25 @@ func postJSON(ctx context.Context, url string, payload any) error {
 	return nil
 }
 
-// ValidateTradeAccountsActivity checks that both buyer and seller accounts exist.
+// ValidateTradeAccountsActivity verifies that both accounts exist in the authoritative ledger.
 func ValidateTradeAccountsActivity(ctx context.Context, input TradeSettlementInput) (bool, error) {
 	activity.GetLogger(ctx).Info("ValidateTradeAccounts", "tradeId", input.TradeID)
-	return true, nil // Gateway validates on transfer; optimistic here
+	for _, accountID := range []string{fmt.Sprintf("settlement-%s", input.BuyerUserID), fmt.Sprintf("settlement-%s", input.SellerUserID)} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, gatewayURL+"/api/ledger/accounts/"+accountID, nil)
+		if err != nil {
+			return false, fmt.Errorf("build ledger account validation request: %w", err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false, fmt.Errorf("validate ledger account %s: %w", accountID, err)
+		}
+		status := resp.StatusCode
+		resp.Body.Close()
+		if status != http.StatusOK {
+			return false, fmt.Errorf("ledger account %s validation returned HTTP %d", accountID, status)
+		}
+	}
+	return true, nil
 }
 
 // DebitBuyerActivity creates a TigerBeetle transfer to debit the buyer's settlement account.

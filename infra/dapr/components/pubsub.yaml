@@ -9,7 +9,7 @@ spec:
   metadata:
     # Kafka broker — matches the KAFKA_BROKERS env var
     - name: brokers
-      value: "${KAFKA_BROKERS}"
+      value: "kafka:9092"
     - name: authType
       value: "none"
     # Consumer group for Dapr subscribers

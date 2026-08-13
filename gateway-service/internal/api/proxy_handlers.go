@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +29,7 @@ func wsUpgrade(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
 	if wsKey == "" {
 		return nil, fmt.Errorf("missing Sec-WebSocket-Key")
 	}
+	// nosemgrep: go.lang.security.audit.crypto.use_of_weak_crypto.use-of-sha1 -- RFC 6455 mandates SHA-1 only for Sec-WebSocket-Accept derivation; it is not a signature or password hash.
 	h := sha1.New()
 	h.Write([]byte(wsKey + "258EAFA5-E914-47DA-95CA-5AB5B86F11D5"))
 	acceptKey := base64.StdEncoding.EncodeToString(h.Sum(nil))
@@ -113,39 +113,6 @@ func wsReadFrame(conn net.Conn) ([]byte, byte, error) {
 	return payload, opcode, nil
 }
 
-// Market data hub singleton for broadcasting to all WS clients
-var (
-	mdClients   = make(map[net.Conn]bool)
-	mdMu        sync.RWMutex
-	mdTickerOnce sync.Once
-)
-
-func startMarketDataTicker() {
-	mdTickerOnce.Do(func() {
-		go func() {
-			ticker := time.NewTicker(2 * time.Second)
-			defer ticker.Stop()
-			symbols := []string{"GOLD", "CRUDE", "COCOA", "COFFEE", "COTTON"}
-			for range ticker.C {
-				for _, sym := range symbols {
-					msg, _ := json.Marshal(map[string]interface{}{
-						"type":      "ticker",
-						"symbol":    sym,
-						"timestamp": time.Now().UTC().Format(time.RFC3339),
-						"price":     1800.0 + float64(time.Now().UnixNano()%10000)/100,
-						"volume":    1000 + time.Now().UnixNano()%5000,
-					})
-					mdMu.RLock()
-					for conn := range mdClients {
-						_ = wsWriteText(conn, msg)
-					}
-					mdMu.RUnlock()
-				}
-			}
-		}()
-	})
-}
-
 // proxyGet forwards a GET request to an upstream service and returns the response.
 func (s *Server) proxyGet(c *gin.Context, baseURL, path string) {
 	url := fmt.Sprintf("%s%s", baseURL, path)
@@ -159,13 +126,16 @@ func (s *Server) proxyGet(c *gin.Context, baseURL, path string) {
 		return
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	var result interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, models.APIResponse{Success: false, Error: "unable to read upstream response"})
+		return
+	}
+	if !json.Valid(body) {
 		c.Data(resp.StatusCode, "application/json", body)
 		return
 	}
-	c.JSON(resp.StatusCode, models.APIResponse{Success: true, Data: result})
+	c.JSON(resp.StatusCode, models.APIResponse{Success: true, Data: json.RawMessage(body)})
 }
 
 // proxyPost forwards a POST request to an upstream service.
@@ -181,13 +151,16 @@ func (s *Server) proxyPost(c *gin.Context, baseURL, path string) {
 		return
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	var result interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, models.APIResponse{Success: false, Error: "unable to read upstream response"})
+		return
+	}
+	if !json.Valid(body) {
 		c.Data(resp.StatusCode, "application/json", body)
 		return
 	}
-	c.JSON(resp.StatusCode, models.APIResponse{Success: true, Data: result})
+	c.JSON(resp.StatusCode, models.APIResponse{Success: true, Data: json.RawMessage(body)})
 }
 
 // ============================================================
@@ -577,57 +550,12 @@ func (s *Server) wsNotifications(c *gin.Context) {
 }
 
 func (s *Server) wsMarketData(c *gin.Context) {
-	// Check if this is a WebSocket upgrade request
-	if c.GetHeader("Upgrade") != "websocket" {
-		c.JSON(http.StatusOK, models.APIResponse{
-			Success: true,
-			Data: gin.H{
-				"message":  "WebSocket endpoint for market data",
-				"usage":    "Connect via ws://host:8000/api/v1/ws/market-data with Upgrade: websocket header",
-				"channels": []string{"ticker", "orderbook", "trades", "candles", "depth"},
-			},
-		})
-		return
-	}
-
-	conn, err := wsUpgrade(c.Writer, c.Request)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{Success: false, Error: err.Error()})
-		return
-	}
-
-	// Register client for market data broadcasts
-	startMarketDataTicker()
-	mdMu.Lock()
-	mdClients[conn] = true
-	mdMu.Unlock()
-
-	// Send welcome
-	welcome, _ := json.Marshal(map[string]interface{}{
-		"type":     "connected",
-		"channel":  "market-data",
-		"channels": []string{"ticker", "orderbook", "trades", "candles", "depth"},
+	// Market events must be delivered by an authoritative Fluvio-backed stream.
+	// Do not upgrade the connection or synthesize tickers while that dependency is unavailable.
+	c.JSON(http.StatusServiceUnavailable, models.APIResponse{
+		Success: false,
+		Error:   "authoritative market-data stream unavailable",
 	})
-	_ = wsWriteText(conn, welcome)
-
-	// Read loop
-	for {
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		_, opcode, err := wsReadFrame(conn)
-		if err != nil || opcode == 0x08 {
-			break
-		}
-		if opcode == 0x09 {
-			pong := []byte{0x8A, 0x00}
-			conn.Write(pong)
-		}
-	}
-
-	// Cleanup
-	mdMu.Lock()
-	delete(mdClients, conn)
-	mdMu.Unlock()
-	conn.Close()
 }
 
 // ============================================================

@@ -30,9 +30,10 @@ services:
     environment:
       POSTGRES_DB: nexcom
       POSTGRES_USER: nexcom
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexcom_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init/00-keycloak-schema.sql:/docker-entrypoint-initdb.d/00-keycloak-schema.sql:ro
     ports:
       - "5432:5432"
     networks: [nexcom]
@@ -96,6 +97,41 @@ services:
       - "3001:3001"
     networks: [nexcom]
 
+  # ─── Identity Provider ────────────────────────────────────────────────────
+
+  keycloak:
+    build:
+      context: ./infra/keycloak
+      dockerfile: Dockerfile
+    container_name: nexcom-keycloak
+    command:
+      - start
+      - --optimized
+      - --import-realm
+      - --http-enabled=true
+      - --health-enabled=true
+      - --metrics-enabled=true
+      - --proxy-headers=xforwarded
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?KEYCLOAK_ADMIN_USERNAME is required}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/nexcom
+      KC_DB_SCHEMA: keycloak
+      KC_DB_USERNAME: nexcom
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?KEYCLOAK_PUBLIC_URL is required}
+      KC_HOSTNAME_STRICT: "true"
+      KC_HOSTNAME_STRICT_HTTPS: "true"
+      KC_PROXY_HEADERS: xforwarded
+    volumes:
+      - ./infra/keycloak/nexcom-realm.json:/opt/keycloak/data/import/nexcom-realm.json:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [nexcom]
+
   # ─── Core Exchange Services ────────────────────────────────────────────────
 
   portal:
@@ -103,7 +139,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
       MATCHING_ENGINE_URL: http://matching-engine:8080
@@ -121,7 +157,16 @@ services:
       INGESTION_SERVICE_URL: http://ingestion-engine:8009
       BLOCKCHAIN_SERVICE_URL: http://blockchain:8010
       TIGERBEETLE_ADDRESSES: tigerbeetle:3001
-      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-nexcom}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_PORTAL_CLIENT_ID:-nexcom-portal}
+      PERMIFY_ENDPOINT: ${PERMIFY_ENDPOINT:-permify:3476}
+      PERMIFY_TENANT_ID: ${PERMIFY_TENANT_ID:-t1}
+      TEMPORAL_HOST: ${TEMPORAL_HOST:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-nexcom}
+      DAPR_HTTP_PORT: ${DAPR_HTTP_PORT:-3500}
+      DAPR_GRPC_PORT: ${DAPR_GRPC_PORT:-50001}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
     ports:
       - "3000:3000"
     depends_on:
@@ -161,7 +206,7 @@ services:
       PORT: "8005"
       TIGERBEETLE_ADDRESSES: tigerbeetle:3001
       KAFKA_BROKERS: kafka:9092
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       # Settlement engine publishes to nexcom.settlement.completed,
       # nexcom.settlement.failed, nexcom.payment.processed — consumed by
       # ingestion-engine Bronze layer for Lakehouse ingestion
@@ -194,14 +239,61 @@ services:
       MOJALOOP_ADAPTER_URL: http://mojaloop-adapter:4001
       AIML_SERVICE_URL: http://ai-ml:8007
       INGESTION_ENGINE_URL: http://ingestion-engine:8009
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      POSTGRES_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       TIGERBEETLE_ADDRESSES: tigerbeetle:3001
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-nexcom}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-nexcom-gateway}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
+      KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-}
+      PERMIFY_ENDPOINT: ${PERMIFY_ENDPOINT:-permify:3476}
+      PERMIFY_TENANT_ID: ${PERMIFY_TENANT_ID:-t1}
+      TEMPORAL_HOST: ${TEMPORAL_HOST:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-nexcom}
+      DAPR_HTTP_PORT: ${DAPR_HTTP_PORT:-3500}
+      DAPR_GRPC_PORT: ${DAPR_GRPC_PORT:-50001}
+      FLUVIO_ENDPOINT: ${FLUVIO_ENDPOINT:-fluvio-proxy:9003}
+      APISIX_ADMIN_URL: ${APISIX_ADMIN_URL:-http://apisix:9180}
+      APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     ports:
       - "8200:8200"
     depends_on:
       kafka: { condition: service_healthy }
+      keycloak: { condition: service_started }
+      permify: { condition: service_healthy }
+      temporal: { condition: service_healthy }
+      dapr-placement: { condition: service_started }
     networks: [nexcom]
+
+  gateway-dapr:
+    image: daprio/daprd:1.13.4
+    container_name: nexcom-gateway-dapr
+    command:
+      - ./daprd
+      - --app-id=nexcom-gateway
+      - --app-port=8200
+      - --dapr-http-port=3500
+      - --dapr-grpc-port=50001
+      - --placement-host-address=dapr-placement:50006
+      - --components-path=/components
+      - --config=/components/config.yaml
+      - --log-level=info
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-kafka:9092}
+    volumes:
+      - ./infra/dapr/components:/components:ro
+    depends_on:
+      - gateway
+      - dapr-placement
+      - redis
+      - kafka
+    network_mode: "service:gateway"
 
   risk-management:
     build:
@@ -211,7 +303,7 @@ services:
       PORT: "8004"
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
     ports:
       - "8004:8004"
     depends_on:
@@ -230,7 +322,7 @@ services:
       dockerfile: Dockerfile
     environment:
       PORT: "8003"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
       OPENSANCTIONS_API_KEY: ${OPENSANCTIONS_API_KEY:-}
     ports:
@@ -280,7 +372,7 @@ services:
     environment:
       PORT: "8009"
       KAFKA_BROKERS: kafka:9092
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       LAKEHOUSE_BASE_PATH: /data/lakehouse
       # Consumes: nexcom.order.filled, nexcom.order.cancelled, nexcom.order.placed,
       #           nexcom.trade.executed, nexcom.settlement.completed,
@@ -310,7 +402,7 @@ services:
       PORT: "8006"
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       LAKEHOUSE_BASE_PATH: /data/lakehouse
       AIML_SERVICE_URL: http://ai-ml:8007
       INGESTION_ENGINE_URL: http://ingestion-engine:8009
@@ -339,7 +431,7 @@ services:
       PORT: "8007"
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       LAKEHOUSE_BASE_PATH: /data/lakehouse
       INGESTION_ENGINE_URL: http://ingestion-engine:8009
     ports:
@@ -362,7 +454,7 @@ services:
     environment:
       PORT: "8010"
       KAFKA_BROKERS: kafka:9092
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
     ports:
       - "8010:8010"
     healthcheck:
@@ -399,7 +491,7 @@ services:
       PORT: "8011"
       MATCHING_ENGINE_URL: http://matching-engine:8080
       INGESTION_ENGINE_URL: http://ingestion-engine:8009
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
     ports:
       - "8011:8011"
     depends_on:
@@ -418,8 +510,8 @@ services:
       dockerfile: Dockerfile
     environment:
       PORT: "8012"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
-      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
     ports:
       - "8012:8012"
     depends_on:
@@ -440,7 +532,7 @@ services:
     environment:
       PORT: "4001"
       DFSP_ID: "nexcom-exchange"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       MOJALOOP_HUB_URL: ${MOJALOOP_HUB_URL:-http://central-ledger:3001}
       MOJALOOP_ALS_URL: ${MOJALOOP_ALS_URL:-http://account-lookup-service:4002}
       CALLBACK_URL: http://mojaloop-adapter:4001/callbacks
@@ -631,7 +723,7 @@ services:
       dockerfile: Dockerfile
     container_name: nexcom-opensearch-sync
     environment:
-      POSTGRES_URL: postgres://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      POSTGRES_URL: postgres://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       OPENSEARCH_URL: http://opensearch:9200
       SYNC_INTERVAL_SECONDS: "30"
       LOG_LEVEL: info
@@ -650,7 +742,7 @@ services:
       - DB=postgresql
       - DB_PORT=5432
       - POSTGRES_USER=nexcom
-      - POSTGRES_PWD=${POSTGRES_PASSWORD:-nexcom_dev}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_SEEDS=postgres
       - ENABLE_ES=false
     ports:
@@ -708,7 +800,7 @@ services:
       TEMPORAL_HOST: temporal:7233
       TEMPORAL_NAMESPACE: nexcom
       TEMPORAL_TASK_QUEUE: nexcom-main
-      POSTGRES_URL: postgres://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      POSTGRES_URL: postgres://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
       TIGERBEETLE_ADDRESS: tigerbeetle:3001
@@ -731,7 +823,7 @@ services:
     command:
       - serve
       - --database-engine=postgres
-      - --database-uri=postgres://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      - --database-uri=postgres://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       - --database-pool-max=10
       - --grpc-port=3478
       - --http-port=3476
@@ -831,7 +923,7 @@ services:
       - --components-path=/components
       - --log-level=info
     volumes:
-      - ./services/middleware-hub/dapr/components:/components:ro
+      - ./infra/dapr/components:/components:ro
     depends_on:
       - dapr-placement
       - kafka
@@ -847,7 +939,7 @@ services:
     container_name: nexcom-ussd-engine
     environment:
       PORT: "8020"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:9092
       AFRICASTALKING_API_KEY: ${AFRICASTALKING_API_KEY:-sandbox}
@@ -890,7 +982,7 @@ services:
     container_name: nexcom-bot-logic
     environment:
       PORT: "8022"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
       CHANNEL_GATEWAY_URL: http://channel-gateway:8021
       PORTAL_URL: http://portal:3000
@@ -911,7 +1003,7 @@ services:
     container_name: nexcom-core-banking
     environment:
       PORT: "8023"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
       CBS_ADAPTER: ${CBS_ADAPTER:-generic}
@@ -935,7 +1027,7 @@ services:
     environment:
       GRPC_PORT: "8024"
       HTTP_PORT: "8025"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
     ports:
@@ -980,7 +1072,7 @@ services:
     container_name: nexcom-credit-scoring
     environment:
       CREDIT_SCORING_PORT: "8089"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
       CORE_BANKING_URL: http://core-banking:8083
       MIN_SCORE_AUTO_APPROVE: "680"
@@ -1010,7 +1102,7 @@ services:
     container_name: nexcom-aml-alert-subscriber
     environment:
       AML_PORT: "8091"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
       ALERT_WEBHOOK_URL: ${AML_ALERT_WEBHOOK_URL:-http://nexcom:3000/api/aml-alerts}
@@ -1037,7 +1129,7 @@ services:
     container_name: nexcom-market-data
     environment:
       MARKET_DATA_PORT: "8092"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:9092
       YAHOO_FINANCE_ENABLED: "true"
@@ -1067,7 +1159,7 @@ services:
     container_name: nexcom-middleware-hub
     environment:
       MIDDLEWARE_HUB_PORT: "8093"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:-nexcom_dev}@postgres:5432/nexcom
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:9092
       CORE_BANKING_URL: http://core-banking:8083
@@ -1075,7 +1167,7 @@ services:
       MOJALOOP_URL: http://ml-api-adapter:3000
       USSD_ENGINE_URL: http://ussd-engine:8080
       BOT_LOGIC_URL: http://bot-logic:3001
-      JWT_SECRET: ${JWT_SECRET:-nexcom-dev-secret-change-in-prod}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
     ports:
       - "8093:8093"
     depends_on:

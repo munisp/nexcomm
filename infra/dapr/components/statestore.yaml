@@ -8,13 +8,13 @@ spec:
   version: v1
   metadata:
     - name: redisHost
-      value: "${REDIS_URL}"
+      value: "redis:6379"
     - name: redisPassword
       secretKeyRef:
         name: nexcom-secrets
         key: redis-password
     - name: enableTLS
-      value: "true"
+      value: "false"
     # Strong consistency for fund-flow idempotency keys
     - name: consistency
       value: "strong"

@@ -2,13 +2,13 @@
  * NEXCOM Go Gateway Client
  * Proxies calls to the Go gateway service (port 8200) which wraps:
  *   - TigerBeetle double-entry ledger (trade settlement, margin, fees)
- *   - Kafka event streaming (fallback: in-memory)
- *   - Redis cache (fallback: in-memory)
- *   - Temporal workflow engine (fallback: in-memory)
- *   - Keycloak identity (fallback: JWT-only)
- *   - Permify authorization (fallback: allow-all)
+ *   - Kafka event streaming (broker-confirmed delivery)
+ *   - Redis cache (Redis-backed operations)
+ *   - Temporal workflow engine (durable workflow execution)
+ *   - Keycloak identity (OIDC-verified tokens)
+ *   - Permify authorization (deny on dependency failure)
  *
- * All calls gracefully degrade if the gateway is unavailable.
+ * Calls return an explicit unavailable result when the gateway cannot respond.
  */
 
 const GATEWAY_BASE = process.env.GATEWAY_URL ?? "http://localhost:8200";

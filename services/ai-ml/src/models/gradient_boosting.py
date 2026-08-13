@@ -1,8 +1,8 @@
 """
 NEXCOM AI/ML — Gradient Boosting Risk Scoring Model
 =====================================================
-Real scikit-learn GradientBoostingClassifier trained on synthetic user
-behaviour data calibrated to real exchange risk distributions.
+Scikit-learn GradientBoostingClassifier trained from a validated, versioned
+lakehouse feature export and persisted for CPU-only inference.
 
 Predicts risk level (LOW/MEDIUM/HIGH/CRITICAL) from 47 features:
   - Behavioural features (10): trade frequency, cancel rate, holding period, etc.
@@ -29,6 +29,10 @@ logger = logging.getLogger("nexcom.ai.gradient_boosting")
 _MODEL_PATH = Path(os.environ.get("MODEL_REGISTRY_PATH", "/tmp/nexcom_models"))
 _MODEL_FILE = _MODEL_PATH / "gradient_boosting_risk.pkl"
 _SCALER_FILE = _MODEL_PATH / "gradient_boosting_risk_scaler.pkl"
+_TRAINING_DATA_PATH = os.environ.get("RISK_TRAINING_DATA_PATH", "")
+
+class ModelUnavailable(RuntimeError):
+    """Raised when a verified model artifact or real training export is unavailable."""
 
 _N_TRAINING_SAMPLES = 30_000
 _RISK_LABELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
@@ -142,10 +146,29 @@ def _generate_training_data(n_samples: int, rng: np.random.Generator) -> tuple[n
 
 
 def _train_model() -> tuple[GradientBoostingClassifier, StandardScaler]:
-    """Train the Gradient Boosting risk scoring model."""
-    logger.info("[GradientBoosting] Training risk model on %d samples...", _N_TRAINING_SAMPLES)
-    rng = np.random.default_rng(42)
-    X_train, y_train = _generate_training_data(_N_TRAINING_SAMPLES, rng)
+    """Train only from a validated lakehouse feature export, never generated samples."""
+    if not _TRAINING_DATA_PATH:
+        raise ModelUnavailable(
+            "RISK_TRAINING_DATA_PATH is required when no persisted risk-model artifact exists"
+        )
+    training_path = Path(_TRAINING_DATA_PATH)
+    if not training_path.is_file():
+        raise ModelUnavailable(f"risk training export not found: {training_path}")
+    try:
+        dataset = np.load(training_path, allow_pickle=False)
+        X_train = np.asarray(dataset["features"], dtype=np.float64)
+        y_train = np.asarray(dataset["labels"], dtype=np.int64)
+    except (KeyError, OSError, ValueError) as exc:
+        raise ModelUnavailable(f"invalid risk training export: {exc}") from exc
+    if X_train.ndim != 2 or X_train.shape[1] != len(FEATURE_NAMES):
+        raise ModelUnavailable(f"risk training features must have shape (n, {len(FEATURE_NAMES)})")
+    if y_train.ndim != 1 or y_train.shape[0] != X_train.shape[0] or X_train.shape[0] < 100:
+        raise ModelUnavailable("risk training export must contain at least 100 labelled records")
+    if not np.isfinite(X_train).all() or not np.isin(y_train, [0, 1, 2, 3]).all():
+        raise ModelUnavailable("risk training export contains invalid feature values or labels")
+    if len(np.unique(y_train)) < 2:
+        raise ModelUnavailable("risk training export must contain at least two risk classes")
+    logger.info("[GradientBoosting] Training risk model on %d lakehouse records...", X_train.shape[0])
 
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X_train)
@@ -187,7 +210,7 @@ def _load_model() -> tuple[GradientBoostingClassifier, StandardScaler] | None:
         logger.info("[GradientBoosting] Loaded pre-trained model from %s", _MODEL_FILE)
         return model, scaler
     except Exception as e:
-        logger.warning("[GradientBoosting] Failed to load model: %s — retraining", e)
+        logger.error("[GradientBoosting] Failed to load persisted model: %s", e)
         return None
 
 
@@ -196,7 +219,7 @@ _scaler_instance: StandardScaler | None = None
 
 
 def get_gradient_boosting_model() -> tuple[GradientBoostingClassifier, StandardScaler]:
-    """Return the singleton trained Gradient Boosting model and scaler."""
+    """Return the verified persisted model, or train from an explicit real-data export."""
     global _model_instance, _scaler_instance
     if _model_instance is None or _scaler_instance is None:
         loaded = _load_model()

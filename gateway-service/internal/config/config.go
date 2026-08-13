@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
 	Port                 string
@@ -16,6 +19,8 @@ type Config struct {
 	KeycloakRealm        string
 	KeycloakClientID     string
 	PermifyEndpoint      string
+	PermifyTenantID      string
+	PermifyAuthToken     string
 	PostgresURL          string
 	APISIXAdminURL       string
 	APISIXAdminKey       string
@@ -46,6 +51,8 @@ func Load() *Config {
 		KeycloakRealm:        getEnv("KEYCLOAK_REALM", "nexcom"),
 		KeycloakClientID:     getEnv("KEYCLOAK_CLIENT_ID", "nexcom-gateway"),
 		PermifyEndpoint:      getEnv("PERMIFY_ENDPOINT", "localhost:3476"),
+		PermifyTenantID:      getEnv("PERMIFY_TENANT_ID", "nexcom"),
+		PermifyAuthToken:     getSecretEnv("PERMIFY_AUTH_TOKEN"),
 		PostgresURL:          getEnv("POSTGRES_URL", "postgres://nexcom:nexcom@localhost:5432/nexcom?sslmode=disable"),
 		APISIXAdminURL:       getEnv("APISIX_ADMIN_URL", "http://localhost:9180"),
 		APISIXAdminKey:       getEnv("APISIX_ADMIN_KEY", "nexcom-apisix-key"),
@@ -67,4 +74,17 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// getSecretEnv supports the chart's read-only Secret-file convention while
+// retaining a direct environment fallback for explicitly managed local tests.
+func getSecretEnv(key string) string {
+	if path := os.Getenv(key + "_FILE"); path != "" {
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(contents))
+	}
+	return os.Getenv(key)
 }

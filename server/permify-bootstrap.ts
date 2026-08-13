@@ -231,8 +231,8 @@ async function writeRelationship(
  *
  * - Writes the NEXCOM schema (idempotent — Permify versions schemas)
  * - Seeds the OWNER_OPEN_ID user as exchange#admin (if env var is set)
- * - Gracefully degrades: if Permify is unreachable, logs a warning and
- *   continues startup (PERMIFY_FAIL_OPEN controls runtime behaviour)
+ * - Records an operator-visible warning if Permify is unreachable. Protected
+ *   runtime operations remain fail-closed until authorization is restored.
  */
 export async function bootstrapPermify(): Promise<void> {
   console.log("[Permify Bootstrap] Writing NEXCOM RBAC schema...");
@@ -241,7 +241,7 @@ export async function bootstrapPermify(): Promise<void> {
   if (!schemaVersion) {
     console.warn(
       "[Permify Bootstrap] Could not write schema — Permify may be offline. " +
-      "RBAC will use fail-open/closed policy (PERMIFY_FAIL_OPEN env var)."
+      "Protected operations will deny access until authorization is restored."
     );
     return;
   }

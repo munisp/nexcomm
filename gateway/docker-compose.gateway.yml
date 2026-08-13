@@ -33,8 +33,8 @@ services:
     ports:
       - "9080:9080/tcp"   # HTTP traffic
       - "9443:9443/tcp"   # HTTPS traffic
-      - "9180:9180/tcp"   # Admin API (restrict in production)
-      - "9091:9091/tcp"   # Prometheus metrics
+      - "127.0.0.1:9180:9180/tcp"   # Admin API: local operator access only
+      - "127.0.0.1:9091:9091/tcp"   # Metrics: local operator access only
     networks:
       - nexcom-gateway
       - nexcom-backend
@@ -84,10 +84,13 @@ services:
       - "com.nexcom.tier=perimeter"
 
   # ─────────────────────────────────────────────
-  # APISIX Dashboard — Web UI for route management
-  # Access at http://localhost:9000 (admin/admin — change in production!)
+  # APISIX Dashboard — Web UI for route management.
+  # Disabled by default and bound to loopback when explicitly enabled.
+  # Replace the non-secret placeholder credentials in a local deployment-only
+  # config before use; never expose this service through ingress.
   # ─────────────────────────────────────────────
   apisix-dashboard:
+    profiles: ["management"]
     container_name: nexcom-apisix-dashboard
     image: "apache/apisix-dashboard:3.0.1-alpine"
     restart: unless-stopped
@@ -96,7 +99,7 @@ services:
     volumes:
       - ./apisix-dashboard/conf.yaml:/usr/local/apisix-dashboard/conf/conf.yaml:ro
     ports:
-      - "9000:9000/tcp"
+      - "127.0.0.1:9000:9000/tcp"
     networks:
       - nexcom-gateway
     labels:
@@ -129,8 +132,7 @@ services:
       - "com.nexcom.tier=observability"
 
   # ─────────────────────────────────────────────
-  # Grafana — Dashboards for APISIX + open-appsec metrics
-  # Access at http://localhost:3001 (admin/admin — change in production!)
+  # Grafana — Dashboards for APISIX + open-appsec metrics; local operator access only.
   # ─────────────────────────────────────────────
   grafana:
     container_name: nexcom-grafana
@@ -139,14 +141,14 @@ services:
     depends_on:
       - prometheus
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-nexcom-grafana-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://localhost:3001
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
-      - "3001:3000/tcp"
+      - "127.0.0.1:3001:3000/tcp"
     networks:
       - nexcom-gateway
     labels:

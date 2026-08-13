@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexcom-staging-deployer
+  namespace: nexcom-staging
+  labels:
+    app.kubernetes.io/part-of: nexcom
+    app.kubernetes.io/component: staging-deployment
+automountServiceAccountToken: false
+---
+# The deployment identity is namespace-scoped. Helm is configured with
+# HELM_DRIVER=configmap so it never needs Secret list/read privileges.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nexcom-staging-deployer
+  namespace: nexcom-staging
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "services", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nexcom-staging-deployer
+  namespace: nexcom-staging
+subjects:
+  - kind: ServiceAccount
+    name: nexcom-staging-deployer
+    namespace: nexcom-staging
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nexcom-staging-deployer
+---
+# This service account is for health observation only. The external smoke suite
+# uses HTTPS endpoints and does not need a Kubernetes token. Use this identity
+# only for kubectl get/list/watch health collection.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexcom-staging-smoke-observer
+  namespace: nexcom-staging
+  labels:
+    app.kubernetes.io/part-of: nexcom
+    app.kubernetes.io/component: staging-smoke-observer
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nexcom-staging-smoke-observer
+  namespace: nexcom-staging
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nexcom-staging-smoke-observer
+  namespace: nexcom-staging
+subjects:
+  - kind: ServiceAccount
+    name: nexcom-staging-smoke-observer
+    namespace: nexcom-staging
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nexcom-staging-smoke-observer

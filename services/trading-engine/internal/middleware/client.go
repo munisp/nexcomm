@@ -62,19 +62,19 @@ func getEnv(key, fallback string) string {
 
 // TradeEvent represents a completed trade fill.
 type TradeEvent struct {
-	TradeID         string  `json:"trade_id"`
-	Symbol          string  `json:"symbol"`
-	BuyerOrderID    string  `json:"buyer_order_id"`
-	SellerOrderID   string  `json:"seller_order_id"`
-	BuyerUserID     string  `json:"buyer_user_id"`
-	SellerUserID    string  `json:"seller_user_id"`
-	Price           float64 `json:"price"`
-	Quantity        float64 `json:"quantity"`
-	GrossAmount     float64 `json:"gross_amount"`
-	FeeAmount       float64 `json:"fee_amount"`
-	Currency        string  `json:"currency"`
-	ExecutedAt      string  `json:"executed_at"`
-	IdempotencyKey  string  `json:"idempotency_key"`
+	TradeID        string  `json:"trade_id"`
+	Symbol         string  `json:"symbol"`
+	BuyerOrderID   string  `json:"buyer_order_id"`
+	SellerOrderID  string  `json:"seller_order_id"`
+	BuyerUserID    string  `json:"buyer_user_id"`
+	SellerUserID   string  `json:"seller_user_id"`
+	Price          float64 `json:"price"`
+	Quantity       float64 `json:"quantity"`
+	GrossAmount    float64 `json:"gross_amount"`
+	FeeAmount      float64 `json:"fee_amount"`
+	Currency       string  `json:"currency"`
+	ExecutedAt     string  `json:"executed_at"`
+	IdempotencyKey string  `json:"idempotency_key"`
 }
 
 // ProcessTradeFill is the single entry point for all trade fills.
@@ -117,13 +117,13 @@ func (c *Client) ProcessTradeFill(ctx context.Context, event TradeEvent) {
 //  3. Collect platform fee (code-3)
 func (c *Client) settleTigerBeetle(ctx context.Context, event TradeEvent) error {
 	type transfer struct {
-		TransferID     string `json:"transfer_id"`
-		DebitAccountID string `json:"debit_account_id"`
+		TransferID      string `json:"transfer_id"`
+		DebitAccountID  string `json:"debit_account_id"`
 		CreditAccountID string `json:"credit_account_id"`
-		Amount         int64  `json:"amount"`
-		Currency       string `json:"currency"`
-		Code           int    `json:"code"`
-		IdempotencyKey string `json:"idempotency_key"`
+		Amount          int64  `json:"amount"`
+		Currency        string `json:"currency"`
+		Code            int    `json:"code"`
+		IdempotencyKey  string `json:"idempotency_key"`
 	}
 
 	transfers := []transfer{
@@ -267,78 +267,81 @@ func (c *Client) postJSON(ctx context.Context, url string, payload any) error {
 }
 
 // GetUserBalance fetches the user's settlement account balance from the gateway.
-// Returns balance in cents (int64). Returns -1 on error (fail-open for availability).
+// Gateway failure is propagated; callers must not trade on an unknown balance.
 func (c *Client) GetUserBalance(ctx context.Context, userID string) (int64, error) {
-url := fmt.Sprintf("%s/api/v1/ledger/accounts/%s/balance", c.gatewayURL, userID)
-req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-if err != nil {
-return -1, err
-}
-resp, err := c.httpClient.Do(req)
-if err != nil {
-c.logger.Warn("GetUserBalance: gateway unavailable", zap.String("user_id", userID), zap.Error(err))
-return -1, nil // fail-open: allow order if gateway is down
-}
-defer resp.Body.Close()
-if resp.StatusCode != http.StatusOK {
-return -1, fmt.Errorf("gateway returned %d", resp.StatusCode)
-}
-var result struct {
-Balance int64 `json:"balance"`
-}
-if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-return -1, err
-}
-return result.Balance, nil
+	url := fmt.Sprintf("%s/api/v1/ledger/accounts/%s/balance", c.gatewayURL, userID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return -1, err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		c.logger.Warn("GetUserBalance: gateway unavailable", zap.String("user_id", userID), zap.Error(err))
+		return 0, fmt.Errorf("get user balance: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return -1, fmt.Errorf("gateway returned %d", resp.StatusCode)
+	}
+	var result struct {
+		Balance int64 `json:"balance"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return -1, err
+	}
+	return result.Balance, nil
 }
 
 // ReserveFunds creates a pending TigerBeetle transfer to reserve funds for an order.
-// Returns the transfer ID on success. Returns "" on error (fail-open).
+// A missing ledger confirmation is an error, not an implicit reservation.
 func (c *Client) ReserveFunds(ctx context.Context, userID string, amountCents int64, orderID string) (string, error) {
-payload := map[string]interface{}{
-"debit_account_id":  "user-settlement-" + userID,
-"credit_account_id": "exchange-clearing",
-"amount":            amountCents,
-"code":              2, // TransferMarginDeposit — pending hold
-"reference":         "order-reserve-" + orderID,
-}
-url := c.gatewayURL + "/api/v1/ledger/transfers/pending"
-body, _ := json.Marshal(payload)
-req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-if err != nil {
-return "", err
-}
-req.Header.Set("Content-Type", "application/json")
-resp, err := c.httpClient.Do(req)
-if err != nil {
-c.logger.Warn("ReserveFunds: gateway unavailable", zap.String("order_id", orderID), zap.Error(err))
-return "", nil // fail-open
-}
-defer resp.Body.Close()
-if resp.StatusCode != http.StatusCreated {
-return "", fmt.Errorf("reserve funds failed: status %d", resp.StatusCode)
-}
-var result struct {
-ID string `json:"id"`
-}
-if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-return "", err
-}
-return result.ID, nil
+	payload := map[string]interface{}{
+		"debit_account_id":  "user-settlement-" + userID,
+		"credit_account_id": "exchange-clearing",
+		"amount":            amountCents,
+		"code":              2, // TransferMarginDeposit — pending hold
+		"reference":         "order-reserve-" + orderID,
+	}
+	url := c.gatewayURL + "/api/v1/ledger/transfers/pending"
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		c.logger.Warn("ReserveFunds: gateway unavailable", zap.String("order_id", orderID), zap.Error(err))
+		return "", fmt.Errorf("reserve funds: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("reserve funds failed: status %d", resp.StatusCode)
+	}
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return result.ID, nil
 }
 
 // ReleaseFunds voids a pending TigerBeetle transfer (releases reserved funds).
 func (c *Client) ReleaseFunds(ctx context.Context, transferID string) error {
-url := fmt.Sprintf("%s/api/v1/ledger/transfers/%s/void", c.gatewayURL, transferID)
-req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
-if err != nil {
-return err
-}
-resp, err := c.httpClient.Do(req)
-if err != nil {
-c.logger.Warn("ReleaseFunds: gateway unavailable", zap.String("transfer_id", transferID), zap.Error(err))
-return nil // fail-open
-}
-defer resp.Body.Close()
-return nil
+	url := fmt.Sprintf("%s/api/v1/ledger/transfers/%s/void", c.gatewayURL, transferID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		c.logger.Warn("ReleaseFunds: gateway unavailable", zap.String("transfer_id", transferID), zap.Error(err))
+		return fmt.Errorf("release funds: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("release funds returned HTTP %d", resp.StatusCode)
+	}
+	return nil
 }

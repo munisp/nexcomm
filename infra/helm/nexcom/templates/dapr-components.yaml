@@ -1,0 +1,76 @@
+{{- if .Values.global.dapr.enabled }}
+---
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: {{ .Values.global.dapr.config }}
+  namespace: {{ .Values.global.namespace }}
+spec:
+  tracing:
+    samplingRate: "1"
+  metric:
+    enabled: true
+  features:
+    - name: Resiliency
+      enabled: true
+---
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: nexcom-statestore
+  namespace: {{ .Values.global.namespace }}
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: {{ .Values.global.dependencies.redis.host | default "redis.nexcom.svc.cluster.local:6379" | quote }}
+    - name: redisPassword
+      secretKeyRef:
+        name: {{ .Values.global.secretName }}
+        key: REDIS_PASSWORD
+    - name: enableTLS
+      value: {{ .Values.global.dependencies.redis.tls | default true | toString | quote }}
+    - name: actorStateStore
+      value: "true"
+    - name: keyPrefix
+      value: "nexcom"
+  scopes:
+    - nexcom-exchange
+    - gateway
+    - temporal-workers
+---
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: nexcom-pubsub
+  namespace: {{ .Values.global.namespace }}
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    - name: brokers
+      value: {{ .Values.global.dependencies.kafka.brokers | quote }}
+    - name: authType
+      value: {{ .Values.global.dependencies.kafka.authType | default "sasl" | quote }}
+    - name: saslUsername
+      secretKeyRef:
+        name: {{ .Values.global.secretName }}
+        key: KAFKA_SASL_USERNAME
+    - name: saslPassword
+      secretKeyRef:
+        name: {{ .Values.global.secretName }}
+        key: KAFKA_SASL_PASSWORD
+    - name: saslMechanism
+      value: {{ .Values.global.dependencies.kafka.saslMechanism | default "SHA-512" | quote }}
+    - name: enableTLS
+      value: {{ .Values.global.dependencies.kafka.tls | default true | toString | quote }}
+    - name: consumerGroup
+      value: "nexcom-dapr"
+    - name: initialOffset
+      value: "newest"
+  scopes:
+    - nexcom-exchange
+    - gateway
+    - temporal-workers
+{{- end }}

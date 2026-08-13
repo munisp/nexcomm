@@ -1,8 +1,11 @@
 /**
- * Commodities router — price history and instrument data.
- * Tries the live_prices table first for current spot price data;
- * falls back to deterministic 90-day OHLCV candles when DB is unavailable.
+ * Commodities router — authoritative instrument and market-data access.
+ *
+ * Historical OHLCV and grade-spread data are deliberately unavailable until the
+ * lakehouse/live market feed provides durable source records. This router never
+ * synthesizes financial prices, candles, volume, or grade-adjusted history.
  */
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { publicProcedure, router } from "../_core/trpc";
@@ -11,14 +14,8 @@ import { getReadDb } from "../db";
 import { livePrices } from "../../drizzle/schema";
 import { getOrSet, CacheKeys, TTL } from "../cache";
 
-// ── Seeded random (mirrors shared/commodities.ts) ────────────────────────────
-function seededRandom(seed: number): number {
-  const x = Math.sin(seed + 1) * 10000;
-  return x - Math.floor(x);
-}
-
 export interface OHLCVBar {
-  time: number;   // Unix timestamp (ms, start of day UTC)
+  time: number;
   open: number;
   high: number;
   low: number;
@@ -26,184 +23,123 @@ export interface OHLCVBar {
   volume: number;
 }
 
-/**
- * Generate `days` daily OHLCV bars ending today for the given symbol.
- * Uses a deterministic walk so the same symbol always produces the same
- * historical shape, while the last bar reflects "today's" simulated price.
- */
-function generateDailyOHLCV(symbol: string, days: number): OHLCVBar[] {
-  const commodity = COMMODITY_MAP.get(symbol);
-  if (!commodity) return [];
-
-  const bars: OHLCVBar[] = [];
-  const now = Date.now();
-  // Align to start of today UTC
-  const todayStart = now - (now % 86_400_000);
-  let price = commodity.basePrice;
-
-  // Walk backwards then reverse so we get ascending order
-  const rawBars: OHLCVBar[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const dayStart = todayStart - i * 86_400_000;
-    const dayIndex = Math.floor(dayStart / 86_400_000);
-    const symbolHash = symbol.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-
-    const r1 = seededRandom(dayIndex * 7 + symbolHash);
-    const r2 = seededRandom(dayIndex * 7 + symbolHash + 1);
-    const r3 = seededRandom(dayIndex * 7 + symbolHash + 2);
-    const r4 = seededRandom(dayIndex * 7 + symbolHash + 3);
-    const r5 = seededRandom(dayIndex * 7 + symbolHash + 4);
-
-    // Daily volatility: ±2.5% max
-    const dailyVol = commodity.basePrice * 0.025;
-    const dayChange = (r1 - 0.5) * 2 * dailyVol;
-    // Seasonal trend: ginger peaks mid-year (harvest season)
-    const dayOfYear = (dayStart / 86_400_000) % 365;
-    const seasonal = Math.sin((dayOfYear / 365) * 2 * Math.PI) * commodity.basePrice * 0.04;
-
-    const open = price;
-    const close = Math.max(
-      commodity.basePrice * 0.6,
-      price + dayChange + seasonal * 0.1
-    );
-    const intraHigh = Math.max(open, close) * (1 + r2 * 0.015);
-    const intraLow  = Math.min(open, close) * (1 - r3 * 0.015);
-    const volume    = Math.floor((r4 * 800 + 200) * commodity.lotSize);
-
-    rawBars.push({
-      time:   dayStart,
-      open:   +open.toFixed(2),
-      high:   +intraHigh.toFixed(2),
-      low:    +intraLow.toFixed(2),
-      close:  +close.toFixed(2),
-      volume,
+async function getAuthoritativeLivePrice(symbol: string) {
+  let db;
+  try {
+    db = await getReadDb();
+  } catch (cause) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "Authoritative commodity market data is unavailable",
+      cause,
     });
-
-    price = close;
-    void r5; // reserved for future use
+  }
+  if (!db) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "Authoritative commodity market data is unavailable",
+    });
   }
 
-  // rawBars is already in ascending order (oldest first)
-  return rawBars;
+  try {
+    const [row] = await db
+      .select()
+      .from(livePrices)
+      .where(eq(livePrices.symbol, symbol))
+      .limit(1);
+    if (!row) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `No authoritative live price is available for ${symbol}`,
+      });
+    }
+    return {
+      price: parseFloat(row.price),
+      changePct: row.changePct ? parseFloat(row.changePct) : 0,
+      updatedAt: row.updatedAt,
+    };
+  } catch (cause) {
+    if (cause instanceof TRPCError) throw cause;
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "Authoritative commodity market data query failed",
+      cause,
+    });
+  }
 }
 
 export const commoditiesRouter = router({
-  /** List all available commodity instruments */
+  /** List declared commodity instruments; this is static catalogue metadata, not market data. */
   list: publicProcedure.query(() => {
     return getOrSet(CacheKeys.commodities(), TTL.COMMODITIES, async () =>
       COMMODITIES.map(c => ({
-        symbol:      c.symbol,
-        name:        c.name,
-        category:    c.category,
-        unit:        c.unit,
-        currency:    c.currency,
-        basePrice:   c.basePrice,
+        symbol: c.symbol,
+        name: c.name,
+        category: c.category,
+        unit: c.unit,
+        currency: c.currency,
         description: c.description,
-        country:     c.country ?? null,
+        country: c.country ?? null,
       }))
     );
   }),
 
   /**
-   * Get OHLCV price history for a commodity symbol.
-   * Tries live_prices table first for the current spot price;
-   * falls back to seeded-random OHLCV when DB is unavailable.
+   * Return only the current authoritative live price. Historical bars stay empty
+   * until a durable OHLCV data source is integrated; no chart-shaped fallback is
+   * generated in the application process.
    */
   priceHistory: publicProcedure
     .input(z.object({
       symbol: z.string().min(1),
-      days:   z.number().int().min(7).max(365).default(90),
+      days: z.number().int().min(7).max(365).default(90),
     }))
     .query(async ({ input }) => {
       const commodity = COMMODITY_MAP.get(input.symbol);
       if (!commodity) {
-        return { symbol: input.symbol, bars: [], instrument: null, livePrice: null };
+        throw new TRPCError({ code: "NOT_FOUND", message: `Unknown commodity ${input.symbol}` });
       }
-
-      // Try to fetch live spot price from the DB
-      let livePrice: { price: number; changePct: number; updatedAt: Date } | null = null;
-      try {
-        const db = await getReadDb();
-        if (db) {
-          const [row] = await db
-            .select()
-            .from(livePrices)
-            .where(eq(livePrices.symbol, input.symbol))
-            .limit(1);
-          if (row) {
-            livePrice = {
-              price:     parseFloat(row.price),
-              changePct: row.changePct ? parseFloat(row.changePct) : 0,
-              updatedAt: row.updatedAt,
-            };
-          }
-        }
-      } catch {
-        // Non-fatal: fall through to seeded-random
-      }
-
-      const bars = generateDailyOHLCV(input.symbol, input.days);
-
-      // If we have a live price, patch the last bar's close to reflect it
-      if (livePrice && bars.length > 0) {
-        const last = bars[bars.length - 1];
-        last.close = livePrice.price;
-        last.high  = Math.max(last.high, livePrice.price);
-        last.low   = Math.min(last.low,  livePrice.price);
-      }
-
+      const livePrice = await getAuthoritativeLivePrice(input.symbol);
       return {
-        symbol:     input.symbol,
+        symbol: input.symbol,
         instrument: {
-          name:        commodity.name,
-          category:    commodity.category,
-          unit:        commodity.unit,
-          currency:    commodity.currency,
-          basePrice:   commodity.basePrice,
+          name: commodity.name,
+          category: commodity.category,
+          unit: commodity.unit,
+          currency: commodity.currency,
           description: commodity.description,
-          country:     commodity.country ?? null,
+          country: commodity.country ?? null,
         },
         livePrice,
-        bars,
+        bars: [] as OHLCVBar[],
+        historyStatus: "UNAVAILABLE",
+        historyMessage: "Historical OHLCV is unavailable until a durable market-data source is configured.",
       };
     }),
 
   /**
-   * Get grade-adjusted daily close prices for all grades of a commodity.
-   * Returns one array of {time, close} per grade, suitable for multi-line charts.
+   * Grade premium metadata is static catalogue information, but historical grade
+   * prices require authoritative OHLCV records and therefore fail closed here.
    */
   gradeSpread: publicProcedure
     .input(z.object({
       symbol: z.string().min(1),
-      days:   z.number().int().min(7).max(365).default(90),
+      days: z.number().int().min(7).max(365).default(90),
     }))
-    .query(({ input }) => {
-      const commodity = COMMODITY_MAP.get(input.symbol);
-      if (!commodity) return { grades: [] };
-
-      const baseBars = generateDailyOHLCV(input.symbol, input.days);
-
-      // Collect all grades for this symbol
-      const gradeList = (GRADE_SPECS as Array<{ commodity: string; code: string; name: string; description: string; premiumPct: number }>)
-        .filter(g => g.commodity === input.symbol);
-
-      // For each grade, apply the premium multiplier to the close price
-      const gradeLines = gradeList.map(grade => ({
-        code:       grade.code,
-        name:       grade.name,
-        premiumPct: grade.premiumPct,
-        bars: baseBars.map(bar => ({
-          time:  bar.time,
-          close: +(bar.close * (1 + grade.premiumPct / 100)).toFixed(2),
-        })),
-      }));
-
-      return { grades: gradeLines };
+    .query(async ({ input }) => {
+      if (!COMMODITY_MAP.has(input.symbol)) {
+        throw new TRPCError({ code: "NOT_FOUND", message: `Unknown commodity ${input.symbol}` });
+      }
+      await getAuthoritativeLivePrice(input.symbol);
+      return {
+        grades: [] as Array<{ code: string; name: string; premiumPct: number; bars: Array<{ time: number; close: number }> }>,
+        historyStatus: "UNAVAILABLE",
+        historyMessage: "Authoritative historical grade pricing is unavailable.",
+      };
     }),
 
-  /** Get related ginger grades and warehouses */
+  /** Get related grade and warehouse catalogue metadata. */
   gingerInfo: publicProcedure.query(() => {
-    // GRADE_SPECS and WAREHOUSES are imported at the top of this file
     const gingerGrades = (GRADE_SPECS as Array<{ commodity: string; code: string; name: string; description: string; premiumPct: number }>)
       .filter(g => g.commodity.startsWith("GINGER"));
     const gingerWarehouses = (WAREHOUSES as Array<{ commodities: string[]; id: string; name: string; city: string; state: string; capacity: number; available: number; certified: boolean; manager: string }>)

@@ -59,12 +59,26 @@ func postJSON(ctx context.Context, url string, payload any) error {
 	return nil
 }
 
-// SanctionsScreeningActivity checks the sender and receiver against OpenSanctions.
+// SanctionsScreeningActivity requires a real configured screening response before a transfer may proceed.
 func SanctionsScreeningActivity(ctx context.Context, input CrossBorderInput) (bool, error) {
 	activity.GetLogger(ctx).Info("SanctionsScreening", "transferId", input.TransferID)
-	// In production: POST to OpenSanctions API with sender/receiver identifiers
-	// For now: pass-through (real implementation uses OPENSANCTIONS_API_KEY)
-	return true, nil
+	apiKey := os.Getenv("OPENSANCTIONS_API_KEY")
+	if apiKey == "" {
+		return false, fmt.Errorf("OpenSanctions API key is not configured")
+	}
+	payload, err := json.Marshal(map[string]any{"sender_user_id": input.SenderUserID, "receiver_account": input.ReceiverAccount, "receiver_fsp": input.ReceiverFSP, "transfer_id": input.TransferID})
+	if err != nil { return false, fmt.Errorf("marshal sanctions request: %w", err) }
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, opensanctionsURL+"/screen", bytes.NewReader(payload))
+	if err != nil { return false, fmt.Errorf("build sanctions request: %w", err) }
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "ApiKey "+apiKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil { return false, fmt.Errorf("OpenSanctions unavailable: %w", err) }
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK { return false, fmt.Errorf("OpenSanctions returned HTTP %d", resp.StatusCode) }
+	var result struct { Cleared bool `json:"cleared"` }
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { return false, fmt.Errorf("decode sanctions response: %w", err) }
+	return result.Cleared, nil
 }
 
 // GetILPQuoteActivity requests an ILP quote from the Mojaloop adapter.
@@ -82,20 +96,19 @@ func GetILPQuoteActivity(ctx context.Context, input CrossBorderInput) (ILPQuoteR
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		// Graceful degradation: return synthetic quote
-		activity.GetLogger(ctx).Warn("Mojaloop unavailable — using synthetic quote", "error", err)
-		return ILPQuoteResult{
-			QuoteID:      fmt.Sprintf("synthetic-%s", input.TransferID),
-			ILPPacket:    "oAKAAA==",
-			Condition:    "synthetic",
-			ExchangeRate: 1.0,
-			FeeAmount:    input.Amount * 0.005,
-			ExpiresAt:    time.Now().Add(30 * time.Second).UTC().Format(time.RFC3339),
-		}, nil
+		return ILPQuoteResult{}, fmt.Errorf("Mojaloop quote request failed: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return ILPQuoteResult{}, fmt.Errorf("Mojaloop quote returned HTTP %d", resp.StatusCode)
+	}
 	var result ILPQuoteResult
-	_ = json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return ILPQuoteResult{}, fmt.Errorf("decode Mojaloop quote: %w", err)
+	}
+	if result.QuoteID == "" || result.ILPPacket == "" || result.Condition == "" || result.ExpiresAt == "" {
+		return ILPQuoteResult{}, fmt.Errorf("Mojaloop quote omitted required settlement fields")
+	}
 	return result, nil
 }
 

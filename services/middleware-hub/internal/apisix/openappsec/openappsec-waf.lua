@@ -68,25 +68,16 @@ function _M.access(conf, ctx)
     end)
 
     if not ok or not res then
-        -- Agent unreachable
-        if conf.fail_open then
-            core.log.warn("[openappsec-waf] agent unreachable, fail-open — allowing request")
-            return
-        else
-            return 503, { error = "WAF agent unavailable" }
-        end
+        core.log.error("[openappsec-waf] agent unavailable; rejecting request")
+        return 503, { error = "WAF agent unavailable" }
     end
 
     if res.status ~= 200 then
-        if conf.fail_open then
-            return
-        end
         return 503, { error = "WAF agent error: " .. tostring(res.status) }
     end
 
     local verdict = cjson.decode(res.body)
     if not verdict then
-        if conf.fail_open then return end
         return 503, { error = "WAF agent bad response" }
     end
 

@@ -53,16 +53,16 @@ pub struct SettlementClient {
 
 impl SettlementClient {
     pub fn new() -> Self {
-        let gateway_url = std::env::var("GATEWAY_URL")
-            .unwrap_or_else(|_| "http://gateway:8200".to_string());
+        let gateway_url =
+            std::env::var("GATEWAY_URL").unwrap_or_else(|_| "http://gateway:8200".to_string());
         let ingestion_url = std::env::var("INGESTION_ENGINE_URL")
             .unwrap_or_else(|_| "http://ingestion-engine:8009".to_string());
         let fluvio_url = std::env::var("FLUVIO_HTTP_URL")
             .unwrap_or_else(|_| "http://fluvio-proxy:8090".to_string());
         let temporal_url = std::env::var("TEMPORAL_HTTP_URL")
             .unwrap_or_else(|_| "http://temporal-proxy:8091".to_string());
-        let dapr_url = std::env::var("DAPR_HTTP_URL")
-            .unwrap_or_else(|_| "http://localhost:3500".to_string());
+        let dapr_url =
+            std::env::var("DAPR_HTTP_URL").unwrap_or_else(|_| "http://localhost:3500".to_string());
         let enabled = !gateway_url.is_empty();
         let http = Client::builder()
             .timeout(Duration::from_millis(3000))
@@ -71,7 +71,9 @@ impl SettlementClient {
         if enabled {
             tracing::info!(
                 "[SettlementClient] Initialized — gateway={} ingestion={} fluvio={}",
-                gateway_url, ingestion_url, fluvio_url
+                gateway_url,
+                ingestion_url,
+                fluvio_url
             );
         } else {
             warn!("[SettlementClient] GATEWAY_URL not set — settlement disabled");
@@ -88,46 +90,56 @@ impl SettlementClient {
     }
 
     /// Check buyer's settlement account balance (in cents).
-    /// Returns -1 on error (fail-open: allow order if gateway is down).
-    pub async fn get_balance(&self, account_id: &str) -> i64 {
+    /// Failure is explicit so callers reject orders with an unverifiable balance.
+    pub async fn get_balance(&self, account_id: &str) -> Result<i64, String> {
         if !self.enabled {
-            return -1;
+            return Err("settlement gateway is not configured".to_string());
         }
         let url = format!(
             "{}/api/v1/ledger/accounts/{}/balance",
             self.gateway_url, account_id
         );
         match self.http.get(&url).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                match resp.json::<BalanceResponse>().await {
-                    Ok(b) => b.balance,
-                    Err(e) => {
-                        warn!("[SettlementClient] Balance parse error for {}: {}", account_id, e);
-                        -1
-                    }
+            Ok(resp) if resp.status().is_success() => match resp.json::<BalanceResponse>().await {
+                Ok(b) => Ok(b.balance),
+                Err(e) => {
+                    warn!(
+                        "[SettlementClient] Balance parse error for {}: {}",
+                        account_id, e
+                    );
+                    Err(format!("decode balance response: {}", e))
                 }
-            }
+            },
             Ok(resp) => {
-                warn!("[SettlementClient] Balance check returned {}", resp.status());
-                -1
+                warn!(
+                    "[SettlementClient] Balance check returned {}",
+                    resp.status()
+                );
+                Err(format!("ledger balance returned HTTP {}", resp.status()))
             }
             Err(e) => {
-                warn!("[SettlementClient] Balance check failed for {}: {}", account_id, e);
-                -1
+                warn!(
+                    "[SettlementClient] Balance check failed for {}: {}",
+                    account_id, e
+                );
+                Err(format!("ledger balance request failed: {}", e))
             }
         }
     }
 
     /// Create a TigerBeetle pending transfer to reserve funds for a BUY order.
-    /// Returns the transfer ID on success, empty string on failure (fail-open).
+    /// A reservation has no valid local substitute when the ledger is unavailable.
     pub async fn reserve_funds(
         &self,
         account_id: &str,
         amount_cents: i64,
         order_id: &str,
-    ) -> String {
-        if !self.enabled || amount_cents <= 0 {
-            return String::new();
+    ) -> Result<String, String> {
+        if !self.enabled {
+            return Err("settlement gateway is not configured".to_string());
+        }
+        if amount_cents <= 0 {
+            return Err("reservation amount must be positive".to_string());
         }
         let url = format!("{}/api/v1/ledger/transfers/pending", self.gateway_url);
         let payload = serde_json::json!({
@@ -140,32 +152,52 @@ impl SettlementClient {
         match self.http.post(&url).json(&payload).send().await {
             Ok(resp) if resp.status().is_success() => {
                 match resp.json::<serde_json::Value>().await {
-                    Ok(v) => v["id"].as_str().unwrap_or("").to_string(),
-                    Err(_) => String::new(),
+                    Ok(v) => v["id"]
+                        .as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| "ledger reservation response omitted id".to_string()),
+                    Err(e) => Err(format!("decode ledger reservation response: {}", e)),
                 }
             }
             Ok(resp) => {
-                warn!("[SettlementClient] reserve_funds returned {}", resp.status());
-                String::new()
+                warn!(
+                    "[SettlementClient] reserve_funds returned {}",
+                    resp.status()
+                );
+                Err(format!(
+                    "ledger reservation returned HTTP {}",
+                    resp.status()
+                ))
             }
             Err(e) => {
                 warn!("[SettlementClient] reserve_funds failed: {}", e);
-                String::new()
+                Err(format!("ledger reservation request failed: {}", e))
             }
         }
     }
 
     /// Void a pending TigerBeetle transfer (release reserved funds on cancel).
-    pub async fn release_funds(&self, transfer_id: &str) {
-        if !self.enabled || transfer_id.is_empty() {
-            return;
+    pub async fn release_funds(&self, transfer_id: &str) -> Result<(), String> {
+        if !self.enabled {
+            return Err("settlement gateway is not configured".to_string());
+        }
+        if transfer_id.is_empty() {
+            return Err("reservation transfer ID is required".to_string());
         }
         let url = format!(
             "{}/api/v1/ledger/transfers/{}/void",
             self.gateway_url, transfer_id
         );
-        if let Err(e) = self.http.post(&url).send().await {
-            warn!("[SettlementClient] release_funds failed for {}: {}", transfer_id, e);
+        match self.http.post(&url).send().await {
+            Ok(resp) if resp.status().is_success() => Ok(()),
+            Ok(resp) => Err(format!("ledger release returned HTTP {}", resp.status())),
+            Err(e) => {
+                warn!(
+                    "[SettlementClient] release_funds failed for {}: {}",
+                    transfer_id, e
+                );
+                Err(format!("ledger release request failed: {}", e))
+            }
         }
     }
 
@@ -199,7 +231,13 @@ impl SettlementClient {
             "trade_id":       fill.trade_id,
             "settlement_id":  format!("settle-{}", fill.trade_id),
         });
-        match self.http.post(&settle_url).json(&settle_payload).send().await {
+        match self
+            .http
+            .post(&settle_url)
+            .json(&settle_payload)
+            .send()
+            .await
+        {
             Ok(resp) if resp.status().is_success() => {
                 debug!(
                     "[SettlementClient] TigerBeetle settled trade {} — {} cents",
@@ -209,7 +247,8 @@ impl SettlementClient {
             Ok(resp) => {
                 warn!(
                     "[SettlementClient] TigerBeetle settlement failed for trade {}: HTTP {}",
-                    fill.trade_id, resp.status()
+                    fill.trade_id,
+                    resp.status()
                 );
                 // Emit Dapr alert on settlement failure
                 self.emit_dapr_alert(fill, "settlement_failed").await;
@@ -234,7 +273,10 @@ impl SettlementClient {
                 "reference":         format!("fee-{}", fill.trade_id),
             });
             if let Err(e) = self.http.post(&fee_url).json(&fee_payload).send().await {
-                warn!("[SettlementClient] Fee collection failed for trade {}: {}", fill.trade_id, e);
+                warn!(
+                    "[SettlementClient] Fee collection failed for trade {}: {}",
+                    fill.trade_id, e
+                );
             }
         }
     }
@@ -257,7 +299,10 @@ impl SettlementClient {
             }
         });
         if let Err(e) = self.http.post(&url).json(&payload).send().await {
-            debug!("[SettlementClient] Fluvio emit failed for trade {}: {}", fill.trade_id, e);
+            debug!(
+                "[SettlementClient] Fluvio emit failed for trade {}: {}",
+                fill.trade_id, e
+            );
         }
     }
 
@@ -280,7 +325,10 @@ impl SettlementClient {
             }
         });
         if let Err(e) = self.http.post(&url).json(&payload).send().await {
-            debug!("[SettlementClient] Temporal trigger failed for trade {}: {}", fill.trade_id, e);
+            debug!(
+                "[SettlementClient] Temporal trigger failed for trade {}: {}",
+                fill.trade_id, e
+            );
         }
     }
 
@@ -304,7 +352,10 @@ impl SettlementClient {
             }
         });
         if let Err(e) = self.http.post(&url).json(&payload).send().await {
-            debug!("[SettlementClient] Lakehouse ingest failed for trade {}: {}", fill.trade_id, e);
+            debug!(
+                "[SettlementClient] Lakehouse ingest failed for trade {}: {}",
+                fill.trade_id, e
+            );
         }
     }
 

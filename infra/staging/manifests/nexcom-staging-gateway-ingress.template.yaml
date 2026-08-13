@@ -1,0 +1,31 @@
+# Render with envsubst; do not apply this template directly.
+# Required variables: STAGING_GATEWAY_HOST, STAGING_TLS_SECRET, CERT_MANAGER_ISSUER.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nexcom-staging-gateway
+  namespace: nexcom-staging
+  labels:
+    app.kubernetes.io/part-of: nexcom
+    app.kubernetes.io/component: public-gateway
+  annotations:
+    cert-manager.io/cluster-issuer: ${CERT_MANAGER_ISSUER}
+    kubernetes.io/ingress.class: apisix
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: apisix
+  tls:
+    - hosts:
+        - ${STAGING_GATEWAY_HOST}
+      secretName: ${STAGING_TLS_SECRET}
+  rules:
+    - host: ${STAGING_GATEWAY_HOST}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nexcom-exchange
+                port:
+                  number: 80

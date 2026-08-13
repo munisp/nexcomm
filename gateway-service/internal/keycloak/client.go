@@ -1,45 +1,52 @@
 package keycloak
 
 import (
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Client wraps Keycloak OIDC operations with real HTTP connectivity.
-// Endpoints:
-//   /realms/{realm}/protocol/openid-connect/token          - Token endpoint
-//   /realms/{realm}/protocol/openid-connect/userinfo       - UserInfo endpoint
-//   /realms/{realm}/protocol/openid-connect/token/introspect - Token introspection
-//   /realms/{realm}/protocol/openid-connect/logout         - Logout endpoint
-//   /admin/realms/{realm}/users                            - User management
+var (
+	// ErrUnavailable is returned when Keycloak cannot be contacted. Callers must
+	// surface this as a dependency outage rather than manufacture an identity.
+	ErrUnavailable = errors.New("keycloak unavailable")
+	// ErrUnauthorized is returned only after Keycloak rejects a credential/token.
+	ErrUnauthorized = errors.New("keycloak rejected credentials or token")
+)
+
+// Client wraps Keycloak OIDC and administration operations. Every identity and
+// credential response is accepted only when it is returned by Keycloak.
 type Client struct {
-	url          string
-	realm        string
-	clientID     string
-	connected    bool
-	fallbackMode bool
-	mu           sync.RWMutex
-	httpClient   *http.Client
+	url               string
+	realm             string
+	clientID          string
+	clientSecret      string
+	adminClientID     string
+	adminClientSecret string
+	connected         bool
+	mu                sync.RWMutex
+	httpClient        *http.Client
 }
 
 type TokenClaims struct {
-	Sub            string   `json:"sub"`
-	Email          string   `json:"email"`
-	Name           string   `json:"name"`
-	PreferredUser  string   `json:"preferred_username"`
-	EmailVerified  bool     `json:"email_verified"`
-	RealmRoles     []string `json:"realm_roles"`
-	AccountTier    string   `json:"account_tier"`
-	Exp            int64    `json:"exp"`
-	Iat            int64    `json:"iat"`
+	Sub           string   `json:"sub"`
+	Email         string   `json:"email"`
+	Name          string   `json:"name"`
+	PreferredUser string   `json:"preferred_username"`
+	EmailVerified bool     `json:"email_verified"`
+	RealmRoles    []string `json:"realm_roles"`
+	AccountTier   string   `json:"account_tier"`
+	Exp           int64    `json:"exp"`
+	Iat           int64    `json:"iat"`
 }
 
 type TokenResponse struct {
@@ -51,222 +58,380 @@ type TokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
+type keycloakUser struct {
+	ID              string   `json:"id"`
+	Username        string   `json:"username"`
+	Email           string   `json:"email"`
+	RequiredActions []string `json:"requiredActions"`
+}
+
 func NewClient(urlStr, realm, clientID string) *Client {
 	c := &Client{
-		url:      urlStr,
-		realm:    realm,
-		clientID: clientID,
-		httpClient: &http.Client{
-			Timeout: 5 * time.Second,
-		},
+		url:               strings.TrimRight(urlStr, "/"),
+		realm:             realm,
+		clientID:          clientID,
+		clientSecret:      os.Getenv("KEYCLOAK_CLIENT_SECRET"),
+		adminClientID:     os.Getenv("KEYCLOAK_ADMIN_CLIENT_ID"),
+		adminClientSecret: os.Getenv("KEYCLOAK_ADMIN_CLIENT_SECRET"),
+		httpClient:        &http.Client{Timeout: 5 * time.Second},
 	}
-	c.checkConnection()
+	_ = c.checkConnection()
 	return c
 }
 
-func (c *Client) checkConnection() {
-	// Check if Keycloak is reachable
-	resp, err := c.httpClient.Get(fmt.Sprintf("%s/realms/%s/.well-known/openid-configuration", c.url, c.realm))
-	if err != nil {
-		log.Printf("[Keycloak] WARN: Cannot reach %s: %v — running in fallback mode (JWT parse only)", c.url, err)
-		c.mu.Lock()
-		c.fallbackMode = true
-		c.connected = false
-		c.mu.Unlock()
-		return
-	}
-	resp.Body.Close()
-
-	c.mu.Lock()
-	c.connected = true
-	c.fallbackMode = false
-	c.mu.Unlock()
-	log.Printf("[Keycloak] Connected to %s realm=%s (OIDC discovery verified)", c.url, c.realm)
+func (c *Client) realmURL(suffix string) string {
+	return fmt.Sprintf("%s/realms/%s%s", c.url, url.PathEscape(c.realm), suffix)
 }
 
-// ValidateToken validates a JWT token and returns claims
-func (c *Client) ValidateToken(token string) (*TokenClaims, error) {
-	c.mu.RLock()
-	isFallback := c.fallbackMode
-	c.mu.RUnlock()
+func (c *Client) adminURL(suffix string) string {
+	return fmt.Sprintf("%s/admin/realms/%s%s", c.url, url.PathEscape(c.realm), suffix)
+}
 
-	// If Keycloak is available, use token introspection
-	if !isFallback {
-		introspectURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token/introspect", c.url, c.realm)
-		data := url.Values{}
-		data.Set("token", token)
-		data.Set("client_id", c.clientID)
-
-		resp, err := c.httpClient.PostForm(introspectURL, data)
-		if err == nil {
-			defer resp.Body.Close()
-			body, _ := io.ReadAll(resp.Body)
-			var result map[string]interface{}
-			if json.Unmarshal(body, &result) == nil {
-				if active, ok := result["active"].(bool); ok && active {
-					return extractClaimsFromIntrospection(result), nil
-				}
-			}
-		}
-		log.Printf("[Keycloak] WARN: Introspection failed, falling back to JWT parse")
-	}
-
-	// Fallback: parse JWT locally (without signature verification)
-	claims, err := parseJWT(token)
+func (c *Client) checkConnection() error {
+	resp, err := c.httpClient.Get(c.realmURL("/.well-known/openid-configuration"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid token: %w", err)
+		c.mu.Lock()
+		c.connected = false
+		c.mu.Unlock()
+		return fmt.Errorf("%w: OIDC discovery request failed: %v", ErrUnavailable, err)
 	}
-
-	if claims.Exp < time.Now().Unix() {
-		return nil, fmt.Errorf("token expired")
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		c.mu.Lock()
+		c.connected = false
+		c.mu.Unlock()
+		return fmt.Errorf("%w: OIDC discovery returned HTTP %d", ErrUnavailable, resp.StatusCode)
 	}
+	c.mu.Lock()
+	c.connected = true
+	c.mu.Unlock()
+	return nil
+}
 
-	return claims, nil
+func (c *Client) ensureConnected() error {
+	c.mu.RLock()
+	connected := c.connected
+	c.mu.RUnlock()
+	if connected {
+		return nil
+	}
+	if err := c.checkConnection(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) tokenEndpoint(values url.Values) (*TokenResponse, error) {
+	if err := c.ensureConnected(); err != nil {
+		return nil, err
+	}
+	values.Set("client_id", c.clientID)
+	if c.clientSecret != "" {
+		values.Set("client_secret", c.clientSecret)
+	}
+	resp, err := c.httpClient.PostForm(c.realmURL("/protocol/openid-connect/token"), values)
+	if err != nil {
+		c.mu.Lock()
+		c.connected = false
+		c.mu.Unlock()
+		return nil, fmt.Errorf("%w: token request failed: %v", ErrUnavailable, err)
+	}
+	defer resp.Body.Close()
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	if readErr != nil {
+		return nil, fmt.Errorf("read Keycloak token response: %w", readErr)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		if resp.StatusCode >= http.StatusBadRequest && resp.StatusCode < http.StatusInternalServerError {
+			return nil, fmt.Errorf("%w: HTTP %d", ErrUnauthorized, resp.StatusCode)
+		}
+		return nil, fmt.Errorf("%w: token endpoint returned HTTP %d", ErrUnavailable, resp.StatusCode)
+	}
+	var tokens TokenResponse
+	if err := json.Unmarshal(body, &tokens); err != nil {
+		return nil, fmt.Errorf("decode Keycloak token response: %w", err)
+	}
+	if tokens.AccessToken == "" || tokens.TokenType == "" {
+		return nil, fmt.Errorf("%w: token response omitted required fields", ErrUnavailable)
+	}
+	return &tokens, nil
+}
+
+// ValidateToken only trusts Keycloak token introspection. It deliberately does
+// not parse or accept unsigned JWT payloads when the identity provider is down.
+func (c *Client) ValidateToken(token string) (*TokenClaims, error) {
+	if strings.TrimSpace(token) == "" {
+		return nil, fmt.Errorf("%w: empty token", ErrUnauthorized)
+	}
+	if err := c.ensureConnected(); err != nil {
+		return nil, err
+	}
+	data := url.Values{}
+	data.Set("token", token)
+	data.Set("client_id", c.clientID)
+	if c.clientSecret != "" {
+		data.Set("client_secret", c.clientSecret)
+	}
+	resp, err := c.httpClient.PostForm(c.realmURL("/protocol/openid-connect/token/introspect"), data)
+	if err != nil {
+		c.mu.Lock()
+		c.connected = false
+		c.mu.Unlock()
+		return nil, fmt.Errorf("%w: introspection request failed: %v", ErrUnavailable, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("%w: introspection returned HTTP %d", ErrUnavailable, resp.StatusCode)
+	}
+	var result map[string]interface{}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode Keycloak introspection response: %w", err)
+	}
+	active, ok := result["active"].(bool)
+	if !ok || !active {
+		return nil, ErrUnauthorized
+	}
+	return extractClaimsFromIntrospection(result), nil
 }
 
 func extractClaimsFromIntrospection(result map[string]interface{}) *TokenClaims {
 	claims := &TokenClaims{}
-	if v, ok := result["sub"].(string); ok {
-		claims.Sub = v
+	if value, ok := result["sub"].(string); ok {
+		claims.Sub = value
 	}
-	if v, ok := result["email"].(string); ok {
-		claims.Email = v
+	if value, ok := result["email"].(string); ok {
+		claims.Email = value
 	}
-	if v, ok := result["name"].(string); ok {
-		claims.Name = v
+	if value, ok := result["name"].(string); ok {
+		claims.Name = value
 	}
-	if v, ok := result["preferred_username"].(string); ok {
-		claims.PreferredUser = v
+	if value, ok := result["preferred_username"].(string); ok {
+		claims.PreferredUser = value
 	}
-	if v, ok := result["exp"].(float64); ok {
-		claims.Exp = int64(v)
+	if value, ok := result["email_verified"].(bool); ok {
+		claims.EmailVerified = value
 	}
-	if v, ok := result["iat"].(float64); ok {
-		claims.Iat = int64(v)
+	if value, ok := result["exp"].(float64); ok {
+		claims.Exp = int64(value)
+	}
+	if value, ok := result["iat"].(float64); ok {
+		claims.Iat = int64(value)
+	}
+	if roles, ok := result["realm_access"].(map[string]interface{}); ok {
+		if rawRoles, ok := roles["roles"].([]interface{}); ok {
+			for _, role := range rawRoles {
+				if roleName, ok := role.(string); ok {
+					claims.RealmRoles = append(claims.RealmRoles, roleName)
+				}
+			}
+		}
+	}
+	if tier, ok := result["account_tier"].(string); ok {
+		claims.AccountTier = tier
 	}
 	return claims
 }
 
-// ExchangeCode exchanges an authorization code for tokens (PKCE flow)
+// ExchangeCode completes the OIDC authorization-code + PKCE exchange.
 func (c *Client) ExchangeCode(code, redirectURI, codeVerifier string) (*TokenResponse, error) {
-	c.mu.RLock()
-	isFallback := c.fallbackMode
-	c.mu.RUnlock()
-
-	if !isFallback {
-		tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", c.url, c.realm)
-		data := url.Values{}
-		data.Set("grant_type", "authorization_code")
-		data.Set("client_id", c.clientID)
-		data.Set("code", code)
-		data.Set("redirect_uri", redirectURI)
-		if codeVerifier != "" {
-			data.Set("code_verifier", codeVerifier)
-		}
-
-		resp, err := c.httpClient.PostForm(tokenURL, data)
-		if err == nil {
-			defer resp.Body.Close()
-			var tokenResp TokenResponse
-			if json.NewDecoder(resp.Body).Decode(&tokenResp) == nil && tokenResp.AccessToken != "" {
-				log.Printf("[Keycloak] Code exchange successful (via Keycloak)")
-				return &tokenResp, nil
-			}
-		}
-		log.Printf("[Keycloak] WARN: Code exchange via Keycloak failed: falling back to mock")
+	if strings.TrimSpace(code) == "" || strings.TrimSpace(redirectURI) == "" {
+		return nil, fmt.Errorf("%w: authorization code and redirect URI are required", ErrUnauthorized)
 	}
-
-	return &TokenResponse{
-		AccessToken:  "mock-access-token",
-		RefreshToken: "mock-refresh-token",
-		IDToken:      "mock-id-token",
-		ExpiresIn:    3600,
-		TokenType:    "Bearer",
-	}, nil
+	data := url.Values{}
+	data.Set("grant_type", "authorization_code")
+	data.Set("code", code)
+	data.Set("redirect_uri", redirectURI)
+	if codeVerifier != "" {
+		data.Set("code_verifier", codeVerifier)
+	}
+	return c.tokenEndpoint(data)
 }
 
-// RefreshTokens refreshes an access token using a refresh token
+// ExchangePassword is used only by the legacy gateway login endpoint. New web
+// clients should use authorization-code + PKCE; this method never fakes a token.
+func (c *Client) ExchangePassword(username, password string) (*TokenResponse, error) {
+	if strings.TrimSpace(username) == "" || password == "" {
+		return nil, fmt.Errorf("%w: username and password are required", ErrUnauthorized)
+	}
+	data := url.Values{}
+	data.Set("grant_type", "password")
+	data.Set("username", username)
+	data.Set("password", password)
+	return c.tokenEndpoint(data)
+}
+
 func (c *Client) RefreshTokens(refreshToken string) (*TokenResponse, error) {
-	c.mu.RLock()
-	isFallback := c.fallbackMode
-	c.mu.RUnlock()
-
-	if !isFallback {
-		tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", c.url, c.realm)
-		data := url.Values{}
-		data.Set("grant_type", "refresh_token")
-		data.Set("client_id", c.clientID)
-		data.Set("refresh_token", refreshToken)
-
-		resp, err := c.httpClient.PostForm(tokenURL, data)
-		if err == nil {
-			defer resp.Body.Close()
-			var tokenResp TokenResponse
-			if json.NewDecoder(resp.Body).Decode(&tokenResp) == nil && tokenResp.AccessToken != "" {
-				log.Printf("[Keycloak] Token refresh successful (via Keycloak)")
-				return &tokenResp, nil
-			}
-		}
-		log.Printf("[Keycloak] WARN: Token refresh via Keycloak failed")
+	if strings.TrimSpace(refreshToken) == "" {
+		return nil, fmt.Errorf("%w: refresh token is required", ErrUnauthorized)
 	}
-
-	return &TokenResponse{
-		AccessToken:  "mock-refreshed-access-token",
-		RefreshToken: "mock-refreshed-refresh-token",
-		IDToken:      "mock-refreshed-id-token",
-		ExpiresIn:    3600,
-		TokenType:    "Bearer",
-	}, nil
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", refreshToken)
+	return c.tokenEndpoint(data)
 }
 
-// RevokeToken revokes a refresh token (logout)
 func (c *Client) RevokeToken(refreshToken string) error {
-	c.mu.RLock()
-	isFallback := c.fallbackMode
-	c.mu.RUnlock()
+	if strings.TrimSpace(refreshToken) == "" {
+		return fmt.Errorf("%w: refresh token is required", ErrUnauthorized)
+	}
+	if err := c.ensureConnected(); err != nil {
+		return err
+	}
+	data := url.Values{}
+	data.Set("client_id", c.clientID)
+	data.Set("refresh_token", refreshToken)
+	if c.clientSecret != "" {
+		data.Set("client_secret", c.clientSecret)
+	}
+	resp, err := c.httpClient.PostForm(c.realmURL("/protocol/openid-connect/logout"), data)
+	if err != nil {
+		c.mu.Lock()
+		c.connected = false
+		c.mu.Unlock()
+		return fmt.Errorf("%w: logout request failed: %v", ErrUnavailable, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("Keycloak logout returned HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
 
-	if !isFallback {
-		logoutURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/logout", c.url, c.realm)
-		data := url.Values{}
-		data.Set("client_id", c.clientID)
-		data.Set("refresh_token", refreshToken)
+func (c *Client) adminToken() (string, error) {
+	clientID, secret := c.adminClientID, c.adminClientSecret
+	if clientID == "" || secret == "" {
+		return "", errors.New("Keycloak admin client credentials are not configured")
+	}
+	if err := c.ensureConnected(); err != nil {
+		return "", err
+	}
+	data := url.Values{}
+	data.Set("grant_type", "client_credentials")
+	data.Set("client_id", clientID)
+	data.Set("client_secret", secret)
+	resp, err := c.httpClient.PostForm(c.realmURL("/protocol/openid-connect/token"), data)
+	if err != nil {
+		return "", fmt.Errorf("%w: admin-token request failed: %v", ErrUnavailable, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", fmt.Errorf("Keycloak admin-token request returned HTTP %d", resp.StatusCode)
+	}
+	var tokens TokenResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&tokens); err != nil {
+		return "", fmt.Errorf("decode Keycloak admin token: %w", err)
+	}
+	if tokens.AccessToken == "" {
+		return "", errors.New("Keycloak admin-token response omitted access_token")
+	}
+	return tokens.AccessToken, nil
+}
 
-		resp, err := c.httpClient.PostForm(logoutURL, data)
-		if err == nil {
-			resp.Body.Close()
-			log.Printf("[Keycloak] Token revoked (via Keycloak)")
-			return nil
+func (c *Client) adminRequest(method, requestPath string, body io.Reader, out interface{}) error {
+	token, err := c.adminToken()
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(method, c.adminURL(requestPath), body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		c.mu.Lock()
+		c.connected = false
+		c.mu.Unlock()
+		return fmt.Errorf("%w: admin request failed: %v", ErrUnavailable, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 8*1024))
+		return fmt.Errorf("Keycloak admin API returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
+	}
+	if out != nil {
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 128*1024)).Decode(out); err != nil && !errors.Is(err, io.EOF) {
+			return err
 		}
 	}
-
-	log.Printf("[Keycloak] Token revocation (fallback)")
 	return nil
 }
 
-// ChangePassword changes a user's password via Keycloak admin API
+func (c *Client) getUser(userID string) (*keycloakUser, error) {
+	var user keycloakUser
+	if err := c.adminRequest(http.MethodGet, "/users/"+url.PathEscape(userID), nil, &user); err != nil {
+		return nil, err
+	}
+	if user.ID == "" {
+		return nil, fmt.Errorf("Keycloak returned no user for %s", userID)
+	}
+	return &user, nil
+}
+
+// ChangePassword verifies the user’s current password with Keycloak, then uses
+// a configured realm-management service account to set the new credential.
 func (c *Client) ChangePassword(userID, currentPassword, newPassword string) error {
-	log.Printf("[Keycloak] Changing password for user=%s", userID)
-	return nil
+	if len(newPassword) < 8 {
+		return errors.New("new password must be at least 8 characters")
+	}
+	user, err := c.getUser(userID)
+	if err != nil {
+		return err
+	}
+	username := user.Username
+	if username == "" {
+		username = user.Email
+	}
+	if _, err := c.ExchangePassword(username, currentPassword); err != nil {
+		return err
+	}
+	payload, err := json.Marshal(map[string]interface{}{"type": "password", "value": newPassword, "temporary": false})
+	if err != nil {
+		return err
+	}
+	return c.adminRequest(http.MethodPut, "/users/"+url.PathEscape(userID)+"/reset-password", strings.NewReader(string(payload)), nil)
 }
 
-// GetUserSessions returns active sessions for a user
 func (c *Client) GetUserSessions(userID string) ([]map[string]interface{}, error) {
-	log.Printf("[Keycloak] Getting sessions for user=%s", userID)
-	return []map[string]interface{}{
-		{"id": "sess-1", "ipAddress": "196.201.214.100", "start": time.Now().Add(-2 * time.Hour).Unix(), "lastAccess": time.Now().Unix(), "clients": map[string]string{"nexcom-pwa": "NEXCOM PWA"}},
-	}, nil
+	var sessions []map[string]interface{}
+	if err := c.adminRequest(http.MethodGet, "/users/"+url.PathEscape(userID)+"/sessions", nil, &sessions); err != nil {
+		return nil, err
+	}
+	return sessions, nil
 }
 
-// RevokeSession revokes a specific user session
 func (c *Client) RevokeSession(sessionID string) error {
-	log.Printf("[Keycloak] Revoking session=%s", sessionID)
-	return nil
+	if strings.TrimSpace(sessionID) == "" {
+		return errors.New("session ID is required")
+	}
+	return c.adminRequest(http.MethodDelete, "/sessions/"+url.PathEscape(sessionID), nil, nil)
 }
 
-// Enable2FA enables TOTP 2FA for a user
+// Enable2FA requires the Keycloak account console to collect the TOTP secret.
+// It schedules the real Keycloak required action and returns the account-security
+// URL; no secret is generated or returned by this service.
 func (c *Client) Enable2FA(userID string) (string, error) {
-	log.Printf("[Keycloak] Enabling 2FA for user=%s", userID)
-	return "otpauth://totp/NEXCOM:trader@nexcom.exchange?secret=JBSWY3DPEHPK3PXP&issuer=NEXCOM", nil
+	user, err := c.getUser(userID)
+	if err != nil {
+		return "", err
+	}
+	for _, action := range user.RequiredActions {
+		if action == "CONFIGURE_TOTP" {
+			return c.realmURL("/account/#/security/signingin"), nil
+		}
+	}
+	user.RequiredActions = append(user.RequiredActions, "CONFIGURE_TOTP")
+	payload, err := json.Marshal(map[string]interface{}{"requiredActions": user.RequiredActions})
+	if err != nil {
+		return "", err
+	}
+	if err := c.adminRequest(http.MethodPut, "/users/"+url.PathEscape(userID), strings.NewReader(string(payload)), nil); err != nil {
+		return "", err
+	}
+	return c.realmURL("/account/#/security/signingin"), nil
 }
 
 func (c *Client) IsConnected() bool {
@@ -275,47 +440,23 @@ func (c *Client) IsConnected() bool {
 	return c.connected
 }
 
-func (c *Client) IsFallback() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.fallbackMode
+// IsFallback is retained for API compatibility. A false return means no local
+// identity fallback exists; callers must inspect IsConnected before proceeding.
+func (c *Client) IsFallback() bool { return false }
+
+func (c *Client) GetAuthURL() string  { return c.realmURL("/protocol/openid-connect/auth") }
+func (c *Client) GetTokenURL() string { return c.realmURL("/protocol/openid-connect/token") }
+
+// BuildAccountURL safely joins a realm account path without exposing a caller to
+// brittle string concatenation in authentication handlers.
+func (c *Client) BuildAccountURL(parts ...string) string {
+	return c.realmURL("/account/" + path.Join(parts...))
 }
 
-func (c *Client) GetAuthURL() string {
-	return fmt.Sprintf("%s/realms/%s/protocol/openid-connect/auth", c.url, c.realm)
-}
-
-func (c *Client) GetTokenURL() string {
-	return fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", c.url, c.realm)
-}
-
-// parseJWT extracts claims from a JWT token (without signature verification for dev)
-func parseJWT(token string) (*TokenClaims, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		// For development: return mock claims for non-JWT tokens
-		return &TokenClaims{
-			Sub:           "usr-001",
-			Email:         "trader@nexcom.exchange",
-			Name:          "Alex Trader",
-			PreferredUser: "alex.trader",
-			EmailVerified: true,
-			RealmRoles:    []string{"trader", "user"},
-			AccountTier:   "retail_trader",
-			Exp:           time.Now().Add(1 * time.Hour).Unix(),
-			Iat:           time.Now().Unix(),
-		}, nil
+func (c *Client) LogConnectivity() {
+	if err := c.ensureConnected(); err != nil {
+		log.Printf("[Keycloak] %v", err)
+		return
 	}
-
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, err
-	}
-
-	var claims TokenClaims
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, err
-	}
-
-	return &claims, nil
+	log.Printf("[Keycloak] Connected to %s realm=%s", c.url, c.realm)
 }

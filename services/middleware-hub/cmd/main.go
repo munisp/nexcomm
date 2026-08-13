@@ -228,7 +228,7 @@ func main() {
 			}
 
 			// Publish KYC event to Fluvio
-			if err := hub.fluvio.ProduceJSON(ctx, fluvio.TopicKYCEvents, fmt.Sprintf("%d", event.UserID), event); err != nil {
+			if err := hub.fluvio.ProduceJSON(ctx, fluvio.TopicKYCEvents, fmt.Sprintf("%s", event.UserID), event); err != nil {
 				logger.Warnw("Fluvio KYC event publish failed", "error", err)
 			}
 
@@ -421,12 +421,12 @@ func main() {
 		// TigerBeetle transfer
 		api.POST("/ledger/transfer", func(c *gin.Context) {
 			var req struct {
-				TransferID    uint64  `json:"transfer_id"`
-				DebitAccount  uint64  `json:"debit_account"`
-				CreditAccount uint64  `json:"credit_account"`
-				Amount        uint64  `json:"amount"`
-				Ledger        uint32  `json:"ledger"`
-				Code          uint16  `json:"code"`
+				TransferID    uint64 `json:"transfer_id"`
+				DebitAccount  uint64 `json:"debit_account"`
+				CreditAccount uint64 `json:"credit_account"`
+				Amount        uint64 `json:"amount"`
+				Ledger        uint32 `json:"ledger"`
+				Code          uint16 `json:"code"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

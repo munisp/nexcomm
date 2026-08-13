@@ -9,10 +9,25 @@
  *   OPENAI_API_KEY (or LLM_BASE_URL for Ollama),
  *   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
  */
+import { readFileSync } from "node:fs";
+
+/**
+ * Resolve a setting from an explicitly mounted secret file when `${NAME}_FILE`
+ * is present; otherwise use the ordinary environment variable. File-read
+ * failures are surfaced instead of silently falling back to a stale default.
+ */
+function valueFromEnvironmentOrFile(name: string, fallback = ""): string {
+  const filePath = process.env[`${name}_FILE`];
+  if (filePath) {
+    return readFileSync(filePath, "utf8").trim();
+  }
+  return process.env[name] ?? fallback;
+}
+
 export const ENV = {
   // ── Core ──────────────────────────────────────────────────────────────────
-  cookieSecret: process.env.JWT_SECRET ?? "nexcom-dev-jwt-secret-change-in-production",
-  databaseUrl: process.env.DATABASE_URL ?? "",
+  cookieSecret: valueFromEnvironmentOrFile("JWT_SECRET", "nexcom-dev-jwt-secret-change-in-production"),
+  databaseUrl: valueFromEnvironmentOrFile("DATABASE_URL"),
   isProduction: process.env.NODE_ENV === "production",
 
   // ── OIDC / Keycloak (replaces Manus OAuth) ────────────────────────────────
@@ -20,12 +35,12 @@ export const ENV = {
   keycloakUrl: process.env.KEYCLOAK_URL ?? "http://keycloak:8080",
   keycloakRealm: process.env.KEYCLOAK_REALM ?? "nexcom",
   keycloakClientId: process.env.KEYCLOAK_CLIENT_ID ?? "nexcom-exchange",
-  keycloakClientSecret: process.env.KEYCLOAK_CLIENT_SECRET ?? "nexcom-exchange-secret",
+  keycloakClientSecret: valueFromEnvironmentOrFile("KEYCLOAK_CLIENT_SECRET", "nexcom-exchange-secret"),
 
   // ── LLM / AI (replaces Manus forge LLM proxy) ────────────────────────────
   // Default: Ollama running as Docker Compose service "ollama" on port 11434.
   // Set OPENAI_API_KEY to use OpenAI directly instead.
-  openaiApiKey: process.env.OPENAI_API_KEY ?? process.env.LLM_API_KEY ?? "",
+  openaiApiKey: valueFromEnvironmentOrFile("OPENAI_API_KEY", valueFromEnvironmentOrFile("LLM_API_KEY")),
   llmBaseUrl: process.env.LLM_BASE_URL ?? "http://ollama:11434/v1",
   llmDefaultModel: process.env.LLM_DEFAULT_MODEL ?? "llama3.2",
   imageModel: process.env.IMAGE_MODEL ?? "dall-e-3",
@@ -38,8 +53,8 @@ export const ENV = {
   // Public URL used to construct download links.
   // In production, point this at your CDN or MinIO public endpoint.
   s3PublicBaseUrl: process.env.S3_PUBLIC_BASE_URL ?? "http://localhost:9000/nexcom-files",
-  awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "nexcom-minio",
-  awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "nexcom-minio-secret",
+  awsAccessKeyId: valueFromEnvironmentOrFile("AWS_ACCESS_KEY_ID", "nexcom-minio"),
+  awsSecretAccessKey: valueFromEnvironmentOrFile("AWS_SECRET_ACCESS_KEY", "nexcom-minio-secret"),
   awsRegion: process.env.AWS_REGION ?? "us-east-1",
 
   // ── Owner notifications (replaces Manus WebDevService) ───────────────────
@@ -52,7 +67,7 @@ export const ENV = {
 
   // ── Infrastructure connectivity ───────────────────────────────────────────
   kafkaBrokers: process.env.KAFKA_BROKERS ?? "kafka:9092",
-  redisUrl: process.env.REDIS_URL ?? "redis://redis:6379",
+  redisUrl: valueFromEnvironmentOrFile("REDIS_URL", "redis://redis:6379"),
   kedaNamespace: process.env.KEDA_NAMESPACE ?? "nexcom",
 
   // ── Microservice base URLs ─────────────────────────────────────────────────
@@ -105,9 +120,9 @@ export const ENV = {
   vapidSubject: process.env.VAPID_SUBJECT ?? "mailto:admin@nexcom.exchange",
 
   // ── Internal service secret ────────────────────────────────────────────────
-  internalSecret: process.env.INTERNAL_SECRET ?? process.env.JWT_SECRET ?? "nexcom-internal-dev-2026",
+  internalSecret: valueFromEnvironmentOrFile("INTERNAL_SECRET", valueFromEnvironmentOrFile("JWT_SECRET", "nexcom-internal-dev-2026")),
 
   // ── PostgreSQL direct connection ───────────────────────────────────────────
-  nexcomPgUrl: process.env.NEXCOM_PG_URL ?? "",
-  nexcomPgReadUrl: process.env.NEXCOM_PG_READ_URL ?? "",
+  nexcomPgUrl: valueFromEnvironmentOrFile("NEXCOM_PG_URL"),
+  nexcomPgReadUrl: valueFromEnvironmentOrFile("NEXCOM_PG_READ_URL"),
 };

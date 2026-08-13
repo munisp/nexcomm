@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -352,7 +353,7 @@ func (s *Server) SetupRoutes() *gin.Engine {
 				bc.GET("/ipfs/status", s.bcIpfsStatus)
 			}
 
-				// KYC Service proxy routes
+			// KYC Service proxy routes
 			kyc := protected.Group("/kyc")
 			{
 				kyc.GET("/applications", s.kycListApplications)
@@ -529,35 +530,28 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 
-	// In development, accept demo credentials
-	if s.cfg.Environment == "development" && req.Email == "trader@nexcom.exchange" {
-		// Publish login event to Kafka
-		s.kafka.Produce(kafkaclient.TopicAuditLog, req.Email, map[string]interface{}{
-			"event": "login", "email": req.Email, "timestamp": time.Now().Unix(),
-		})
-
-		c.JSON(http.StatusOK, models.APIResponse{
-			Success: true,
-			Data: models.LoginResponse{
-				AccessToken:  "demo-access-token",
-				RefreshToken: "demo-refresh-token",
-				IDToken:      "demo-id-token",
-				ExpiresIn:    3600,
-				TokenType:    "Bearer",
-			},
-		})
+	// The gateway never creates credentials locally. Keycloak must accept the
+	// credentials before a successful response is returned.
+	tokens, err := s.keycloak.ExchangePassword(req.Email, req.Password)
+	if err != nil {
+		status := http.StatusBadGateway
+		if errors.Is(err, keycloak.ErrUnauthorized) {
+			status = http.StatusUnauthorized
+		}
+		c.JSON(status, models.APIResponse{Success: false, Error: "authentication failed"})
 		return
 	}
 
-	// In production: exchange credentials with Keycloak
+	// Audit delivery must not change the already-verified authentication result;
+	// Kafka client errors are surfaced by its health/readiness endpoint.
+	s.kafka.Produce(kafkaclient.TopicAuditLog, req.Email, map[string]interface{}{
+		"event": "login", "email": req.Email, "timestamp": time.Now().Unix(),
+	})
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data: models.LoginResponse{
-			AccessToken:  "mock-access-token",
-			RefreshToken: "mock-refresh-token",
-			IDToken:      "mock-id-token",
-			ExpiresIn:    3600,
-			TokenType:    "Bearer",
+			AccessToken: tokens.AccessToken, RefreshToken: tokens.RefreshToken,
+			IDToken: tokens.IDToken, ExpiresIn: tokens.ExpiresIn, TokenType: tokens.TokenType,
 		},
 	})
 }
@@ -802,12 +796,12 @@ func (s *Server) createOrder(c *gin.Context) {
 	}
 
 	order := models.Order{
-		UserID:   userID,
-		Symbol:   req.Symbol,
-		Side:     req.Side,
-		Type:     req.Type,
-		Quantity: req.Quantity,
-		Price:    req.Price,
+		UserID:    userID,
+		Symbol:    req.Symbol,
+		Side:      req.Side,
+		Type:      req.Type,
+		Quantity:  req.Quantity,
+		Price:     req.Price,
 		StopPrice: req.StopPrice,
 	}
 
@@ -1297,7 +1291,6 @@ func (s *Server) markAllRead(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: gin.H{"message": "all notifications marked as read"}})
 }
 
-
 // ============================================================
 // Middleware Status
 // ============================================================
@@ -1384,15 +1377,15 @@ func (s *Server) v2GetOrderBookSnapshot(c *gin.Context) {
 		"success": true,
 		"version": "2.0",
 		"data": gin.H{
-			"symbol":      symbol,
-			"bids":        bids,
-			"asks":        asks,
-			"midPrice":    midPrice,
-			"spread":      spread,
-			"spreadBps":   spreadBps,
-			"imbalance":   imbalance,
-			"lastUpdate":  book.LastUpdate,
-			"depth":       depth,
+			"symbol":     symbol,
+			"bids":       bids,
+			"asks":       asks,
+			"midPrice":   midPrice,
+			"spread":     spread,
+			"spreadBps":  spreadBps,
+			"imbalance":  imbalance,
+			"lastUpdate": book.LastUpdate,
+			"depth":      depth,
 		},
 	})
 }

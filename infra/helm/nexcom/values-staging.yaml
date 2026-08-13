@@ -3,8 +3,47 @@
 
 global:
   namespace: nexcom-staging
-  imageTag: "latest"
+  # CI must replace this tag with the signed image digest before apply.
+  imageTag: "1.0.0"
   imagePullPolicy: Always
+  requireImageDigest: true
+  environment: staging
+  secretName: nexcom-staging-secrets
+  dapr:
+    enabled: true
+    config: nexcom-runtime
+    appProtocol: http
+    httpPort: "3500"
+    grpcPort: "50001"
+    logLevel: info
+  dependencies:
+    keycloak:
+      url: http://keycloak.nexcom-iam.svc.cluster.local:8080
+      realm: nexcom
+      clientId: nexcom-gateway
+    permify:
+      # Internal TLS is required because the gateway sends a bearer token.
+      endpoint: https://permify.nexcom-staging.svc.cluster.local:3476
+      tenantId: t1
+    temporal:
+      host: temporal-frontend.temporal.svc.cluster.local:7233
+      namespace: nexcom
+      taskQueue: nexcom-main
+    tigerbeetle:
+      addresses: tigerbeetle.nexcom-staging.svc.cluster.local:3001
+    fluvio:
+      endpoint: fluvio-proxy.nexcom-staging.svc.cluster.local:9003
+    apisix:
+      adminUrl: http://apisix-admin.nexcom-staging.svc.cluster.local:9180
+    redis:
+      host: redis.nexcom-staging.svc.cluster.local:6379
+      tls: true
+    kafka:
+      brokers: kafka-bootstrap.nexcom-staging.svc.cluster.local:9093
+      authType: sasl
+      saslMechanism: SHA-512
+      tls: true
+    corsOrigins: https://staging.nexcom.exchange
 
 nexcomExchange:
   replicaCount: 2

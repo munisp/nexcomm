@@ -195,16 +195,16 @@ func (w *ActivityWorker) RecordTigerBeetle(ctx context.Context, input Settlement
 	payload := map[string]interface{}{
 		"transfers": []map[string]interface{}{
 			{
-				"id":              rand.Uint64(),
-				"debit_account":   fmt.Sprintf("ACC-%s", input.BuyerID),
-				"credit_account":  fmt.Sprintf("ACC-%s", input.SellerID),
-				"amount":          int64(input.Total * 100), // Store in cents
-				"ledger":          1,
-				"code":            1001, // TRADE_SETTLEMENT
-				"user_data":       mojaloopTxID,
-				"pending_id":      0,
-				"timeout":         0,
-				"flags":           0,
+				"id":             rand.Uint64(),
+				"debit_account":  fmt.Sprintf("ACC-%s", input.BuyerID),
+				"credit_account": fmt.Sprintf("ACC-%s", input.SellerID),
+				"amount":         int64(input.Total * 100), // Store in cents
+				"ledger":         1,
+				"code":           1001, // TRADE_SETTLEMENT
+				"user_data":      mojaloopTxID,
+				"pending_id":     0,
+				"timeout":        0,
+				"flags":          0,
 			},
 		},
 	}
@@ -527,11 +527,11 @@ func (w *ActivityWorker) CreditCheck(ctx context.Context, input LoanDisbursement
 	}
 
 	payload := map[string]interface{}{
-		"user_id":   input.UserID,
-		"amount":    input.Amount,
-		"currency":  input.Currency,
-		"tenor":     input.TenorMonths,
-		"loan_id":   input.LoanID,
+		"user_id":  input.UserID,
+		"amount":   input.Amount,
+		"currency": input.Currency,
+		"tenor":    input.TenorMonths,
+		"loan_id":  input.LoanID,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -549,8 +549,8 @@ func (w *ActivityWorker) CreditCheck(ctx context.Context, input LoanDisbursement
 
 	resp, err := w.httpClient.Do(req)
 	if err != nil {
-		w.logger.Warnw("Credit scoring service unavailable, defaulting to approved", "error", err)
-		return true, nil // fail-open for demo
+		w.logger.Errorw("Credit scoring service unavailable; declining to make an approval decision", "error", err)
+		return false, fmt.Errorf("credit scoring service unavailable: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -578,8 +578,8 @@ func (w *ActivityWorker) ReserveFunds(ctx context.Context, input LoanDisbursemen
 
 	payload := map[string]interface{}{
 		"transfer_id":    transferID,
-		"debit_account":  1001, // loan disbursement pool account
-		"credit_account": 1002, // pending disbursement account
+		"debit_account":  1001,                       // loan disbursement pool account
+		"credit_account": 1002,                       // pending disbursement account
 		"amount":         uint64(input.Amount * 100), // convert to minor units
 		"ledger":         1,
 		"code":           100, // loan reservation code
@@ -682,20 +682,20 @@ func (w *ActivityWorker) GenerateSettlementNote(ctx context.Context, input Settl
 	noteID := fmt.Sprintf("SN-%s-%d", result.SettlementID, time.Now().UnixNano()%100000)
 
 	note := map[string]interface{}{
-		"note_id":        noteID,
-		"settlement_id":  result.SettlementID,
-		"trade_id":       input.TradeID,
-		"buyer_id":       input.BuyerID,
-		"seller_id":      input.SellerID,
-		"symbol":         input.Symbol,
-		"quantity":       input.Quantity,
-		"price":          input.Price,
-		"settled_at":     result.SettledAt,
+		"note_id":         noteID,
+		"settlement_id":   result.SettlementID,
+		"trade_id":        input.TradeID,
+		"buyer_id":        input.BuyerID,
+		"seller_id":       input.SellerID,
+		"symbol":          input.Symbol,
+		"quantity":        input.Quantity,
+		"price":           input.Price,
+		"settled_at":      result.SettledAt,
 		"tiger_beetle_id": result.TigerBeetleID,
-		"mojaloop_tx_id": result.MojaloopTxID,
-		"is_t0":          result.IsT0,
-		"latency_ms":     result.LatencyMs,
-		"generated_at":   time.Now().UTC().Format(time.RFC3339),
+		"mojaloop_tx_id":  result.MojaloopTxID,
+		"is_t0":           result.IsT0,
+		"latency_ms":      result.LatencyMs,
+		"generated_at":    time.Now().UTC().Format(time.RFC3339),
 	}
 
 	data, _ := json.Marshal(note)

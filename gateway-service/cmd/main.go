@@ -12,13 +12,13 @@ import (
 	"github.com/munisp/NGApp/services/gateway/internal/api"
 	"github.com/munisp/NGApp/services/gateway/internal/config"
 	"github.com/munisp/NGApp/services/gateway/internal/dapr"
+	"github.com/munisp/NGApp/services/gateway/internal/fluvio"
 	kafkaclient "github.com/munisp/NGApp/services/gateway/internal/kafka"
 	"github.com/munisp/NGApp/services/gateway/internal/keycloak"
 	"github.com/munisp/NGApp/services/gateway/internal/permify"
 	redisclient "github.com/munisp/NGApp/services/gateway/internal/redis"
 	"github.com/munisp/NGApp/services/gateway/internal/temporal"
 	"github.com/munisp/NGApp/services/gateway/internal/tigerbeetle"
-	"github.com/munisp/NGApp/services/gateway/internal/fluvio"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 	daprClient := dapr.NewClient(cfg.DaprHTTPPort, cfg.DaprGRPCPort)
 	fluvioClient := fluvio.NewClient(cfg.FluvioEndpoint)
 	keycloakClient := keycloak.NewClient(cfg.KeycloakURL, cfg.KeycloakRealm, cfg.KeycloakClientID)
-	permifyClient := permify.NewClient(cfg.PermifyEndpoint)
+	permifyClient := permify.NewAuthenticatedClient(cfg.PermifyEndpoint, cfg.PermifyTenantID, cfg.PermifyAuthToken)
 
 	// Create API server with all dependencies
 	server := api.NewServer(

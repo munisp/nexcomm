@@ -3,7 +3,6 @@ package store
 import (
 	"fmt"
 	"math"
-	"math/rand"
 	"sort"
 	"sync"
 	"time"
@@ -17,12 +16,12 @@ import (
 type Store struct {
 	mu            sync.RWMutex
 	commodities   []models.Commodity
-	orders        map[string]models.Order        // orderID -> Order
-	trades        map[string]models.Trade        // tradeID -> Trade
-	positions     map[string]models.Position     // positionID -> Position
-	alerts        map[string]models.PriceAlert   // alertID -> Alert
-	users         map[string]models.User         // userID -> User
-	sessions      map[string]models.Session      // sessionID -> Session
+	orders        map[string]models.Order           // orderID -> Order
+	trades        map[string]models.Trade           // tradeID -> Trade
+	positions     map[string]models.Position        // positionID -> Position
+	alerts        map[string]models.PriceAlert      // alertID -> Alert
+	users         map[string]models.User            // userID -> User
+	sessions      map[string]models.Session         // sessionID -> Session
 	preferences   map[string]models.UserPreferences // userID -> Preferences
 	notifications map[string][]models.Notification  // userID -> []Notification
 	tickers       map[string]models.MarketTicker    // symbol -> Ticker
@@ -44,206 +43,9 @@ func New() *Store {
 		accounts:      make(map[string]models.Account),
 		auditLog:      make([]models.AuditEntry, 0),
 	}
-	s.seedData()
+	// Production data must be loaded from durable upstream services. The gateway
+	// does not seed a demo account, orders, trades, positions, or market prices.
 	return s
-}
-
-func (s *Store) seedData() {
-	s.commodities = seedCommodities()
-	for _, c := range s.commodities {
-		s.tickers[c.Symbol] = models.MarketTicker{
-			Symbol:           c.Symbol,
-			LastPrice:        c.LastPrice,
-			Bid:              c.LastPrice * 0.999,
-			Ask:              c.LastPrice * 1.001,
-			Change24h:        c.Change24h,
-			ChangePercent24h: c.ChangePercent24h,
-			Volume24h:        c.Volume24h,
-			High24h:          c.High24h,
-			Low24h:           c.Low24h,
-			Timestamp:        time.Now().UnixMilli(),
-		}
-	}
-
-	// Seed demo user
-	demoUserID := "usr-001"
-	s.users[demoUserID] = models.User{
-		ID:          demoUserID,
-		Email:       "trader@nexcom.exchange",
-		Name:        "Alex Trader",
-		AccountTier: models.TierRetailTrader,
-		KYCStatus:   models.KYCVerified,
-		Phone:       "+254712345678",
-		Country:     "Kenya",
-		CreatedAt:   time.Now().Add(-90 * 24 * time.Hour),
-	}
-
-	s.preferences[demoUserID] = models.UserPreferences{
-		UserID:             demoUserID,
-		OrderFilled:        true,
-		PriceAlerts:        true,
-		MarginWarnings:     true,
-		MarketNews:         false,
-		SettlementUpdates:  true,
-		SystemMaintenance:  true,
-		EmailNotifications: true,
-		SMSNotifications:   false,
-		PushNotifications:  true,
-		USSDNotifications:  false,
-		DefaultCurrency:    "USD",
-		TimeZone:           "Africa/Nairobi",
-		DefaultChartPeriod: "1D",
-	}
-
-	s.sessions[demoUserID] = models.Session{
-		ID:        "sess-001",
-		UserID:    demoUserID,
-		Device:    "Chrome 120 / macOS",
-		Location:  "Nairobi, Kenya",
-		IP:        "196.201.214.100",
-		Active:    true,
-		CreatedAt: time.Now().Add(-2 * time.Hour),
-		LastSeen:  time.Now(),
-	}
-
-	// Seed orders
-	symbols := []string{"MAIZE", "GOLD", "COFFEE", "CRUDE_OIL", "WHEAT"}
-	sides := []models.OrderSide{models.SideBuy, models.SideSell}
-	types := []models.OrderType{models.TypeLimit, models.TypeMarket}
-	statuses := []models.OrderStatus{models.StatusOpen, models.StatusFilled, models.StatusCancelled, models.StatusPartial}
-
-	for i := 0; i < 12; i++ {
-		oid := fmt.Sprintf("ord-%03d", i+1)
-		sym := symbols[i%len(symbols)]
-		side := sides[i%2]
-		otype := types[i%len(types)]
-		status := statuses[i%len(statuses)]
-		price := s.tickers[sym].LastPrice * (0.95 + rand.Float64()*0.1)
-		qty := float64(rand.Intn(50)+1) * 10
-
-		filled := 0.0
-		if status == models.StatusFilled {
-			filled = qty
-		} else if status == models.StatusPartial {
-			filled = qty * (0.3 + rand.Float64()*0.5)
-		}
-
-		s.orders[oid] = models.Order{
-			ID:             oid,
-			UserID:         demoUserID,
-			Symbol:         sym,
-			Side:           side,
-			Type:           otype,
-			Status:         status,
-			Quantity:        qty,
-			Price:           math.Round(price*100) / 100,
-			FilledQuantity:  math.Round(filled*100) / 100,
-			AveragePrice:    math.Round(price*1.001*100) / 100,
-			CreatedAt:       time.Now().Add(-time.Duration(i) * time.Hour),
-			UpdatedAt:       time.Now().Add(-time.Duration(i) * 30 * time.Minute),
-		}
-	}
-
-	// Seed trades
-	for i := 0; i < 8; i++ {
-		tid := fmt.Sprintf("trd-%03d", i+1)
-		sym := symbols[i%len(symbols)]
-		side := sides[i%2]
-		price := s.tickers[sym].LastPrice * (0.98 + rand.Float64()*0.04)
-		qty := float64(rand.Intn(30)+1) * 10
-		settlementStatus := models.SettlementSettled
-		if i < 2 {
-			settlementStatus = models.SettlementPending
-		}
-
-		s.trades[tid] = models.Trade{
-			ID:               tid,
-			OrderID:          fmt.Sprintf("ord-%03d", i+1),
-			UserID:           demoUserID,
-			Symbol:           sym,
-			Side:             side,
-			Price:            math.Round(price*100) / 100,
-			Quantity:         qty,
-			Fee:              math.Round(price*qty*0.001*100) / 100,
-			Timestamp:        time.Now().Add(-time.Duration(i) * 2 * time.Hour),
-			SettlementStatus: settlementStatus,
-		}
-	}
-
-	// Seed positions
-	positionData := []struct {
-		symbol string
-		side   models.OrderSide
-		qty    float64
-	}{
-		{"MAIZE", models.SideBuy, 500},
-		{"GOLD", models.SideBuy, 50},
-		{"COFFEE", models.SideSell, 200},
-		{"CRUDE_OIL", models.SideBuy, 100},
-		{"WHEAT", models.SideSell, 300},
-	}
-
-	for i, pd := range positionData {
-		pid := fmt.Sprintf("pos-%03d", i+1)
-		ticker := s.tickers[pd.symbol]
-		entry := ticker.LastPrice * (0.92 + rand.Float64()*0.16)
-		pnl := (ticker.LastPrice - entry) * pd.qty
-		if pd.side == models.SideSell {
-			pnl = (entry - ticker.LastPrice) * pd.qty
-		}
-		pnlPct := (pnl / (entry * pd.qty)) * 100
-
-		s.positions[pid] = models.Position{
-			ID:                   pid,
-			UserID:               demoUserID,
-			Symbol:               pd.symbol,
-			Side:                 pd.side,
-			Quantity:             pd.qty,
-			AverageEntryPrice:    math.Round(entry*100) / 100,
-			CurrentPrice:         ticker.LastPrice,
-			UnrealizedPnl:        math.Round(pnl*100) / 100,
-			UnrealizedPnlPercent: math.Round(pnlPct*100) / 100,
-			RealizedPnl:          math.Round(rand.Float64()*5000*100) / 100,
-			Margin:               math.Round(entry*pd.qty*0.1*100) / 100,
-			LiquidationPrice:     math.Round(entry*0.8*100) / 100,
-		}
-	}
-
-	// Seed alerts
-	alertData := []struct {
-		symbol    string
-		condition models.AlertCondition
-		target    float64
-		active    bool
-	}{
-		{"MAIZE", models.ConditionAbove, 285.00, true},
-		{"GOLD", models.ConditionBelow, 1950.00, true},
-		{"COFFEE", models.ConditionAbove, 165.00, false},
-		{"CRUDE_OIL", models.ConditionBelow, 72.00, true},
-	}
-
-	for i, ad := range alertData {
-		aid := fmt.Sprintf("alt-%03d", i+1)
-		s.alerts[aid] = models.PriceAlert{
-			ID:          aid,
-			UserID:      demoUserID,
-			Symbol:      ad.symbol,
-			Condition:   ad.condition,
-			TargetPrice: ad.target,
-			Active:      ad.active,
-			CreatedAt:   time.Now().Add(-time.Duration(i*24) * time.Hour),
-			UpdatedAt:   time.Now().Add(-time.Duration(i*12) * time.Hour),
-		}
-	}
-
-	// Seed notifications
-	s.notifications[demoUserID] = []models.Notification{
-		{ID: "notif-001", UserID: demoUserID, Type: "order_filled", Title: "Order Filled", Message: "Your BUY order for 100 MAIZE has been filled at $278.50", Read: false, Timestamp: time.Now().Add(-30 * time.Minute)},
-		{ID: "notif-002", UserID: demoUserID, Type: "price_alert", Title: "Price Alert Triggered", Message: "GOLD has crossed above $2,050.00", Read: false, Timestamp: time.Now().Add(-2 * time.Hour)},
-		{ID: "notif-003", UserID: demoUserID, Type: "margin_warning", Title: "Margin Warning", Message: "Your COFFEE SHORT position margin is at 85%", Read: false, Timestamp: time.Now().Add(-4 * time.Hour)},
-		{ID: "notif-004", UserID: demoUserID, Type: "settlement", Title: "Settlement Complete", Message: "Trade TRD-005 has been settled via TigerBeetle ledger", Read: true, Timestamp: time.Now().Add(-6 * time.Hour)},
-		{ID: "notif-005", UserID: demoUserID, Type: "system", Title: "System Maintenance", Message: "Scheduled maintenance window: Sunday 02:00-04:00 EAT", Read: true, Timestamp: time.Now().Add(-24 * time.Hour)},
-	}
 }
 
 // ============================================================
@@ -289,98 +91,15 @@ func (s *Store) GetTicker(symbol string) (models.MarketTicker, bool) {
 }
 
 func (s *Store) GetOrderBook(symbol string) models.OrderBook {
-	s.mu.RLock()
-	ticker, ok := s.tickers[symbol]
-	s.mu.RUnlock()
-
-	if !ok {
-		return models.OrderBook{Symbol: symbol}
-	}
-
-	bids := make([]models.OrderBookLevel, 15)
-	asks := make([]models.OrderBookLevel, 15)
-	bidTotal := 0.0
-	askTotal := 0.0
-
-	for i := 0; i < 15; i++ {
-		bidPrice := ticker.LastPrice * (1 - float64(i)*0.001)
-		askPrice := ticker.LastPrice * (1 + float64(i+1)*0.001)
-		bidQty := float64(rand.Intn(500)+50) * 10
-		askQty := float64(rand.Intn(500)+50) * 10
-		bidTotal += bidQty
-		askTotal += askQty
-
-		bids[i] = models.OrderBookLevel{
-			Price:    math.Round(bidPrice*100) / 100,
-			Quantity: bidQty,
-			Total:    bidTotal,
-		}
-		asks[i] = models.OrderBookLevel{
-			Price:    math.Round(askPrice*100) / 100,
-			Quantity: askQty,
-			Total:    askTotal,
-		}
-	}
-
-	spread := asks[0].Price - bids[0].Price
-	return models.OrderBook{
-		Symbol:        symbol,
-		Bids:          bids,
-		Asks:          asks,
-		Spread:        math.Round(spread*100) / 100,
-		SpreadPercent: math.Round(spread/ticker.LastPrice*10000) / 100,
-		LastUpdate:    time.Now().UnixMilli(),
-	}
+	// Order-book depth is authoritative only when received from the matching
+	// engine/Fluvio stream. Returning generated depth would be market-data fraud.
+	return models.OrderBook{Symbol: symbol}
 }
 
 func (s *Store) GetCandles(symbol string, interval string, limit int) []models.OHLCVCandle {
-	s.mu.RLock()
-	ticker, ok := s.tickers[symbol]
-	s.mu.RUnlock()
-
-	if !ok {
-		return nil
-	}
-
-	candles := make([]models.OHLCVCandle, limit)
-	var intervalDuration time.Duration
-	switch interval {
-	case "1m":
-		intervalDuration = time.Minute
-	case "5m":
-		intervalDuration = 5 * time.Minute
-	case "15m":
-		intervalDuration = 15 * time.Minute
-	case "1h":
-		intervalDuration = time.Hour
-	case "4h":
-		intervalDuration = 4 * time.Hour
-	case "1d":
-		intervalDuration = 24 * time.Hour
-	default:
-		intervalDuration = time.Hour
-	}
-
-	basePrice := ticker.LastPrice
-	for i := limit - 1; i >= 0; i-- {
-		t := time.Now().Add(-time.Duration(i) * intervalDuration)
-		open := basePrice * (0.98 + rand.Float64()*0.04)
-		closeP := basePrice * (0.98 + rand.Float64()*0.04)
-		high := math.Max(open, closeP) * (1 + rand.Float64()*0.02)
-		low := math.Min(open, closeP) * (1 - rand.Float64()*0.02)
-		vol := float64(rand.Intn(10000)+1000) * 10
-
-		candles[limit-1-i] = models.OHLCVCandle{
-			Time:   t.Unix(),
-			Open:   math.Round(open*100) / 100,
-			High:   math.Round(high*100) / 100,
-			Low:    math.Round(low*100) / 100,
-			Close:  math.Round(closeP*100) / 100,
-			Volume: vol,
-		}
-		basePrice = closeP
-	}
-	return candles
+	// Historical OHLCV must come from the lakehouse or a real market-data
+	// provider. This legacy store has no durable time-series source.
+	return nil
 }
 
 // ============================================================
@@ -630,19 +349,45 @@ func (s *Store) UpdatePreferences(userID string, req models.UpdatePreferencesReq
 	if !ok {
 		prefs = models.UserPreferences{UserID: userID}
 	}
-	if req.OrderFilled != nil { prefs.OrderFilled = *req.OrderFilled }
-	if req.PriceAlerts != nil { prefs.PriceAlerts = *req.PriceAlerts }
-	if req.MarginWarnings != nil { prefs.MarginWarnings = *req.MarginWarnings }
-	if req.MarketNews != nil { prefs.MarketNews = *req.MarketNews }
-	if req.SettlementUpdates != nil { prefs.SettlementUpdates = *req.SettlementUpdates }
-	if req.SystemMaintenance != nil { prefs.SystemMaintenance = *req.SystemMaintenance }
-	if req.EmailNotifications != nil { prefs.EmailNotifications = *req.EmailNotifications }
-	if req.SMSNotifications != nil { prefs.SMSNotifications = *req.SMSNotifications }
-	if req.PushNotifications != nil { prefs.PushNotifications = *req.PushNotifications }
-	if req.USSDNotifications != nil { prefs.USSDNotifications = *req.USSDNotifications }
-	if req.DefaultCurrency != nil { prefs.DefaultCurrency = *req.DefaultCurrency }
-	if req.TimeZone != nil { prefs.TimeZone = *req.TimeZone }
-	if req.DefaultChartPeriod != nil { prefs.DefaultChartPeriod = *req.DefaultChartPeriod }
+	if req.OrderFilled != nil {
+		prefs.OrderFilled = *req.OrderFilled
+	}
+	if req.PriceAlerts != nil {
+		prefs.PriceAlerts = *req.PriceAlerts
+	}
+	if req.MarginWarnings != nil {
+		prefs.MarginWarnings = *req.MarginWarnings
+	}
+	if req.MarketNews != nil {
+		prefs.MarketNews = *req.MarketNews
+	}
+	if req.SettlementUpdates != nil {
+		prefs.SettlementUpdates = *req.SettlementUpdates
+	}
+	if req.SystemMaintenance != nil {
+		prefs.SystemMaintenance = *req.SystemMaintenance
+	}
+	if req.EmailNotifications != nil {
+		prefs.EmailNotifications = *req.EmailNotifications
+	}
+	if req.SMSNotifications != nil {
+		prefs.SMSNotifications = *req.SMSNotifications
+	}
+	if req.PushNotifications != nil {
+		prefs.PushNotifications = *req.PushNotifications
+	}
+	if req.USSDNotifications != nil {
+		prefs.USSDNotifications = *req.USSDNotifications
+	}
+	if req.DefaultCurrency != nil {
+		prefs.DefaultCurrency = *req.DefaultCurrency
+	}
+	if req.TimeZone != nil {
+		prefs.TimeZone = *req.TimeZone
+	}
+	if req.DefaultChartPeriod != nil {
+		prefs.DefaultChartPeriod = *req.DefaultChartPeriod
+	}
 	s.preferences[userID] = prefs
 	return prefs, nil
 }
@@ -857,19 +602,4 @@ func (s *Store) GetAuditEntry(id string) (models.AuditEntry, bool) {
 		}
 	}
 	return models.AuditEntry{}, false
-}
-
-func seedCommodities() []models.Commodity {
-	return []models.Commodity{
-		{ID: "cmd-001", Symbol: "MAIZE", Name: "Yellow Maize", Category: "agricultural", Unit: "MT", TickSize: 0.25, LotSize: 10, LastPrice: 278.50, Change24h: 3.25, ChangePercent24h: 1.18, Volume24h: 145230, High24h: 280.00, Low24h: 274.50, Open24h: 275.25},
-		{ID: "cmd-002", Symbol: "WHEAT", Name: "Hard Red Wheat", Category: "agricultural", Unit: "MT", TickSize: 0.25, LotSize: 10, LastPrice: 342.75, Change24h: -2.50, ChangePercent24h: -0.72, Volume24h: 98450, High24h: 346.00, Low24h: 340.25, Open24h: 345.25},
-		{ID: "cmd-003", Symbol: "COFFEE", Name: "Arabica Coffee", Category: "agricultural", Unit: "MT", TickSize: 0.05, LotSize: 5, LastPrice: 157.80, Change24h: 4.30, ChangePercent24h: 2.80, Volume24h: 67890, High24h: 159.00, Low24h: 152.50, Open24h: 153.50},
-		{ID: "cmd-004", Symbol: "COCOA", Name: "Premium Cocoa", Category: "agricultural", Unit: "MT", TickSize: 1.00, LotSize: 10, LastPrice: 3245.00, Change24h: -45.00, ChangePercent24h: -1.37, Volume24h: 23450, High24h: 3300.00, Low24h: 3220.00, Open24h: 3290.00},
-		{ID: "cmd-005", Symbol: "SESAME", Name: "White Sesame", Category: "agricultural", Unit: "MT", TickSize: 0.50, LotSize: 5, LastPrice: 1850.00, Change24h: 25.00, ChangePercent24h: 1.37, Volume24h: 12340, High24h: 1860.00, Low24h: 1820.00, Open24h: 1825.00},
-		{ID: "cmd-006", Symbol: "GOLD", Name: "Gold", Category: "metals", Unit: "oz", TickSize: 0.10, LotSize: 1, LastPrice: 2045.30, Change24h: 12.80, ChangePercent24h: 0.63, Volume24h: 234560, High24h: 2050.00, Low24h: 2030.00, Open24h: 2032.50},
-		{ID: "cmd-007", Symbol: "SILVER", Name: "Silver", Category: "metals", Unit: "oz", TickSize: 0.01, LotSize: 50, LastPrice: 23.45, Change24h: 0.35, ChangePercent24h: 1.52, Volume24h: 178900, High24h: 23.60, Low24h: 23.00, Open24h: 23.10},
-		{ID: "cmd-008", Symbol: "CRUDE_OIL", Name: "Brent Crude Oil", Category: "energy", Unit: "bbl", TickSize: 0.01, LotSize: 100, LastPrice: 78.45, Change24h: -1.20, ChangePercent24h: -1.51, Volume24h: 456780, High24h: 80.00, Low24h: 77.80, Open24h: 79.65},
-		{ID: "cmd-009", Symbol: "NAT_GAS", Name: "Natural Gas", Category: "energy", Unit: "MMBtu", TickSize: 0.001, LotSize: 100, LastPrice: 2.85, Change24h: 0.08, ChangePercent24h: 2.89, Volume24h: 345670, High24h: 2.90, Low24h: 2.75, Open24h: 2.77},
-		{ID: "cmd-010", Symbol: "VCU", Name: "Verified Carbon Units", Category: "carbon", Unit: "tCO2e", TickSize: 0.01, LotSize: 100, LastPrice: 15.20, Change24h: 0.45, ChangePercent24h: 3.05, Volume24h: 89012, High24h: 15.50, Low24h: 14.70, Open24h: 14.75},
-	}
 }

@@ -1,10 +1,8 @@
 """
 Keycloak OIDC client for the NEXCOM Analytics service.
 Validates JWT tokens against the Keycloak JWKS endpoint.
-Falls back to base64 decode for development without a running Keycloak.
+Fails closed when Keycloak or the JWT verification dependency is unavailable.
 """
-import base64
-import json
 import logging
 import os
 import time
@@ -72,25 +70,10 @@ class KeycloakClient:
             )
             return claims
         except ImportError:
-            pass
-        except Exception as exc:
-            logger.warning("[Keycloak] PyJWT validation failed: %s", exc)
+            logger.error("[Keycloak] PyJWT is required for signature verification")
             return None
-
-        # Fallback: decode without signature verification (dev mode only)
-        try:
-            parts = token.split(".")
-            if len(parts) != 3:
-                return None
-            payload = base64.urlsafe_b64decode(parts[1] + "==")
-            claims = json.loads(payload)
-            if claims.get("exp", 0) < time.time():
-                logger.warning("[Keycloak] Token expired")
-                return None
-            logger.warning("[Keycloak] Signature not verified (PyJWT unavailable)")
-            return claims
         except Exception as exc:
-            logger.error("[Keycloak] Token decode failed: %s", exc)
+            logger.warning("[Keycloak] JWT validation failed: %s", exc)
             return None
 
     def get_userinfo(self, token: str) -> Optional[dict]:

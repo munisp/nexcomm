@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 /// multi_currency — Multi-leg atomic currency swap engine
 ///
 /// Provides:
@@ -8,8 +10,6 @@
 ///  - Real-time swap quote streaming via Fluvio
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ pub struct MultiCurrencySwap {
     pub source_amount: f64,
     pub target_amount_estimate: f64,
     pub target_amount_actual: Option<f64>,
-    pub route: Vec<String>,      // e.g. ["NGN", "USD", "KES"]
+    pub route: Vec<String>, // e.g. ["NGN", "USD", "KES"]
     pub legs: Vec<SwapLeg>,
     pub total_fee_bps: f64,
     pub slippage_tolerance_bps: f64,
@@ -170,10 +170,10 @@ impl MultiCurrencyEngine {
         let via_usd_b = format!("{}/USD", to);
         let via_usd_b_rev = format!("USD/{}", to);
 
-        let has_from_usd = self.pools.contains_key(&via_usd_a)
-            || self.pools.contains_key(&via_usd_a_rev);
-        let has_to_usd = self.pools.contains_key(&via_usd_b)
-            || self.pools.contains_key(&via_usd_b_rev);
+        let has_from_usd =
+            self.pools.contains_key(&via_usd_a) || self.pools.contains_key(&via_usd_a_rev);
+        let has_to_usd =
+            self.pools.contains_key(&via_usd_b) || self.pools.contains_key(&via_usd_b_rev);
 
         if has_from_usd && has_to_usd {
             return Some(vec![from.to_string(), "USD".to_string(), to.to_string()]);
@@ -208,7 +208,7 @@ impl MultiCurrencyEngine {
     }
 
     /// Compute AMM output amount using constant-product formula: x * y = k
-    pub fn compute_amm_output(&self, pool: &LiquidityPool, input_amount: f64, a_to_b: bool) -> f64 {
+    pub fn compute_amm_output(pool: &LiquidityPool, input_amount: f64, a_to_b: bool) -> f64 {
         let (reserve_in, reserve_out) = if a_to_b {
             (pool.reserve_a, pool.reserve_b)
         } else {
@@ -224,12 +224,7 @@ impl MultiCurrencyEngine {
     }
 
     /// Generate a swap quote for a multi-leg route
-    pub fn quote_swap(
-        &self,
-        from: &str,
-        to: &str,
-        amount: f64,
-    ) -> Option<SwapQuote> {
+    pub fn quote_swap(&self, from: &str, to: &str, amount: f64) -> Option<SwapQuote> {
         let route = self.find_route(from, to)?;
         let mut current_amount = amount;
         let mut legs = Vec::new();
@@ -250,22 +245,34 @@ impl MultiCurrencyEngine {
                 return None;
             };
 
-            let output = self.compute_amm_output(pool, current_amount, a_to_b);
-            let rate = if current_amount > 0.0 { output / current_amount } else { 0.0 };
+            let output = Self::compute_amm_output(pool, current_amount, a_to_b);
+            let rate = if current_amount > 0.0 {
+                output / current_amount
+            } else {
+                0.0
+            };
 
             legs.push(SwapLegQuote {
                 from_currency: leg_from.clone(),
                 to_currency: leg_to.clone(),
                 rate,
                 fee_bps: pool.fee_bps,
-                liquidity: if a_to_b { pool.reserve_b } else { pool.reserve_a },
+                liquidity: if a_to_b {
+                    pool.reserve_b
+                } else {
+                    pool.reserve_a
+                },
             });
 
             total_fee_bps += pool.fee_bps;
             current_amount = output;
         }
 
-        let effective_rate = if amount > 0.0 { current_amount / amount } else { 0.0 };
+        let effective_rate = if amount > 0.0 {
+            current_amount / amount
+        } else {
+            0.0
+        };
         let direct_rate = self.get_spot_rate(from, to).unwrap_or(effective_rate);
         let price_impact_bps = if direct_rate > 0.0 {
             ((direct_rate - effective_rate) / direct_rate * 10_000.0).abs()
@@ -299,7 +306,11 @@ impl MultiCurrencyEngine {
         idempotency_key: &str,
     ) -> Result<MultiCurrencySwap, String> {
         // Idempotency check
-        if let Some(existing) = self.swaps.values().find(|s| s.idempotency_key == idempotency_key) {
+        if let Some(existing) = self
+            .swaps
+            .values()
+            .find(|s| s.idempotency_key == idempotency_key)
+        {
             return Ok(existing.clone());
         }
 
@@ -353,7 +364,7 @@ impl MultiCurrencyEngine {
             };
 
             let pool = self.pools.get_mut(&pool_key).unwrap();
-            let output = self.compute_amm_output(pool, current_amount, a_to_b);
+            let output = Self::compute_amm_output(pool, current_amount, a_to_b);
 
             // Update pool reserves
             if a_to_b {
@@ -405,14 +416,22 @@ impl MultiCurrencyEngine {
             target_currency: to.to_string(),
             source_amount: amount,
             target_amount_estimate: quote.target_amount,
-            target_amount_actual: if all_succeeded { Some(current_amount) } else { None },
+            target_amount_actual: if all_succeeded {
+                Some(current_amount)
+            } else {
+                None
+            },
             route: quote.route,
             legs,
             total_fee_bps: quote.total_fee_bps,
             slippage_tolerance_bps: slippage_bps,
             status,
             created_at: Utc::now(),
-            completed_at: if all_succeeded { Some(Utc::now()) } else { None },
+            completed_at: if all_succeeded {
+                Some(Utc::now())
+            } else {
+                None
+            },
             idempotency_key: idempotency_key.to_string(),
         };
 
@@ -540,14 +559,7 @@ mod tests {
     #[test]
     fn test_submit_swap_atomic_success() {
         let mut engine = MultiCurrencyEngine::new();
-        let result = engine.submit_swap(
-            "user-001",
-            "NGN",
-            "USD",
-            50_000.0,
-            200.0,
-            "idem-test-001",
-        );
+        let result = engine.submit_swap("user-001", "NGN", "USD", 50_000.0, 200.0, "idem-test-001");
         assert!(result.is_ok());
         let swap = result.unwrap();
         assert_eq!(swap.status, SwapStatus::Executed);
@@ -566,8 +578,12 @@ mod tests {
     #[test]
     fn test_get_user_swaps() {
         let mut engine = MultiCurrencyEngine::new();
-        engine.submit_swap("user-002", "NGN", "USD", 10_000.0, 200.0, "idem-002").unwrap();
-        engine.submit_swap("user-002", "KES", "USD", 5_000.0, 200.0, "idem-003").unwrap();
+        engine
+            .submit_swap("user-002", "NGN", "USD", 10_000.0, 200.0, "idem-002")
+            .unwrap();
+        engine
+            .submit_swap("user-002", "KES", "USD", 5_000.0, 200.0, "idem-003")
+            .unwrap();
         let swaps = engine.get_user_swaps("user-002");
         assert_eq!(swaps.len(), 2);
     }

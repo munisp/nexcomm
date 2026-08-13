@@ -1,73 +1,87 @@
 #!/usr/bin/env sh
-# infra/permify/push-schema.sh
-#
-# Waits for the Permify HTTP server to become healthy, then writes the
-# nexcom RBAC schema from permify.perm into the Permify tenant store.
-#
-# Environment variables (all optional — defaults shown):
-#   PERMIFY_HOST       Permify HTTP host   (default: localhost)
-#   PERMIFY_HTTP_PORT  Permify HTTP port   (default: 3476)
-#   PERMIFY_TENANT_ID  Permify tenant ID   (default: t1)
-#   SCHEMA_FILE        Path to .perm file  (default: /app/permify.perm)
-#
-# Usage (Docker):
-#   CMD ["sh", "/app/push-schema.sh"]
-
+# Writes the NEXCOMM authorization schema to a live Permify tenant.
+# Staging and production fail closed on unavailable Permify, insecure transport,
+# missing API authentication, malformed schema input, or schema-write failure.
 set -eu
 
-PERMIFY_HOST="${PERMIFY_HOST:-localhost}"
+PERMIFY_HOST="${PERMIFY_HOST:-permify}"
 PERMIFY_HTTP_PORT="${PERMIFY_HTTP_PORT:-3476}"
 PERMIFY_TENANT_ID="${PERMIFY_TENANT_ID:-t1}"
+PERMIFY_SCHEME="${PERMIFY_SCHEME:-https}"
+PERMIFY_CA_FILE="${PERMIFY_CA_FILE:-}"
+PERMIFY_AUTH_TOKEN="${PERMIFY_AUTH_TOKEN:-}"
+PERMIFY_AUTH_TOKEN_FILE="${PERMIFY_AUTH_TOKEN_FILE:-}"
+PERMIFY_ALLOW_INSECURE_LOCAL="${PERMIFY_ALLOW_INSECURE_LOCAL:-0}"
+ENVIRONMENT="${ENVIRONMENT:-staging}"
 SCHEMA_FILE="${SCHEMA_FILE:-/app/permify.perm}"
-BASE_URL="http://${PERMIFY_HOST}:${PERMIFY_HTTP_PORT}"
-MAX_WAIT=120   # seconds
-INTERVAL=3
+MAX_WAIT="${MAX_WAIT:-120}"
+INTERVAL="${INTERVAL:-3}"
+BASE_URL="${PERMIFY_SCHEME}://${PERMIFY_HOST}:${PERMIFY_HTTP_PORT}"
 
-echo "[permify-push] Waiting for Permify at ${BASE_URL}/healthz …"
+if [ -n "$PERMIFY_AUTH_TOKEN" ] && [ -n "$PERMIFY_AUTH_TOKEN_FILE" ]; then
+  echo "ERROR: set only one of PERMIFY_AUTH_TOKEN or PERMIFY_AUTH_TOKEN_FILE" >&2
+  exit 2
+fi
+if [ -n "$PERMIFY_AUTH_TOKEN_FILE" ]; then
+  [ -r "$PERMIFY_AUTH_TOKEN_FILE" ] || { echo "ERROR: PERMIFY_AUTH_TOKEN_FILE is unreadable" >&2; exit 2; }
+  PERMIFY_AUTH_TOKEN="$(cat "$PERMIFY_AUTH_TOKEN_FILE")"
+fi
+if [ "$PERMIFY_SCHEME" != "https" ]; then
+  if [ "$PERMIFY_ALLOW_INSECURE_LOCAL" != "1" ] || [ "$ENVIRONMENT" != "local-test" ]; then
+    echo "ERROR: HTTPS is required outside explicit ENVIRONMENT=local-test" >&2
+    exit 2
+  fi
+fi
+if [ "$ENVIRONMENT" = "staging" ] || [ "$ENVIRONMENT" = "production" ] || [ "$ENVIRONMENT" = "prod" ]; then
+  [ -n "$PERMIFY_AUTH_TOKEN" ] || { echo "ERROR: PERMIFY_AUTH_TOKEN or PERMIFY_AUTH_TOKEN_FILE is required" >&2; exit 2; }
+fi
+[ -f "$SCHEMA_FILE" ] || { echo "ERROR: schema file not found: $SCHEMA_FILE" >&2; exit 2; }
+
+curl_args="--fail --show-error --silent"
+if [ -n "$PERMIFY_CA_FILE" ]; then
+  [ -r "$PERMIFY_CA_FILE" ] || { echo "ERROR: PERMIFY_CA_FILE is unreadable" >&2; exit 2; }
+  curl_args="$curl_args --cacert $PERMIFY_CA_FILE"
+fi
+if [ -n "$PERMIFY_AUTH_TOKEN" ]; then
+  auth_header="Authorization: Bearer $PERMIFY_AUTH_TOKEN"
+else
+  auth_header=""
+fi
+
+request_health() {
+  if [ -n "$auth_header" ]; then
+    # shellcheck disable=SC2086
+    curl $curl_args -H "$auth_header" "$BASE_URL/healthz" >/dev/null
+  else
+    # shellcheck disable=SC2086
+    curl $curl_args "$BASE_URL/healthz" >/dev/null
+  fi
+}
+
+echo "[permify-push] waiting for authenticated Permify health at ${BASE_URL}/healthz"
 elapsed=0
-until curl -sf "${BASE_URL}/healthz" > /dev/null 2>&1; do
+until request_health; do
   if [ "$elapsed" -ge "$MAX_WAIT" ]; then
-    echo "[permify-push] ERROR: Permify did not become healthy within ${MAX_WAIT}s" >&2
+    echo "ERROR: Permify did not become healthy within ${MAX_WAIT}s" >&2
     exit 1
   fi
   sleep "$INTERVAL"
   elapsed=$((elapsed + INTERVAL))
 done
-echo "[permify-push] Permify is healthy after ${elapsed}s."
 
-# Read the schema file
-if [ ! -f "$SCHEMA_FILE" ]; then
-  echo "[permify-push] ERROR: Schema file not found: ${SCHEMA_FILE}" >&2
-  exit 1
-fi
-SCHEMA=$(cat "$SCHEMA_FILE")
-
-# Escape the schema for JSON (replace \ → \\, " → \", newline → \n)
-SCHEMA_JSON=$(printf '%s' "$SCHEMA" \
-  | sed 's/\\/\\\\/g' \
-  | sed 's/"/\\"/g' \
-  | tr '\n' '\\' \
-  | sed 's/\\/\\n/g')
-
-PAYLOAD="{\"schema\":\"${SCHEMA_JSON}\"}"
-
-echo "[permify-push] Writing schema to tenant '${PERMIFY_TENANT_ID}' …"
-HTTP_STATUS=$(curl -sf -o /tmp/permify_response.json -w "%{http_code}" \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -d "$PAYLOAD" \
-  "${BASE_URL}/v1/tenants/${PERMIFY_TENANT_ID}/schemas/write" 2>&1) || true
-
-if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "201" ]; then
-  echo "[permify-push] Schema pushed successfully (HTTP ${HTTP_STATUS})."
-  cat /tmp/permify_response.json 2>/dev/null || true
-  echo ""
+payload="$(jq -n --rawfile schema "$SCHEMA_FILE" '{schema: $schema}')"
+response_file="$(mktemp)"
+trap 'rm -f "$response_file"' EXIT HUP INT TERM
+if [ -n "$auth_header" ]; then
+  # shellcheck disable=SC2086
+  status="$(curl $curl_args -o "$response_file" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H "$auth_header" --data "$payload" "$BASE_URL/v1/tenants/$PERMIFY_TENANT_ID/schemas/write")"
 else
-  echo "[permify-push] WARNING: Schema push returned HTTP ${HTTP_STATUS}." >&2
-  cat /tmp/permify_response.json 2>/dev/null || true
-  echo ""
-  # Non-fatal: the server may already have the latest schema version.
-  # The main Permify service will still start correctly.
+  # shellcheck disable=SC2086
+  status="$(curl $curl_args -o "$response_file" -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "$payload" "$BASE_URL/v1/tenants/$PERMIFY_TENANT_ID/schemas/write")"
 fi
-
-echo "[permify-push] Done."
+case "$status" in
+  200|201) ;;
+  *) echo "ERROR: schema write returned HTTP $status" >&2; cat "$response_file" >&2; exit 1 ;;
+esac
+jq -e 'type == "object"' "$response_file" >/dev/null || { echo "ERROR: schema write response was not JSON" >&2; exit 1; }
+echo "[permify-push] schema write succeeded for tenant ${PERMIFY_TENANT_ID} (HTTP ${status})"

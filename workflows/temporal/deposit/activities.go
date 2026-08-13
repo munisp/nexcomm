@@ -134,13 +134,15 @@ func CheckKYCStatusActivity(ctx context.Context, userID string) (*KYCCheckResult
 	url := fmt.Sprintf("%s/api/v1/kyc/%s/status", gatewayURL(), userID)
 	resp, err := http.Get(url)
 	if err != nil {
-		// Fail open: if KYC service is unreachable, allow small deposits
-		return &KYCCheckResult{Approved: true, Reason: "kyc-service-unavailable-fail-open"}, nil
+		return nil, fmt.Errorf("verify KYC status: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("KYC status returned HTTP %d", resp.StatusCode)
+	}
 	var result KYCCheckResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return &KYCCheckResult{Approved: true}, nil
+		return nil, fmt.Errorf("decode KYC status: %w", err)
 	}
 	return &result, nil
 }

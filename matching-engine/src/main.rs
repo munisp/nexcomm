@@ -8,6 +8,7 @@ mod broker;
 mod circuit_breaker;
 mod clearing;
 mod corporate_actions;
+mod cross_currency;
 mod delivery;
 mod engine;
 mod fees;
@@ -16,16 +17,15 @@ mod futures;
 mod ha;
 mod indices;
 mod investor_protection;
+mod kafka;
 mod market_data;
 mod market_maker;
+mod multi_currency;
 mod options;
 mod orderbook;
 pub mod persistence;
-mod kafka;
 mod settlement_client;
 mod spot_fx;
-mod cross_currency;
-mod multi_currency;
 mod surveillance;
 mod types;
 
@@ -118,14 +118,8 @@ async fn main() {
         .route("/api/v1/cluster", get(cluster_status))
         // Orders
         .route("/api/v1/orders", post(submit_order))
-        .route(
-            "/api/v1/orders/:symbol/:order_id",
-            delete(cancel_order),
-        )
-        .route(
-            "/api/v1/orders/:symbol/:order_id/amend",
-            put(amend_order),
-        )
+        .route("/api/v1/orders/:symbol/:order_id", delete(cancel_order))
+        .route("/api/v1/orders/:symbol/:order_id/amend", put(amend_order))
         // Market Data
         .route("/api/v1/depth/:symbol", get(market_depth))
         .route("/api/v1/symbols", get(list_symbols))
@@ -139,10 +133,7 @@ async fn main() {
         .route("/api/v1/options/chain/:underlying", get(option_chain))
         // Clearing
         .route("/api/v1/clearing/margins/:account_id", get(get_margins))
-        .route(
-            "/api/v1/clearing/positions/:account_id",
-            get(get_positions),
-        )
+        .route("/api/v1/clearing/positions/:account_id", get(get_positions))
         .route("/api/v1/clearing/guarantee-fund", get(guarantee_fund))
         // Surveillance
         .route("/api/v1/surveillance/alerts", get(surveillance_alerts))
@@ -162,10 +153,7 @@ async fn main() {
             get(account_receipts),
         )
         .route("/api/v1/delivery/receipts", post(issue_receipt))
-        .route(
-            "/api/v1/delivery/grades/:commodity",
-            get(commodity_grades),
-        )
+        .route("/api/v1/delivery/grades/:commodity", get(commodity_grades))
         .route("/api/v1/delivery/stocks", get(warehouse_stocks))
         // Audit
         .route("/api/v1/audit/entries", get(audit_entries))
@@ -176,8 +164,14 @@ async fn main() {
         // Market Makers
         .route("/api/v1/market-makers", get(list_market_makers))
         .route("/api/v1/market-makers/:id", get(get_market_maker))
-        .route("/api/v1/market-makers/:id/performance", get(market_maker_performance))
-        .route("/api/v1/market-makers/quotes/:symbol", get(market_maker_quotes))
+        .route(
+            "/api/v1/market-makers/:id/performance",
+            get(market_maker_performance),
+        )
+        .route(
+            "/api/v1/market-makers/quotes/:symbol",
+            get(market_maker_quotes),
+        )
         .route("/api/v1/market-makers/quotes", post(submit_quote))
         // Indices
         .route("/api/v1/indices", get(list_indices))
@@ -186,9 +180,18 @@ async fn main() {
         .route("/api/v1/indices/:id/value", get(get_index_value))
         // Corporate Actions
         .route("/api/v1/corporate-actions", get(list_corporate_actions))
-        .route("/api/v1/corporate-actions/pending", get(pending_corporate_actions))
-        .route("/api/v1/corporate-actions/:symbol", get(corporate_actions_for_symbol))
-        .route("/api/v1/corporate-actions/:id/process", post(process_corporate_action))
+        .route(
+            "/api/v1/corporate-actions/pending",
+            get(pending_corporate_actions),
+        )
+        .route(
+            "/api/v1/corporate-actions/:symbol",
+            get(corporate_actions_for_symbol),
+        )
+        .route(
+            "/api/v1/corporate-actions/:id/process",
+            post(process_corporate_action),
+        )
         // Brokers
         .route("/api/v1/brokers", get(list_brokers))
         .route("/api/v1/brokers/:id", get(get_broker))
@@ -196,13 +199,25 @@ async fn main() {
         .route("/api/v1/brokers/route", post(route_order))
         // Circuit Breakers (NYSE-equivalent)
         .route("/api/v1/circuit-breaker/bands", get(circuit_breaker_bands))
-        .route("/api/v1/circuit-breaker/bands/:symbol", get(circuit_breaker_band))
-        .route("/api/v1/circuit-breaker/market-wide", get(market_wide_status))
-        .route("/api/v1/circuit-breaker/interruptions", get(volatility_interruptions))
+        .route(
+            "/api/v1/circuit-breaker/bands/:symbol",
+            get(circuit_breaker_band),
+        )
+        .route(
+            "/api/v1/circuit-breaker/market-wide",
+            get(market_wide_status),
+        )
+        .route(
+            "/api/v1/circuit-breaker/interruptions",
+            get(volatility_interruptions),
+        )
         // Auctions (NYSE-equivalent)
         .route("/api/v1/auctions/active", get(active_auctions))
         .route("/api/v1/auctions/history", get(auction_history))
-        .route("/api/v1/auctions/:symbol/indicative", get(auction_indicative))
+        .route(
+            "/api/v1/auctions/:symbol/indicative",
+            get(auction_indicative),
+        )
         .route("/api/v1/auctions/:symbol/start", post(start_auction))
         .route("/api/v1/auctions/:symbol/run", post(run_auction))
         // Market Data Infrastructure (NYSE-equivalent)
@@ -232,19 +247,23 @@ async fn main() {
         .route("/api/v1/fees/invoices/generate", post(fee_generate_invoice))
         .route("/api/v1/fees/listing", post(fee_charge_listing))
         .route("/api/v1/fees/tokenization", post(fee_charge_tokenization))
-        
         // ── Spot FX ──────────────────────────────────────────────────────────
         .route("/api/v1/fx/pairs", get(fx_list_pairs))
         .route("/api/v1/fx/rates", get(fx_get_all_rates))
         .route("/api/v1/fx/rate/:pair_base/:pair_quote", get(fx_get_rate))
         .route("/api/v1/fx/cross/:base/:quote", get(fx_cross_rate))
         .route("/api/v1/fx/orders", post(fx_submit_order))
-        .route("/api/v1/fx/orders/:pair_base/:pair_quote/:order_id/cancel", post(fx_cancel_order))
+        .route(
+            "/api/v1/fx/orders/:pair_base/:pair_quote/:order_id/cancel",
+            post(fx_cancel_order),
+        )
         .route("/api/v1/fx/depth/:pair_base/:pair_quote", get(fx_depth))
         .route("/api/v1/fx/trades/:pair_base/:pair_quote", get(fx_trades))
-        .route("/api/v1/fx/stats/:pair_base/:pair_quote", get(fx_pair_stats))
+        .route(
+            "/api/v1/fx/stats/:pair_base/:pair_quote",
+            get(fx_pair_stats),
+        )
         .route("/api/v1/fx/rates/update", post(fx_update_reference_rate))
-
         // ── Cross-Currency ──────────────────────────────────────────────────
         .route("/api/v1/xccy/pairs", get(xccy_list_pairs))
         .route("/api/v1/xccy/rates", get(xccy_get_all_rates))
@@ -255,7 +274,6 @@ async fn main() {
         .route("/api/v1/xccy/depth/:base/:quote", get(xccy_get_order_book))
         .route("/api/v1/xccy/arbitrage", get(xccy_detect_arbitrage))
         .route("/api/v1/xccy/arbitrage/log", get(xccy_arbitrage_log))
-
         // ── Multi-Currency Atomic Swaps ─────────────────────────────────────
         .route("/api/v1/mccy/pools", get(mccy_list_pools))
         .route("/api/v1/mccy/quote", post(mccy_get_quote))
@@ -263,13 +281,16 @@ async fn main() {
         .route("/api/v1/mccy/swap/:swap_id", get(mccy_get_swap))
         .route("/api/v1/mccy/swaps/:user_id", get(mccy_get_user_swaps))
         .route("/api/v1/mccy/routes", post(mccy_get_routes))
-
         .layer(RequestBodyLimitLayer::new(1024 * 1024)) // 1MB request body limit
         .layer(cors)
         .with_state(state);
 
     let addr = format!("0.0.0.0:{}", port);
-    info!("NEXCOM Matching Engine v{} listening on {}", env!("CARGO_PKG_VERSION"), addr);
+    info!(
+        "NEXCOM Matching Engine v{} listening on {}",
+        env!("CARGO_PKG_VERSION"),
+        addr
+    );
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     // Graceful shutdown: drain in-flight requests on SIGTERM/SIGINT
@@ -289,13 +310,20 @@ async fn main() {
 }
 
 // ─── Prometheus Metrics Endpoint ───────────────────────────────────────────────────
-async fn prometheus_metrics(
-    State(state): State<AppState>,
-) -> axum::response::Response {
+async fn prometheus_metrics(State(state): State<AppState>) -> axum::response::Response {
     let status = state.engine.status();
-    let total_orders = status.get("total_orders").and_then(|v| v.as_u64()).unwrap_or(0);
-    let total_trades = status.get("total_trades").and_then(|v| v.as_u64()).unwrap_or(0);
-    let symbols_count = status.get("symbols_count").and_then(|v| v.as_u64()).unwrap_or(0);
+    let total_orders = status
+        .get("total_orders")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let total_trades = status
+        .get("total_trades")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let symbols_count = status
+        .get("symbols_count")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
     let is_primary = state.engine.cluster.role() == NodeRole::Primary;
     let body = format!(
         "# HELP nexcom_matching_orders_total Total orders submitted to matching engine\n\
@@ -323,21 +351,23 @@ async fn prometheus_metrics(
 }
 
 // ─── Kubernetes Readiness Probe ──────────────────────────────────────────────────────
-async fn readiness_probe(
-    State(state): State<AppState>,
-) -> axum::response::Response {
+async fn readiness_probe(State(state): State<AppState>) -> axum::response::Response {
     let accepting = state.engine.cluster.is_accepting_orders();
     if accepting {
         axum::response::Response::builder()
             .status(200)
             .header("Content-Type", "application/json")
-            .body(axum::body::Body::from(r#"{"status":"ready","accepting_orders":true}"#))
+            .body(axum::body::Body::from(
+                r#"{"status":"ready","accepting_orders":true}"#,
+            ))
             .unwrap()
     } else {
         axum::response::Response::builder()
             .status(503)
             .header("Content-Type", "application/json")
-            .body(axum::body::Body::from(r#"{"status":"not_ready","accepting_orders":false}"#))
+            .body(axum::body::Body::from(
+                r#"{"status":"not_ready","accepting_orders":false}"#,
+            ))
             .unwrap()
     }
 }
@@ -369,15 +399,18 @@ async fn submit_order(
     Json(req): Json<NewOrderRequest>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
     // ── Pre-trade balance check ──────────────────────────────────────────────
-    // For BUY LIMIT orders, verify the buyer has sufficient settlement balance.
-    // Fail-open: if gateway is unavailable (balance == -1), order proceeds.
+    // For BUY LIMIT orders, require an authoritative settlement balance.
     if req.side == Side::Buy {
         if let Some(price) = req.price {
             if price > 0.0 {
                 let required_cents = (price * req.quantity * 100.0 * 1.1) as i64;
                 if required_cents > 0 {
-                    let balance = engine.settlement.get_balance(&req.account_id).await;
-                    if balance >= 0 && balance < required_cents {
+                    let balance = engine
+                        .settlement
+                        .get_balance(&req.account_id)
+                        .await
+                        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+                    if balance < required_cents {
                         return Ok(Json(ApiResponse::<serde_json::Value>::err(format!(
                             "Insufficient balance: required {} cents, available {} cents",
                             required_cents, balance
@@ -403,69 +436,89 @@ async fn submit_order(
     match engine.submit_order(order) {
         Ok((trades, result_order)) => {
             // Publish OrderCreated event to Kafka
-            engine.kafka.publish(kafka::MatchingEvent::OrderCreated(kafka::OrderCreatedEvent {
-                order_id: result_order.id.to_string(),
-                account_id: result_order.account_id.clone(),
-                symbol: result_order.symbol.clone(),
-                side: format!("{:?}", result_order.side).to_lowercase(),
-                order_type: format!("{:?}", result_order.order_type).to_lowercase(),
-                quantity: result_order.quantity as f64 / 1_000_000.0,
-                price: if result_order.price > 0 { Some(from_price(result_order.price)) } else { None },
-                stop_price: if result_order.stop_price > 0 { Some(from_price(result_order.stop_price)) } else { None },
-                time_in_force: format!("{:?}", result_order.time_in_force).to_lowercase(),
-                timestamp_us: kafka::now_us(),
-                node_id: std::env::var("NODE_ID").unwrap_or_else(|_| "nexcom-primary".to_string()),
-            }));
-            // Publish TradeExecuted and OrderFilled events for each fill
-            for trade in &trades {
-                engine.kafka.publish(kafka::MatchingEvent::TradeExecuted(kafka::TradeExecutedEvent {
-                    trade_id: trade.id.to_string(),
-                    symbol: trade.symbol.clone(),
-                    buyer_order_id: trade.buyer_order_id.to_string(),
-                    seller_order_id: trade.seller_order_id.to_string(),
-                    buyer_account_id: trade.buyer_account.clone(),
-                    seller_account_id: trade.seller_account.clone(),
-                    quantity: trade.quantity as f64 / 1_000_000.0,
-                    price: from_price(trade.price),
-                    aggressor_side: format!("{:?}", trade.aggressor_side).to_lowercase(),
-                    timestamp_us: kafka::now_us(),
-                    node_id: std::env::var("NODE_ID").unwrap_or_else(|_| "nexcom-primary".to_string()),
-                }));
-            }
-            // Publish OrderFilled if the order is fully or partially filled
-            if !trades.is_empty() {
-                engine.kafka.publish(kafka::MatchingEvent::OrderFilled(kafka::OrderFilledEvent {
+            engine.kafka.publish(kafka::MatchingEvent::OrderCreated(
+                kafka::OrderCreatedEvent {
                     order_id: result_order.id.to_string(),
                     account_id: result_order.account_id.clone(),
                     symbol: result_order.symbol.clone(),
                     side: format!("{:?}", result_order.side).to_lowercase(),
-                    filled_quantity: result_order.filled_quantity as f64 / 1_000_000.0,
-                    remaining_quantity: result_order.remaining_quantity as f64 / 1_000_000.0,
-                    fill_price: from_price(result_order.average_price),
-                    is_fully_filled: result_order.remaining_quantity == 0,
-                    trade_id: trades.last().map(|t| t.id.to_string()).unwrap_or_default(),
+                    order_type: format!("{:?}", result_order.order_type).to_lowercase(),
+                    quantity: result_order.quantity as f64 / 1_000_000.0,
+                    price: if result_order.price > 0 {
+                        Some(from_price(result_order.price))
+                    } else {
+                        None
+                    },
+                    stop_price: if result_order.stop_price > 0 {
+                        Some(from_price(result_order.stop_price))
+                    } else {
+                        None
+                    },
+                    time_in_force: format!("{:?}", result_order.time_in_force).to_lowercase(),
                     timestamp_us: kafka::now_us(),
-                    node_id: std::env::var("NODE_ID").unwrap_or_else(|_| "nexcom-primary".to_string()),
-                }));
-
-                // ── Fund-Flow: TigerBeetle settlement + Fluvio + Temporal + Lakehouse ──
-                // Fire-and-forget for each trade fill. Never blocks the hot path.
-                for trade in &trades {
-                    let gross_amount = (trade.quantity as f64 / 1_000_000.0) * from_price(trade.price);
-                    let fee_amount = gross_amount * 0.001; // 0.1% platform fee
-                    engine.settlement.process_fill(settlement_client::TradeFill {
+                    node_id: std::env::var("NODE_ID")
+                        .unwrap_or_else(|_| "nexcom-primary".to_string()),
+                },
+            ));
+            // Publish TradeExecuted and OrderFilled events for each fill
+            for trade in &trades {
+                engine.kafka.publish(kafka::MatchingEvent::TradeExecuted(
+                    kafka::TradeExecutedEvent {
                         trade_id: trade.id.to_string(),
                         symbol: trade.symbol.clone(),
+                        buyer_order_id: trade.buyer_order_id.to_string(),
+                        seller_order_id: trade.seller_order_id.to_string(),
                         buyer_account_id: trade.buyer_account.clone(),
                         seller_account_id: trade.seller_account.clone(),
                         quantity: trade.quantity as f64 / 1_000_000.0,
                         price: from_price(trade.price),
-                        gross_amount,
-                        fee_amount,
-                        currency: "NGN".to_string(),
-                        executed_at_us: kafka::now_us(),
-                        idempotency_key: trade.id.to_string(),
-                    });
+                        aggressor_side: format!("{:?}", trade.aggressor_side).to_lowercase(),
+                        timestamp_us: kafka::now_us(),
+                        node_id: std::env::var("NODE_ID")
+                            .unwrap_or_else(|_| "nexcom-primary".to_string()),
+                    },
+                ));
+            }
+            // Publish OrderFilled if the order is fully or partially filled
+            if !trades.is_empty() {
+                engine
+                    .kafka
+                    .publish(kafka::MatchingEvent::OrderFilled(kafka::OrderFilledEvent {
+                        order_id: result_order.id.to_string(),
+                        account_id: result_order.account_id.clone(),
+                        symbol: result_order.symbol.clone(),
+                        side: format!("{:?}", result_order.side).to_lowercase(),
+                        filled_quantity: result_order.filled_quantity as f64 / 1_000_000.0,
+                        remaining_quantity: result_order.remaining_quantity as f64 / 1_000_000.0,
+                        fill_price: from_price(result_order.average_price),
+                        is_fully_filled: result_order.remaining_quantity == 0,
+                        trade_id: trades.last().map(|t| t.id.to_string()).unwrap_or_default(),
+                        timestamp_us: kafka::now_us(),
+                        node_id: std::env::var("NODE_ID")
+                            .unwrap_or_else(|_| "nexcom-primary".to_string()),
+                    }));
+
+                // ── Fund-Flow: TigerBeetle settlement + Fluvio + Temporal + Lakehouse ──
+                // Fire-and-forget for each trade fill. Never blocks the hot path.
+                for trade in &trades {
+                    let gross_amount =
+                        (trade.quantity as f64 / 1_000_000.0) * from_price(trade.price);
+                    let fee_amount = gross_amount * 0.001; // 0.1% platform fee
+                    engine
+                        .settlement
+                        .process_fill(settlement_client::TradeFill {
+                            trade_id: trade.id.to_string(),
+                            symbol: trade.symbol.clone(),
+                            buyer_account_id: trade.buyer_account.clone(),
+                            seller_account_id: trade.seller_account.clone(),
+                            quantity: trade.quantity as f64 / 1_000_000.0,
+                            price: from_price(trade.price),
+                            gross_amount,
+                            fee_amount,
+                            currency: "NGN".to_string(),
+                            executed_at_us: kafka::now_us(),
+                            idempotency_key: trade.id.to_string(),
+                        });
                 }
             }
             let response = serde_json::json!({
@@ -489,14 +542,17 @@ async fn submit_order(
         }
         Err(e) => {
             // Publish OrderRejected event
-            engine.kafka.publish(kafka::MatchingEvent::OrderRejected(kafka::OrderRejectedEvent {
-                order_id: String::new(), // no order ID on rejection
-                account_id: String::new(),
-                symbol: String::new(),
-                reason: e.clone(),
-                timestamp_us: kafka::now_us(),
-                node_id: std::env::var("NODE_ID").unwrap_or_else(|_| "nexcom-primary".to_string()),
-            }));
+            engine.kafka.publish(kafka::MatchingEvent::OrderRejected(
+                kafka::OrderRejectedEvent {
+                    order_id: String::new(), // no order ID on rejection
+                    account_id: String::new(),
+                    symbol: String::new(),
+                    reason: e.clone(),
+                    timestamp_us: kafka::now_us(),
+                    node_id: std::env::var("NODE_ID")
+                        .unwrap_or_else(|_| "nexcom-primary".to_string()),
+                },
+            ));
             Ok(Json(ApiResponse::<serde_json::Value>::err(e)))
         }
     }
@@ -514,18 +570,25 @@ async fn cancel_order(
                 if !reserve_id.is_empty() {
                     let settlement = engine.settlement.clone();
                     let rid = reserve_id.to_string();
-                    tokio::spawn(async move { settlement.release_funds(&rid).await });
+                    tokio::spawn(async move {
+                        if let Err(err) = settlement.release_funds(&rid).await {
+                            tracing::error!(transfer_id = %rid, error = %err, "failed to release reserved funds");
+                        }
+                    });
                 }
             }
-            engine.kafka.publish(kafka::MatchingEvent::OrderCancelled(kafka::OrderCancelledEvent {
-                order_id: order.id.to_string(),
-                account_id: order.account_id.clone(),
-                symbol: order.symbol.clone(),
-                reason: "user_request".to_string(),
-                remaining_quantity: order.remaining_quantity as f64 / 1_000_000.0,
-                timestamp_us: kafka::now_us(),
-                node_id: std::env::var("NODE_ID").unwrap_or_else(|_| "nexcom-primary".to_string()),
-            }));
+            engine.kafka.publish(kafka::MatchingEvent::OrderCancelled(
+                kafka::OrderCancelledEvent {
+                    order_id: order.id.to_string(),
+                    account_id: order.account_id.clone(),
+                    symbol: order.symbol.clone(),
+                    reason: "user_request".to_string(),
+                    remaining_quantity: order.remaining_quantity as f64 / 1_000_000.0,
+                    timestamp_us: kafka::now_us(),
+                    node_id: std::env::var("NODE_ID")
+                        .unwrap_or_else(|_| "nexcom-primary".to_string()),
+                },
+            ));
             Ok(Json(ApiResponse::ok(serde_json::json!({
                 "order_id": order.id,
                 "status": order.status,
@@ -601,9 +664,7 @@ async fn list_symbols(State(engine): State<AppState>) -> Json<ApiResponse<Vec<St
 
 // ─── Futures ─────────────────────────────────────────────────────────────────
 
-async fn list_futures(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<Vec<FuturesContract>>> {
+async fn list_futures(State(engine): State<AppState>) -> Json<ApiResponse<Vec<FuturesContract>>> {
     Json(ApiResponse::ok(engine.futures.active_contracts()))
 }
 
@@ -641,9 +702,7 @@ async fn list_specs(State(engine): State<AppState>) -> Json<ApiResponse<serde_js
 
 // ─── Options ─────────────────────────────────────────────────────────────────
 
-async fn list_options(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<Vec<OptionsContract>>> {
+async fn list_options(State(engine): State<AppState>) -> Json<ApiResponse<Vec<OptionsContract>>> {
     Json(ApiResponse::ok(engine.options.active_contracts()))
 }
 
@@ -706,9 +765,7 @@ async fn get_positions(
     Json(ApiResponse::ok(engine.clearing.get_positions(&account_id)))
 }
 
-async fn guarantee_fund(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn guarantee_fund(State(engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     Json(ApiResponse::ok(serde_json::json!({
         "total": from_price(engine.clearing.guarantee_fund_total()),
         "members": engine.clearing.member_count(),
@@ -738,18 +795,14 @@ async fn check_position(
     })))
 }
 
-async fn daily_report(
-    State(_engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn daily_report(State(_engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     let report = surveillance::RegulatoryReporter::daily_trade_report(&[]);
     Json(ApiResponse::ok(report))
 }
 
 // ─── Delivery ────────────────────────────────────────────────────────────────
 
-async fn list_warehouses(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<Vec<Warehouse>>> {
+async fn list_warehouses(State(engine): State<AppState>) -> Json<ApiResponse<Vec<Warehouse>>> {
     Json(ApiResponse::ok(engine.delivery.get_warehouses()))
 }
 
@@ -830,9 +883,7 @@ async fn audit_entries(
     Json(ApiResponse::ok(engine.audit.get_range(from, to)))
 }
 
-async fn audit_integrity(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn audit_integrity(State(engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     let valid = engine.audit.verify_integrity();
     Json(ApiResponse::ok(serde_json::json!({
         "integrity_valid": valid,
@@ -843,9 +894,7 @@ async fn audit_integrity(
 
 // ─── FIX ─────────────────────────────────────────────────────────────────────
 
-async fn fix_sessions(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn fix_sessions(State(engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     Json(ApiResponse::ok(serde_json::json!({
         "total_sessions": engine.fix_gateway.session_count(),
         "logged_in": engine.fix_gateway.logged_in_count(),
@@ -906,7 +955,9 @@ async fn market_maker_quotes(
     State(engine): State<AppState>,
     Path(symbol): Path<String>,
 ) -> Json<ApiResponse<Vec<market_maker::TwoSidedQuote>>> {
-    Json(ApiResponse::ok(engine.market_makers.quotes_for_symbol(&symbol)))
+    Json(ApiResponse::ok(
+        engine.market_makers.quotes_for_symbol(&symbol),
+    ))
 }
 
 #[derive(serde::Deserialize)]
@@ -994,7 +1045,9 @@ async fn corporate_actions_for_symbol(
     State(engine): State<AppState>,
     Path(symbol): Path<String>,
 ) -> Json<ApiResponse<Vec<corporate_actions::CorporateAction>>> {
-    Json(ApiResponse::ok(engine.corporate_actions.actions_for_symbol(&symbol)))
+    Json(ApiResponse::ok(
+        engine.corporate_actions.actions_for_symbol(&symbol),
+    ))
 }
 
 async fn process_corporate_action(
@@ -1013,9 +1066,7 @@ async fn process_corporate_action(
 
 // ─── Brokers ────────────────────────────────────────────────────────────────
 
-async fn list_brokers(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<Vec<broker::Broker>>> {
+async fn list_brokers(State(engine): State<AppState>) -> Json<ApiResponse<Vec<broker::Broker>>> {
     Json(ApiResponse::ok(engine.brokers.list_brokers()))
 }
 
@@ -1087,7 +1138,9 @@ async fn market_wide_status(
 async fn volatility_interruptions(
     State(engine): State<AppState>,
 ) -> Json<ApiResponse<Vec<circuit_breaker::VolatilityInterruption>>> {
-    Json(ApiResponse::ok(engine.circuit_breaker.recent_interruptions()))
+    Json(ApiResponse::ok(
+        engine.circuit_breaker.recent_interruptions(),
+    ))
 }
 
 // ─── Auctions (NYSE-equivalent) ─────────────────────────────────────────────
@@ -1110,7 +1163,10 @@ async fn auction_indicative(
 ) -> Json<ApiResponse<auction::IndicativeData>> {
     match engine.auction.indicative_data(&symbol) {
         Some(data) => Json(ApiResponse::ok(data)),
-        None => Json(ApiResponse::err(format!("No active auction for {}", symbol))),
+        None => Json(ApiResponse::err(format!(
+            "No active auction for {}",
+            symbol
+        ))),
     }
 }
 
@@ -1130,7 +1186,12 @@ async fn start_auction(
         "PRE_CLOSE" | "PRECLOSE" => auction::AuctionPhase::PreClose,
         "CLOSING" | "CLOSING_AUCTION" => auction::AuctionPhase::ClosingAuction,
         "REOPENING" => auction::AuctionPhase::ReopeningAuction,
-        _ => return Json(ApiResponse::err(format!("Unknown auction phase: {}", req.phase))),
+        _ => {
+            return Json(ApiResponse::err(format!(
+                "Unknown auction phase: {}",
+                req.phase
+            )))
+        }
     };
     engine.auction.start_auction(&symbol, phase);
     Json(ApiResponse::ok(serde_json::json!({
@@ -1146,7 +1207,10 @@ async fn run_auction(
 ) -> Json<ApiResponse<auction::AuctionResult>> {
     match engine.auction.run_auction(&symbol) {
         Some(result) => Json(ApiResponse::ok(result)),
-        None => Json(ApiResponse::err(format!("No auction to run for {}", symbol))),
+        None => Json(ApiResponse::err(format!(
+            "No auction to run for {}",
+            symbol
+        ))),
     }
 }
 
@@ -1171,7 +1235,9 @@ async fn symbol_tape(
     Query(params): Query<TapeQuery>,
 ) -> Json<ApiResponse<Vec<market_data::TapeEntry>>> {
     let count = params.count.unwrap_or(50);
-    Json(ApiResponse::ok(engine.market_data.tape.for_symbol(&symbol, count)))
+    Json(ApiResponse::ok(
+        engine.market_data.tape.for_symbol(&symbol, count),
+    ))
 }
 
 async fn nbbo_quote(
@@ -1194,17 +1260,13 @@ async fn market_snapshot(
     }
 }
 
-async fn all_stats(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn all_stats(State(engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     Json(ApiResponse::ok(engine.market_data.summary()))
 }
 
 // ─── Investor Protection Fund (NYSE SIPC-equivalent) ────────────────────────
 
-async fn ipf_status(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn ipf_status(State(engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     Json(ApiResponse::ok(engine.investor_protection.fund_status()))
 }
 
@@ -1237,9 +1299,7 @@ async fn ipf_submit_claim(
 
 // ─── Fee Engine & Revenue Management ─────────────────────────────────────────
 
-async fn fee_status(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn fee_status(State(engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     Json(ApiResponse::ok(engine.fees.status()))
 }
 
@@ -1255,13 +1315,14 @@ async fn fee_schedule_by_key(
 ) -> Json<ApiResponse<fees::FeeSchedule>> {
     match engine.fees.get_schedule(&key.to_uppercase()) {
         Some(schedule) => Json(ApiResponse::ok(schedule)),
-        None => Json(ApiResponse::err(format!("Fee schedule '{}' not found", key))),
+        None => Json(ApiResponse::err(format!(
+            "Fee schedule '{}' not found",
+            key
+        ))),
     }
 }
 
-async fn fee_api_tiers(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn fee_api_tiers(State(engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     let tiers: Vec<serde_json::Value> = engine
         .fees
         .api_tiers()
@@ -1339,9 +1400,7 @@ async fn fee_calculate_trade(
     })))
 }
 
-async fn fee_subscriptions(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn fee_subscriptions(State(engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     let subs: Vec<serde_json::Value> = engine
         .fees
         .active_subscriptions()
@@ -1387,9 +1446,7 @@ async fn fee_create_subscription(
     Json(ApiResponse::ok(sub))
 }
 
-async fn fee_memberships(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<serde_json::Value>> {
+async fn fee_memberships(State(engine): State<AppState>) -> Json<ApiResponse<serde_json::Value>> {
     let mems: Vec<serde_json::Value> = engine
         .fees
         .active_memberships()
@@ -1437,9 +1494,7 @@ async fn fee_revenue_summary(
     Json(ApiResponse::ok(engine.fees.revenue_summary()))
 }
 
-async fn fee_invoices(
-    State(engine): State<AppState>,
-) -> Json<ApiResponse<Vec<fees::Invoice>>> {
+async fn fee_invoices(State(engine): State<AppState>) -> Json<ApiResponse<Vec<fees::Invoice>>> {
     Json(ApiResponse::ok(engine.fees.all_invoices()))
 }
 
@@ -1468,11 +1523,10 @@ async fn fee_charge_listing(
     State(engine): State<AppState>,
     Json(req): Json<ChargingListingRequest>,
 ) -> Json<ApiResponse<fees::FeeCharge>> {
-    let charge = engine.fees.charge_listing_fee(
-        &req.account_id,
-        &req.instrument_symbol,
-        req.fee_type,
-    );
+    let charge =
+        engine
+            .fees
+            .charge_listing_fee(&req.account_id, &req.instrument_symbol, req.fee_type);
     Json(ApiResponse::ok(charge))
 }
 
@@ -1487,11 +1541,10 @@ async fn fee_charge_tokenization(
     State(engine): State<AppState>,
     Json(req): Json<ChargeTokenizationRequest>,
 ) -> Json<ApiResponse<fees::FeeCharge>> {
-    let charge = engine.fees.charge_tokenization_fee(
-        &req.account_id,
-        req.fee_type,
-        &req.asset_description,
-    );
+    let charge =
+        engine
+            .fees
+            .charge_tokenization_fee(&req.account_id, req.fee_type, &req.asset_description);
     Json(ApiResponse::ok(charge))
 }
 
@@ -1499,7 +1552,7 @@ async fn fee_charge_tokenization(
 
 async fn fx_list_pairs(
     State(engine): State<AppState>,
-) -> Json<ApiResponse<Vec<spot_fx::FxPair>>> {
+) -> Json<ApiResponse<Vec<spot_fx::FxPairConfig>>> {
     Json(ApiResponse::ok(engine.fx.list_pairs()))
 }
 
@@ -1519,7 +1572,8 @@ async fn fx_get_rate(
     State(engine): State<AppState>,
     axum::extract::Path(p): axum::extract::Path<FxPairPath>,
 ) -> Json<ApiResponse<Option<spot_fx::FxRate>>> {
-    Json(ApiResponse::ok(engine.fx.get_rate(&p.pair_base, &p.pair_quote)))
+    let pair_id = format!("{}/{}", p.pair_base, p.pair_quote);
+    Json(ApiResponse::ok(engine.fx.get_rate(&pair_id)))
 }
 
 #[derive(serde::Deserialize)]
@@ -1537,10 +1591,21 @@ async fn fx_cross_rate(
 
 async fn fx_submit_order(
     State(engine): State<AppState>,
-    Json(req): Json<spot_fx::FxOrderRequest>,
-) -> Json<ApiResponse<spot_fx::FxOrderResult>> {
-    let result = engine.fx.submit_order(req);
-    Json(ApiResponse::ok(result))
+    Json(req): Json<spot_fx::SubmitFxOrderRequest>,
+) -> Json<ApiResponse<spot_fx::SubmitFxOrderResponse>> {
+    match engine.fx.submit_order(
+        &req.pair_id,
+        req.side,
+        req.price_bp,
+        req.quantity,
+        &req.account_id,
+    ) {
+        Ok((order, trades)) => Json(ApiResponse::ok(spot_fx::SubmitFxOrderResponse {
+            order,
+            trades,
+        })),
+        Err(err) => Json(ApiResponse::err(err)),
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -1554,49 +1619,40 @@ async fn fx_cancel_order(
     State(engine): State<AppState>,
     axum::extract::Path(p): axum::extract::Path<FxCancelPath>,
 ) -> Json<ApiResponse<bool>> {
-    let ok = engine.fx.cancel_order(&p.pair_base, &p.pair_quote, &p.order_id);
+    let pair_id = format!("{}/{}", p.pair_base, p.pair_quote);
+    let ok = engine.fx.cancel_order(&pair_id, &p.order_id);
     Json(ApiResponse::ok(ok))
 }
 
 async fn fx_depth(
     State(engine): State<AppState>,
     axum::extract::Path(p): axum::extract::Path<FxPairPath>,
-) -> Json<ApiResponse<spot_fx::FxDepth>> {
-    Json(ApiResponse::ok(engine.fx.depth(&p.pair_base, &p.pair_quote)))
+) -> Json<ApiResponse<Option<spot_fx::FxDepth>>> {
+    let pair_id = format!("{}/{}", p.pair_base, p.pair_quote);
+    Json(ApiResponse::ok(engine.fx.get_depth(&pair_id, 50)))
 }
 
 async fn fx_trades(
     State(engine): State<AppState>,
     axum::extract::Path(p): axum::extract::Path<FxPairPath>,
 ) -> Json<ApiResponse<Vec<spot_fx::FxTrade>>> {
-    Json(ApiResponse::ok(engine.fx.recent_trades(&p.pair_base, &p.pair_quote, 50)))
+    let pair_id = format!("{}/{}", p.pair_base, p.pair_quote);
+    Json(ApiResponse::ok(engine.fx.get_trades(&pair_id, 50)))
 }
 
 async fn fx_pair_stats(
     State(engine): State<AppState>,
     axum::extract::Path(p): axum::extract::Path<FxPairPath>,
-) -> Json<ApiResponse<spot_fx::FxPairStats>> {
-    Json(ApiResponse::ok(engine.fx.pair_stats(&p.pair_base, &p.pair_quote)))
-}
-
-#[derive(serde::Deserialize)]
-struct FxRateUpdateRequest {
-    pair_base: String,
-    pair_quote: String,
-    rate: rust_decimal::Decimal,
-    source: Option<String>,
+) -> Json<ApiResponse<Option<spot_fx::FxPairStats>>> {
+    let pair_id = format!("{}/{}", p.pair_base, p.pair_quote);
+    Json(ApiResponse::ok(engine.fx.pair_stats(&pair_id)))
 }
 
 async fn fx_update_reference_rate(
     State(engine): State<AppState>,
-    Json(req): Json<FxRateUpdateRequest>,
+    Json(req): Json<spot_fx::UpdateReferenceRateRequest>,
 ) -> Json<ApiResponse<()>> {
-    engine.fx.update_reference_rate(
-        &req.pair_base,
-        &req.pair_quote,
-        req.rate,
-        req.source.as_deref().unwrap_or("manual"),
-    );
+    engine.fx.update_reference_rate(&req.pair_id, req.rate_bp);
     Json(ApiResponse::ok(()))
 }
 
@@ -1680,14 +1736,18 @@ async fn xccy_get_user_orders(
     State(engine): State<AppState>,
     axum::extract::Path(user_id): axum::extract::Path<String>,
 ) -> Json<ApiResponse<Vec<cross_currency::CrossCurrencyOrder>>> {
-    Json(ApiResponse::ok(engine.cross_currency.get_user_orders(&user_id, 100)))
+    Json(ApiResponse::ok(
+        engine.cross_currency.get_user_orders(&user_id, 100),
+    ))
 }
 
 async fn xccy_get_user_fills(
     State(engine): State<AppState>,
     axum::extract::Path(user_id): axum::extract::Path<String>,
 ) -> Json<ApiResponse<Vec<cross_currency::CrossCurrencyFill>>> {
-    Json(ApiResponse::ok(engine.cross_currency.get_user_fills(&user_id, 100)))
+    Json(ApiResponse::ok(
+        engine.cross_currency.get_user_fills(&user_id, 100),
+    ))
 }
 
 async fn xccy_get_order_book(
@@ -1715,9 +1775,7 @@ async fn xccy_arbitrage_log(
 
 // ─── Multi-Currency Atomic Swap Handlers ─────────────────────────────────────
 
-async fn mccy_list_pools(
-    State(state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn mccy_list_pools(State(state): State<AppState>) -> Json<serde_json::Value> {
     let engine = state.multi_currency.read().unwrap();
     let pools: Vec<&multi_currency::LiquidityPool> = engine.get_pools();
     Json(serde_json::json!({ "pools": pools, "count": pools.len() }))

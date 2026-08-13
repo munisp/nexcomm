@@ -39,7 +39,11 @@ spec:
         {{- if $g.dapr.enabled }}
         dapr.io/enabled: "true"
         dapr.io/app-id: {{ $name | quote }}
-        dapr.io/app-port: {{ $g.dapr.appPort | quote }}
+        dapr.io/app-port: {{ $svc.port | toString | quote }}
+        dapr.io/app-protocol: {{ $g.dapr.appProtocol | quote }}
+        dapr.io/config: {{ $g.dapr.config | quote }}
+        dapr.io/log-level: {{ $g.dapr.logLevel | quote }}
+        dapr.io/enable-metrics: "true"
         {{- end }}
         {{- if $g.prometheus.scrape }}
         prometheus.io/scrape: {{ $g.prometheus.scrape | quote }}
@@ -48,13 +52,24 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ $g.serviceAccountName }}
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        runAsUser: {{ $g.securityContext.runAsUser }}
+        runAsGroup: {{ $g.securityContext.runAsGroup }}
+        fsGroup: {{ $g.securityContext.fsGroup }}
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: {{ $name }}
+          {{- if contains "@sha256:" $svc.image.name }}
+          image: {{ $svc.image.name }}
+          {{- else }}
+          {{- if $g.requireImageDigest }}
+          {{- fail (printf "service %s requires image.name to be a full immutable @sha256 reference" $name) }}
+          {{- end }}
           image: {{ $g.imageRegistry }}/{{ $svc.image.name }}:{{ $g.imageTag }}
+          {{- end }}
           imagePullPolicy: {{ $g.imagePullPolicy }}
           ports:
             - name: http
@@ -67,26 +82,56 @@ spec:
               value: {{ $svc.port | toString | quote }}
             - name: LOG_LEVEL
               value: "info"
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $g.secretName }}
-                  key: DATABASE_URL
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $g.secretName }}
-                  key: JWT_SECRET
-            - name: REDIS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $g.secretName }}
-                  key: REDIS_URL
-            - name: KAFKA_BROKERS
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $g.secretName }}
-                  key: KAFKA_BROKERS
+            - name: DATABASE_URL_FILE
+              value: {{ printf "%s/DATABASE_URL" $g.secretFiles.mountPath | quote }}
+            - name: JWT_SECRET_FILE
+              value: {{ printf "%s/JWT_SECRET" $g.secretFiles.mountPath | quote }}
+            - name: REDIS_URL_FILE
+              value: {{ printf "%s/REDIS_URL" $g.secretFiles.mountPath | quote }}
+            - name: KAFKA_BROKERS_FILE
+              value: {{ printf "%s/KAFKA_BROKERS" $g.secretFiles.mountPath | quote }}
+            - name: ENVIRONMENT
+              value: {{ $g.environment | default "production" | quote }}
+            - name: POSTGRES_URL_FILE
+              value: {{ printf "%s/POSTGRES_URL" $g.secretFiles.mountPath | quote }}
+            - name: KEYCLOAK_URL
+              value: {{ $g.dependencies.keycloak.url | quote }}
+            - name: KEYCLOAK_REALM
+              value: {{ $g.dependencies.keycloak.realm | quote }}
+            - name: KEYCLOAK_CLIENT_ID
+              value: {{ $g.dependencies.keycloak.clientId | quote }}
+            - name: KEYCLOAK_CLIENT_SECRET_FILE
+              value: {{ printf "%s/KEYCLOAK_CLIENT_SECRET" $g.secretFiles.mountPath | quote }}
+            - name: KEYCLOAK_ADMIN_CLIENT_ID_FILE
+              value: {{ printf "%s/KEYCLOAK_ADMIN_CLIENT_ID" $g.secretFiles.mountPath | quote }}
+            - name: KEYCLOAK_ADMIN_CLIENT_SECRET_FILE
+              value: {{ printf "%s/KEYCLOAK_ADMIN_CLIENT_SECRET" $g.secretFiles.mountPath | quote }}
+            - name: PERMIFY_ENDPOINT
+              value: {{ $g.dependencies.permify.endpoint | quote }}
+            - name: PERMIFY_TENANT_ID
+              value: {{ $g.dependencies.permify.tenantId | quote }}
+            - name: PERMIFY_AUTH_TOKEN_FILE
+              value: {{ printf "%s/PERMIFY_AUTH_TOKEN" $g.secretFiles.mountPath | quote }}
+            - name: TEMPORAL_HOST
+              value: {{ $g.dependencies.temporal.host | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ $g.dependencies.temporal.namespace | quote }}
+            - name: TEMPORAL_TASK_QUEUE
+              value: {{ $g.dependencies.temporal.taskQueue | quote }}
+            - name: DAPR_HTTP_PORT
+              value: {{ $g.dapr.httpPort | quote }}
+            - name: DAPR_GRPC_PORT
+              value: {{ $g.dapr.grpcPort | quote }}
+            - name: TIGERBEETLE_ADDRESSES
+              value: {{ $g.dependencies.tigerbeetle.addresses | quote }}
+            - name: FLUVIO_ENDPOINT
+              value: {{ $g.dependencies.fluvio.endpoint | quote }}
+            - name: APISIX_ADMIN_URL
+              value: {{ $g.dependencies.apisix.adminUrl | quote }}
+            - name: APISIX_ADMIN_KEY_FILE
+              value: {{ printf "%s/APISIX_ADMIN_KEY" $g.secretFiles.mountPath | quote }}
+            - name: CORS_ORIGINS
+              value: {{ $g.dependencies.corsOrigins | quote }}
           resources:
             {{- if $svc.resources }}
             {{- toYaml $svc.resources | nindent 12 }}
@@ -113,9 +158,21 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: service-secrets
+              mountPath: {{ $g.secretFiles.mountPath | quote }}
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir: {}
+        - name: service-secrets
+          secret:
+            secretName: {{ $g.secretName }}
+            defaultMode: {{ $g.secretFiles.defaultMode }}
+            items:
+              {{- range $g.secretFiles.keys }}
+              - key: {{ . }}
+                path: {{ . }}
+              {{- end }}
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname

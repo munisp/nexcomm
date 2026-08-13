@@ -13,7 +13,7 @@ apisix:
     port: 9091
   admin_key:
     - name: admin
-      key: ${APISIX_ADMIN_KEY:-nexcom-apisix-admin-key-change-in-prod}
+      key: ${{APISIX_ADMIN_KEY:=}}
       role: admin
 
 deployment:
@@ -32,8 +32,8 @@ plugin_attr:
   openappsec-agent:
     # The openappsec-agent sidecar listens on this port for inspection requests
     agent_url: "http://localhost:8090"
-    # Fail-open: if agent is unavailable, allow traffic through
-    fail_open: true
+    # Agent failure must reject protected traffic; inspection may not be bypassed.
+    fail_open: false
     # Enforcement mode: prevent | detect
     mode: prevent
     # Minimum threat level to block: critical | high | medium | low

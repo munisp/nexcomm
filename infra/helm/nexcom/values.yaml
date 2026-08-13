@@ -5,10 +5,34 @@
 global:
   namespace: nexcom
   imageRegistry: nexcom
-  imageTag: latest
+  # Release automation must override this with an immutable image digest in
+  # secured clusters; `latest` is never a permitted deployment value.
+  imageTag: "1.0.0"
   imagePullPolicy: IfNotPresent
+  requireImageDigest: false
   serviceAccountName: nexcom-service-account
   secretName: nexcom-secrets
+  securityContext:
+    # Dedicated high UID/GID avoids host and shared-volume identity collisions.
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+  secretFiles:
+    # Sensitive settings are projected into this read-only volume. Services must
+    # resolve NAME_FILE before NAME; the portal configuration loader supports it.
+    mountPath: /var/run/secrets/nexcom
+    defaultMode: 0400
+    keys:
+      - DATABASE_URL
+      - POSTGRES_URL
+      - JWT_SECRET
+      - REDIS_URL
+      - KAFKA_BROKERS
+      - KEYCLOAK_CLIENT_SECRET
+      - KEYCLOAK_ADMIN_CLIENT_ID
+      - KEYCLOAK_ADMIN_CLIENT_SECRET
+      - PERMIFY_AUTH_TOKEN
+      - APISIX_ADMIN_KEY
 
   # Common resource defaults (overridable per service)
   resources:
@@ -30,10 +54,45 @@ global:
       initialDelaySeconds: 10
       periodSeconds: 5
 
-  # Dapr sidecar injection
+  # Dapr sidecar injection. Components are deployed as Dapr CRDs by
+  # templates/dapr-components.yaml; workloads use their own service port.
   dapr:
     enabled: true
-    appPort: 3000
+    config: nexcom-runtime
+    appProtocol: http
+    httpPort: "3500"
+    grpcPort: "50001"
+    logLevel: info
+
+  # Authoritative external dependency endpoints. Sensitive credentials remain
+  # in global.secretName and must be supplied by the target environment.
+  dependencies:
+    keycloak:
+      url: http://keycloak.nexcom-iam.svc.cluster.local:8080
+      realm: nexcom
+      clientId: nexcom-gateway
+    permify:
+      endpoint: permify.nexcom.svc.cluster.local:3476
+      tenantId: t1
+    temporal:
+      host: temporal-frontend.temporal.svc.cluster.local:7233
+      namespace: nexcom
+      taskQueue: nexcom-main
+    tigerbeetle:
+      addresses: tigerbeetle.nexcom.svc.cluster.local:3001
+    fluvio:
+      endpoint: fluvio-proxy.nexcom.svc.cluster.local:9003
+    apisix:
+      adminUrl: http://apisix-admin.nexcom.svc.cluster.local:9180
+    redis:
+      host: redis.nexcom.svc.cluster.local:6379
+      tls: true
+    kafka:
+      brokers: kafka-bootstrap.nexcom.svc.cluster.local:9093
+      authType: sasl
+      saslMechanism: SHA-512
+      tls: true
+    corsOrigins: https://nexcom.exchange
 
   # Prometheus scraping
   prometheus:

@@ -1,8 +1,8 @@
 """
 NEXCOM Exchange - AI/ML Service
 Provides price forecasting, risk scoring, anomaly detection, and sentiment analysis.
-All models are trained on startup using real scikit-learn implementations and
-persisted to disk for fast reload. Inference runs on CPU without GPU requirements.
+Models load verified persisted artifacts, or train only from explicit real-data
+exports. CPU inference is reported ready only after those requirements are met.
 """
 import asyncio
 import logging
@@ -20,10 +20,7 @@ _log = logging.getLogger("nexcom.ai")
 
 
 async def _initialize_models() -> None:
-    """
-    Initialize all ML models in a background thread to avoid blocking the event loop.
-    Models are trained on first startup and persisted to disk for subsequent restarts.
-    """
+    """Load verified CPU model artifacts or train from configured real-data exports."""
     loop = asyncio.get_event_loop()
 
     def _train_all():
@@ -50,10 +47,18 @@ async def _initialize_models() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifecycle management — trains and loads all ML models on startup."""
-    logger.info("Starting NEXCOM AI/ML Service — initializing models...")
-    await _initialize_models()
-    logger.info("NEXCOM AI/ML Service ready.")
+    """Application lifecycle management with explicit model-artifact readiness."""
+    logger.info("Starting NEXCOM AI/ML Service — loading verified CPU models...")
+    app.state.models_ready = False
+    app.state.model_error = None
+    try:
+        await _initialize_models()
+    except Exception as exc:
+        app.state.model_error = str(exc)
+        _log.exception("[AI/ML] Model initialization failed; inference remains unavailable")
+    else:
+        app.state.models_ready = True
+        logger.info("NEXCOM AI/ML Service ready for CPU inference.")
     yield
     logger.info("Shutting down NEXCOM AI/ML Service...")
 
@@ -80,17 +85,25 @@ app.add_middleware(
 # Health endpoints
 @app.get("/healthz", tags=["health"])
 async def health():
-    return {"status": "healthy", "service": "ai-ml", "version": "1.0.0"}
+    return {
+        "status": "healthy" if app.state.models_ready else "degraded",
+        "service": "ai-ml",
+        "version": "1.0.0",
+        "models_ready": app.state.models_ready,
+        "model_error": app.state.model_error,
+    }
 
 
 @app.get("/readyz", tags=["health"])
 async def ready():
     """Returns ready only after all models are initialized."""
-    from src.models.isolation_forest import _model_instance as if_model
-    from src.models.gradient_boosting import _model_instance as gb_model
-    if if_model is None or gb_model is None:
+    if not app.state.models_ready:
         from fastapi import Response
-        return Response(status_code=503, content='{"status":"initializing"}', media_type="application/json")
+        return Response(
+            status_code=503,
+            content='{"status":"model_artifacts_unavailable"}',
+            media_type="application/json",
+        )
     return {"status": "ready", "models": ["isolation_forest", "gradient_boosting", "lstm_forecaster", "sentiment"]}
 
 

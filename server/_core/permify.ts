@@ -69,8 +69,8 @@ interface PermifyCheckResponse {
 
 /**
  * Calls the Permify check endpoint.
- * Returns true if allowed, false if denied or on any error (fail-open is
- * configurable via PERMIFY_FAIL_OPEN env var — defaults to false / fail-closed).
+ * Returns true only for a verified allow decision. Every transport, timeout,
+ * decoding, and permission-service error is denied.
  */
 async function checkPermission(
   subjectId: string,
@@ -78,8 +78,6 @@ async function checkPermission(
   resourceId: string,
   action: PermifyAction
 ): Promise<boolean> {
-  const failOpen = process.env.PERMIFY_FAIL_OPEN === "true";
-
   const body: PermifyCheckRequest = {
     metadata: {
       schema_version: "",
@@ -116,17 +114,14 @@ async function checkPermission(
       console.warn(
         `[Permify] HTTP ${res.status} for ${subjectId}:${resource}/${resourceId}:${action}`
       );
-      return failOpen;
+      return false;
     }
 
     const data = (await res.json()) as PermifyCheckResponse;
     return data.can === "RESULT_ALLOWED";
   } catch (err) {
-    // Network error or timeout — apply fail-open/closed policy
-    console.warn(
-      `[Permify] Check failed (${(err as Error).message}) — fail-${failOpen ? "open" : "closed"}`
-    );
-    return failOpen;
+    console.warn(`[Permify] Check failed (${(err as Error).message}); denying request`);
+    return false;
   }
 }
 
@@ -190,8 +185,7 @@ export const requireSettlementApprove = withPermify("settlement", "approve", () 
 
 // ── Fund-flow Permify guards ──────────────────────────────────────────────────
 // These guards are used by fund-flow routers to enforce fine-grained RBAC.
-// Permify is fail-open by default in dev (PERMIFY_FAIL_OPEN=true) and
-// fail-closed in production (PERMIFY_FAIL_OPEN=false).
+// These guards are fail-closed in every environment.
 
 /** Allow only users who can 'create' orders (trading permission). */
 export const requireOrderCreate = withPermify("order", "create", () => "*");

@@ -237,6 +237,17 @@ class QueryRequest(BaseModel):
     engine: str = "datafusion"  # datafusion | spark | sedona
 
 
+def _require_lakehouse_executor() -> str:
+    """Return the configured execution endpoint or fail rather than fabricate a result."""
+    endpoint = os.getenv("LAKEHOUSE_EXECUTOR_URL", "").strip()
+    if not endpoint:
+        raise HTTPException(
+            status_code=503,
+            detail="Lakehouse executor is not configured; refusing to report an unexecuted query as successful",
+        )
+    return endpoint.rstrip("/")
+
+
 # ============================================================
 # Health
 # ============================================================
@@ -266,10 +277,10 @@ async def health():
                 "schema_registry": schema_registry.status(),
             },
             "lakehouse": {
-                    "bronze": {"status": "healthy"},
-                    "silver": {"status": "healthy"},
-                    "gold": {"status": "healthy"},
-                    "geospatial": {"status": "healthy"},
+                "bronze": bronze.status(),
+                "silver": silver.status(),
+                "gold": gold.status(),
+                "geospatial": geospatial.status(),
                 "catalog_tables": catalog.table_count(),
             },
             "infrastructure": {
@@ -384,16 +395,21 @@ async def lakehouse_catalog(layer: Optional[str] = Query(None)):
 
 @app.post("/api/v1/lakehouse/query")
 async def lakehouse_query(req: QueryRequest):
-    """Execute an analytical query against the Lakehouse."""
-    if req.engine == "datafusion":
-        result = {"engine": "datafusion", "sql": req.sql, "status": "executed", "note": "DataFusion analytical query engine"}
-    elif req.engine == "spark":
-        result = {"engine": "spark", "sql": req.sql, "status": "submitted", "note": "Spark SQL batch query"}
-    elif req.engine == "sedona":
-        result = {"engine": "sedona", "sql": req.sql, "status": "executed", "queries": geospatial.list_queries()}
-    else:
+    """Execute an analytical query through a configured lakehouse executor."""
+    if req.engine not in {"datafusion", "spark", "sedona"}:
         raise HTTPException(status_code=400, detail=f"Unknown engine: {req.engine}")
-    return APIResponse(success=True, data={"engine": req.engine, "result": result})
+    executor = _require_lakehouse_executor()
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(f"{executor}/query", json={"sql": req.sql, "engine": req.engine})
+        response.raise_for_status()
+        result = response.json()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Lakehouse executor failed: {exc}") from exc
+    return APIResponse(success=True, data={"engine": req.engine, "result": result, "executor": executor})
 
 
 @app.get("/api/v1/lakehouse/lineage/{table}")

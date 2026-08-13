@@ -1,15 +1,16 @@
 // Package matching implements the core order matching engine for NEXCOM Exchange.
 // Supports FIFO (Price-Time Priority) and Pro-Rata matching algorithms.
 package matching
+
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
 	"github.com/google/uuid"
+	"github.com/nexcom-exchange/trading-engine/internal/middleware"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
-	"github.com/nexcom-exchange/trading-engine/internal/middleware"
+	"sync"
+	"time"
 )
 
 // Side represents the order side (BUY or SELL)
@@ -46,22 +47,22 @@ const (
 
 // Order represents a trading order in the matching engine
 type Order struct {
-	ID              string          `json:"order_id"`
-	UserID          string          `json:"user_id"`
-	Symbol          string          `json:"symbol"`
-	Side            Side            `json:"side"`
-	Type            OrderType       `json:"order_type"`
-	Quantity        decimal.Decimal `json:"quantity"`
-	FilledQuantity  decimal.Decimal `json:"filled_quantity"`
-	Price           decimal.Decimal `json:"price"`
-	StopPrice       decimal.Decimal `json:"stop_price,omitempty"`
-	Status          OrderStatus     `json:"status"`
-	TimeInForce     string          `json:"time_in_force"`
-	ClientOrderID   string          `json:"client_order_id,omitempty"`
-	CreatedAt          time.Time       `json:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at"`
-	ReserveTransferID  string          `json:"reserve_transfer_id,omitempty"` // TigerBeetle pending transfer
-	AccountID          string          `json:"account_id,omitempty"`           // Gateway account ID for balance checks
+	ID                string          `json:"order_id"`
+	UserID            string          `json:"user_id"`
+	Symbol            string          `json:"symbol"`
+	Side              Side            `json:"side"`
+	Type              OrderType       `json:"order_type"`
+	Quantity          decimal.Decimal `json:"quantity"`
+	FilledQuantity    decimal.Decimal `json:"filled_quantity"`
+	Price             decimal.Decimal `json:"price"`
+	StopPrice         decimal.Decimal `json:"stop_price,omitempty"`
+	Status            OrderStatus     `json:"status"`
+	TimeInForce       string          `json:"time_in_force"`
+	ClientOrderID     string          `json:"client_order_id,omitempty"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+	ReserveTransferID string          `json:"reserve_transfer_id,omitempty"` // TigerBeetle pending transfer
+	AccountID         string          `json:"account_id,omitempty"`          // Gateway account ID for balance checks
 }
 
 // RemainingQuantity returns the unfilled portion of the order
@@ -135,8 +136,8 @@ func (e *Engine) PlaceOrder(ctx context.Context, order *Order) (*Order, error) {
 	order.UpdatedAt = order.CreatedAt
 
 	// ── Pre-trade margin/balance check ────────────────────────────────────────
-	// For BUY LIMIT orders: verify the buyer has sufficient settlement balance.
-	// Fail-open: if gateway is unavailable (balance == -1), order proceeds.
+	// BUY LIMIT orders require a verified ledger balance and durable pending
+	// TigerBeetle reservation. Dependency failure is an order rejection.
 	if order.Side == SideBuy && !order.Price.IsZero() {
 		priceFloat, _ := order.Price.Float64()
 		qtyFloat, _ := order.Quantity.Float64()
@@ -146,16 +147,27 @@ func (e *Engine) PlaceOrder(ctx context.Context, order *Order) (*Order, error) {
 			accountID = order.UserID
 		}
 		balance, balErr := e.mw.GetUserBalance(ctx, accountID)
-		if balErr == nil && balance >= 0 && balance < requiredCents {
+		if balErr != nil || balance < 0 {
+			order.Status = StatusRejected
+			if balErr != nil {
+				return order, fmt.Errorf("ledger balance verification unavailable: %w", balErr)
+			}
+			return order, fmt.Errorf("ledger returned invalid balance for account %s", accountID)
+		}
+		if balance < requiredCents {
 			order.Status = StatusRejected
 			return order, fmt.Errorf("insufficient balance: required %d cents, available %d cents", requiredCents, balance)
 		}
-		// Reserve funds via TigerBeetle pending transfer
-		if balance >= 0 && requiredCents > 0 {
-			reserveID, _ := e.mw.ReserveFunds(ctx, accountID, requiredCents, order.ID)
-			if reserveID != "" {
-				order.ReserveTransferID = reserveID
+		if requiredCents > 0 {
+			reserveID, reserveErr := e.mw.ReserveFunds(ctx, accountID, requiredCents, order.ID)
+			if reserveErr != nil || reserveID == "" {
+				order.Status = StatusRejected
+				if reserveErr != nil {
+					return order, fmt.Errorf("ledger reservation unavailable: %w", reserveErr)
+				}
+				return order, fmt.Errorf("ledger reservation was not confirmed")
 			}
+			order.ReserveTransferID = reserveID
 		}
 	}
 
@@ -320,14 +332,14 @@ func (e *Engine) Stats() EngineStats {
 // NewOrderFromRequest creates a new Order from API request parameters
 func NewOrderFromRequest(userID, symbol, side, orderType, quantity, price, stopPrice, timeInForce, clientID string) *Order {
 	order := &Order{
-		UserID:        userID,
-		Symbol:        symbol,
-		Side:          Side(side),
-		Type:          OrderType(orderType),
-		Quantity:      decimal.RequireFromString(quantity),
+		UserID:         userID,
+		Symbol:         symbol,
+		Side:           Side(side),
+		Type:           OrderType(orderType),
+		Quantity:       decimal.RequireFromString(quantity),
 		FilledQuantity: decimal.Zero,
-		TimeInForce:   timeInForce,
-		ClientOrderID: clientID,
+		TimeInForce:    timeInForce,
+		ClientOrderID:  clientID,
 	}
 
 	if price != "" {

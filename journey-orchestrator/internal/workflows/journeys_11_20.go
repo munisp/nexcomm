@@ -29,11 +29,11 @@ type USSDMobileTradeInput struct {
 }
 
 type USSDMobileTradeResult struct {
-	OrderID     string  `json:"order_id"`
-	Status      string  `json:"status"`
-	FilledQtyKg float64 `json:"filled_qty_kg"`
-	AvgPriceNGN float64 `json:"avg_price_ngn"`
-	SMSRef      string  `json:"sms_ref"`
+	OrderID     string    `json:"order_id"`
+	Status      string    `json:"status"`
+	FilledQtyKg float64   `json:"filled_qty_kg"`
+	AvgPriceNGN float64   `json:"avg_price_ngn"`
+	SMSRef      string    `json:"sms_ref"`
 	CompletedAt time.Time `json:"completed_at"`
 }
 
@@ -127,26 +127,26 @@ func USSDMobileTradeWorkflow(ctx workflow.Context, input USSDMobileTradeInput) (
 // ─────────────────────────────────────────────────────────────────────────────
 
 type LoanApplicationInput struct {
-	FarmerID        string  `json:"farmer_id"`
-	LoanAmountNGN   float64 `json:"loan_amount_ngn"`
-	LoanPurpose     string  `json:"loan_purpose"` // "INPUT_FINANCING" | "EQUIPMENT" | "WR_FINANCING"
-	LoanTermMonths  int     `json:"loan_term_months"`
-	CollateralType  string  `json:"collateral_type"` // "WAREHOUSE_RECEIPT" | "LAND_TITLE"
-	CollateralRefID string  `json:"collateral_ref_id"`
+	FarmerID           string  `json:"farmer_id"`
+	LoanAmountNGN      float64 `json:"loan_amount_ngn"`
+	LoanPurpose        string  `json:"loan_purpose"` // "INPUT_FINANCING" | "EQUIPMENT" | "WR_FINANCING"
+	LoanTermMonths     int     `json:"loan_term_months"`
+	CollateralType     string  `json:"collateral_type"` // "WAREHOUSE_RECEIPT" | "LAND_TITLE"
+	CollateralRefID    string  `json:"collateral_ref_id"`
 	CollateralValueNGN float64 `json:"collateral_value_ngn"`
-	FarmSizeHa      float64 `json:"farm_size_ha"`
-	AnnualIncomeNGN float64 `json:"annual_income_ngn"`
+	FarmSizeHa         float64 `json:"farm_size_ha"`
+	AnnualIncomeNGN    float64 `json:"annual_income_ngn"`
 }
 
 type LoanApplicationResult struct {
-	LoanID          int64   `json:"loan_id"`
-	Decision        string  `json:"decision"` // "APPROVED" | "CONDITIONAL" | "REJECTED"
-	ApprovedAmountNGN float64 `json:"approved_amount_ngn"`
-	InterestRatePct float64 `json:"interest_rate_pct"`
-	CreditScore     int     `json:"credit_score"`
-	ScoreBand       string  `json:"score_band"`
-	Conditions      []string `json:"conditions,omitempty"`
-	CompletedAt     time.Time `json:"completed_at"`
+	LoanID            int64     `json:"loan_id"`
+	Decision          string    `json:"decision"` // "APPROVED" | "CONDITIONAL" | "REJECTED"
+	ApprovedAmountNGN float64   `json:"approved_amount_ngn"`
+	InterestRatePct   float64   `json:"interest_rate_pct"`
+	CreditScore       int       `json:"credit_score"`
+	ScoreBand         string    `json:"score_band"`
+	Conditions        []string  `json:"conditions,omitempty"`
+	CompletedAt       time.Time `json:"completed_at"`
 }
 
 func LoanApplicationWorkflow(ctx workflow.Context, input LoanApplicationInput) (*LoanApplicationResult, error) {
@@ -255,19 +255,19 @@ func min(a, b float64) float64 {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type LoanDisbursementInput struct {
-	LoanID     int64   `json:"loan_id"`
-	FarmerID   string  `json:"farmer_id"`
-	AmountNGN  float64 `json:"amount_ngn"`
-	BankAccount string `json:"bank_account"`
-	BankCode   string  `json:"bank_code"`
-	ApprovedBy string  `json:"approved_by"`
+	LoanID      int64   `json:"loan_id"`
+	FarmerID    string  `json:"farmer_id"`
+	AmountNGN   float64 `json:"amount_ngn"`
+	BankAccount string  `json:"bank_account"`
+	BankCode    string  `json:"bank_code"`
+	ApprovedBy  string  `json:"approved_by"`
 }
 
 type LoanDisbursementResult struct {
-	LoanID       int64  `json:"loan_id"`
-	Status       string `json:"status"`
-	MojaloopTxID string `json:"mojaloop_tx_id"`
-	LedgerTxID   string `json:"ledger_tx_id"`
+	LoanID       int64     `json:"loan_id"`
+	Status       string    `json:"status"`
+	MojaloopTxID string    `json:"mojaloop_tx_id"`
+	LedgerTxID   string    `json:"ledger_tx_id"`
 	DisbursedAt  time.Time `json:"disbursed_at"`
 }
 
@@ -301,9 +301,9 @@ func LoanDisbursementWorkflow(ctx workflow.Context, input LoanDisbursementInput)
 	var mojaTx activities.MojaloopTxResult
 	if err := workflow.ExecuteActivity(ctx5m, activities.ExecuteMojaloopTransfer, activities.MojaloopTransferInput{
 		TransferID: fmt.Sprintf("loan-disburse-%d", input.LoanID),
-		SenderFSP: "nexcom", ReceiverFSP: input.BankCode,
+		SenderFSP:  "nexcom", ReceiverFSP: input.BankCode,
 		ReceiverAccount: input.BankAccount,
-		Amount: input.AmountNGN, Currency: "NGN",
+		Amount:          input.AmountNGN, Currency: "NGN",
 		Note: fmt.Sprintf("NEXCOM Loan #%d disbursement", input.LoanID),
 	}).Get(ctx, &mojaTx); err != nil {
 		// Compensation: release lending pool reservation
@@ -368,10 +368,10 @@ type CorporateActionInput struct {
 }
 
 type CorporateActionResult struct {
-	ActionID         string   `json:"action_id"`
-	ProcessedHolders int      `json:"processed_holders"`
-	TotalDistributed float64  `json:"total_distributed_ngn"`
-	Status           string   `json:"status"`
+	ActionID         string    `json:"action_id"`
+	ProcessedHolders int       `json:"processed_holders"`
+	TotalDistributed float64   `json:"total_distributed_ngn"`
+	Status           string    `json:"status"`
 	CompletedAt      time.Time `json:"completed_at"`
 }
 
@@ -453,21 +453,21 @@ func CorporateActionWorkflow(ctx workflow.Context, input CorporateActionInput) (
 // ─────────────────────────────────────────────────────────────────────────────
 
 type SurveillanceInput struct {
-	AlertID     string  `json:"alert_id"`
-	AlertType   string  `json:"alert_type"` // "SPOOFING" | "WASH_TRADING" | "FRONT_RUNNING" | "LAYERING"
-	UserID      string  `json:"user_id"`
-	Symbol      string  `json:"symbol"`
-	Severity    string  `json:"severity"` // "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
-	Evidence    map[string]interface{} `json:"evidence"`
-	ReviewerID  string  `json:"reviewer_id"`
+	AlertID    string                 `json:"alert_id"`
+	AlertType  string                 `json:"alert_type"` // "SPOOFING" | "WASH_TRADING" | "FRONT_RUNNING" | "LAYERING"
+	UserID     string                 `json:"user_id"`
+	Symbol     string                 `json:"symbol"`
+	Severity   string                 `json:"severity"` // "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+	Evidence   map[string]interface{} `json:"evidence"`
+	ReviewerID string                 `json:"reviewer_id"`
 }
 
 type SurveillanceResult struct {
-	AlertID     string `json:"alert_id"`
-	Decision    string `json:"decision"` // "DISMISSED" | "WARNING" | "SUSPENDED" | "REFERRED_TO_REGULATOR"
-	AccountFrozen bool `json:"account_frozen"`
-	STRFiled    bool   `json:"str_filed"`
-	CompletedAt time.Time `json:"completed_at"`
+	AlertID       string    `json:"alert_id"`
+	Decision      string    `json:"decision"` // "DISMISSED" | "WARNING" | "SUSPENDED" | "REFERRED_TO_REGULATOR"
+	AccountFrozen bool      `json:"account_frozen"`
+	STRFiled      bool      `json:"str_filed"`
+	CompletedAt   time.Time `json:"completed_at"`
 }
 
 func MarketSurveillanceWorkflow(ctx workflow.Context, input SurveillanceInput) (*SurveillanceResult, error) {
@@ -561,12 +561,12 @@ type ComplianceAuditInput struct {
 }
 
 type ComplianceAuditResult struct {
-	AuditID        string `json:"audit_id"`
-	ReportURL      string `json:"report_url"`
-	ViolationsFound int   `json:"violations_found"`
-	AlertsFiled    int    `json:"alerts_filed"`
-	Status         string `json:"status"`
-	CompletedAt    time.Time `json:"completed_at"`
+	AuditID         string    `json:"audit_id"`
+	ReportURL       string    `json:"report_url"`
+	ViolationsFound int       `json:"violations_found"`
+	AlertsFiled     int       `json:"alerts_filed"`
+	Status          string    `json:"status"`
+	CompletedAt     time.Time `json:"completed_at"`
 }
 
 func ComplianceAuditWorkflow(ctx workflow.Context, input ComplianceAuditInput) (*ComplianceAuditResult, error) {
@@ -574,7 +574,6 @@ func ComplianceAuditWorkflow(ctx workflow.Context, input ComplianceAuditInput) (
 	logger.Info("ComplianceAuditWorkflow started", "audit_id", input.AuditID, "type", input.AuditType)
 
 	ctx5m := activityOpts(ctx, 5*time.Minute)
-	ctx2m := activityOpts(ctx, 2*time.Minute)
 	ctx30s := activityOpts(ctx, 30*time.Second)
 
 	result := &ComplianceAuditResult{AuditID: input.AuditID}
@@ -661,12 +660,12 @@ type BrokerOnboardingInput struct {
 }
 
 type BrokerOnboardingResult struct {
-	BrokerID        string `json:"broker_id"`
-	Status          string `json:"status"`
-	TradingAccountID string `json:"trading_account_id"`
-	ClientPoolAcctID string `json:"client_pool_account_id"`
-	KeycloakRoles   []string `json:"keycloak_roles"`
-	CompletedAt     time.Time `json:"completed_at"`
+	BrokerID         string    `json:"broker_id"`
+	Status           string    `json:"status"`
+	TradingAccountID string    `json:"trading_account_id"`
+	ClientPoolAcctID string    `json:"client_pool_account_id"`
+	KeycloakRoles    []string  `json:"keycloak_roles"`
+	CompletedAt      time.Time `json:"completed_at"`
 }
 
 func BrokerOnboardingWorkflow(ctx workflow.Context, input BrokerOnboardingInput) (*BrokerOnboardingResult, error) {
@@ -715,7 +714,7 @@ func BrokerOnboardingWorkflow(ctx workflow.Context, input BrokerOnboardingInput)
 	// Step 5: Notify broker and admin
 	workflow.ExecuteActivity(ctx30s, activities.SendNotification, activities.NotificationInput{
 		UserID: input.BrokerID, Channel: "email",
-		Title: "Broker Registration Approved",
+		Title:   "Broker Registration Approved",
 		Message: fmt.Sprintf("Welcome to NEXCOM Exchange! Your broker account is active. License: %s", input.LicenseNo),
 	})
 
@@ -753,10 +752,10 @@ type MarketMakerQuoteInput struct {
 }
 
 type MarketMakerQuoteResult struct {
-	BidOrderID  string  `json:"bid_order_id"`
-	AskOrderID  string  `json:"ask_order_id"`
-	SpreadBps   float64 `json:"spread_bps"`
-	Status      string  `json:"status"`
+	BidOrderID  string    `json:"bid_order_id"`
+	AskOrderID  string    `json:"ask_order_id"`
+	SpreadBps   float64   `json:"spread_bps"`
+	Status      string    `json:"status"`
 	CompletedAt time.Time `json:"completed_at"`
 }
 
@@ -845,19 +844,19 @@ func MarketMakerQuoteWorkflow(ctx workflow.Context, input MarketMakerQuoteInput)
 // ─────────────────────────────────────────────────────────────────────────────
 
 type RegulatorReportInput struct {
-	ReportID     string `json:"report_id"`
-	ReportType   string `json:"report_type"` // "DAILY_TRADE_REPORT" | "WEEKLY_POSITION" | "MONTHLY_STR" | "ANNUAL_AUDIT"
-	Regulator    string `json:"regulator"` // "SEC" | "CBN" | "FMDQ" | "NGX"
-	PeriodStart  string `json:"period_start"`
-	PeriodEnd    string `json:"period_end"`
-	SubmittedBy  string `json:"submitted_by"`
+	ReportID    string `json:"report_id"`
+	ReportType  string `json:"report_type"` // "DAILY_TRADE_REPORT" | "WEEKLY_POSITION" | "MONTHLY_STR" | "ANNUAL_AUDIT"
+	Regulator   string `json:"regulator"`   // "SEC" | "CBN" | "FMDQ" | "NGX"
+	PeriodStart string `json:"period_start"`
+	PeriodEnd   string `json:"period_end"`
+	SubmittedBy string `json:"submitted_by"`
 }
 
 type RegulatorReportResult struct {
-	ReportID         string `json:"report_id"`
-	SubmissionRef    string `json:"submission_ref"`
-	RecordsSubmitted int    `json:"records_submitted"`
-	Status           string `json:"status"`
+	ReportID         string    `json:"report_id"`
+	SubmissionRef    string    `json:"submission_ref"`
+	RecordsSubmitted int       `json:"records_submitted"`
+	Status           string    `json:"status"`
 	CompletedAt      time.Time `json:"completed_at"`
 }
 
@@ -901,7 +900,7 @@ func RegulatorReportingWorkflow(ctx workflow.Context, input RegulatorReportInput
 	// Step 4: Notify submitter
 	workflow.ExecuteActivity(ctx30s, activities.SendNotification, activities.NotificationInput{
 		UserID: input.SubmittedBy, Channel: "email",
-		Title: fmt.Sprintf("%s Report Submitted to %s", input.ReportType, input.Regulator),
+		Title:   fmt.Sprintf("%s Report Submitted to %s", input.ReportType, input.Regulator),
 		Message: fmt.Sprintf("Report %s submitted. Ref: %s. Records: %d.", input.ReportID, submissionRef, result.RecordsSubmitted),
 	})
 
@@ -1008,7 +1007,7 @@ func PlatformHealthCheckWorkflow(ctx workflow.Context, input PlatformHealthInput
 		}
 		workflow.ExecuteActivity(ctx30s, activities.SendNotification, activities.NotificationInput{
 			UserID: input.AlertUserID, Channel: "push",
-			Title: "NEXCOM Platform Health Alert",
+			Title:   "NEXCOM Platform Health Alert",
 			Message: fmt.Sprintf("%d services unhealthy: %v", result.UnhealthyCount, unhealthyNames),
 		})
 	}

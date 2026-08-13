@@ -658,6 +658,14 @@ async function seedMarketBroadcasts() {
 // ─── Main Execution ───────────────────────────────────────────────────────────
 
 async function main() {
+  if (process.env.NEXCOM_ALLOW_DEMO_SEED !== "I_UNDERSTAND_THIS_IS_NOT_PRODUCTION") {
+    throw new Error(
+      "Demo seed generation is disabled. Set NEXCOM_ALLOW_DEMO_SEED=I_UNDERSTAND_THIS_IS_NOT_PRODUCTION only for isolated development fixtures."
+    );
+  }
+  if (process.env.NODE_ENV === "production" || process.env.ENVIRONMENT === "staging") {
+    throw new Error("Demo seed generation is prohibited in staging and production environments");
+  }
   console.log("\n╔══════════════════════════════════════════════════════╗");
   console.log("║   NEXCOM Exchange — Comprehensive Seed Data Script   ║");
   console.log("╚══════════════════════════════════════════════════════╝\n");

@@ -8,8 +8,8 @@
 
 FROM alpine:3.19
 
-# curl is needed for the health-check polling and schema write
-RUN apk add --no-cache curl
+# curl, jq, and CA roots are required for the authenticated TLS health and schema write.
+RUN apk add --no-cache ca-certificates curl jq
 
 # Copy the schema file and the push script
 COPY permify.perm /app/permify.perm

@@ -22,8 +22,8 @@ type KYCActivityInput struct {
 	PhoneNumber    string `json:"phone_number"`
 }
 type KYCActivityResult struct {
-	Status   string `json:"status"`
-	KYCLevel int    `json:"kyc_level"`
+	Status    string `json:"status"`
+	KYCLevel  int    `json:"kyc_level"`
 	Reference string `json:"reference"`
 }
 type AMLActivityInput struct {
@@ -191,9 +191,9 @@ type FeeInput struct {
 	TradeID  string `json:"trade_id"`
 }
 type MarginReqInput struct {
-	AccountID string  `json:"account_id"`
-	Symbol    string  `json:"symbol"`
-	Contracts int     `json:"contracts"`
+	AccountID string `json:"account_id"`
+	Symbol    string `json:"symbol"`
+	Contracts int    `json:"contracts"`
 }
 type MarginRequirementResult struct {
 	InitialMargin     float64 `json:"initial_margin"`
@@ -219,10 +219,10 @@ type ILPQuoteInput struct {
 	ReceiveCurrency string  `json:"receive_currency"`
 }
 type ILPQuoteResult struct {
-	FXRate          float64 `json:"fx_rate"`
-	ReceivedAmount  float64 `json:"received_amount"`
-	FeeNGN          float64 `json:"fee_ngn"`
-	ILPCondition    string  `json:"ilp_condition"`
+	FXRate         float64 `json:"fx_rate"`
+	ReceivedAmount float64 `json:"received_amount"`
+	FeeNGN         float64 `json:"fee_ngn"`
+	ILPCondition   string  `json:"ilp_condition"`
 }
 type MojaloopTransferInput struct {
 	TransferID      string  `json:"transfer_id"`
@@ -277,11 +277,11 @@ type CreditScoreInput struct {
 	CollateralValueNGN float64 `json:"collateral_value_ngn"`
 }
 type CreditScoreActivityResult struct {
-	Score       int     `json:"score"`
-	ScoreBand   string  `json:"score_band"`
-	Decision    string  `json:"decision"`
-	MaxLoanNGN  float64 `json:"max_loan_amount_ngn"`
-	PremiumBPS  int     `json:"interest_rate_premium_bps"`
+	Score      int     `json:"score"`
+	ScoreBand  string  `json:"score_band"`
+	Decision   string  `json:"decision"`
+	MaxLoanNGN float64 `json:"max_loan_amount_ngn"`
+	PremiumBPS int     `json:"interest_rate_premium_bps"`
 }
 type LoanRecordInput struct {
 	FarmerID        string  `json:"farmer_id"`
@@ -307,8 +307,8 @@ type LoanCommitInput struct {
 	MojaloopTxID string `json:"mojaloop_tx_id"`
 }
 type RepaymentScheduleInput struct {
-	LoanID   int64   `json:"loan_id"`
-	FarmerID string  `json:"farmer_id"`
+	LoanID    int64   `json:"loan_id"`
+	FarmerID  string  `json:"farmer_id"`
 	AmountNGN float64 `json:"amount_ngn"`
 }
 type STRInput struct {
@@ -329,10 +329,10 @@ type KYCUpgradeInput struct {
 	NewLevel int    `json:"new_level"`
 }
 type CorporateActionValidateInput struct {
-	ActionID   string `json:"action_id"`
-	Symbol     string `json:"symbol"`
-	ActionType string `json:"action_type"`
-	RecordDate string `json:"record_date"`
+	ActionID    string `json:"action_id"`
+	Symbol      string `json:"symbol"`
+	ActionType  string `json:"action_type"`
+	RecordDate  string `json:"record_date"`
 	InitiatedBy string `json:"initiated_by"`
 }
 type HolderQueryInput struct {
@@ -403,8 +403,8 @@ type ComplianceReportInput struct {
 	GeneratedBy string `json:"generated_by"`
 }
 type ComplianceReportResult struct {
-	ReportURL       string              `json:"report_url"`
-	ViolationsFound int                 `json:"violations_found"`
+	ReportURL       string                `json:"report_url"`
+	ViolationsFound int                   `json:"violations_found"`
 	Violations      []ComplianceViolation `json:"violations"`
 }
 type ComplianceViolation struct {
@@ -550,7 +550,7 @@ func (a *Activities) GetAccountBalance(ctx context.Context, accountID string) (i
 func (a *Activities) CheckSufficientBalance(ctx context.Context, input BalanceCheckInput) (bool, error) {
 	balance, err := a.client.GetBalance(ctx, fmt.Sprintf("user-settlement-%s", input.UserID))
 	if err != nil {
-		return true, nil // fail-open if gateway unavailable
+		return false, fmt.Errorf("verify sufficient balance through gateway: %w", err)
 	}
 	return float64(balance)/100 >= input.RequiredAmount, nil
 }
@@ -640,7 +640,7 @@ func (a *Activities) DebitUserAccount(ctx context.Context, input DebitInput) (st
 func (a *Activities) PlaceOrder(ctx context.Context, input OrderInput) (*OrderActivityResult, error) {
 	result, err := a.client.PlaceOrder(ctx, clients.OrderRequest{
 		ClientOrderID: fmt.Sprintf("journey-%d", time.Now().UnixMilli()),
-		AccountID: input.AccountID, Symbol: input.Symbol,
+		AccountID:     input.AccountID, Symbol: input.Symbol,
 		Side: input.Side, OrderType: input.OrderType, TimeInForce: input.TimeInForce,
 		Price: input.Price, Quantity: input.Quantity,
 	})
@@ -674,7 +674,10 @@ func (a *Activities) PreTradeRiskCheck(ctx context.Context, input PreTradeInput)
 		"quantity": input.Quantity, "price": input.Price, "side": "BUY",
 	}
 	err := a.client.PostRaw(ctx, a.cfg.RiskURL+"/api/v1/risk/pre-trade", body)
-	return err == nil, nil // fail-open
+	if err != nil {
+		return false, fmt.Errorf("pre-trade risk check unavailable: %w", err)
+	}
+	return true, nil
 }
 
 // ─── Warehouse Activities ─────────────────────────────────────────────────────
@@ -682,7 +685,10 @@ func (a *Activities) PreTradeRiskCheck(ctx context.Context, input PreTradeInput)
 func (a *Activities) VerifyWarehouseCapacity(ctx context.Context, input WarehouseCheckInput) (bool, error) {
 	// Call matching engine delivery endpoint
 	err := a.client.GetRaw(ctx, fmt.Sprintf("%s/api/v1/delivery/warehouses/%s", a.cfg.MatchingEngine, input.WarehouseID))
-	return err == nil, nil
+	if err != nil {
+		return false, fmt.Errorf("verify warehouse capacity: %w", err)
+	}
+	return true, nil
 }
 
 func (a *Activities) IssueWarehouseReceipt(ctx context.Context, input WarehouseReceiptInput) (*WarehouseReceiptResult, error) {
@@ -698,7 +704,10 @@ func (a *Activities) IssueWarehouseReceipt(ctx context.Context, input WarehouseR
 
 func (a *Activities) VerifyWarehouseReceiptOwnership(ctx context.Context, input ReceiptOwnershipInput) (bool, error) {
 	err := a.client.GetRaw(ctx, fmt.Sprintf("%s/api/v1/delivery/receipts/%s", a.cfg.MatchingEngine, input.ReceiptID))
-	return err == nil, nil
+	if err != nil {
+		return false, fmt.Errorf("verify warehouse receipt ownership: %w", err)
+	}
+	return true, nil
 }
 
 func (a *Activities) TransferWarehouseReceipt(ctx context.Context, input ReceiptTransferInput) error {
@@ -811,7 +820,10 @@ func (a *Activities) CheckPermission(ctx context.Context, input PermissionInput)
 
 func (a *Activities) VerifyUserProfile(ctx context.Context, userID string) (bool, error) {
 	err := a.client.GetRaw(ctx, a.cfg.UserMgmtURL+"/api/v1/users/"+userID)
-	return err == nil, nil
+	if err != nil {
+		return false, fmt.Errorf("verify user profile: %w", err)
+	}
+	return true, nil
 }
 
 func (a *Activities) AssignKeycloakRole(ctx context.Context, input RoleAssignInput) ([]string, error) {
@@ -875,7 +887,10 @@ func (a *Activities) CreateLoanRecord(ctx context.Context, input LoanRecordInput
 
 func (a *Activities) ValidateLoanApproval(ctx context.Context, input LoanValidateInput) (bool, error) {
 	err := a.client.GetRaw(ctx, fmt.Sprintf("%s/api/loans/%d", a.cfg.PortalURL, input.LoanID))
-	return err == nil, nil
+	if err != nil {
+		return false, fmt.Errorf("validate loan approval: %w", err)
+	}
+	return true, nil
 }
 
 func (a *Activities) ReserveLendingPoolFunds(ctx context.Context, input LendingReserveInput) (string, error) {
@@ -883,7 +898,7 @@ func (a *Activities) ReserveLendingPoolFunds(ctx context.Context, input LendingR
 		DebitAccountID:  "lending-pool",
 		CreditAccountID: fmt.Sprintf("loan-escrow-%d", input.LoanID),
 		Amount:          input.Amount, Code: 2,
-		Reference:       fmt.Sprintf("loan-reserve-%d", input.LoanID),
+		Reference: fmt.Sprintf("loan-reserve-%d", input.LoanID),
 	})
 	if err != nil {
 		return "", err
@@ -1049,8 +1064,9 @@ func (a *Activities) DetectTradingAnomaly(ctx context.Context, input AnomalyInpu
 // buildAnomalyFeatures constructs an 8-dimensional feature vector for the
 // Isolation Forest model from the surveillance alert evidence.
 // Features: [order_cancel_ratio, self_trade_ratio, quote_stuffing_rate,
-//            velocity_zscore, price_impact, volume_concentration,
-//            time_of_day_anomaly, cross_market_correlation]
+//
+//	velocity_zscore, price_impact, volume_concentration,
+//	time_of_day_anomaly, cross_market_correlation]
 func buildAnomalyFeatures(input AnomalyInput) []float64 {
 	ev := input.Evidence
 	get := func(key string) float64 {
@@ -1168,26 +1184,29 @@ func (a *Activities) FileComplianceAlert(ctx context.Context, input ComplianceAl
 
 func (a *Activities) ValidateCorporateAction(ctx context.Context, input CorporateActionValidateInput) (bool, error) {
 	err := a.client.GetRaw(ctx, fmt.Sprintf("%s/api/v1/corporate-actions/%s", a.cfg.MatchingEngine, input.ActionID))
-	return err == nil, nil
+	if err != nil {
+		return false, fmt.Errorf("validate corporate action: %w", err)
+	}
+	return true, nil
 }
 
 func (a *Activities) GetHoldersAtRecordDate(ctx context.Context, input HolderQueryInput) ([]HolderRecord, error) {
 	// Query the portal's investor relations endpoint for shareholders at record date
 	var result struct {
 		Shareholders []struct {
-			UserID      string  `json:"user_id"`
-			HolderID    string  `json:"holder_id"`
-			Quantity    float64 `json:"quantity"`
-			HoldingPct  float64 `json:"holding_pct"`
+			UserID     string  `json:"user_id"`
+			HolderID   string  `json:"holder_id"`
+			Quantity   float64 `json:"quantity"`
+			HoldingPct float64 `json:"holding_pct"`
 		} `json:"shareholders"`
 	}
-	url := fmt.Sprintf("%s/api/trpc/investorRelations.listShareholders?input={"companySymbol":"%s","limit":1000}",
+	url := fmt.Sprintf("%s/api/trpc/investorRelations.listShareholders?input={\"companySymbol\":\"%s\",\"limit\":1000}",
 		a.cfg.PortalURL, input.Symbol)
 	if err := a.client.GetJSON(ctx, url, &result); err != nil {
 		// Fallback: query clearing positions from matching engine
 		var posResult map[string]interface{}
 		if err2 := a.client.GetJSON(ctx, fmt.Sprintf("%s/api/v1/clearing/positions/%s", a.cfg.MatchingEngine, input.Symbol), &posResult); err2 != nil {
-			return []HolderRecord{}, nil
+			return nil, fmt.Errorf("retrieve shareholders from portal and clearing positions: portal=%v clearing=%w", err, err2)
 		}
 		// Parse positions into holder records
 		var holders []HolderRecord
@@ -1310,12 +1329,11 @@ func (a *Activities) RegisterBroker(ctx context.Context, input BrokerRegisterInp
 // ─── Market Maker Activities ──────────────────────────────────────────────────
 
 func (a *Activities) CheckCircuitBreaker(ctx context.Context, symbol string) (*CircuitBreakerStatus, error) {
-	result, err := a.client.GetRaw(ctx, fmt.Sprintf("%s/api/v1/circuit-breaker/bands/%s", a.cfg.MatchingEngine, symbol))
-	_ = result
-	if err != nil {
-		return &CircuitBreakerStatus{Halted: false}, nil
+	var result CircuitBreakerStatus
+	if err := a.client.GetJSON(ctx, fmt.Sprintf("%s/api/v1/circuit-breaker/bands/%s", a.cfg.MatchingEngine, symbol), &result); err != nil {
+		return nil, fmt.Errorf("retrieve circuit-breaker status: %w", err)
 	}
-	return &CircuitBreakerStatus{Halted: false}, nil
+	return &result, nil
 }
 
 // ─── Regulator Activities ─────────────────────────────────────────────────────
@@ -1401,24 +1419,24 @@ type ServiceHealthStatus struct {
 
 func (a *Activities) CheckServiceHealth(ctx context.Context, serviceName string) (*ServiceHealthStatus, error) {
 	serviceURLs := map[string]string{
-		"portal":           a.cfg.PortalURL + "/health",
-		"matching-engine":  a.cfg.MatchingEngine + "/api/v1/status",
+		"portal":            a.cfg.PortalURL + "/health",
+		"matching-engine":   a.cfg.MatchingEngine + "/api/v1/status",
 		"settlement-engine": a.cfg.SettlementURL + "/healthz",
-		"gateway":          a.cfg.GatewayURL + "/health",
-		"kyc-service":      a.cfg.KYCURL + "/health",
-		"risk-management":  a.cfg.RiskURL + "/health",
-		"analytics":        a.cfg.AnalyticsURL + "/health",
-		"ai-ml":            a.cfg.AiMlURL + "/health",
-		"notification":     a.cfg.NotificationURL + "/health",
-		"ingestion-engine": a.cfg.IngestionURL + "/health",
-		"blockchain":       a.cfg.BlockchainURL + "/healthz",
-		"analytics-engine": a.cfg.AnalyticsEngineURL + "/health",
-		"user-management":  a.cfg.UserMgmtURL + "/health",
-		"credit-scoring":   a.cfg.CreditScoringURL + "/health",
-		"ussd-engine":      a.cfg.USSDEngineURL + "/health",
-		"middleware-hub":   a.cfg.MiddlewareHubURL + "/health",
-		"mojaloop-adapter": a.cfg.MojaloopURL + "/health",
-		"temporal":         a.cfg.TemporalAddr, // gRPC health check
+		"gateway":           a.cfg.GatewayURL + "/health",
+		"kyc-service":       a.cfg.KYCURL + "/health",
+		"risk-management":   a.cfg.RiskURL + "/health",
+		"analytics":         a.cfg.AnalyticsURL + "/health",
+		"ai-ml":             a.cfg.AiMlURL + "/health",
+		"notification":      a.cfg.NotificationURL + "/health",
+		"ingestion-engine":  a.cfg.IngestionURL + "/health",
+		"blockchain":        a.cfg.BlockchainURL + "/healthz",
+		"analytics-engine":  a.cfg.AnalyticsEngineURL + "/health",
+		"user-management":   a.cfg.UserMgmtURL + "/health",
+		"credit-scoring":    a.cfg.CreditScoringURL + "/health",
+		"ussd-engine":       a.cfg.USSDEngineURL + "/health",
+		"middleware-hub":    a.cfg.MiddlewareHubURL + "/health",
+		"mojaloop-adapter":  a.cfg.MojaloopURL + "/health",
+		"temporal":          a.cfg.TemporalAddr, // gRPC health check
 	}
 	url, ok := serviceURLs[serviceName]
 	if !ok {

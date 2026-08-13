@@ -6,6 +6,8 @@ package temporal
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -44,8 +46,8 @@ type WorkflowExecution struct {
 	Input      interface{} `json:"input,omitempty"`
 }
 
-// Client wraps the official Temporal Go SDK client with graceful fallback to
-// an in-memory simulation when the Temporal server is unreachable.
+// Client wraps the official Temporal Go SDK. Workflow state is authoritative
+// only when it is accepted and persisted by Temporal.
 type Client struct {
 	tc           temporalclient.Client
 	workers      []worker.Worker
@@ -53,18 +55,11 @@ type Client struct {
 	connected    bool
 	fallbackMode bool
 	mu           sync.RWMutex
-
-	// In-memory fallback store
-	workflows map[string]*WorkflowExecution
 }
 
 // NewClient creates a Temporal client that connects via the official SDK.
-// Falls back to in-memory simulation if the Temporal server is unreachable.
 func NewClient(host string) *Client {
-	c := &Client{
-		host:      host,
-		workflows: make(map[string]*WorkflowExecution),
-	}
+	c := &Client{host: host}
 	c.connect()
 	return c
 }
@@ -77,10 +72,10 @@ func (c *Client) connect() {
 		Namespace: "default",
 	})
 	if err != nil {
-		log.Printf("[Temporal] WARN: Cannot connect to %s: %v — running in fallback mode (in-memory workflows)", c.host, err)
+		log.Printf("[Temporal] Cannot connect to %s: %v", c.host, err)
 		c.mu.Lock()
-		c.fallbackMode = true
 		c.connected = false
+		c.fallbackMode = false
 		c.mu.Unlock()
 		return
 	}
@@ -124,8 +119,8 @@ func (c *Client) startWorkers() {
 
 	for _, q := range queues {
 		w := worker.New(c.tc, q.name, worker.Options{
-			MaxConcurrentWorkflowTaskPollers:  4,
-			MaxConcurrentActivityTaskPollers:  8,
+			MaxConcurrentWorkflowTaskPollers:   4,
+			MaxConcurrentActivityTaskPollers:   8,
 			MaxConcurrentActivityExecutionSize: 100,
 		})
 		for _, wf := range q.workflows {
@@ -151,8 +146,8 @@ func (c *Client) StartOrderWorkflow(ctx context.Context, orderID string, input i
 	workflowID := "order-" + orderID
 	log.Printf("[Temporal] Starting OrderLifecycleWorkflow: workflowID=%s fallback=%v", workflowID, c.IsFallback())
 
-	if c.IsFallback() {
-		return c.startFallbackWorkflow(workflowID, TaskQueueTrading, input, 100*time.Millisecond), nil
+	if c.IsFallback() || !c.IsConnected() {
+		return nil, errors.New("Temporal is unavailable")
 	}
 
 	opts := temporalclient.StartWorkflowOptions{
@@ -170,8 +165,7 @@ func (c *Client) StartOrderWorkflow(ctx context.Context, orderID string, input i
 
 	run, err := c.tc.ExecuteWorkflow(ctx, opts, OrderLifecycleWorkflow, wfInput)
 	if err != nil {
-		log.Printf("[Temporal] Failed to start OrderLifecycleWorkflow: %v", err)
-		return c.startFallbackWorkflow(workflowID, TaskQueueTrading, input, 100*time.Millisecond), nil
+		return nil, fmt.Errorf("start OrderLifecycleWorkflow: %w", err)
 	}
 
 	return &WorkflowExecution{
@@ -189,8 +183,8 @@ func (c *Client) StartSettlementWorkflow(ctx context.Context, tradeID string, in
 	workflowID := "settlement-" + tradeID
 	log.Printf("[Temporal] Starting SettlementWorkflow: workflowID=%s", workflowID)
 
-	if c.IsFallback() {
-		return c.startFallbackWorkflow(workflowID, TaskQueueSettlement, input, 200*time.Millisecond), nil
+	if c.IsFallback() || !c.IsConnected() {
+		return nil, errors.New("Temporal is unavailable")
 	}
 
 	opts := temporalclient.StartWorkflowOptions{
@@ -208,8 +202,7 @@ func (c *Client) StartSettlementWorkflow(ctx context.Context, tradeID string, in
 
 	run, err := c.tc.ExecuteWorkflow(ctx, opts, SettlementWorkflow, wfInput)
 	if err != nil {
-		log.Printf("[Temporal] Failed to start SettlementWorkflow: %v", err)
-		return c.startFallbackWorkflow(workflowID, TaskQueueSettlement, input, 200*time.Millisecond), nil
+		return nil, fmt.Errorf("start SettlementWorkflow: %w", err)
 	}
 
 	return &WorkflowExecution{
@@ -227,8 +220,8 @@ func (c *Client) StartKYCWorkflow(ctx context.Context, userID string, input inte
 	workflowID := "kyc-" + userID
 	log.Printf("[Temporal] Starting KYCVerificationWorkflow: workflowID=%s", workflowID)
 
-	if c.IsFallback() {
-		return c.startFallbackWorkflow(workflowID, TaskQueueKYC, input, 500*time.Millisecond), nil
+	if c.IsFallback() || !c.IsConnected() {
+		return nil, errors.New("Temporal is unavailable")
 	}
 
 	opts := temporalclient.StartWorkflowOptions{
@@ -248,8 +241,7 @@ func (c *Client) StartKYCWorkflow(ctx context.Context, userID string, input inte
 
 	run, err := c.tc.ExecuteWorkflow(ctx, opts, KYCVerificationWorkflow, wfInput)
 	if err != nil {
-		log.Printf("[Temporal] Failed to start KYCVerificationWorkflow: %v", err)
-		return c.startFallbackWorkflow(workflowID, TaskQueueKYC, input, 500*time.Millisecond), nil
+		return nil, fmt.Errorf("start KYCVerificationWorkflow: %w", err)
 	}
 
 	return &WorkflowExecution{
@@ -267,8 +259,8 @@ func (c *Client) StartMarginCallWorkflow(ctx context.Context, userID string, inp
 	workflowID := "margin-call-" + userID + "-" + time.Now().Format("20060102-150405")
 	log.Printf("[Temporal] Starting MarginCallWorkflow: workflowID=%s", workflowID)
 
-	if c.IsFallback() {
-		return c.startFallbackWorkflow(workflowID, TaskQueueMargin, input, 300*time.Millisecond), nil
+	if c.IsFallback() || !c.IsConnected() {
+		return nil, errors.New("Temporal is unavailable")
 	}
 
 	opts := temporalclient.StartWorkflowOptions{
@@ -281,8 +273,7 @@ func (c *Client) StartMarginCallWorkflow(ctx context.Context, userID string, inp
 
 	run, err := c.tc.ExecuteWorkflow(ctx, opts, MarginCallWorkflow, input)
 	if err != nil {
-		log.Printf("[Temporal] Failed to start MarginCallWorkflow: %v", err)
-		return c.startFallbackWorkflow(workflowID, TaskQueueMargin, input, 300*time.Millisecond), nil
+		return nil, fmt.Errorf("start MarginCallWorkflow: %w", err)
 	}
 
 	return &WorkflowExecution{
@@ -300,8 +291,8 @@ func (c *Client) StartMarginCallWorkflow(ctx context.Context, userID string, inp
 // SignalWorkflow sends a signal to a running workflow.
 func (c *Client) SignalWorkflow(ctx context.Context, workflowID string, signalName string, data interface{}) error {
 	log.Printf("[Temporal] Signaling workflow=%s signal=%s", workflowID, signalName)
-	if c.IsFallback() {
-		return nil
+	if c.IsFallback() || !c.IsConnected() {
+		return errors.New("Temporal is unavailable")
 	}
 	return c.tc.SignalWorkflow(ctx, workflowID, "", signalName, data)
 }
@@ -309,31 +300,16 @@ func (c *Client) SignalWorkflow(ctx context.Context, workflowID string, signalNa
 // CancelWorkflow cancels a running workflow.
 func (c *Client) CancelWorkflow(ctx context.Context, workflowID string) error {
 	log.Printf("[Temporal] Cancelling workflow=%s", workflowID)
-	if c.IsFallback() {
-		c.mu.Lock()
-		if wf, ok := c.workflows[workflowID]; ok {
-			wf.Status = "CANCELLED"
-		}
-		c.mu.Unlock()
-		return nil
+	if c.IsFallback() || !c.IsConnected() {
+		return errors.New("Temporal is unavailable")
 	}
 	return c.tc.CancelWorkflow(ctx, workflowID, "")
 }
 
 // QueryWorkflow queries workflow state.
 func (c *Client) QueryWorkflow(ctx context.Context, workflowID string, queryType string) (interface{}, error) {
-	if c.IsFallback() {
-		c.mu.RLock()
-		wf, ok := c.workflows[workflowID]
-		c.mu.RUnlock()
-		if ok {
-			return map[string]interface{}{
-				"status":    wf.Status,
-				"startedAt": wf.StartedAt,
-				"taskQueue": wf.TaskQueue,
-			}, nil
-		}
-		return map[string]string{"status": "UNKNOWN"}, nil
+	if c.IsFallback() || !c.IsConnected() {
+		return nil, errors.New("Temporal is unavailable")
 	}
 
 	resp, err := c.tc.QueryWorkflow(ctx, workflowID, "", queryType)
@@ -349,13 +325,8 @@ func (c *Client) QueryWorkflow(ctx context.Context, workflowID string, queryType
 
 // GetWorkflowStatus returns the execution status.
 func (c *Client) GetWorkflowStatus(ctx context.Context, workflowID string) (string, error) {
-	if c.IsFallback() {
-		c.mu.RLock()
-		defer c.mu.RUnlock()
-		if wf, ok := c.workflows[workflowID]; ok {
-			return wf.Status, nil
-		}
-		return "UNKNOWN", nil
+	if c.IsFallback() || !c.IsConnected() {
+		return "", errors.New("Temporal is unavailable")
 	}
 
 	resp, err := c.tc.DescribeWorkflowExecution(ctx, workflowID, "")
@@ -365,16 +336,9 @@ func (c *Client) GetWorkflowStatus(ctx context.Context, workflowID string) (stri
 	return resp.WorkflowExecutionInfo.Status.String(), nil
 }
 
-// ListWorkflows returns all tracked workflows (fallback only).
-func (c *Client) ListWorkflows() []*WorkflowExecution {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	result := make([]*WorkflowExecution, 0, len(c.workflows))
-	for _, wf := range c.workflows {
-		result = append(result, wf)
-	}
-	return result
-}
+// ListWorkflows is retained for backward compatibility. The API must use the
+// Temporal visibility API rather than a local process cache.
+func (c *Client) ListWorkflows() []*WorkflowExecution { return nil }
 
 // ─── Status ───────────────────────────────────────────────────────────────────
 
@@ -404,38 +368,12 @@ func (c *Client) Close() {
 	log.Println("[Temporal] Connection closed")
 }
 
-// ─── Fallback helpers ─────────────────────────────────────────────────────────
-
-func (c *Client) startFallbackWorkflow(workflowID, taskQueue string, input interface{}, completionDelay time.Duration) *WorkflowExecution {
-	exec := &WorkflowExecution{
-		WorkflowID: workflowID,
-		RunID:      "fallback-" + workflowID,
-		Status:     "RUNNING",
-		TaskQueue:  taskQueue,
-		StartedAt:  time.Now(),
-		Input:      input,
-	}
-	c.mu.Lock()
-	c.workflows[workflowID] = exec
-	c.mu.Unlock()
-
-	go func() {
-		time.Sleep(completionDelay)
-		c.mu.Lock()
-		if wf, ok := c.workflows[workflowID]; ok {
-			wf.Status = "COMPLETED"
-		}
-		c.mu.Unlock()
-	}()
-	return exec
-}
-
 // ─── Workflow input/output types ──────────────────────────────────────────────
 
 // KYCWorkflowInput is the input for the KYC verification workflow.
 type KYCWorkflowInput struct {
-	UserID      string `json:"userId"`
-	DocumentURL string `json:"documentUrl,omitempty"`
+	UserID       string `json:"userId"`
+	DocumentURL  string `json:"documentUrl,omitempty"`
 	DocumentType string `json:"documentType,omitempty"`
 }
 
@@ -611,8 +549,8 @@ func KYCVerificationWorkflow(ctx workflow.Context, input KYCWorkflowInput) error
 	timerFired := workflow.NewTimer(timerCtx, 72*time.Hour)
 
 	var decision struct {
-		Approved bool   `json:"approved"`
-		Reason   string `json:"reason"`
+		Approved   bool   `json:"approved"`
+		Reason     string `json:"reason"`
 		ReviewerID string `json:"reviewerId"`
 	}
 	var timedOut bool

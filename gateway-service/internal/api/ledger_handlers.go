@@ -111,11 +111,11 @@ type RefundRequest struct {
 }
 
 type StripeTopupRequest struct {
-	UserID                 string  `json:"user_id" binding:"required"`
-	Amount                 float64 `json:"amount" binding:"required,min=0.01"`
-	Currency               string  `json:"currency"`
-	StripePaymentIntentID  string  `json:"stripe_payment_intent_id" binding:"required"`
-	Code                   uint16  `json:"code"`
+	UserID                string  `json:"user_id" binding:"required"`
+	Amount                float64 `json:"amount" binding:"required,min=0.01"`
+	Currency              string  `json:"currency"`
+	StripePaymentIntentID string  `json:"stripe_payment_intent_id" binding:"required"`
+	Code                  uint16  `json:"code"`
 }
 
 type FreezeRequest struct {
@@ -418,15 +418,15 @@ func (s *Server) ledgerLoanRepay(c *gin.Context) {
 		}
 	}
 	s.emitKafkaAudit("nexcom.lending.loan-repaid", map[string]interface{}{
-		"user_id":          req.UserID,
-		"loan_id":          req.LoanID,
-		"amount":           req.Amount,
-		"principal":        req.Principal,
-		"interest":         req.Interest,
-		"currency":         req.Currency,
-		"transfer_id":      repayTransfer.ID,
-		"fee_transfer_id":  feeTransferID,
-		"timestamp":        time.Now().UnixMilli(),
+		"user_id":         req.UserID,
+		"loan_id":         req.LoanID,
+		"amount":          req.Amount,
+		"principal":       req.Principal,
+		"interest":        req.Interest,
+		"currency":        req.Currency,
+		"transfer_id":     repayTransfer.ID,
+		"fee_transfer_id": feeTransferID,
+		"timestamp":       time.Now().UnixMilli(),
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"success":         true,
@@ -616,18 +616,18 @@ func (s *Server) ledgerMarginLiquidate(c *gin.Context) {
 		}
 	}
 	s.emitKafkaAudit("nexcom.margin.liquidated", map[string]interface{}{
-		"user_id":               req.UserID,
-		"reason":                req.Reason,
-		"recovered_amount":      recoveredAmount,
-		"positions_liquidated":  positionsLiquidated,
-		"timestamp":             time.Now().UnixMilli(),
+		"user_id":              req.UserID,
+		"reason":               req.Reason,
+		"recovered_amount":     recoveredAmount,
+		"positions_liquidated": positionsLiquidated,
+		"timestamp":            time.Now().UnixMilli(),
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"user_id":               req.UserID,
-		"positions_liquidated":  positionsLiquidated,
-		"recovered_amount":      recoveredAmount,
-		"shortfall_amount":      0,
-		"status":                status,
+		"user_id":              req.UserID,
+		"positions_liquidated": positionsLiquidated,
+		"recovered_amount":     recoveredAmount,
+		"shortfall_amount":     0,
+		"status":               status,
 	})
 }
 
@@ -888,7 +888,7 @@ func (s *Server) ledgerMojaloopTransfer(c *gin.Context) {
 
 // ─── Helper: emit Kafka audit event (non-fatal) ───────────────────────────────
 
-func (s *Server) emitKafkaAudit(ctx interface{ Done() <-chan struct{} }, topic string, payload map[string]interface{}) {
+func (s *Server) emitKafkaAudit(topic string, payload map[string]interface{}) {
 	if s.kafka == nil {
 		return
 	}

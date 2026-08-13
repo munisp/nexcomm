@@ -1,7 +1,7 @@
 """
 Permify fine-grained authorization client for the NEXCOM Analytics service.
 Uses the Permify REST API for relationship-based access control (ReBAC).
-Falls back to allow-all in development when Permify is not reachable.
+Fails closed when Permify is not reachable or rejects an authorization request.
 """
 import logging
 import os
@@ -31,7 +31,8 @@ class PermifyClient:
             else:
                 logger.warning("[Permify] Health check returned %d", resp.status_code)
         except Exception as exc:
-            logger.warning("[Permify] Not reachable (%s) — using fail-open mode", exc)
+            self._connected = False
+            logger.warning("[Permify] Not reachable (%s); authorization will fail closed", exc)
 
     def check(
         self,
@@ -43,9 +44,11 @@ class PermifyClient:
     ) -> bool:
         """Check if a subject has a permission on an entity via Permify REST API."""
         if not self._connected:
-            logger.debug("[Permify] Fail-open: allowing %s:%s#%s@%s:%s",
-                         entity_type, entity_id, permission, subject_type, subject_id)
-            return True
+            self._check_connection()
+        if not self._connected:
+            logger.warning("[Permify] Denying %s:%s#%s@%s:%s because Permify is unavailable",
+                           entity_type, entity_id, permission, subject_type, subject_id)
+            return False
         try:
             payload = {
                 "metadata": {"schema_version": "", "snap_token": "", "depth": 20},
@@ -65,11 +68,12 @@ class PermifyClient:
                              entity_type, entity_id, permission, subject_type, subject_id,
                              "ALLOW" if result else "DENY")
                 return result
-            logger.warning("[Permify] Check returned %d", resp.status_code)
-            return True  # fail-open on API errors
+            logger.warning("[Permify] Check returned %d; denying request", resp.status_code)
+            return False
         except Exception as exc:
-            logger.warning("[Permify] Check failed (%s) — fail-open", exc)
-            return True
+            self._connected = False
+            logger.warning("[Permify] Check failed (%s); denying request", exc)
+            return False
 
     def write_relationship(
         self,
@@ -78,11 +82,13 @@ class PermifyClient:
         relation: str,
         subject_type: str,
         subject_id: str,
-    ) -> None:
-        """Create a relationship tuple in Permify."""
+    ) -> bool:
+        """Create a relationship tuple in Permify and report real completion."""
         if not self._connected:
-            logger.debug("[Permify] WriteRelationship skipped (not connected)")
-            return
+            self._check_connection()
+        if not self._connected:
+            logger.error("[Permify] WriteRelationship refused because Permify is unavailable")
+            return False
         try:
             payload = {
                 "metadata": {"schema_version": ""},
@@ -97,10 +103,14 @@ class PermifyClient:
                 json=payload,
                 timeout=5,
             )
-            if resp.status_code not in (200, 201):
-                logger.warning("[Permify] WriteRelationship returned %d", resp.status_code)
+            if resp.status_code in (200, 201):
+                return True
+            logger.warning("[Permify] WriteRelationship returned %d", resp.status_code)
+            return False
         except Exception as exc:
+            self._connected = False
             logger.warning("[Permify] WriteRelationship failed: %s", exc)
+            return False
 
     def check_analytics_access(self, user_id: str, report_type: str) -> bool:
         return self.check("report", report_type, "view", "user", user_id)

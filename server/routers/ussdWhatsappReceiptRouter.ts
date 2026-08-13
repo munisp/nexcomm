@@ -26,8 +26,8 @@ async function sendWhatsAppMessage(to: string, message: string): Promise<boolean
   const channelGatewayUrl = ENV.channelGatewayUrl || "http://localhost:8082";
   const token = ENV.whatsappAccessToken;
   if (!token) {
-    console.warn("[WhatsApp] WHATSAPP_ACCESS_TOKEN not set — logging message instead:", { to, message });
-    return true; // graceful degradation in dev
+    console.error("[WhatsApp] WHATSAPP_ACCESS_TOKEN is not configured; receipt will not be sent", { to });
+    return false;
   }
   try {
     const res = await fetch(`${channelGatewayUrl}/api/v1/whatsapp/send`, {
