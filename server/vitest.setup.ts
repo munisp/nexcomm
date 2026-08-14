@@ -9,8 +9,8 @@ import postgres from "postgres";
 
 export async function setup() {
   // Note: vitest.config.ts `env` block is NOT available in globalSetup (runs in main process).
-  // Fall back to the same local URL used in vitest.config.ts.
-  const pgUrl = process.env.NEXCOM_PG_URL ?? "postgresql://nexcom:nexcom123@127.0.0.1:5432/nexcom";
+  // An explicit secure test URL is required; integration tests are skipped otherwise.
+  const pgUrl = process.env.NEXCOM_PG_URL ?? "";
   if (!pgUrl.startsWith("postgresql://") && !pgUrl.startsWith("postgres://")) {
     process.env.DB_AVAILABLE = "false";
     console.log("[vitest.setup] No valid NEXCOM_PG_URL — DB-dependent tests will be skipped");

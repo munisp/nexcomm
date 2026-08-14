@@ -134,6 +134,7 @@ export const receiptsRouter = router({
           quantity: input.quantity,
           unit: input.unit,
           warehouseId: input.warehouseId ?? "unknown",
+          idempotencyKey: `receipt-issued:${receipt.id}`,
         }).catch(() => {});
       });
       return receipt;
@@ -230,6 +231,7 @@ export const receiptsRouter = router({
           quantity: result[0].quantity,
           unit: result[0].unit,
           warehouseId: result[0].warehouseId ?? "unknown",
+          idempotencyKey: `receipt-redeemed:${input.id}`,
         }).catch(() => {});
       });
       return { success: true };

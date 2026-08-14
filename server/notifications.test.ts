@@ -42,17 +42,16 @@ import { getDb } from "./db";
 // ─────────────────────────────────────────────────────────────
 
 describe("Push Token Registration", () => {
-  it("logs a registration message for a valid token", () => {
+  it("logs a registration message without a device credential", () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const userId = 7;
-    const token = "ExponentPushToken[abcdefghijklmnopqrstuvwx]";
     const platform = "android";
 
-    // Mirrors the procedure body
-    console.log(`[Push] Registered token for user ${userId} (${platform}): ${token.slice(0, 20)}...`);
+    // Mirrors the procedure body without printing any credential material.
+    console.log(`[Push] Registered push device for user ${userId} (${platform}).`);
 
     expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining("Registered token for user 7")
+      expect.stringContaining("Registered push device for user 7")
     );
     spy.mockRestore();
   });
@@ -60,9 +59,9 @@ describe("Push Token Registration", () => {
   it("logs an unregistration message on logout", () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const userId = 7;
-    console.log(`[Push] Unregistered token for user ${userId}`);
+    console.log(`[Push] Unregistered push device for user ${userId}.`);
     expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining("Unregistered token for user 7")
+      expect.stringContaining("Unregistered push device for user 7")
     );
     spy.mockRestore();
   });

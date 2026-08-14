@@ -124,31 +124,38 @@ func FarmerOnboardingWorkflow(ctx workflow.Context, input FarmerOnboardingInput)
 	}
 	result.WalletAccountID = walletAcct.AccountID
 
-	// Step 5: Assign Keycloak role (FARMER)
+	// Step 5: Assign mandatory Keycloak roles before account completion.
 	var roles []string
 	if err := workflow.ExecuteActivity(ctx30s, activities.AssignKeycloakRole, activities.RoleAssignInput{
 		UserID: input.UserID, Roles: []string{"FARMER", "TRADER"},
 	}).Get(ctx, &roles); err != nil {
-		logger.Warn("Keycloak role assignment failed (non-fatal)", "error", err)
+		return nil, fmt.Errorf("assign Keycloak roles: %w", err)
+	}
+	if len(roles) == 0 {
+		return nil, temporal.NewApplicationError("InvalidRoleAssignment", "IDENTITY", "Keycloak returned no assigned roles")
 	}
 	result.KeycloakRoles = roles
 
-	// Step 6: Send welcome notification (SMS + email)
-	workflow.ExecuteActivity(ctx30s, activities.SendNotification, activities.NotificationInput{
+	// Step 6: Send welcome notification and require acknowledgement.
+	if err := workflow.ExecuteActivity(ctx30s, activities.SendNotification, activities.NotificationInput{
 		UserID: input.UserID, Channel: "sms",
 		Title: "Welcome to NEXCOM Exchange",
 		Message: fmt.Sprintf("Welcome %s! Your account is ready. Trade commodities, access loans, and grow your farm business.", input.FirstName),
-	})
+	}).Get(ctx, nil); err != nil {
+		return nil, fmt.Errorf("onboarding notification: %w", err)
+	}
 
-	// Step 7: Ingest to Lakehouse (Bronze layer)
-	workflow.ExecuteActivity(ctx30s, activities.IngestToLakehouse, activities.LakehouseInput{
+	// Step 7: Ingest immutable onboarding audit data and require acknowledgement.
+	if err := workflow.ExecuteActivity(ctx30s, activities.IngestToLakehouse, activities.LakehouseInput{
 		Topic: "nexcom.users.onboarded",
 		Record: map[string]interface{}{
 			"user_id": input.UserID, "kyc_status": kycResult.Status,
 			"farm_location": input.FarmLocation, "farm_size_ha": input.FarmSizeHa,
 			"cooperative_id": input.CooperativeID, "onboarded_at": workflow.Now(ctx),
 		},
-	})
+	}).Get(ctx, nil); err != nil {
+		return nil, fmt.Errorf("onboarding lakehouse ingestion: %w", err)
+	}
 
 	result.CompletedAt = workflow.Now(ctx)
 	logger.Info("FarmerOnboardingWorkflow completed", "user_id", input.UserID)
@@ -319,47 +326,56 @@ func WarehouseReceiptWorkflow(ctx workflow.Context, input WarehouseReceiptInput)
 	result.ReceiptID = receipt.ReceiptID
 	result.LotNumber = receipt.LotNumber
 
-	// Step 3: Get current commodity price for valuation
+	// Step 3: Get authoritative commodity price for valuation.
 	var priceResult activities.PriceResult
 	if err := workflow.ExecuteActivity(ctx30s, activities.GetCommodityPrice, input.CommoditySymbol).Get(ctx, &priceResult); err != nil {
-		logger.Warn("Price lookup failed, using zero valuation", "error", err)
+		return nil, fmt.Errorf("authoritative commodity price lookup: %w", err)
+	}
+	if priceResult.Price <= 0 {
+		return nil, temporal.NewApplicationError("InvalidMarketData", "MARKET_DATA", "Commodity valuation requires a positive authoritative price")
 	}
 	result.ValuationNGN = priceResult.Price * input.QuantityTonnes * 1000 // price per kg → per tonne
 
-	// Step 4: Tokenize on blockchain (optional)
+	// Step 4: When on-chain tokenization is requested, it is required for completion.
 	if input.TokenizeOnChain {
 		var tokenResult activities.TokenizeResult
 		if err := workflow.ExecuteActivity(ctx5m, activities.TokenizeCommodity, activities.TokenizeInput{
 			CommoditySymbol: input.CommoditySymbol, Quantity: fmt.Sprintf("%.2f", input.QuantityTonnes),
 			OwnerID: input.FarmerID, WarehouseReceiptID: receipt.ReceiptID, Chain: input.Chain,
 		}).Get(ctx, &tokenResult); err != nil {
-			logger.Warn("Tokenization failed (non-fatal)", "error", err)
-		} else {
-			result.TokenID = tokenResult.TokenID
-			result.TxHash = tokenResult.TxHash
+			return nil, fmt.Errorf("commodity tokenization: %w", err)
 		}
+		if tokenResult.TokenID == "" || tokenResult.TxHash == "" {
+			return nil, temporal.NewApplicationError("InvalidTokenizationResult", "TOKENIZATION", "Tokenization returned no authoritative token identity")
+		}
+		result.TokenID = tokenResult.TokenID
+		result.TxHash = tokenResult.TxHash
 	}
 
-	// Step 5: Create TigerBeetle collateral account
+	// Step 5: Create the required TigerBeetle collateral account.
 	var collateralAcct activities.LedgerAccountResult
 	if err := workflow.ExecuteActivity(ctx2m, activities.CreateLedgerAccount, activities.CreateAccountInput{
 		UserID: input.FarmerID, AccountType: "COLLATERAL", Currency: "NGN",
 	}).Get(ctx, &collateralAcct); err != nil {
-		logger.Warn("Collateral account creation failed (non-fatal)", "error", err)
-	} else {
-		result.CollateralAcctID = collateralAcct.AccountID
+		return nil, fmt.Errorf("create collateral ledger account: %w", err)
 	}
+	if collateralAcct.AccountID == "" {
+		return nil, temporal.NewApplicationError("InvalidLedgerAccount", "LEDGER", "Collateral account creation returned no account identity")
+	}
+	result.CollateralAcctID = collateralAcct.AccountID
 
-	// Step 6: Notify farmer
-	workflow.ExecuteActivity(ctx30s, activities.SendNotification, activities.NotificationInput{
+	// Step 6: Notify farmer and require the notification activity to acknowledge.
+	if err := workflow.ExecuteActivity(ctx30s, activities.SendNotification, activities.NotificationInput{
 		UserID: input.FarmerID, Channel: "sms",
 		Title: "Warehouse Receipt Issued",
 		Message: fmt.Sprintf("Receipt #%s issued for %.2f MT %s at warehouse %s. Valuation: ₦%.2f",
 			result.ReceiptID, input.QuantityTonnes, input.CommoditySymbol, input.WarehouseID, result.ValuationNGN),
-	})
+	}).Get(ctx, nil); err != nil {
+		return nil, fmt.Errorf("warehouse receipt notification: %w", err)
+	}
 
-	// Step 7: Ingest to Lakehouse
-	workflow.ExecuteActivity(ctx30s, activities.IngestToLakehouse, activities.LakehouseInput{
+	// Step 7: Ingest to Lakehouse and require immutable-audit acknowledgement.
+	if err := workflow.ExecuteActivity(ctx30s, activities.IngestToLakehouse, activities.LakehouseInput{
 		Topic: "nexcom.warehouse.receipts_issued",
 		Record: map[string]interface{}{
 			"receipt_id": result.ReceiptID, "farmer_id": input.FarmerID,
@@ -367,7 +383,9 @@ func WarehouseReceiptWorkflow(ctx workflow.Context, input WarehouseReceiptInput)
 			"grade": input.Grade, "valuation_ngn": result.ValuationNGN,
 			"token_id": result.TokenID, "issued_at": workflow.Now(ctx),
 		},
-	})
+	}).Get(ctx, nil); err != nil {
+		return nil, fmt.Errorf("warehouse receipt lakehouse ingestion: %w", err)
+	}
 
 	result.CompletedAt = workflow.Now(ctx)
 	return result, nil

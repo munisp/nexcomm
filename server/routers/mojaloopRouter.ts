@@ -252,17 +252,6 @@ export const mojaloopRouter = router({
         condition: quote.condition,
       }).catch(e => console.warn("[Kafka] emitMojaloopTransferInitiated failed:", (e as Error).message));
 
-      // ── TigerBeetle: record cross-border settlement (code 12) via Go gateway ────
-      settleCrossBorder({
-        settlementId: transfer.transferId,
-        payerUserId: String(ctx.user.id),
-        payeeFspId: input.payeeFspId,
-        amount: parseFloat(input.amount),
-        currency: input.currency,
-        ilpPacket: quote.ilpPacket,
-        condition: quote.condition,
-      }).catch(e => console.warn("[TigerBeetle] settleCrossBorder failed:", (e as Error).message));
-
       // ── Fluvio: emit settlement.initiated for real-time downstream consumers ───
       produce(FLUVIO_TOPICS.SETTLEMENT_INITIATED, {
         key: `MOJALOOP-${transfer.transferId}`,
@@ -290,19 +279,18 @@ export const mojaloopRouter = router({
         status: "initiated",
         correlationId: transfer.transferId,
       });
-      // FundFlow: unified middleware orchestration for cross-border transfer
-      setImmediate(() => {
-        FundFlow.crossBorder({
-          transferId: transfer.transferId,
-          userId: ctx.user.id,
-          amount: input.amount,
-          sourceCurrency: input.currency,
-          targetCurrency: input.currency,
-          payerFspId: "nexcom-exchange",
-          payeeFspId: input.payeeFspId,
-          ilpPacket: quote.ilpPacket,
-          condition: quote.condition,
-        }).catch(() => {});
+      // FundFlow is the sole ledger/event path; failure is surfaced for reconciliation.
+      await FundFlow.crossBorder({
+        transferId: transfer.transferId,
+        userId: ctx.user.id,
+        amount: input.amount,
+        sourceCurrency: input.currency,
+        targetCurrency: input.currency,
+        payerFspId: "nexcom-exchange",
+        payeeFspId: input.payeeFspId,
+        ilpPacket: quote.ilpPacket,
+        condition: quote.condition,
+        idempotencyKey: `mojaloop-transfer:${transfer.transferId}`,
       });
       // Cache result for 5 minutes to handle duplicate submissions
       await cacheSet(transferKey, { transferId: transfer.transferId, transferState: transfer.transferState }, 300).catch(() => {});

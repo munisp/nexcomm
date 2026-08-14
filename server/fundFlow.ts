@@ -65,37 +65,62 @@ import {
   ingestAmlAlert,
 } from "./lakehouse";
 import { indexDocument } from "./opensearch";
-import { cacheGet, cacheSet } from "./cache";
+import { cacheSetIfAbsentStrict, cacheSetStrict } from "./cache";
 
-// ─── Idempotency guard ────────────────────────────────────────────────────────
+// ─── Idempotency and critical-effect guard ────────────────────────────────────
 
 const IDEMPOTENCY_TTL_SECONDS = 86400; // 24 hours
 
-/**
- * Returns true if this idempotency key has already been processed.
- * Uses Redis SET NX EX for atomic check-and-set.
- */
-async function checkIdempotency(key: string): Promise<boolean> {
-  try {
-    const existing = await cacheGet<string>(`idempotency:${key}`);
-    if (existing !== null) return true; // already processed
-    await cacheSet(`idempotency:${key}`, "1", IDEMPOTENCY_TTL_SECONDS);
-    return false;
-  } catch {
-    return false; // Redis unavailable — fail open for availability
+type IdempotencyState = "PROCESSING" | "COMPLETED" | "FAILED";
+
+function idempotencyStorageKey(key: string): string {
+  if (!key || key.trim().length < 8) {
+    throw new Error("A non-empty idempotency key of at least eight characters is required for fund-flow operations.");
   }
+  return `idempotency:${key}`;
 }
 
-// ─── Helper: fire all middleware asynchronously ───────────────────────────────
+/**
+ * Atomically reserves an idempotency key. Redis is a required safety dependency for
+ * these operations: inability to reserve a key rejects the operation before any
+ * ledger or external side effect begins.
+ */
+async function checkIdempotency(key: string): Promise<boolean> {
+  const acquired = await cacheSetIfAbsentStrict(
+    idempotencyStorageKey(key),
+    { state: "PROCESSING" satisfies IdempotencyState, startedAt: new Date().toISOString() },
+    IDEMPOTENCY_TTL_SECONDS,
+  );
+  return !acquired;
+}
 
-function fireAndForget(fn: () => Promise<void>, label: string): void {
-  setImmediate(async () => {
+/**
+ * Executes the complete critical path synchronously. A failure is reported to the
+ * caller and the idempotency record remains terminally failed, preventing a blind
+ * duplicate retry from producing a second financial effect.
+ */
+async function runCriticalMiddleware(key: string, fn: () => Promise<void>, label: string): Promise<void> {
+  const storageKey = idempotencyStorageKey(key);
+  try {
+    await fn();
+    await cacheSetStrict(
+      storageKey,
+      { state: "COMPLETED" satisfies IdempotencyState, completedAt: new Date().toISOString() },
+      IDEMPOTENCY_TTL_SECONDS,
+    );
+  } catch {
     try {
-      await fn();
-    } catch (err) {
-      console.error(`[FundFlow] ${label} failed (non-critical):`, err);
+      await cacheSetStrict(
+        storageKey,
+        { state: "FAILED" satisfies IdempotencyState, failedAt: new Date().toISOString() },
+        IDEMPOTENCY_TTL_SECONDS,
+      );
+    } catch {
+      // The original dependency failure is still surfaced below; no payload is logged.
     }
-  });
+    console.error(`[FundFlow] ${label} failed; the operation is blocked pending reconciliation.`);
+    throw new Error(`Fund-flow operation failed: ${label}`);
+  }
 }
 
 // ─── FundFlow namespace ───────────────────────────────────────────────────────
@@ -110,15 +135,15 @@ export const FundFlow = {
     currency: string;
     stripeSessionId?: string;
     stripePaymentIntentId?: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `deposit:${event.depositId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) {
       console.warn(`[FundFlow] Duplicate deposit: ${key}`);
       return { duplicate: true };
     }
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       // TigerBeetle: credit settlement account (code 6 = deposit)
       await createLedgerTransfer({
         debitAccountId: "nexcom-fiat-gateway",
@@ -183,15 +208,15 @@ export const FundFlow = {
     amount: number;
     currency: string;
     bankAccountId?: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `withdrawal:${event.withdrawalId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) {
       console.warn(`[FundFlow] Duplicate withdrawal: ${key}`);
       return { duplicate: true };
     }
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       // TigerBeetle: debit settlement account (code 5 = withdrawal)
       await createLedgerTransfer({
         debitAccountId: `settlement-${event.userId}`,
@@ -257,15 +282,15 @@ export const FundFlow = {
     grossAmount: number;
     feeAmount: number;
     currency: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `trade:${event.tradeId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) {
       console.warn(`[FundFlow] Duplicate trade fill: ${key}`);
       return { duplicate: true };
     }
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       // TigerBeetle: atomic 3-leg settlement via settleTrade helper
       await settleTrade({
         tradeId: event.tradeId,
@@ -353,12 +378,12 @@ export const FundFlow = {
     type: string;
     quantity: number;
     price?: number;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `order:placed:${event.orderId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       // TigerBeetle: 2-phase pending hold for limit BUY orders
       if (event.price && event.quantity && event.side === "BUY") {
         await createPendingLedgerTransfer({
@@ -395,12 +420,12 @@ export const FundFlow = {
     quantity: number;
     price?: number;
     reason?: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `order:cancelled:${event.orderId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       // TigerBeetle: void the pending hold for BUY orders
       if (event.side === "BUY") {
         await voidLedgerTransfer(`hold-order-${event.orderId}`);
@@ -437,12 +462,12 @@ export const FundFlow = {
     collateralType?: string;
     collateralId?: string;
     loanId?: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `margin:pledge:${event.marginId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await holdCollateral({
         userId: String(event.userId),
         amount: event.amount,
@@ -488,12 +513,12 @@ export const FundFlow = {
     userId: number;
     amount: number;
     currency: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `margin:release:${event.marginId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await releaseCollateral(event.marginId);
       await emitMarginReleased({
         userId: event.userId,
@@ -531,12 +556,12 @@ export const FundFlow = {
     amount: number;
     currency: string;
     reason: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `margin:liquidate:${event.marginId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await liquidateMargin({
         userId: String(event.userId),
         reason: event.reason,
@@ -576,12 +601,12 @@ export const FundFlow = {
     currency: string;
     interestRate: number;
     dueDate: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `loan:disbursed:${event.loanId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await createLedgerTransfer({
         debitAccountId: "nexcom-loan-pool",
         creditAccountId: `settlement-${event.userId}`,
@@ -626,12 +651,12 @@ export const FundFlow = {
     principalPaid: number;
     interestPaid: number;
     remainingBalance: number;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `loan:repaid:${event.repaymentId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await createLedgerTransfer({
         debitAccountId: `settlement-${event.userId}`,
         creditAccountId: "nexcom-loan-pool",
@@ -680,12 +705,12 @@ export const FundFlow = {
     payeeFspId: string;
     ilpPacket?: string;
     condition?: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `crossborder:${event.transferId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await settleCrossBorder({
         settlementId: event.transferId,
         payerUserId: String(event.userId),
@@ -726,12 +751,12 @@ export const FundFlow = {
     quantity: string;
     unit: string;
     warehouseId: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `receipt:issued:${event.receiptId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await emitEvent("receipt.issued", { ...event, timestamp: Date.now() });
       await saveSagaState(`receipt-issued-${event.receiptId}`, { status: "running", step: "receipt_issued", payload: event });
       await triggerTemporalWorkflow("WarehouseReceiptWorkflow", event, `receipt-issued-${event.receiptId}`);
@@ -760,12 +785,12 @@ export const FundFlow = {
     quantity: string;
     unit: string;
     warehouseId: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `receipt:redeemed:${event.receiptId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await emitEvent("receipt.redeemed", { ...event, timestamp: Date.now() });
       await saveSagaState(`receipt-redeemed-${event.receiptId}`, { status: "running", step: "receipt_redeemed", payload: event });
       await triggerTemporalWorkflow("WarehouseReceiptWorkflow", event, `receipt-redeemed-${event.receiptId}`);
@@ -795,12 +820,12 @@ export const FundFlow = {
     amount: string;
     currency: string;
     payoutType: "dividend" | "patronage" | "rebate" | "bonus";
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `coop:payout:${event.payoutId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       // TigerBeetle: credit member settlement account (code 6 = credit)
       await createLedgerTransfer({
         debitAccountId: `cooperative-${event.cooperativeId}`,
@@ -835,12 +860,12 @@ export const FundFlow = {
     amount: number;
     currency: string;
     reason: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `refund:${event.refundId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await issueRefund({
         userId: String(event.userId),
         amount: event.amount,
@@ -865,12 +890,12 @@ export const FundFlow = {
     alertType: string;
     riskScore: number;
     reason: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `aml:freeze:${event.alertId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await freezeAccount({
         userId: String(event.userId),
         reason: event.reason,
@@ -905,12 +930,12 @@ export const FundFlow = {
     userId: number;
     amount: number;
     currency: string;
-    idempotencyKey?: string;
+    idempotencyKey: string;
   }): Promise<{ duplicate: boolean }> {
-    const key = event.idempotencyKey ?? `stripe:topup:${event.stripePaymentIntentId}`;
+    const key = event.idempotencyKey;
     if (await checkIdempotency(key)) return { duplicate: true };
 
-    fireAndForget(async () => {
+    await runCriticalMiddleware(key, async () => {
       await recordStripeTopup({
         userId: String(event.userId),
         amount: event.amount,

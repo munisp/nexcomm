@@ -126,23 +126,24 @@ export async function dequeueJob(
 }
 
 /**
- * Enqueue a job with optional priority and delay.
+ * Enqueue a job with a required caller-supplied operation identity.
  * Uses ON CONFLICT DO NOTHING for idempotent enqueue (safe to retry).
  */
 export async function enqueueJob(
   queue: string,
   payload: Record<string, unknown>,
   options: {
+    idempotencyKey: string;
     priority?: number;
     delayMs?: number;
-    idempotencyKey?: string;
     maxAttempts?: number;
-  } = {}
+  }
 ): Promise<string> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const id = options.idempotencyKey ?? ulid();
+  const id = options.idempotencyKey;
+  if (id.trim().length < 8) throw new Error("A non-empty idempotency key of at least eight characters is required");
   const scheduledAt = new Date(Date.now() + (options.delayMs ?? 0));
 
   await db.execute(sql`

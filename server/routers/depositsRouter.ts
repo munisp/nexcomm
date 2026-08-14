@@ -203,6 +203,7 @@ export const depositsRouter = router({
           userId: ctx.user.id,
           amount: parseFloat(input.quantity) || 0,
           currency: "NGN",
+          idempotencyKey: `deposit-request:${deposit.id}`,
         }).catch(() => {});
       });
 

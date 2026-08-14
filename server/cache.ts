@@ -20,6 +20,13 @@
 
 import Redis from "ioredis";
 
+export class CacheUnavailableError extends Error {
+  constructor(message = "Redis is unavailable for a required durable operation") {
+    super(message);
+    this.name = "CacheUnavailableError";
+  }
+}
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -107,6 +114,66 @@ export async function cacheSet<T>(key: string, value: T, ttlSeconds: number): Pr
     await client.setex(key, ttlSeconds, JSON.stringify(value));
   } catch {
     stats.errors++;
+  }
+}
+
+/**
+ * Waits briefly for the shared Redis connection and throws if it is not usable.
+ * Financial and authorization operations use this path; cache degradation is never
+ * an acceptable reason to execute a retryable critical effect without idempotency.
+ */
+async function getRequiredClient(): Promise<Redis> {
+  const existing = getClient();
+  if (existing) return existing;
+  const client = _client;
+  if (!client) throw new CacheUnavailableError();
+
+  if (client.status === "wait") {
+    try {
+      await client.connect();
+    } catch {
+      throw new CacheUnavailableError();
+    }
+  } else if (client.status === "connecting") {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new CacheUnavailableError()), 2_000);
+      client.once("connect", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      client.once("error", () => {
+        clearTimeout(timer);
+        reject(new CacheUnavailableError());
+      });
+    }).catch((error) => {
+      throw error instanceof CacheUnavailableError ? error : new CacheUnavailableError();
+    });
+  }
+
+  if (!_available || client.status !== "ready") throw new CacheUnavailableError();
+  return client;
+}
+
+/** Atomically stores a value only when the key is absent. Throws on Redis failure. */
+export async function cacheSetIfAbsentStrict<T>(key: string, value: T, ttlSeconds: number): Promise<boolean> {
+  const client = await getRequiredClient();
+  try {
+    const result = await client.set(key, JSON.stringify(value), "EX", ttlSeconds, "NX");
+    return result === "OK";
+  } catch (error) {
+    stats.errors++;
+    throw new CacheUnavailableError(error instanceof Error ? error.message : undefined);
+  }
+}
+
+/** Stores a required durable coordination value. Throws on Redis failure. */
+export async function cacheSetStrict<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
+  const client = await getRequiredClient();
+  try {
+    await client.set(key, JSON.stringify(value), "EX", ttlSeconds);
+  } catch (error) {
+    stats.errors++;
+    throw new CacheUnavailableError(error instanceof Error ? error.message : undefined);
   }
 }
 

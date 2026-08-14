@@ -402,7 +402,11 @@ export default function MarginAccount() {
               disabled={!selectedReceiptId || pledgeMutation.isPending}
               onClick={() => {
                 if (selectedReceiptId) {
-                  pledgeMutation.mutate({ receiptId: selectedReceiptId, notes: pledgeNotes || undefined });
+                  pledgeMutation.mutate({
+                    receiptId: selectedReceiptId,
+                    notes: pledgeNotes || undefined,
+                    idempotencyKey: crypto.randomUUID(),
+                  });
                 }
               }}
             >
@@ -439,7 +443,11 @@ export default function MarginAccount() {
               disabled={!selectedCollateralId || releaseMutation.isPending}
               onClick={() => {
                 if (selectedCollateralId) {
-                  releaseMutation.mutate({ collateralItemId: selectedCollateralId, notes: releaseNotes || undefined });
+                  releaseMutation.mutate({
+                    collateralItemId: selectedCollateralId,
+                    notes: releaseNotes || undefined,
+                    idempotencyKey: crypto.randomUUID(),
+                  });
                 }
               }}
             >

@@ -358,7 +358,7 @@ export const ledgerRouter = router({
       z.object({
         tradeId:        z.string().trim(),
         priority:       z.number().min(0).max(10).default(5),
-        idempotencyKey: z.string().optional(),
+        idempotencyKey: z.string().min(8).max(128),
       })
     )
     .mutation(async ({ input }) => {

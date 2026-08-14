@@ -457,6 +457,7 @@ export const ordersRouter = router({
           type: order.orderType,
           quantity: parseFloat(order.quantity),
           price: order.price ? parseFloat(order.price) : undefined,
+          idempotencyKey: `order-placement:${order.id}`,
         }).catch(() => {});
       });
 
@@ -542,6 +543,7 @@ export const ordersRouter = router({
           quantity: parseFloat(updated.quantity),
           price: updated.price ? parseFloat(updated.price) : undefined,
           reason: "User cancelled",
+          idempotencyKey: `order-cancellation:${updated.id}`,
         }).catch(() => {});
       });
 

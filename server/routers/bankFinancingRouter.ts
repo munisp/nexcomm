@@ -195,17 +195,6 @@ export const bankFinancingRouter = router({
         metadata: { applicationId: input.id, status: input.status },
         read: false,
       });
-      // TigerBeetle: bank financing disbursement (code 7 = loan_disbursement)
-      if (input.status === "DISBURSED" && updated) {
-        void createLedgerTransfer({
-          debitAccountId: "nexcom-bank-financing-pool",
-          creditAccountId: `settlement-${updated.userId}`,
-          amount: Math.round(Number(updated.approvedAmountNgn ?? 0) * 100),
-          code: 7,
-        }).then((tbTx) => {
-          if (tbTx) db.update(bankFinancingApplications).set({ ledgerTxId: tbTx.id } as any).where(eq(bankFinancingApplications.id, updated.id)).catch(() => null);
-        }).catch(() => null);
-      }
             // Lakehouse: immutable Bronze-layer record of loan disbursement
       if (input.status === "DISBURSED" && updated) {
         void ingestLoan({
@@ -218,18 +207,17 @@ export const bankFinancingRouter = router({
           status: "disbursed",
           correlationId: String(updated.id),
         });
-        // FundFlow: unified middleware orchestration for loan disbursement
-        setImmediate(() => {
-          const dueDate = new Date();
-          dueDate.setMonth(dueDate.getMonth() + (updated.tenorMonths ?? 6));
-          FundFlow.loanDisbursed({
-            loanId: String(updated.id),
-            userId: updated.userId,
-            principalAmount: Number(updated.approvedAmountNgn ?? 0),
-            currency: "NGN",
-            interestRate: Number(updated.interestRatePct ?? 12) / 100,
-            dueDate: dueDate.toISOString(),
-          }).catch(() => {});
+        // FundFlow is the sole ledger/event path; failure is surfaced for reconciliation.
+        const dueDate = new Date();
+        dueDate.setMonth(dueDate.getMonth() + (updated.tenorMonths ?? 6));
+        await FundFlow.loanDisbursed({
+          loanId: String(updated.id),
+          userId: updated.userId,
+          principalAmount: Number(updated.approvedAmountNgn ?? 0),
+          currency: "NGN",
+          interestRate: Number(updated.interestRatePct ?? 12) / 100,
+          dueDate: dueDate.toISOString(),
+          idempotencyKey: `bank-financing-disbursement:${updated.id}`,
         });
       }
       // Middleware: Temporal + Dapr + Fluvio + Redis (on DISBURSED)

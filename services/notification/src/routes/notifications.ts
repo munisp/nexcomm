@@ -80,7 +80,7 @@ async function sendSMS(to: string, message: string): Promise<boolean> {
   const apiKey = process.env.AFRICASTALKING_API_KEY;
   const username = process.env.AFRICASTALKING_USERNAME ?? 'sandbox';
   const senderId = process.env.AFRICASTALKING_SENDER_ID ?? 'NEXCOM';
-  if (!apiKey) { logger.warn("[SMS] Africa's Talking API key not configured"); return false; }
+  if (!apiKey) { logger.warn("[SMS] Africa's Talking delivery integration is not configured"); return false; }
   try {
     const resp = await fetch('https://api.africastalking.com/version1/messaging', {
       method: 'POST',

@@ -3,6 +3,12 @@ import path from "path";
 
 const templateRoot = path.resolve(import.meta.dirname);
 
+/**
+ * Unit tests receive only explicit test configuration supplied by the runner.
+ * Authorization remains fail-closed: tests that need a policy decision must set up
+ * an authenticated test dependency or assert denial. No development credential or
+ * permissive authorization switch is embedded in source control.
+ */
 export default defineConfig({
   root: templateRoot,
   resolve: {
@@ -17,31 +23,22 @@ export default defineConfig({
     include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
     globalSetup: ["./server/vitest.setup.ts"],
     env: {
-      // Suppress owner notifications (emails/alerts) during test runs.
       NODE_ENV: "test",
       EMAIL_ENABLED: "false",
-      // Permify is not running in CI/test — fail-open so permission-guarded
-      // procedures are accessible to admin callers in unit tests.
-      PERMIFY_FAIL_OPEN: "true",
-      // VAPID keys for push notification tests (test-only, not production keys)
-      VAPID_PUBLIC_KEY: "BAqUezaDoP0Y5NC704Okm4VJWanZ2517ZnSB8SNBHFp5ptC3qHb5oWdYl2R6Txh_5b00yNBAOr4uWXIYPr5wWmE",
-      VAPID_PRIVATE_KEY: "TA_YkUFeRRSKSkOC-p8umVsTqW4xl8JG5qGcz71HPlA",
-      VAPID_SUBJECT: "mailto:admin@nexcomexchange.com",
-      // Local PostgreSQL — password must match db.ts fallback URL
-      NEXCOM_PG_URL: "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom",
-      // S3/MinIO credentials for storage tests (MinIO is not running in CI — tests skip gracefully)
-      S3_ENDPOINT: "http://127.0.0.1:9000",
-      S3_BUCKET: "nexcom-test",
-      AWS_ACCESS_KEY_ID: "nexcom-minio",
-      AWS_SECRET_ACCESS_KEY: "nexcom-minio-secret",
-      // Keycloak is not running in CI — auth tests use mock contexts
-      KEYCLOAK_URL: "http://127.0.0.1:8080",
-      KEYCLOAK_REALM: "nexcom",
-      KEYCLOAK_CLIENT_ID: "nexcom-exchange",
-      KEYCLOAK_CLIENT_SECRET: "nexcom-exchange-secret",
-      // LLM is not running in CI — LLM tests use vi.mock
-      LLM_BASE_URL: "http://127.0.0.1:11434/v1",
-      OPENAI_API_KEY: "test-openai-key-for-vitest",
+      NEXCOM_PG_URL: process.env.NEXCOM_PG_URL ?? "",
+      S3_ENDPOINT: process.env.S3_ENDPOINT ?? "",
+      S3_BUCKET: process.env.S3_BUCKET ?? "",
+      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID ?? "",
+      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ?? "",
+      KEYCLOAK_URL: process.env.KEYCLOAK_URL ?? "",
+      KEYCLOAK_REALM: process.env.KEYCLOAK_REALM ?? "",
+      KEYCLOAK_CLIENT_ID: process.env.KEYCLOAK_CLIENT_ID ?? "",
+      KEYCLOAK_CLIENT_SECRET: process.env.KEYCLOAK_CLIENT_SECRET ?? "",
+      VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY ?? "",
+      VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY ?? "",
+      VAPID_SUBJECT: process.env.VAPID_SUBJECT ?? "",
+      LLM_BASE_URL: process.env.LLM_BASE_URL ?? "",
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
     },
   },
 });

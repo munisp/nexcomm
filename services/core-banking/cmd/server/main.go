@@ -7,7 +7,7 @@
 //   - gRPC API on :9090       (for internal microservice communication)
 //
 // The active CBS adapter is selected via the CBS_PROVIDER env variable:
-//   CBS_PROVIDER=temenos|finacle|mambu|mock
+//   CBS_PROVIDER=temenos|finacle|mambu
 //
 // All banking operations are published to Kafka topics under the "agri.*"
 // namespace for consumption by risk, analytics, and notification services.
@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -40,38 +41,37 @@ func main() {
 	log, _ := zap.NewProduction()
 	defer log.Sync()
 
-	// ── Select CBS adapter ────────────────────────────────────────────────────
-	provider := getEnv("CBS_PROVIDER", "mock")
+	// ── Select the required, explicitly configured CBS adapter ─────────────────
+	provider := strings.ToLower(strings.TrimSpace(os.Getenv("CBS_PROVIDER")))
 	var cbs models.CBSAdapter
 
 	switch provider {
 	case "temenos":
 		cbs = temenos.New(temenos.Config{
-			BaseURL:      getEnv("TEMENOS_BASE_URL", "https://t24.example.com/irf-provider-container"),
-			TokenURL:     getEnv("TEMENOS_TOKEN_URL", "https://t24.example.com/oauth/token"),
-			ClientID:     getEnv("TEMENOS_CLIENT_ID", ""),
-			ClientSecret: getEnv("TEMENOS_CLIENT_SECRET", ""),
-			CompanyID:    getEnv("TEMENOS_COMPANY_ID", "BNK"),
+			BaseURL:      requiredEnv(log, "TEMENOS_BASE_URL"),
+			TokenURL:     requiredEnv(log, "TEMENOS_TOKEN_URL"),
+			ClientID:     requiredEnv(log, "TEMENOS_CLIENT_ID"),
+			ClientSecret: requiredEnv(log, "TEMENOS_CLIENT_SECRET"),
+			CompanyID:    requiredEnv(log, "TEMENOS_COMPANY_ID"),
 			Timeout:      30 * time.Second,
 		}, log)
 	case "finacle":
 		cbs = finacle.New(finacle.Config{
-			BaseURL:      getEnv("FINACLE_BASE_URL", "https://finacle-api.example.com/api/v1"),
-			TokenURL:     getEnv("FINACLE_TOKEN_URL", "https://finacle-api.example.com/oauth2/token"),
-			ClientID:     getEnv("FINACLE_CLIENT_ID", ""),
-			ClientSecret: getEnv("FINACLE_CLIENT_SECRET", ""),
-			BankCode:     getEnv("FINACLE_BANK_CODE", "001"),
+			BaseURL:      requiredEnv(log, "FINACLE_BASE_URL"),
+			TokenURL:     requiredEnv(log, "FINACLE_TOKEN_URL"),
+			ClientID:     requiredEnv(log, "FINACLE_CLIENT_ID"),
+			ClientSecret: requiredEnv(log, "FINACLE_CLIENT_SECRET"),
+			BankCode:     requiredEnv(log, "FINACLE_BANK_CODE"),
 			Timeout:      30 * time.Second,
 		}, log)
 	case "mambu":
 		cbs = mambu.New(mambu.Config{
-			BaseURL: getEnv("MAMBU_BASE_URL", "https://nexcom.mambu.com/api"),
-			APIKey:  getEnv("MAMBU_API_KEY", ""),
+			BaseURL: requiredEnv(log, "MAMBU_BASE_URL"),
+			APIKey:  requiredEnv(log, "MAMBU_API_KEY"),
 			Timeout: 30 * time.Second,
 		}, log)
 	default:
-		log.Info("using mock CBS adapter (no real CBS configured)")
-		cbs = &mockAdapter{log: log}
+		log.Fatal("CBS_PROVIDER must be one of temenos, finacle, or mambu; mock adapters are prohibited outside isolated tests")
 	}
 
 	log.Info("core banking service starting",
@@ -440,6 +440,14 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func requiredEnv(log *zap.Logger, key string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		log.Fatal("required core-banking configuration is missing", zap.String("variable", key))
+	}
+	return value
 }
 
 func parseDate(s string, fallback time.Time) time.Time {

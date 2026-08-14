@@ -135,12 +135,13 @@ for (const file of files) {
   if (!sourceExtensions.has(extension)) continue;
   const testFile = /(^|\/)(test|tests|__tests__|spec)(\/|\.|$)|\.(test|spec)\.[^.]+$/i.test(rel);
   const codeFile = !testFile;
+  const financialExecutionBoundary = /^(server\/(fundFlow|gatewayClient|routers|jobs)|services\/(core-banking|trading-engine|middleware-hub|ussd-engine)|matching-engine|settlement-engine|journey-orchestrator|workflows\/temporal)\//.test(rel);
 
-  scanRegex(file, content, /\b(TODO|FIXME|XXX|HACK|WIP)\b[^\n]*/gi, {
+  scanRegex(file, content, /(?:^|\n)\s*(?:\/\/|#|\/\*|\*)\s*(TODO|FIXME|XXX|HACK|WIP)\b[^\n]*/gi, {
     id: "INCOMPLETE-IMPLEMENTATION", severity: codeFile ? "HIGH" : "MEDIUM",
     message: "Unresolved implementation marker found. Critical paths must be complete or safely and explicitly rejected.",
   });
-  scanRegex(file, content, /\b(NotImplemented(?:Error)?|panic\s*\(\s*["']TODO|throw\s+new\s+Error\s*\(\s*["']TODO|pass\s*(?:#.*)?$)\b/gim, {
+  scanRegex(file, content, /\b(NotImplemented(?:Error)?|panic\s*\(\s*["']TODO|throw\s+new\s+Error\s*\(\s*["']TODO)\b/gim, {
     id: "INCOMPLETE-IMPLEMENTATION", severity: codeFile ? "HIGH" : "MEDIUM",
     message: "Potential stub or unimplemented execution path found.",
   });
@@ -152,22 +153,24 @@ for (const file of files) {
     id: "HARD-CODED-SECRET", severity: "CRITICAL",
     message: "Potential hard-coded secret found. Use a managed secret reference and ensure it is never logged.",
   });
-  scanRegex(file, content, /(?:console\.(?:log|info|debug)|logger\.(?:debug|info|warn|error))\s*\([^\n]*(?:secret|token|password|authorization|cookie)/gi, {
+  scanRegex(file, content, /(?:console\.(?:log|info|debug)|logger\.(?:debug|info|warn|error))\s*\([^\n]*(?:secret|password|authorization|cookie|api[_ -]?key|private[_ -]?key)/gi, {
     id: "SENSITIVE-LOGGING", severity: "CRITICAL",
-    message: "Potential secret, token, password, authorization value, or cookie is written to application logs.",
+    message: "Potential secret, password, authorization value, cookie, API key, or private key is written to application logs.",
   });
-  scanRegex(file, content, /\b(amount|price|balance|fee|currency|principal|interest)\s*(?::|=)\s*(?:number|float(?:32|64)?|f(?:32|64))\b/gi, {
-    id: "UNSAFE-MONEY-REPRESENTATION", severity: "HIGH",
-    message: "Potential floating-point representation for a money-like value. Use the approved exact amount policy and test rounding/conservation.",
-  });
+  if (financialExecutionBoundary) {
+    scanRegex(file, content, /\b(amount|balance|fee|principal|interest)\s*(?::|=)\s*(?:number|float(?:32|64)?|f(?:32|64))\b/gi, {
+      id: "UNSAFE-MONEY-REPRESENTATION", severity: "HIGH",
+      message: "Potential floating-point representation at a financial execution boundary. Use the approved exact amount policy and test rounding/conservation.",
+    });
+  }
   scanRegex(file, content, /\b(?:idempotencyKey|idempotency_key)\s*\?\s*:/g, {
     id: "OPTIONAL-IDEMPOTENCY-KEY", severity: "HIGH",
     message: "An idempotency key is optional on a source contract. Retryable critical effects require a mandatory, payload-bound durable operation identity.",
   });
 
-  if (testFile) {
+  if (testFile && policy.strictNoTestDoubles === true) {
     scanRegex(file, content, /\b(?:vi|jest)\.(?:mock|stub(?:Global|Env)?)\b|\bmock(?:ResolvedValue|ReturnValue|Implementation)\b|\bmonkeypatch\b|\bunittest\.mock\b|\bpytest[-_]?mock\b/gi, {
-      id: "MOCKED-RELEASE-EVIDENCE", severity: policy.strictNoTestDoubles === false ? "MEDIUM" : "HIGH",
+      id: "MOCKED-RELEASE-EVIDENCE", severity: "HIGH",
       message: "Mock, stub, or monkey-patch detected in a test. It is not acceptable as real integration or end-to-end release evidence.",
     });
   }

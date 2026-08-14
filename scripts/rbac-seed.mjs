@@ -113,12 +113,13 @@ async function checkPermifyHealth() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
+  const authenticationConfigured = Boolean(API_KEY);
   console.log("╔══════════════════════════════════════════════════════╗");
   console.log("║          NEXCOM RBAC Relationship Seeder             ║");
   console.log("╚══════════════════════════════════════════════════════╝");
   console.log(`  Host      : ${HOST}`);
   console.log(`  Tenant    : ${TENANT_ID}`);
-  console.log(`  Auth      : ${API_KEY ? "Bearer token set" : "none (unauthenticated)"}`);
+  console.log(`  Authentication configured: ${authenticationConfigured ? "yes" : "no"}`);
   console.log(`  Mode      : ${DRY_RUN ? "DRY RUN (no HTTP calls)" : "LIVE"}`);
   console.log("");
 

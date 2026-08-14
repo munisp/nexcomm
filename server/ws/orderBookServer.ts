@@ -1,59 +1,16 @@
 /**
  * NEXCOM Exchange — WebSocket Order Book Server
- * Broadcasts live price ticks and order book snapshots to subscribed clients.
- * Clients subscribe by sending: { type: "subscribe", symbols: ["GINGER-NG-SPOT", ...] }
- * Server broadcasts: { type: "tick", symbol, price, bid, ask, changePct, volume }
- *                    { type: "book", symbol, bids: [...], asks: [...], spread, spreadPct }
  *
- * Data sources (in priority order):
- *   1. Rust matching engine REST API (port 8080) — real price-time priority depth
- *   2. Simulated random-walk data — fallback when Rust engine is unavailable
+ * This endpoint serves order-book snapshots only from the matching engine. It never
+ * synthesizes prices, quantities, volumes, or historical changes. When the matching
+ * engine is unavailable or has no authoritative depth for a symbol, subscribers
+ * receive an explicit non-success message rather than plausible market data.
  */
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "http";
 import { getMarketDepth, checkMatchingEngineHealth } from "../matchingEngineClient";
-import { subscribePositions, unsubscribePositions, broadcastPriceUpdate } from "./positionBroadcaster";
+import { subscribePositions, unsubscribePositions } from "./positionBroadcaster";
 import { subscribeLoanEvents, unsubscribeLoanEvents } from "./loanNotificationBroadcaster";
-
-// Cache of whether the Rust engine is available (checked every 30s)
-let _rustEngineAvailable = false;
-setInterval(async () => {
-  _rustEngineAvailable = await checkMatchingEngineHealth();
-}, 30_000);
-// Initial check
-checkMatchingEngineHealth().then(ok => { _rustEngineAvailable = ok; }).catch(() => {});
-
-// ─── Instrument registry ──────────────────────────────────────────────────────
-// Seed prices for all NEXCOM instruments. These mirror the shared/commodities.ts
-// base prices so the WS feed is consistent with the REST mock data.
-const SEED_PRICES: Record<string, number> = {
-  "GINGER-NG-SPOT": 1850, "MAIZE-NG-SPOT": 290, "SORGHUM-NG-SPOT": 185,
-  "SOYBEANS-NG-SPOT": 520, "SESAME-NG-SPOT": 1100, "COWPEA-NG-SPOT": 650,
-  "COCOA-SPOT": 3200, "COFFEE-SPOT": 185, "COTTON-SPOT": 82,
-  "RUBBER-SPOT": 1.65, "PALM-OIL-SPOT": 920, "GROUNDNUT-SPOT": 1250,
-  "WHEAT-FUTURES": 610, "CORN-FUTURES": 480, "SOYBEAN-FUTURES": 1380,
-  "SUGAR-FUTURES": 22.5, "COFFEE-FUTURES": 195, "COTTON-FUTURES": 85,
-  "CRUDE-OIL-WTI": 78.5, "CRUDE-OIL-BRENT": 82.3, "NATURAL-GAS": 2.85,
-  "GOLD-SPOT": 2050, "SILVER-SPOT": 24.5, "PLATINUM-SPOT": 980,
-  "COPPER-LME": 8750, "ALUMINUM-LME": 2250, "ZINC-LME": 2600,
-  "EURUSD": 1.0850, "GBPUSD": 1.2650, "USDJPY": 149.50,
-  "USDNGN": 1580, "USDGHS": 15.20, "USDKES": 129.50,
-  "EURUSD-FX": 1.0850, "GBPEUR-FX": 1.1650, "USDZAR-FX": 18.75,
-  "AAPL": 185.5, "MSFT": 415.2, "GOOGL": 175.8,
-  "DANGOTE": 285, "GTCO": 42.5, "ZENITH": 38.2,
-  "BTC-USD": 67500, "ETH-USD": 3850, "BNB-USD": 580,
-  "NEXCOM-AGRI-IDX": 1250, "NEXCOM-METAL-IDX": 2100, "NEXCOM-ENERGY-IDX": 980,
-};
-
-interface PriceState {
-  price: number;
-  bid: number;
-  ask: number;
-  open: number;
-  changePct: number;
-  volume: number;
-  tickSize: number;
-}
 
 interface OrderBookLevel {
   price: number;
@@ -62,171 +19,182 @@ interface OrderBookLevel {
   depth: number;
 }
 
-interface OrderBookSnapshot {
+interface AuthoritativeOrderBook {
   bids: OrderBookLevel[];
   asks: OrderBookLevel[];
   spread: number;
   spreadPct: number;
 }
 
-// ─── State ────────────────────────────────────────────────────────────────────
-const priceState = new Map<string, PriceState>();
-
-function initState(symbol: string): PriceState {
-  const base = SEED_PRICES[symbol] ?? 100;
-  const tickSize = base > 1000 ? 0.5 : base > 100 ? 0.1 : base > 10 ? 0.01 : 0.0001;
-  const spread = tickSize * 2;
-  return {
-    price: base,
-    bid: base - spread,
-    ask: base + spread,
-    open: base,
-    changePct: 0,
-    volume: Math.floor(Math.random() * 5000 + 500),
-    tickSize,
-  };
+interface FeedError {
+  type: "error";
+  code: string;
+  symbol?: string;
+  message: string;
+  retryable: boolean;
 }
 
-function tickPrice(state: PriceState): PriceState {
-  // Mean-reverting random walk
-  const drift = (state.open - state.price) * 0.0005;
-  const shock = (Math.random() - 0.5) * state.price * 0.0015;
-  const newPrice = Math.max(state.price * 0.5, state.price + drift + shock);
-  const spread = state.tickSize * (1.5 + Math.random());
-  const changePct = ((newPrice - state.open) / state.open) * 100;
-  return {
-    ...state,
-    price: parseFloat(newPrice.toFixed(4)),
-    bid: parseFloat((newPrice - spread).toFixed(4)),
-    ask: parseFloat((newPrice + spread).toFixed(4)),
-    changePct: parseFloat(changePct.toFixed(3)),
-    volume: state.volume + Math.floor(Math.random() * 20),
-  };
+const subscriptions = new Map<WebSocket, Set<string>>();
+let pollInterval: ReturnType<typeof setInterval> | null = null;
+let pollInFlight = false;
+
+function send(ws: WebSocket, payload: object): void {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  }
 }
 
-function buildBook(state: PriceState, levels = 14): OrderBookSnapshot {
-  const bids: OrderBookLevel[] = [];
-  const asks: OrderBookLevel[] = [];
-  let bidTotal = 0;
-  let askTotal = 0;
+function sendFeedError(ws: WebSocket, error: Omit<FeedError, "type">): void {
+  send(ws, { type: "error", ...error });
+}
 
-  for (let i = 0; i < levels; i++) {
-    const bPrice = parseFloat(
-      (state.bid - state.tickSize * i * (1 + Math.random() * 0.3)).toFixed(4)
-    );
-    const bQty = Math.floor(Math.random() * 80 + 5);
-    bidTotal += bQty;
-    bids.push({ price: bPrice, qty: bQty, total: bidTotal, depth: 0 });
-
-    const aPrice = parseFloat(
-      (state.ask + state.tickSize * i * (1 + Math.random() * 0.3)).toFixed(4)
-    );
-    const aQty = Math.floor(Math.random() * 80 + 5);
-    askTotal += aQty;
-    asks.push({ price: aPrice, qty: aQty, total: askTotal, depth: 0 });
+function normalizeDepth(raw: Awaited<ReturnType<typeof getMarketDepth>>): AuthoritativeOrderBook | null {
+  if (!raw || (raw.bids.length === 0 && raw.asks.length === 0)) {
+    return null;
   }
 
-  const maxBid = bids[bids.length - 1].total;
-  const maxAsk = asks[asks.length - 1].total;
-  bids.forEach(b => (b.depth = (b.total / maxBid) * 100));
-  asks.forEach(a => (a.depth = (a.total / maxAsk) * 100));
-
-  const spread = parseFloat((state.ask - state.bid).toFixed(4));
-  const spreadPct = parseFloat(((spread / state.price) * 100).toFixed(4));
-
-  return { bids, asks: asks.reverse(), spread, spreadPct };
-}
-
-// ─── Client subscriptions ─────────────────────────────────────────────────────
-const subscriptions = new Map<WebSocket, Set<string>>();
-
-function broadcast(symbol: string, payload: object) {
-  const msg = JSON.stringify(payload);
-  Array.from(subscriptions.entries()).forEach(([ws, syms]) => {
-    if (syms.has(symbol) && ws.readyState === WebSocket.OPEN) {
-      ws.send(msg);
-    }
+  let bidTotal = 0;
+  const bids = raw.bids.map((level) => {
+    bidTotal += level.quantity;
+    return { price: level.price, qty: level.quantity, total: bidTotal, depth: 0 };
   });
+
+  let askTotal = 0;
+  const asks = raw.asks.map((level) => {
+    askTotal += level.quantity;
+    return { price: level.price, qty: level.quantity, total: askTotal, depth: 0 };
+  });
+
+  const maxBid = bids.length > 0 ? bids[bids.length - 1].total : 0;
+  const maxAsk = asks.length > 0 ? asks[asks.length - 1].total : 0;
+  if (maxBid > 0) bids.forEach((level) => { level.depth = (level.total / maxBid) * 100; });
+  if (maxAsk > 0) asks.forEach((level) => { level.depth = (level.total / maxAsk) * 100; });
+
+  const topBid = bids[0]?.price;
+  const topAsk = asks[0]?.price;
+  const spread = topBid !== undefined && topAsk !== undefined ? topAsk - topBid : 0;
+  const reference = topBid !== undefined && topAsk !== undefined ? (topBid + topAsk) / 2 : 0;
+
+  return {
+    bids,
+    asks: asks.reverse(),
+    spread,
+    spreadPct: reference > 0 ? (spread / reference) * 100 : 0,
+  };
 }
 
-// ─── Tick loop ────────────────────────────────────────────────────────────────
-let tickInterval: ReturnType<typeof setInterval> | null = null;
+function uniqueSubscribedSymbols(): Set<string> {
+  const symbols = new Set<string>();
+  for (const subscription of subscriptions.values()) {
+    for (const symbol of subscription) symbols.add(symbol);
+  }
+  return symbols;
+}
 
-function startTickLoop() {
-  if (tickInterval) return;
-  tickInterval = setInterval(() => {
-    Array.from(priceState.entries()).forEach(async ([symbol, state]) => {
-      const newState = tickPrice(state);
-      priceState.set(symbol, newState);
+async function fetchAndBroadcastBook(symbol: string, target?: WebSocket): Promise<boolean> {
+  const recipients = target
+    ? [target]
+    : Array.from(subscriptions.entries())
+        .filter(([, symbols]) => symbols.has(symbol))
+        .map(([ws]) => ws);
 
-      // Broadcast tick
-      broadcast(symbol, {
-        type: "tick",
-        symbol,
-        price: newState.price,
-        bid: newState.bid,
-        ask: newState.ask,
-        changePct: newState.changePct,
-        volume: newState.volume,
-      });
-
-      // Push real-time position/P&L updates to subscribed traders
-      broadcastPriceUpdate(symbol, newState.price).catch(() => {});
-
-      // Broadcast book every other tick (750ms)
-      // Prefer real Rust engine depth; fall back to simulated data
-      if (Math.random() > 0.5) {
-        if (_rustEngineAvailable) {
-          try {
-            const rustDepth = await getMarketDepth(symbol);
-            if (rustDepth && (rustDepth.bids.length > 0 || rustDepth.asks.length > 0)) {
-              // Convert Rust depth format to WS book format
-              let bidTotal = 0;
-              const bids = rustDepth.bids.map(b => {
-                bidTotal += b.quantity;
-                return { price: b.price, qty: b.quantity, total: bidTotal, depth: 0 };
-              });
-              let askTotal = 0;
-              const asks = rustDepth.asks.map(a => {
-                askTotal += a.quantity;
-                return { price: a.price, qty: a.quantity, total: askTotal, depth: 0 };
-              });
-              const maxBid = bids[bids.length - 1]?.total || 1;
-              const maxAsk = asks[asks.length - 1]?.total || 1;
-              bids.forEach(b => (b.depth = (b.total / maxBid) * 100));
-              asks.forEach(a => (a.depth = (a.total / maxAsk) * 100));
-              const topBid = bids[0]?.price ?? newState.bid;
-              const topAsk = asks[0]?.price ?? newState.ask;
-              const spread = parseFloat((topAsk - topBid).toFixed(4));
-              const spreadPct = parseFloat(((spread / newState.price) * 100).toFixed(4));
-              broadcast(symbol, {
-                type: "book",
-                symbol,
-                bids,
-                asks: asks.reverse(),
-                spread,
-                spreadPct,
-                source: "rust",
-              });
-              return;
-            }
-          } catch {
-            // Fall through to simulated data
-          }
-        }
-        // Simulated fallback
-        broadcast(symbol, {
-          type: "book",
+  try {
+    const depth = normalizeDepth(await getMarketDepth(symbol));
+    if (!depth) {
+      for (const ws of recipients) {
+        sendFeedError(ws, {
+          code: "AUTHORITATIVE_MARKET_DATA_UNAVAILABLE",
           symbol,
-          ...buildBook(newState),
-          source: "simulated",
+          message: "The matching engine has no authoritative order-book depth for this symbol.",
+          retryable: true,
         });
       }
-    });
-  }, 750);
+      return false;
+    }
+
+    for (const ws of recipients) {
+      send(ws, {
+        type: "book",
+        symbol,
+        ...depth,
+        source: "matching-engine",
+      });
+    }
+    return true;
+  } catch {
+    for (const ws of recipients) {
+      sendFeedError(ws, {
+        code: "AUTHORITATIVE_MARKET_DATA_UNAVAILABLE",
+        symbol,
+        message: "The authoritative matching-engine market-data service is unavailable.",
+        retryable: true,
+      });
+    }
+    return false;
+  }
 }
 
-// ─── Server setup ─────────────────────────────────────────────────────────────
+async function pollAuthoritativeBooks(): Promise<void> {
+  if (pollInFlight || subscriptions.size === 0) return;
+  pollInFlight = true;
+  try {
+    if (!(await checkMatchingEngineHealth())) {
+      for (const [ws, symbols] of subscriptions) {
+        for (const symbol of symbols) {
+          sendFeedError(ws, {
+            code: "AUTHORITATIVE_MARKET_DATA_UNAVAILABLE",
+            symbol,
+            message: "The authoritative matching-engine market-data service is unavailable.",
+            retryable: true,
+          });
+        }
+      }
+      return;
+    }
+
+    await Promise.all(Array.from(uniqueSubscribedSymbols(), (symbol) => fetchAndBroadcastBook(symbol)));
+  } finally {
+    pollInFlight = false;
+  }
+}
+
+function startPolling(): void {
+  if (pollInterval) return;
+  pollInterval = setInterval(() => {
+    void pollAuthoritativeBooks();
+  }, 1_000);
+}
+
+function stopPollingWhenUnused(): void {
+  if (subscriptions.size === 0 && pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+}
+
+async function subscribeToAuthoritativeBook(ws: WebSocket, symbol: string): Promise<void> {
+  if (!(await checkMatchingEngineHealth())) {
+    sendFeedError(ws, {
+      code: "AUTHORITATIVE_MARKET_DATA_UNAVAILABLE",
+      symbol,
+      message: "The authoritative matching-engine market-data service is unavailable.",
+      retryable: true,
+    });
+    return;
+  }
+
+  const delivered = await fetchAndBroadcastBook(symbol, ws);
+  if (delivered) {
+    subscriptions.get(ws)?.add(symbol);
+    startPolling();
+  }
+}
+
+/**
+ * Attaches the authoritative order-book endpoint. The endpoint remains usable for
+ * real position and loan notifications, but market-data subscriptions are accepted
+ * only after a matching-engine depth snapshot has been verified.
+ */
 export function attachOrderBookWS(httpServer: Server): WebSocketServer {
   const wss = new WebSocketServer({ server: httpServer, path: "/ws/orderbook" });
 
@@ -234,68 +202,88 @@ export function attachOrderBookWS(httpServer: Server): WebSocketServer {
     subscriptions.set(ws, new Set());
 
     ws.on("message", (raw) => {
-      try {
-        const msg = JSON.parse(raw.toString());
+      void (async () => {
+        let message: unknown;
+        try {
+          message = JSON.parse(raw.toString());
+        } catch {
+          sendFeedError(ws, {
+            code: "INVALID_REQUEST",
+            message: "WebSocket messages must be valid JSON.",
+            retryable: false,
+          });
+          return;
+        }
+
+        if (!message || typeof message !== "object") {
+          sendFeedError(ws, {
+            code: "INVALID_REQUEST",
+            message: "WebSocket message must be an object.",
+            retryable: false,
+          });
+          return;
+        }
+
+        const msg = message as { type?: unknown; symbols?: unknown; userId?: unknown };
         if (msg.type === "subscribe" && Array.isArray(msg.symbols)) {
-          const syms = subscriptions.get(ws)!;
-          for (const sym of msg.symbols as string[]) {
-            syms.add(sym);
-            // Ensure price state exists
-            if (!priceState.has(sym)) {
-              priceState.set(sym, initState(sym));
+          for (const value of msg.symbols) {
+            if (typeof value !== "string" || value.trim() === "") {
+              sendFeedError(ws, {
+                code: "INVALID_SYMBOL",
+                message: "Each subscribed symbol must be a non-empty string.",
+                retryable: false,
+              });
+              continue;
             }
-            // Send immediate snapshot
-            const state = priceState.get(sym)!;
-            ws.send(JSON.stringify({
-              type: "tick",
-              symbol: sym,
-              price: state.price,
-              bid: state.bid,
-              ask: state.ask,
-              changePct: state.changePct,
-              volume: state.volume,
-            }));
-            ws.send(JSON.stringify({
-              type: "book",
-              symbol: sym,
-              ...buildBook(state),
-            }));
+            await subscribeToAuthoritativeBook(ws, value);
           }
-          startTickLoop();
         } else if (msg.type === "unsubscribe" && Array.isArray(msg.symbols)) {
-          const syms = subscriptions.get(ws)!;
-          for (const sym of msg.symbols as string[]) {
-            syms.delete(sym);
+          const symbols = subscriptions.get(ws);
+          for (const value of msg.symbols) {
+            if (typeof value === "string") symbols?.delete(value);
           }
+          stopPollingWhenUnused();
         } else if (msg.type === "subscribe_positions" && typeof msg.userId === "number") {
-          // Subscribe to real-time position/P&L updates for this user
           subscribePositions(ws, msg.userId);
-          ws.send(JSON.stringify({ type: "positions_subscribed", userId: msg.userId }));
+          send(ws, { type: "positions_subscribed", userId: msg.userId });
         } else if (msg.type === "unsubscribe_positions") {
           unsubscribePositions(ws);
         } else if (msg.type === "subscribe_loans" && typeof msg.userId === "number") {
-          // Subscribe to real-time loan lifecycle events (approvals, disbursements, repayments)
           subscribeLoanEvents(ws, msg.userId);
         } else if (msg.type === "unsubscribe_loans") {
           unsubscribeLoanEvents(ws);
         } else if (msg.type === "ping") {
-          ws.send(JSON.stringify({ type: "pong" }));
+          send(ws, { type: "pong" });
+        } else {
+          sendFeedError(ws, {
+            code: "INVALID_REQUEST",
+            message: "Unsupported WebSocket message type.",
+            retryable: false,
+          });
         }
-      } catch {
-        // ignore malformed messages
-      }
+      })().catch(() => {
+        sendFeedError(ws, {
+          code: "INTERNAL_ERROR",
+          message: "Unable to process the WebSocket request.",
+          retryable: true,
+        });
+      });
     });
 
     ws.on("close", () => {
       subscriptions.delete(ws);
-      unsubscribePositions(ws);   // Clean up position subscriptions
-      unsubscribeLoanEvents(ws);  // Clean up loan notification subscriptions
+      unsubscribePositions(ws);
+      unsubscribeLoanEvents(ws);
+      stopPollingWhenUnused();
     });
 
-    // Send welcome
-    ws.send(JSON.stringify({ type: "connected", message: "NEXCOM Order Book Feed v1.0" }));
+    send(ws, {
+      type: "connected",
+      message: "NEXCOM Authoritative Order Book Feed",
+      marketDataSource: "matching-engine",
+    });
   });
 
-  console.log("[WS] Order book server attached at /ws/orderbook");
+  console.log("[WS] Authoritative order book server attached at /ws/orderbook");
   return wss;
 }

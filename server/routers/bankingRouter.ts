@@ -720,6 +720,7 @@ export const bankingRouter = router({
       loanId: z.number().int().positive(),
       disbursedValueNgn: z.number().positive(),
       notes: z.string().optional(),
+      idempotencyKey: z.string().min(8).max(128),
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -758,6 +759,7 @@ export const bankingRouter = router({
           currency: "NGN",
           interestRate: 0.12, // 12% p.a. default
           dueDate: dueDate.toISOString(),
+          idempotencyKey: input.idempotencyKey,
         }).catch(() => {});
         // Fluvio: emit loan.disbursed for real-time downstream consumers
         produce(FLUVIO_TOPICS.LOAN_DISBURSED, {
@@ -853,7 +855,7 @@ export const bankingRouter = router({
     .input(z.object({
       loanId: z.number().int().positive(),
       amountNgn: z.number().positive(),
-      paymentRef: z.string().optional(),
+      paymentRef: z.string().min(8).max(128),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -878,7 +880,7 @@ export const bankingRouter = router({
       setImmediate(() => {
         const disbursed = Number(loan.disbursedValueNgn ?? loan.requestedValueNgn ?? 0);
         FundFlow.loanRepaid({
-          repaymentId: `repay-${input.loanId}-${Date.now()}`,
+          repaymentId: input.paymentRef,
           loanId: String(input.loanId),
           userId: ctx.user.id,
           amount: input.amountNgn,
@@ -886,6 +888,7 @@ export const bankingRouter = router({
           principalPaid: input.amountNgn * 0.9,
           interestPaid: input.amountNgn * 0.1,
           remainingBalance: Math.max(0, disbursed - newRepaid),
+          idempotencyKey: input.paymentRef,
         }).catch(() => {});
         // Fluvio: emit loan.repaid for real-time downstream consumers
         produce(FLUVIO_TOPICS.PAYMENT_RECEIVED, {

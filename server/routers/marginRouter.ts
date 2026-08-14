@@ -153,6 +153,7 @@ export const marginRouter = router({
     .input(z.object({
       receiptId: z.number().int().positive(),
       notes: z.string().max(512).optional(),
+      idempotencyKey: z.string().min(8).max(128),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -173,8 +174,14 @@ export const marginRouter = router({
       // Ensure margin account exists
       const acct = await ensureMarginAccount(db, ctx.user.id);
 
-      // Calculate collateral value with haircut
-      const faceValue = parseFloat(receipt.valueUsd ?? "0") || (parseFloat(receipt.quantity) * 1500); // fallback price
+      // Calculate collateral value only from an authoritative receipt valuation.
+      if (!receipt.valueUsd || Number.isNaN(Number(receipt.valueUsd)) || Number(receipt.valueUsd) <= 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Warehouse receipt has no authoritative valuation and cannot be pledged as collateral.",
+        });
+      }
+      const faceValue = Number(receipt.valueUsd);
       const haircutPct = RECEIPT_HAIRCUT;
       const eligibleValue = faceValue * (1 - haircutPct / 100);
 
@@ -220,15 +227,6 @@ export const marginRouter = router({
         description: `Pledged warehouse receipt ${receipt.receiptNumber} as collateral`,
         performedBy: ctx.user.id,
       });
-      // TigerBeetle: margin deposit (code 2)
-      void createLedgerTransfer({
-        debitAccountId: `settlement-${ctx.user.id}`,
-        creditAccountId: `margin-${ctx.user.id}`,
-        amount: Math.round(Number(eligibleValue ?? 0) * 100),
-        code: 2,
-      }).catch(() => null);
-
-
       // Recalculate margin account
       await recalcMarginAccount(db, ctx.user.id);
 
@@ -242,16 +240,15 @@ export const marginRouter = router({
         newBalance: String(balanceBefore + eligibleValue),
         correlationId: `pledge-${item.id}`,
       });
-      // FundFlow: unified middleware orchestration for margin pledge
-      setImmediate(() => {
-        FundFlow.marginPledge({
-          marginId: `pledge-${item.id}`,
-          userId: ctx.user.id,
-          amount: eligibleValue,
-          currency: "USD",
-          collateralType: item.collateralType,
-          collateralId: String(item.id),
-        }).catch(() => {});
+      // FundFlow is the sole ledger/event path; failure is surfaced for reconciliation.
+      await FundFlow.marginPledge({
+        marginId: `pledge-${item.id}`,
+        userId: ctx.user.id,
+        amount: eligibleValue,
+        currency: "USD",
+        collateralType: item.collateralType,
+        collateralId: String(item.id),
+        idempotencyKey: input.idempotencyKey,
       });
       return { collateralItem: item, eligibleValue };
     }),
@@ -261,6 +258,7 @@ export const marginRouter = router({
     .input(z.object({
       collateralItemId: z.number().int().positive(),
       notes: z.string().max(512).optional(),
+      idempotencyKey: z.string().min(8).max(128),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -325,14 +323,13 @@ export const marginRouter = router({
         newBalance: String(Math.max(0, balanceBefore - eligibleValue)),
         correlationId: `release-${item.id}`,
       });
-      // FundFlow: unified middleware orchestration for margin release
-      setImmediate(() => {
-        FundFlow.marginRelease({
-          marginId: `release-${item.id}`,
-          userId: ctx.user.id,
-          amount: eligibleValue,
-          currency: "USD",
-        }).catch(() => {});
+      // FundFlow is the sole ledger/event path; failure is surfaced for reconciliation.
+      await FundFlow.marginRelease({
+        marginId: `release-${item.id}`,
+        userId: ctx.user.id,
+        amount: eligibleValue,
+        currency: "USD",
+        idempotencyKey: input.idempotencyKey,
       });
       return { success: true };
     }),

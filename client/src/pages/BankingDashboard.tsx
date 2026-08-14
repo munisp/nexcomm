@@ -1344,7 +1344,11 @@ export default function BankingDashboard() {
                 </div>
                 <Button
                   disabled={!repayLoanId || !repayAmount || makeRepayment.isPending}
-                  onClick={() => repayLoanId && repayAmount && makeRepayment.mutate({ loanId: repayLoanId, amountNgn: Number(repayAmount) })}
+                  onClick={() => repayLoanId && repayAmount && makeRepayment.mutate({
+                    loanId: repayLoanId,
+                    amountNgn: Number(repayAmount),
+                    paymentRef: crypto.randomUUID(),
+                  })}
                 >
                   {makeRepayment.isPending ? "Processing..." : "Pay"}
                 </Button>
@@ -1449,7 +1453,11 @@ export default function BankingDashboard() {
                             {loan.status === "APPROVED" && (
                               <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700"
                                 disabled={disburseLoan.isPending}
-                                onClick={() => disburseLoan.mutate({ loanId: loan.id, disbursedValueNgn: parseFloat(String(loan.approvedValueNgn ?? loan.requestedValueNgn ?? 0)) })}>
+                                onClick={() => disburseLoan.mutate({
+                                  loanId: loan.id,
+                                  disbursedValueNgn: parseFloat(String(loan.approvedValueNgn ?? loan.requestedValueNgn ?? 0)),
+                                  idempotencyKey: crypto.randomUUID(),
+                                })}>
                                 Disburse
                               </Button>
                             )}
