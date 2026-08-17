@@ -363,8 +363,8 @@ importers:
         specifier: ^7.4.1
         version: 7.4.1
       wouter:
-        specifier: ^3.7.1
-        version: 3.7.1(react@19.2.7)
+        specifier: ^3.10.0
+        version: 3.10.0(react@19.2.7)
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -7353,8 +7353,8 @@ packages:
   workbox-window@7.4.1:
     resolution: {integrity: sha512-notZDH2u8VXaqyuD7xaqIfEFi6SRM4SUSd7ewe9PDsVqADuepxX2ZMY3uvuZGxzY5ZOsGC/vD3A/3smFtJt4/A==}
 
-  wouter@3.7.1:
-    resolution: {integrity: sha512-od5LGmndSUzntZkE2R5CHhoiJ7YMuTIbiXsa0Anytc2RATekgv4sfWRAxLEULBrp7ADzinWQw8g470lkT8+fOw==}
+  wouter@3.10.0:
+    resolution: {integrity: sha512-zTfddD80zc2/J5l8JKcdvzOK6AwP0kpyHEI3DxRN2bn8U1oJPnrSVm8v+X3WwDamvLAOxTO7ZvkxkpRWlyeJ1Q==}
     peerDependencies:
       react: '>=16.8.0'
 
@@ -15013,7 +15013,7 @@ snapshots:
       '@types/trusted-types': 2.0.7
       workbox-core: 7.4.1
 
-  wouter@3.7.1(react@19.2.7):
+  wouter@3.10.0(react@19.2.7):
     dependencies:
       mitt: 3.0.1
       react: 19.2.7
