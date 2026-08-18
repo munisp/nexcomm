@@ -31,7 +31,7 @@ redis = { version = "1.4", features = ["tokio-comp", "connection-manager"] }
 rdkafka = { version = "0.36", features = ["cmake-build"] }
 
 # Password hashing (USSD PIN)
-bcrypt = "0.15"
+bcrypt = "0.19"
 
 # Tracing / observability
 tracing = "0.1"
