@@ -7,7 +7,7 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 
 # Kafka
-kafka-python==2.0.2
+kafka-python==2.3.2
 confluent-kafka==2.6.1
 
 # Redis
