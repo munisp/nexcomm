@@ -276,8 +276,8 @@ importers:
         specifier: ^5.24.0
         version: 5.24.0
       multer:
-        specifier: ^2.2.0
-        version: 2.2.0
+        specifier: ^2.3.0
+        version: 2.3.0
       nanoid:
         specifier: ^6.0.0
         version: 6.0.0
@@ -5458,6 +5458,7 @@ packages:
   isomorphic-dompurify@3.22.0:
     resolution: {integrity: sha512-cz/BkSODnQir4IV2quqbuEHhAGz4MAYGvhoemsxuwMpY/oZbRHlNjPLPyIQ0fdULiwDPUE+OHPwWb6XTEiNk1A==}
     engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
+    deprecated: Raised the minimum Node.js version (breaking) without a major bump. Use 4.x for the same code with correct semver, or pin 3.19.0 for Node < 22.22.2.
 
   jackspeak@3.4.3:
     resolution: {integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==}
@@ -5747,8 +5748,8 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
-  lru.min@1.1.4:
-    resolution: {integrity: sha512-DqC6n3QQ77zdFpCMASA1a3Jlb64Hv2N2DciFGkO/4L9+q/IpIAuRlKOvCXabtRW6cQf8usbmM6BE/TOPysCdIA==}
+  lru.min@1.1.5:
+    resolution: {integrity: sha512-5J9ysMYUpYIg9RF2vJpy9SinEmSviFSe0GyPpCQ4L5QSkLAgeLXlTAOu2ZwWUU5m+0SBl6gUU1R1ZQB3aKypfA==}
     engines: {bun: '>=1.0.0', deno: '>=1.30.0', node: '>=8.0.0'}
 
   lucide-react@1.31.0:
@@ -6004,8 +6005,8 @@ packages:
     resolution: {integrity: sha512-kh8ARjh8rMN7Du2igDRO9QJnqCb2xYTJxyQYK7vJJS4TvLLmsbyhiKpSW+t+y26gyOyMd0riphX0GeWKU3ky5g==}
     engines: {node: '>=12.13'}
 
-  multer@2.2.0:
-    resolution: {integrity: sha512-6rdyFg2kLrMh9Jee7/BMPuV9lEAd7lLW2YUpF9/YxR7njyoUwwQ0ZPh3TaIY50Sw6vlyD2HW3wGOkTS4P79xrQ==}
+  multer@2.3.0:
+    resolution: {integrity: sha512-cjNbm3sttszgZeGfJR124D+jFEfkXCVAsoPBmFn9X7UxmDSFHWqE2CoEj0vrmSpuAFnqWR1Szcm9QTsiHr60Xw==}
     engines: {node: '>= 10.16.0'}
 
   murmurhash-js@1.0.0:
@@ -12994,7 +12995,7 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lru.min@1.1.4:
+  lru.min@1.1.5:
     optional: true
 
   lucide-react@1.31.0(react@19.2.7):
@@ -13476,7 +13477,7 @@ snapshots:
 
   ms@3.0.0-canary.1: {}
 
-  multer@2.2.0:
+  multer@2.3.0:
     dependencies:
       append-field: 1.0.0
       busboy: 1.6.0
@@ -13492,7 +13493,7 @@ snapshots:
       generate-function: 2.3.1
       iconv-lite: 0.7.3
       long: 5.3.2
-      lru.min: 1.1.4
+      lru.min: 1.1.5
       named-placeholders: 1.1.6
       seq-queue: 0.0.5
       sqlstring: 2.3.3
@@ -13500,7 +13501,7 @@ snapshots:
 
   named-placeholders@1.1.6:
     dependencies:
-      lru.min: 1.1.4
+      lru.min: 1.1.5
     optional: true
 
   nanoid@3.3.18: {}
