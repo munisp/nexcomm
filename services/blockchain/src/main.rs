@@ -508,11 +508,22 @@ async fn on_chain_settle(
     // Fire-and-forget: blockchain is the primary settlement record;
     // TigerBeetle provides the double-entry accounting layer.
     {
+        // price/quantity arrive as decimal strings — parse and multiply
+        // numerically (String * String is not valid Rust). Fail closed on
+        // malformed input rather than settling a garbage amount.
+        let amount: f64 = match (req.price.parse::<f64>(), req.quantity.parse::<f64>()) {
+            (Ok(p), Ok(q)) if p.is_finite() && q.is_finite() && p >= 0.0 && q >= 0.0 => p * q,
+            _ => {
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": "price and quantity must be non-negative finite numbers"
+                }))
+            }
+        };
         let settle_url = format!("{}/api/v1/settlement/settle", state.gateway_url);
         let settle_payload = serde_json::json!({
             "buyer_user_id":  req.buyer_address,
             "seller_user_id": req.seller_address,
-            "amount":         req.price * req.quantity,
+            "amount":         amount,
             "currency":       "NGN",
             "trade_id":       req.trade_id,
             "settlement_id":  escrow_id.clone(),

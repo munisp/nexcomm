@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.temporal.io/sdk/temporal"
+	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -192,7 +193,7 @@ func DepositWorkflow(ctx workflow.Context, input DepositInput) (*DepositOutput, 
 }
 
 // runCompensations executes all registered compensation functions in LIFO order.
-func runCompensations(ctx workflow.Context, compensations []func(workflow.Context) error, logger workflow.Logger) {
+func runCompensations(ctx workflow.Context, compensations []func(workflow.Context) error, logger log.Logger) {
 	for i := len(compensations) - 1; i >= 0; i-- {
 		if err := compensations[i](ctx); err != nil {
 			logger.Error("Compensation step failed", "index", i, "error", err)
