@@ -70,7 +70,7 @@ export const userManagementRouter = router({
       } catch {
         // Fallback: update in DB
         const db = await getDb();
-                if (!db) return { success: true };
+                if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "User-management service and database both unavailable" });
         const updates: Record<string, unknown> = {};
         if (input.firstName || input.lastName) {
           const name = [input.firstName, input.lastName].filter(Boolean).join(" ");
@@ -146,9 +146,12 @@ export const userManagementRouter = router({
           body: JSON.stringify({ status: input.status, reason: input.reason }),
         });
         return { ...(data as object), source: "user-management-service" };
-      } catch {
-        // Fallback: update role in DB (limited — no status field in base schema)
-        return { success: true, userId: input.userId, status: input.status, source: "db-fallback" };
+      } catch (err) {
+        // Never fabricate a success — surface the outage honestly.
+        throw new TRPCError({
+          code: "SERVICE_UNAVAILABLE",
+          message: `User-management service unavailable — status change NOT applied: ${(err as Error).message}`,
+        });
       }
     }),
 
@@ -184,13 +187,12 @@ export const userManagementRouter = router({
           body: JSON.stringify(input),
         });
         return { ...(data as object), source: "user-management-service" };
-      } catch {
-        return {
-          success: true,
-          submissionId: `kyc-${ctx.user.id}-${Date.now()}`,
-          status: "documents_submitted",
-          source: "db-fallback",
-        };
+      } catch (err) {
+        // Never fabricate a submission id — the documents were not received.
+        throw new TRPCError({
+          code: "SERVICE_UNAVAILABLE",
+          message: `KYC submission service unavailable — documents NOT submitted: ${(err as Error).message}`,
+        });
       }
     }),
 
@@ -213,13 +215,12 @@ export const userManagementRouter = router({
           }),
         });
         return { ...(data as object), source: "user-management-service" };
-      } catch {
-        return {
-          success: true,
-          submissionId: input.submissionId,
-          decision: input.decision,
-          source: "db-fallback",
-        };
+      } catch (err) {
+        // Never fabricate a review decision.
+        throw new TRPCError({
+          code: "SERVICE_UNAVAILABLE",
+          message: `KYC review service unavailable — decision NOT recorded: ${(err as Error).message}`,
+        });
       }
     }),
 

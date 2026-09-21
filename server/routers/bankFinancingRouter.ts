@@ -169,7 +169,7 @@ export const bankFinancingRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return { success: true };
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — application not updated" });
       const [updated] = await db.update(bankFinancingApplications)
         .set({
           status: input.status,

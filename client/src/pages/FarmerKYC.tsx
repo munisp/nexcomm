@@ -74,7 +74,18 @@ export default function FarmerKYC() {
   // Liveness state
   const [livenessOpen, setLivenessOpen] = useState(false);
   const [livenessResult, setLivenessResult] = useState<LivenessResult | null>(null);
-  const [applicationId] = useState(() => `farmer-kyc-${Date.now()}`);
+  // Real kyc-service application id — resolved server-side, never fabricated
+  const [applicationId, setApplicationId] = useState<string | null>(null);
+  const ensureAppMut = trpc.farmer.ensureKycApplication.useMutation({
+    onSuccess: (data) => {
+      setApplicationId(data.applicationId);
+      setLivenessOpen(true);
+    },
+    onError: (e) => {
+      // Honest error — do NOT fall back to a fabricated id (it 404s downstream)
+      toast.error("Identity verification unavailable", { description: e.message });
+    },
+  });
 
   // Hidden file inputs — one per doc
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -398,7 +409,8 @@ export default function FarmerKYC() {
               </div>
             ) : (
               <Button
-                onClick={() => setLivenessOpen(true)}
+                onClick={() => ensureAppMut.mutate()}
+                disabled={ensureAppMut.isPending}
                 variant="outline"
                 className="w-full h-11 border-border text-foreground hover:bg-muted"
               >
@@ -451,6 +463,7 @@ export default function FarmerKYC() {
         </div>
       )}
       {/* Liveness Modal */}
+      {applicationId && (
       <LivenessChallengeModal
         open={livenessOpen}
         onClose={() => setLivenessOpen(false)}
@@ -467,6 +480,7 @@ export default function FarmerKYC() {
         documentPhotoUrl={allDocs["passport_photo"]}
         title="Farmer Identity Verification"
       />
+      )}
     </div>
   );
 }

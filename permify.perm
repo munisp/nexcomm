@@ -42,6 +42,16 @@ entity exchange {
   permission manage_system_config = admin
   permission view_analytics       = admin or compliance_officer
   permission export_reports       = admin or compliance_officer
+
+  // ── Action aliases checked by application code (server/_core/permify.ts) ──
+  // NOTE: "admin" is intentionally NOT redefined as a permission here — it is
+  // already a relation, and Permify check requests resolve relation names
+  // directly, so checking permission "admin" on exchange already evaluates
+  // this relation. Duplicating the identifier would risk a schema error.
+  permission view   = admin or compliance_officer or broker or trader or farmer or warehouse_operator or market_maker or viewer
+  permission edit   = admin
+  permission manage = admin
+  permission export = admin or compliance_officer
 }
 
 // ─── Order ────────────────────────────────────────────────────────────────────
@@ -57,6 +67,12 @@ entity order {
   permission read    = owner or manager or exchange.admin or exchange.compliance_officer or exchange.broker
   permission cancel  = owner or manager or exchange.admin
   permission modify  = owner or manager or exchange.admin
+
+  // Action aliases used by application code (view/edit/manage/delete over existing relations)
+  permission view    = read
+  permission edit    = modify
+  permission delete  = exchange.admin
+  permission manage  = owner or manager or exchange.admin
 }
 
 // ─── Trade ────────────────────────────────────────────────────────────────────
@@ -68,6 +84,12 @@ entity trade {
   permission read   = buyer or seller or exchange.admin or exchange.compliance_officer
   permission settle = exchange.admin
   permission dispute = buyer or seller or exchange.admin
+
+  // Action aliases used by application code (e.g. requireTradeCreate checks "create")
+  permission view    = read
+  permission create  = exchange.admin or exchange.trader or exchange.market_maker
+  permission edit    = exchange.admin
+  permission manage  = exchange.admin
 }
 
 // ─── Settlement ───────────────────────────────────────────────────────────────
@@ -78,6 +100,11 @@ entity settlement {
   permission read    = participant or exchange.admin or exchange.compliance_officer
   permission approve = exchange.admin
   permission dispute = participant or exchange.admin
+
+  // Action aliases used by application code
+  permission view    = read
+  permission edit    = exchange.admin
+  permission manage  = exchange.admin
 }
 
 // ─── KYC Application ─────────────────────────────────────────────────────────
@@ -93,6 +120,12 @@ entity kyc_application {
   permission approve = reviewer or exchange.admin or exchange.compliance_officer
   permission reject  = reviewer or exchange.admin or exchange.compliance_officer
   permission escalate = exchange.admin or exchange.compliance_officer
+
+  // Action aliases used by application code
+  permission view    = read
+  permission create  = submit
+  permission edit    = reviewer or exchange.admin
+  permission manage  = exchange.admin or exchange.compliance_officer
 }
 
 // ─── Warehouse Receipt ────────────────────────────────────────────────────────
@@ -108,6 +141,12 @@ entity warehouse_receipt {
   permission pledge  = owner or exchange.admin
   permission redeem  = owner or exchange.admin
   permission cancel  = exchange.warehouse_operator or exchange.admin
+
+  // Action aliases used by application code (e.g. requireReceiptView/Approve)
+  permission view    = read
+  permission approve = warehouse_operator or exchange.admin
+  permission edit    = owner or warehouse_operator or exchange.admin
+  permission manage  = exchange.warehouse_operator or exchange.admin
 }
 
 // ─── AML Flag ─────────────────────────────────────────────────────────────────
@@ -122,6 +161,11 @@ entity aml_flag {
   permission escalate = exchange.compliance_officer or exchange.admin
   permission file_sar = exchange.compliance_officer or exchange.admin
   permission clear    = exchange.admin
+
+  // Action aliases used by application code
+  permission view     = read
+  permission edit     = exchange.compliance_officer or exchange.admin
+  permission manage   = exchange.admin
 }
 
 // ─── User Account ─────────────────────────────────────────────────────────────
@@ -135,4 +179,9 @@ entity user_account {
   permission promote = exchange.admin
   permission delete  = exchange.admin
   permission update_mfa = owner or exchange.admin
+
+  // Action aliases used by application code (e.g. requireUserManage checks "manage")
+  permission view    = read
+  permission edit    = owner or exchange.admin
+  permission manage  = exchange.admin
 }

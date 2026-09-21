@@ -6,6 +6,7 @@ import postgres from "postgres";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
+  // DEV-ONLY local default (dev compose password) — never used in prod deployments
   "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom";
 
 const sql = postgres(DATABASE_URL, { max: 1, ssl: false });

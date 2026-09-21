@@ -85,12 +85,15 @@ app.add_middleware(
 # Health endpoints
 @app.get("/healthz", tags=["health"])
 async def health():
+    from src import mlplatform_client
+
     return {
         "status": "healthy" if app.state.models_ready else "degraded",
         "service": "ai-ml",
         "version": "1.0.0",
         "models_ready": app.state.models_ready,
         "model_error": app.state.model_error,
+        "ml_platform": mlplatform_client.health(),
     }
 
 
@@ -154,11 +157,16 @@ async def list_models():
     }
 
 
-# Mount route modules
+# Mount route modules. Dual-mounted: server/routers/aiMlRouter.ts calls the
+# unprefixed /api/v1/* paths while the canonical prefix is /api/v1/ai/*.
 app.include_router(forecasting.router, prefix="/api/v1/ai", tags=["forecasting"])
 app.include_router(risk_scoring.router, prefix="/api/v1/ai", tags=["risk-scoring"])
 app.include_router(anomaly.router, prefix="/api/v1/ai", tags=["anomaly-detection"])
 app.include_router(sentiment.router, prefix="/api/v1/ai", tags=["sentiment"])
+app.include_router(forecasting.router, prefix="/api/v1", tags=["forecasting-compat"])
+app.include_router(risk_scoring.router, prefix="/api/v1", tags=["risk-scoring-compat"])
+app.include_router(anomaly.router, prefix="/api/v1", tags=["anomaly-detection-compat"])
+app.include_router(sentiment.router, prefix="/api/v1", tags=["sentiment-compat"])
 
 if __name__ == "__main__":
     import uvicorn

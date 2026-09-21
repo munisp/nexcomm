@@ -17,6 +17,11 @@
  *   ACCOUNT     → account management
  *   SET_PIN     → set/change USSD PIN
  *   SET_PIN_CONFIRM → confirm new PIN
+ *   REGISTER_NAME   → unknown MSISDN: collect full name
+ *   REGISTER_PIN    → unknown MSISDN: create PIN
+ *   REGISTER_PIN_CONFIRM → unknown MSISDN: confirm PIN, create user +
+ *                          PENDING farmer profile (routed to cooperative/agent
+ *                          verification)
  */
 
 use anyhow::Result;
@@ -108,6 +113,9 @@ async fn route_input(
         "WATCHLIST_DELETE" => handle_watchlist_delete(state, session, input).await,
         "SET_PIN" => handle_set_pin(session, input).await,
         "SET_PIN_CONFIRM" => handle_set_pin_confirm(state, session, input).await,
+        "REGISTER_NAME" => handle_register_name(session, input).await,
+        "REGISTER_PIN" => handle_register_pin(session, input).await,
+        "REGISTER_PIN_CONFIRM" => handle_register_pin_confirm(state, session, input).await,
         _ => Ok(MenuResponse::End("Invalid session state. Please dial again.".to_string())),
     }
 }
@@ -119,8 +127,20 @@ async fn handle_main(
     session: &mut UssdSessionState,
     input: &str,
 ) -> Result<MenuResponse> {
-    // First call — show main menu
+    // First call — unknown MSISDNs are routed into the REGISTER flow instead
+    // of an unhandled "no user found" dead end.
     if input.is_empty() {
+        if session.is_registered.is_none() {
+            session.is_registered =
+                Some(db::user_exists_by_phone(&state.db, &session.phone_number).await?);
+        }
+        if session.is_registered == Some(false) {
+            session.current_menu = "REGISTER_NAME".to_string();
+            return Ok(MenuResponse::Continue(
+                "Welcome to NEXCOM Exchange.\nNo account found for this number.\nEnter your full name to register:"
+                    .to_string(),
+            ));
+        }
         return Ok(MenuResponse::Continue(main_menu_text().to_string()));
     }
 
@@ -231,6 +251,110 @@ async fn handle_auth(
             session.pending_pin = Some(PendingPin { new_pin: None, step: 1 });
             Ok(MenuResponse::Continue(
                 "No PIN set. Create a 4-digit PIN:\n(You will be asked to confirm it)".to_string(),
+            ))
+        }
+    }
+}
+
+// ─── REGISTRATION (unknown MSISDN) ────────────────────────────────────────────
+
+/// REGISTER_NAME: collect and validate the farmer's full name.
+async fn handle_register_name(session: &mut UssdSessionState, input: &str) -> Result<MenuResponse> {
+    let name = input.trim();
+    let valid = name.len() >= 3
+        && name.len() <= 60
+        && name.chars().all(|c| c.is_alphabetic() || c == ' ' || c == '-' || c == '\'');
+    if !valid {
+        return Ok(MenuResponse::Continue(
+            "Invalid name. Enter your full name (letters only, 3-60 chars):".to_string(),
+        ));
+    }
+    session.pending_registration_name = Some(name.to_string());
+    session.pending_pin = Some(PendingPin { new_pin: None, step: 1 });
+    session.current_menu = "REGISTER_PIN".to_string();
+    Ok(MenuResponse::Continue(format!(
+        "Welcome, {}.\nCreate a 4-digit USSD PIN:",
+        name
+    )))
+}
+
+/// REGISTER_PIN: collect the new PIN.
+async fn handle_register_pin(session: &mut UssdSessionState, input: &str) -> Result<MenuResponse> {
+    let pin = input.trim();
+    if pin.len() != 4 || !pin.chars().all(|c| c.is_ascii_digit()) {
+        return Ok(MenuResponse::Continue(
+            "PIN must be exactly 4 digits. Create a 4-digit PIN:".to_string(),
+        ));
+    }
+    session.pending_pin = Some(PendingPin {
+        new_pin: Some(pin.to_string()),
+        step: 2,
+    });
+    session.current_menu = "REGISTER_PIN_CONFIRM".to_string();
+    Ok(MenuResponse::Continue("Confirm your 4-digit PIN:".to_string()))
+}
+
+/// REGISTER_PIN_CONFIRM: confirm PIN and atomically create the user account +
+/// PENDING farmer profile, then notify cooperative/agent verification.
+async fn handle_register_pin_confirm(
+    state: &AppState,
+    session: &mut UssdSessionState,
+    input: &str,
+) -> Result<MenuResponse> {
+    let pending = match &session.pending_pin {
+        Some(p) => p.clone(),
+        None => {
+            session.current_menu = "REGISTER_PIN".to_string();
+            return Ok(MenuResponse::Continue("Create a 4-digit PIN:".to_string()));
+        }
+    };
+    let new_pin = pending.new_pin.clone().unwrap_or_default();
+    if input.trim() != new_pin {
+        // Mismatch — restart PIN creation within the same registration flow.
+        session.pending_pin = Some(PendingPin { new_pin: None, step: 1 });
+        session.current_menu = "REGISTER_PIN".to_string();
+        return Ok(MenuResponse::Continue(
+            "PINs do not match. Create a 4-digit PIN:".to_string(),
+        ));
+    }
+
+    let name = session
+        .pending_registration_name
+        .clone()
+        .unwrap_or_else(|| "USSD Farmer".to_string());
+    let phone = session.phone_number.clone();
+
+    match db::register_ussd_user(&state.db, &phone, &name, &new_pin).await {
+        Ok(user_id) => {
+            session.user_id = Some(user_id);
+            session.is_registered = Some(true);
+            session.pending_pin = None;
+            session.pending_registration_name = None;
+            session.current_menu = "MAIN".to_string();
+
+            // Route to cooperative/agent verification queue.
+            state
+                .kafka
+                .send(
+                    "nexcom.ussd.registrations",
+                    &format!(
+                        r#"{{"event":"farmer_registered","user_id":{},"phone":"{}","name":"{}","kyc_status":"PENDING","verification_queue":"cooperative_agent"}}"#,
+                        user_id, phone, name
+                    ),
+                )
+                .await
+                .ok();
+
+            Ok(MenuResponse::Continue(format!(
+                "Registration successful, {}!\nYour farmer profile is PENDING verification by your cooperative/agent.\n\n{}",
+                name,
+                main_menu_text()
+            )))
+        }
+        Err(e) => {
+            tracing::error!(error = %e, phone = %phone, "USSD registration failed");
+            Ok(MenuResponse::End(
+                "Registration failed due to a system error. Please try again later.".to_string(),
             ))
         }
     }

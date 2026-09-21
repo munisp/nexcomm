@@ -19,6 +19,7 @@ import {
   positions,
   type TraderProfile,
 } from "../../drizzle/schema";
+import { applyKycDecisionSideEffects } from "../kycReview";
 
 
 // ─── in-memory fallback stores (used when DB is unavailable, e.g. in tests) ─
@@ -399,6 +400,18 @@ export const traderRouter = router({
         reviewerName: ctx.user.name ?? null,
         decision: input.decision,
         notes: input.notes ?? null,
+      });
+      // Sync generic profile store, grant trader role on approval, notify applicant
+      await applyKycDecisionSideEffects(db, {
+        userId: profile.userId,
+        decision: input.decision,
+        reviewerId: ctx.user.id,
+        reviewerName: ctx.user.name,
+        notes: input.notes,
+        stakeholderLabel: "Trader",
+        approvedRole: "trader",
+        accountType: "TRADER",
+        metadata: { traderProfileId: input.traderId },
       });
       // Notify owner of KYC decision (applicant sees updated status in their dashboard)
       notifyOwner({

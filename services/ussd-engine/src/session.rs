@@ -45,6 +45,13 @@ pub struct UssdSessionState {
     pub pending_delete_alert_id: Option<i64>,
     /// Watchlist entry id pending deletion confirmation in the My Watchlist menu
     pub pending_delete_watchlist_id: Option<i64>,
+    /// Registration flow: whether this MSISDN has a user account
+    /// (None = not yet checked this session)
+    #[serde(default)]
+    pub is_registered: Option<bool>,
+    /// Registration flow: full name collected at REGISTER_NAME
+    #[serde(default)]
+    pub pending_registration_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +126,8 @@ impl UssdSessionState {
             pending_price_alert: None,
             pending_delete_alert_id: None,
             pending_delete_watchlist_id: None,
+            is_registered: None,
+            pending_registration_name: None,
             interactions: 0,
         }
     }
@@ -164,6 +173,26 @@ impl SessionStore {
     pub async fn delete(&mut self, session_id: &str) -> Result<()> {
         self.conn.del::<_, ()>(Self::key(session_id)).await?;
         Ok(())
+    }
+
+    /// Replay protection for Africa's Talking callbacks.
+    ///
+    /// AT retransmits a callback if our response is slow or lost. Each USSD
+    /// step is uniquely identified by (session_id, accumulated text), so we
+    /// SET NX that pair with the session TTL as the replay window: the first
+    /// delivery wins the mark and is processed; retransmissions within the
+    /// window are duplicates. Returns Ok(true) for the first occurrence.
+    pub async fn mark_request_once(&mut self, session_id: &str, text: &str) -> Result<bool> {
+        let key = format!("nexcom:ussd:dedup:{}:{}", session_id, text);
+        let result: Option<String> = redis::cmd("SET")
+            .arg(&key)
+            .arg("1")
+            .arg("NX")
+            .arg("EX")
+            .arg(SESSION_TTL_SECS)
+            .query_async(&mut self.conn)
+            .await?;
+        Ok(result.is_some())
     }
 
     /// Increment a counter for rate limiting (e.g. failed PIN attempts)

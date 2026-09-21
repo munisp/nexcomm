@@ -1,14 +1,15 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
+import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   inputFinancingLoans,
   inputFinancingRepayments,
   fieldAgents,
   fieldVisits,
+  notifications,
 } from "../../drizzle/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { writeAuditLog } from "../audit";
 import { createLedgerTransfer } from "../gatewayClient";
 import { triggerTemporalWorkflow } from "../temporal/temporalClient";
@@ -85,7 +86,7 @@ export const inputFinancingRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { success: true };
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — request not recorded. Please retry." });
       await db.insert(inputFinancingRepayments).values({
         loanId: input.loanId,
         amountNgn: input.amountNgn,
@@ -129,7 +130,7 @@ export const inputFinancingRouter = router({
     .input(z.object({ loanId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { success: true };
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — request not recorded. Please retry." });
       const [loan] = await db.select().from(inputFinancingLoans)
         .where(and(eq(inputFinancingLoans.id, input.loanId), eq(inputFinancingLoans.farmerId, ctx.user.id)));
       if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
@@ -186,7 +187,7 @@ export const fieldAgentRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { success: true };
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — request not recorded. Please retry." });
       const agentCode = `AGT-${Date.now().toString(36).toUpperCase()}`;
       await db.insert(fieldAgents).values({
         userId: ctx.user.id,
@@ -224,7 +225,7 @@ export const fieldAgentRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { success: true };
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — request not recorded. Please retry." });
       const agent = await db.select().from(fieldAgents)
         .where(eq(fieldAgents.userId, ctx.user.id)).limit(1);
       if (!agent[0]) throw new TRPCError({ code: "FORBIDDEN", message: "Not registered as field agent" });
@@ -241,22 +242,163 @@ export const fieldAgentRouter = router({
 
   // ── Network stats ──────────────────────────────────────────────────────────
   networkStats: publicProcedure.query(async () => {
-    return {
-      totalAgents: 847,
-      activeAgents: 612,
-      statesCovered: 18,
-      totalFarmersOnboarded: 94200,
-      totalVisitsCompleted: 284750,
-      avgFarmersPerAgent: 154,
-    };
+    const db = await getDb();
+    if (!db) return DEMO_NETWORK_STATS;
+    try {
+      const [agentStats] = await db
+        .select({
+          totalAgents: sql<number>`COUNT(*)::int`,
+          activeAgents: sql<number>`SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END)::int`,
+          statesCovered: sql<number>`COUNT(DISTINCT state_of_operation)::int`,
+          totalFarmersOnboarded: sql<number>`COALESCE(SUM(total_farmers_onboarded), 0)::int`,
+        })
+        .from(fieldAgents);
+      const [visitStats] = await db
+        .select({
+          totalVisitsCompleted: sql<number>`SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END)::int`,
+        })
+        .from(fieldVisits);
+      const totalAgents = Number(agentStats?.totalAgents ?? 0);
+      const totalFarmersOnboarded = Number(agentStats?.totalFarmersOnboarded ?? 0);
+      return {
+        totalAgents,
+        activeAgents: Number(agentStats?.activeAgents ?? 0),
+        statesCovered: Number(agentStats?.statesCovered ?? 0),
+        totalFarmersOnboarded,
+        totalVisitsCompleted: Number(visitStats?.totalVisitsCompleted ?? 0),
+        avgFarmersPerAgent: totalAgents > 0 ? Math.round(totalFarmersOnboarded / totalAgents) : 0,
+      };
+    } catch {
+      return DEMO_NETWORK_STATS;
+    }
   }),
 
   leaderboard: publicProcedure.query(async () => {
-    return DEMO_LEADERBOARD;
+    const db = await getDb();
+    if (!db) return DEMO_LEADERBOARD;
+    try {
+      const rows = await db
+        .select({
+          agentCode: fieldAgents.agentCode,
+          fullName: fieldAgents.fullName,
+          stateOfOperation: fieldAgents.stateOfOperation,
+          farmersOnboarded: fieldAgents.totalFarmersOnboarded,
+          loansOriginated: fieldAgents.totalLoansOriginated,
+          loansValueNgn: fieldAgents.totalLoansValueNgn,
+        })
+        .from(fieldAgents)
+        .where(eq(fieldAgents.status, "ACTIVE"))
+        .orderBy(desc(fieldAgents.totalFarmersOnboarded))
+        .limit(10);
+      return rows.length > 0 ? rows : DEMO_LEADERBOARD;
+    } catch {
+      return DEMO_LEADERBOARD;
+    }
   }),
+
+  // ── Admin: field agent lifecycle ──────────────────────────────────────────
+  adminListFieldAgents: adminProcedure
+    .input(z.object({
+      status: z.enum(["PENDING", "ACTIVE", "SUSPENDED", "TERMINATED", "ALL"]).default("ALL"),
+      limit: z.number().int().min(1).max(100).default(50),
+      offset: z.number().int().min(0).default(0),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
+      const conditions = input.status !== "ALL" ? [eq(fieldAgents.status, input.status)] : [];
+      const [rows, [countRow]] = await Promise.all([
+        db.select().from(fieldAgents)
+          .where(conditions.length ? and(...conditions) : undefined)
+          .orderBy(desc(fieldAgents.createdAt))
+          .limit(input.limit)
+          .offset(input.offset),
+        db.select({ total: sql<number>`COUNT(*)::int` }).from(fieldAgents)
+          .where(conditions.length ? and(...conditions) : undefined),
+      ]);
+      return { agents: rows, total: Number(countRow?.total ?? 0) };
+    }),
+
+  /**
+   * Admin: approve / suspend / terminate a field agent.
+   * approve → ACTIVE; suspend → SUSPENDED; terminate → TERMINATED (reason required).
+   */
+  adminReviewFieldAgent: adminProcedure
+    .input(z.object({
+      agentId: z.number().int().positive(),
+      action: z.enum(["APPROVE", "SUSPEND", "TERMINATE"]),
+      reason: z.string().max(1000).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — decision not recorded" });
+
+      const [agent] = await db
+        .select()
+        .from(fieldAgents)
+        .where(eq(fieldAgents.id, input.agentId))
+        .limit(1);
+      if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Field agent not found" });
+
+      if (input.action === "TERMINATE" && !input.reason) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A reason is required to terminate a field agent" });
+      }
+      if (input.action === "APPROVE" && agent.status !== "PENDING" && agent.status !== "SUSPENDED") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Agent is ${agent.status}, not approvable` });
+      }
+      if (input.action !== "APPROVE" && agent.status === "TERMINATED") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Agent is already TERMINATED" });
+      }
+
+      const newStatus = input.action === "APPROVE" ? "ACTIVE"
+        : input.action === "SUSPEND" ? "SUSPENDED" : "TERMINATED";
+
+      const [updated] = await db
+        .update(fieldAgents)
+        .set({ status: newStatus, updatedAt: new Date() })
+        .where(eq(fieldAgents.id, input.agentId))
+        .returning();
+
+      await writeAuditLog({
+        userId: ctx.user.id,
+        action: `FIELD_AGENT_${input.action}`,
+        resource: "field_agents",
+        resourceId: String(input.agentId),
+        details: { agentCode: agent.agentCode, previousStatus: agent.status, newStatus, reason: input.reason ?? null },
+      });
+
+      // Notify the agent in-app
+      await db.insert(notifications).values({
+        userId: agent.userId,
+        title: input.action === "APPROVE" ? "Field Agent Application Approved ✓"
+          : input.action === "SUSPEND" ? "Field Agent Account Suspended"
+          : "Field Agent Account Terminated",
+        message: input.action === "APPROVE"
+          ? `Your field agent registration (${agent.agentCode}) has been approved. You can now schedule field visits.`
+          : input.action === "SUSPEND"
+            ? `Your field agent account (${agent.agentCode}) has been suspended.${input.reason ? ` Reason: ${input.reason}` : ""}`
+            : `Your field agent account (${agent.agentCode}) has been terminated. Reason: ${input.reason}`,
+        type: "SYSTEM",
+        read: false,
+        metadata: { agentId: input.agentId, action: input.action, reviewedBy: ctx.user.id },
+      });
+
+      return { success: true, agentId: input.agentId, status: newStatus };
+    }),
 });
 
 // ─── Demo data ────────────────────────────────────────────────────────────────
+// Offline fallback for the public landing page when the DB is unreachable.
+const DEMO_NETWORK_STATS = {
+  totalAgents: 847,
+  activeAgents: 612,
+  statesCovered: 18,
+  totalFarmersOnboarded: 94200,
+  totalVisitsCompleted: 284750,
+  avgFarmersPerAgent: 154,
+};
+
+
 const DEMO_LOANS = [
   {
     id: 1, farmerId: 1, agentId: 1, cropPlanId: 1,

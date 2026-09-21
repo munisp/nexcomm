@@ -14,6 +14,7 @@ const rawUrl =
 const connectionString =
   rawUrl.startsWith("postgresql://") || rawUrl.startsWith("postgres://")
     ? rawUrl
+    // DEV-ONLY fallback (dev compose password); drizzle-kit is a dev/CI tool
     : "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom";
 
 export default defineConfig({

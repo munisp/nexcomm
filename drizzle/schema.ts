@@ -35,7 +35,7 @@ export const geometry = customType<{ data: string; driverData: string; config: {
 // Enums
 // ============================================================
 export const roleEnum = pgEnum("role", ["user", "admin", "farmer", "trader", "broker"]);
-export const accountTypeEnum = pgEnum("account_type", ["FARMER", "TRADER", "PROCESSOR", "BROKER", "WAREHOUSE_OPERATOR", "MARKET_MAKER"]);
+export const accountTypeEnum = pgEnum("account_type", ["FARMER", "TRADER", "PROCESSOR", "BROKER", "WAREHOUSE_OPERATOR", "MARKET_MAKER", "ADMIN"]);
 export const kycStatusEnum = pgEnum("kyc_status", ["PENDING", "VERIFIED", "REJECTED"]);
 export const kycQueueStatusEnum = pgEnum("kyc_queue_status", ["PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED"]);
 export const alertConditionEnum = pgEnum("alert_condition", ["ABOVE", "BELOW", "CROSS_ABOVE", "CROSS_BELOW"]);
@@ -650,6 +650,36 @@ export const webhookConfigs = pgTable("webhook_configs", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 export type WebhookConfig = typeof webhookConfigs.$inferSelect;
+
+// Webhook dead-letter log: outbound deliveries that exhausted all retry
+// attempts are recorded here for manual replay / investigation.
+export const webhookDeadLetters = pgTable("webhook_dead_letters", {
+  id: serial("id").primaryKey(),
+  webhookConfigId: integer("webhook_config_id"),
+  url: varchar("url", { length: 2048 }).notNull(),
+  event: varchar("event", { length: 64 }).notNull(),
+  payload: text("payload").notNull(),
+  attempts: integer("attempts").notNull(),
+  lastStatusCode: integer("last_status_code"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type WebhookDeadLetter = typeof webhookDeadLetters.$inferSelect;
+
+// GDPR-style privacy requests: data-export and erasure audit trail.
+// Erasure anonymizes PII with a hash tombstone while financial ledger
+// tables (orders, settlements, ledger entries, audit_log) are preserved
+// per the retention policy in docs/DATA_RETENTION.md.
+export const privacyRequests = pgTable("privacy_requests", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  requestType: varchar("request_type", { length: 16 }).notNull(), // EXPORT | ERASURE
+  status: varchar("status", { length: 16 }).notNull().default("COMPLETED"),
+  tombstone: varchar("tombstone", { length: 64 }), // hash pseudonym applied on erasure
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+export type PrivacyRequest = typeof privacyRequests.$inferSelect;
 
 // IP Allowlist: restrict admin actions to trusted IP ranges
 export const ipAllowlistScopeEnum = pgEnum("ip_allowlist_scope", [
@@ -1374,6 +1404,7 @@ export type PortfolioEquitySnapshot = typeof portfolioEquitySnapshots.$inferSele
 
 // ─── Farmer Onboarding ────────────────────────────────────────────────────────
 export const farmerKycStatusEnum = pgEnum("farmer_kyc_status", ["PENDING", "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED"]);
+export const farmerAccountStatusEnum = pgEnum("farmer_account_status", ["ACTIVE", "SUSPENDED"]);
 export const soilTypeEnum = pgEnum("soil_type", ["LOAMY", "CLAY", "SANDY", "SILT", "PEAT", "CHALK", "OTHER"]);
 export const cropStatusEnum = pgEnum("crop_status_v2", ["ACTIVE", "SOLD", "EXPIRED", "WITHDRAWN"]);
 
@@ -1388,6 +1419,11 @@ export const farmerProfiles = pgTable("farmer_profiles", {
   lga: varchar("lga", { length: 100 }).notNull(),
   kycStatus: farmerKycStatusEnum("kyc_status").default("PENDING").notNull(),
   kycDocuments: text("kyc_documents"), // JSON array of document URLs
+  // Real application ID issued by the KYC microservice (services/kyc-service);
+  // used by the liveness flow so sessions resolve against a real application.
+  kycApplicationId: varchar("kyc_application_id", { length: 80 }),
+  // Account lifecycle — mirrors trader/broker/WO/MM accountStatus.
+  accountStatus: farmerAccountStatusEnum("account_status").default("ACTIVE").notNull(),
   kycReviewedAt: timestamp("kyc_reviewed_at"),
   kycReviewedBy: integer("kyc_reviewed_by"),
   kycNotes: text("kyc_notes"),
@@ -2064,6 +2100,8 @@ export const dfspKycStatusEnum = pgEnum("dfsp_kyc_status", ["PENDING", "APPROVED
 export const dfspKycRecords = pgTable("dfsp_kyc_records", {
   id:                        serial("id").primaryKey(),
   fspId:                     varchar("fsp_id", { length: 64 }).notNull().unique(),
+  // The portal user who submitted this KYC application (for notifications)
+  userId:                    integer("user_id").references(() => users.id, { onDelete: "set null" }),
   // Legal entity
   legalEntityName:           varchar("legal_entity_name", { length: 256 }).notNull(),
   registrationNumber:        varchar("registration_number", { length: 128 }).notNull(),
@@ -3068,34 +3106,6 @@ export const tbTransferLog = pgTable("tb_transfer_log", {
 export type TbTransferLog = typeof tbTransferLog.$inferSelect;
 export type InsertTbTransferLog = typeof tbTransferLog.$inferInsert;
 
-// ─── Loan Ledger Entries ──────────────────────────────────────────────────────
-export const loanLedgerEntries = pgTable("loan_ledger_entries", {
-  id:           bigserial("id", { mode: "number" }).primaryKey(),
-  loanId:       bigint("loan_id", { mode: "number" }).notNull(),
-  loanType:     varchar("loan_type", { length: 32 }).notNull(),  // "input_financing", "bank_financing"
-  entryType:    varchar("entry_type", { length: 32 }).notNull(), // "DISBURSEMENT", "REPAYMENT", "INTEREST", "PENALTY"
-  amount:       numeric("amount", { precision: 20, scale: 2 }).notNull(),
-  currency:     varchar("currency", { length: 8 }).default("NGN").notNull(),
-  tbTransferId: varchar("tb_transfer_id", { length: 64 }),
-  balanceAfter: numeric("balance_after", { precision: 20, scale: 2 }),
-  notes:        text("notes"),
-  createdAt:    timestamp("created_at").defaultNow().notNull(),
-});
-export type LoanLedgerEntry = typeof loanLedgerEntries.$inferSelect;
-
-// ─── Margin Ledger Entries ────────────────────────────────────────────────────
-export const marginLedgerEntries = pgTable("margin_ledger_entries", {
-  id:           bigserial("id", { mode: "number" }).primaryKey(),
-  userId:       integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  entryType:    varchar("entry_type", { length: 32 }).notNull(), // "DEPOSIT", "RELEASE", "LIQUIDATION", "CALL"
-  amount:       numeric("amount", { precision: 20, scale: 8 }).notNull(),
-  currency:     varchar("currency", { length: 8 }).default("USD").notNull(),
-  tbTransferId: varchar("tb_transfer_id", { length: 64 }),
-  relatedId:    varchar("related_id", { length: 64 }),  // marginCallId, positionId, etc.
-  createdAt:    timestamp("created_at").defaultNow().notNull(),
-});
-export type MarginLedgerEntry = typeof marginLedgerEntries.$inferSelect;
-
 // ─── Cross-Border Ledger Entries ──────────────────────────────────────────────
 export const crossBorderLedgerEntries = pgTable("cross_border_ledger_entries", {
   id:              bigserial("id", { mode: "number" }).primaryKey(),
@@ -3113,74 +3123,9 @@ export const crossBorderLedgerEntries = pgTable("cross_border_ledger_entries", {
 });
 export type CrossBorderLedgerEntry = typeof crossBorderLedgerEntries.$inferSelect;
 
-// ─── Receipt Ledger Entries ───────────────────────────────────────────────────
-export const receiptLedgerEntries = pgTable("receipt_ledger_entries", {
-  id:           bigserial("id", { mode: "number" }).primaryKey(),
-  receiptId:    integer("receipt_id").notNull(),
-  userId:       integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  entryType:    varchar("entry_type", { length: 32 }).notNull(), // "ISSUE", "PLEDGE", "REDEMPTION", "CANCEL"
-  valueUsd:     numeric("value_usd", { precision: 20, scale: 2 }),
-  tbTransferId: varchar("tb_transfer_id", { length: 64 }),
-  createdAt:    timestamp("created_at").defaultNow().notNull(),
-});
-export type ReceiptLedgerEntry = typeof receiptLedgerEntries.$inferSelect;
-
-// ─── Broker Ledger Entries ────────────────────────────────────────────────────
-export const brokerLedgerEntries = pgTable("broker_ledger_entries", {
-  id:           bigserial("id", { mode: "number" }).primaryKey(),
-  brokerId:     integer("broker_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  entryType:    varchar("entry_type", { length: 32 }).notNull(), // "COMMISSION", "REBATE", "SETTLEMENT"
-  amount:       numeric("amount", { precision: 20, scale: 6 }).notNull(),
-  currency:     varchar("currency", { length: 8 }).default("USD").notNull(),
-  tbTransferId: varchar("tb_transfer_id", { length: 64 }),
-  tradeId:      bigint("trade_id", { mode: "number" }),
-  createdAt:    timestamp("created_at").defaultNow().notNull(),
-});
-export type BrokerLedgerEntry = typeof brokerLedgerEntries.$inferSelect;
-
-// ─── Clearing Ledger Entries ──────────────────────────────────────────────────
-export const clearingLedgerEntries = pgTable("clearing_ledger_entries", {
-  id:              bigserial("id", { mode: "number" }).primaryKey(),
-  marginCallId:    bigint("margin_call_id", { mode: "number" }),
-  userId:          integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  entryType:       varchar("entry_type", { length: 32 }).notNull(), // "INITIAL_MARGIN", "VARIATION_MARGIN", "LIQUIDATION"
-  amount:          numeric("amount", { precision: 20, scale: 8 }).notNull(),
-  currency:        varchar("currency", { length: 8 }).default("USD").notNull(),
-  tbTransferId:    varchar("tb_transfer_id", { length: 64 }),
-  createdAt:       timestamp("created_at").defaultNow().notNull(),
-});
-export type ClearingLedgerEntry = typeof clearingLedgerEntries.$inferSelect;
-
-// ─── Settlement Ledger Entries ────────────────────────────────────────────────
-export const settlementLedgerEntries = pgTable("settlement_ledger_entries", {
-  id:              bigserial("id", { mode: "number" }).primaryKey(),
-  settlementId:    bigint("settlement_id", { mode: "number" }),
-  buyerUserId:     integer("buyer_user_id").references(() => users.id, { onDelete: "set null" }),
-  sellerUserId:    integer("seller_user_id").references(() => users.id, { onDelete: "set null" }),
-  entryType:       varchar("entry_type", { length: 32 }).notNull(), // "DVP_DEBIT", "DVP_CREDIT", "FEE"
-  amount:          numeric("amount", { precision: 20, scale: 6 }).notNull(),
-  currency:        varchar("currency", { length: 8 }).default("USD").notNull(),
-  tbTransferId:    varchar("tb_transfer_id", { length: 64 }),
-  createdAt:       timestamp("created_at").defaultNow().notNull(),
-});
-export type SettlementLedgerEntry = typeof settlementLedgerEntries.$inferSelect;
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Round 63 — Middleware Integration Tracking Tables
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// ─── Keycloak User Sync Log ───────────────────────────────────────────────────
-export const keycloakUserSync = pgTable("keycloak_user_sync", {
-  id:              bigserial("id", { mode: "number" }).primaryKey(),
-  userId:          integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  keycloakId:      varchar("keycloak_id", { length: 128 }),
-  syncAction:      varchar("sync_action", { length: 32 }).notNull(),
-  syncStatus:      varchar("sync_status", { length: 16 }).default("PENDING").notNull(),
-  errorMessage:    text("error_message"),
-  syncedAt:        timestamp("synced_at"),
-  createdAt:       timestamp("created_at").defaultNow().notNull(),
-});
-export type KeycloakUserSync = typeof keycloakUserSync.$inferSelect;
 
 // ─── Temporal Workflow Execution Log ─────────────────────────────────────────
 export const workflowExecutions = pgTable("workflow_executions", {
@@ -3210,69 +3155,6 @@ export const fluvioEventLog = pgTable("fluvio_event_log", {
   userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
 });
 export type FluvioEventLog = typeof fluvioEventLog.$inferSelect;
-
-// ─── Dapr Pub/Sub Log ─────────────────────────────────────────────────────────
-export const daprPubsubLog = pgTable("dapr_pubsub_log", {
-  id:              bigserial("id", { mode: "number" }).primaryKey(),
-  pubsubName:      varchar("pubsub_name", { length: 128 }).notNull(),
-  topicName:       varchar("topic_name", { length: 256 }).notNull(),
-  payload:         jsonb("payload").notNull(),
-  status:          varchar("status", { length: 16 }).default("PUBLISHED").notNull(),
-  errorMessage:    text("error_message"),
-  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
-  publishedAt:     timestamp("published_at").defaultNow().notNull(),
-});
-export type DaprPubsubLog = typeof daprPubsubLog.$inferSelect;
-
-// ─── APISIX Route Config Snapshot ────────────────────────────────────────────
-export const apisixRouteSnapshots = pgTable("apisix_route_snapshots", {
-  id:              bigserial("id", { mode: "number" }).primaryKey(),
-  routeId:         varchar("route_id", { length: 128 }).notNull(),
-  routeName:       varchar("route_name", { length: 256 }),
-  upstreamUrl:     varchar("upstream_url", { length: 512 }),
-  plugins:         jsonb("plugins"),
-  status:          varchar("status", { length: 16 }).default("ACTIVE").notNull(),
-  snapshotAt:      timestamp("snapshot_at").defaultNow().notNull(),
-  createdBy:       integer("created_by").references(() => users.id, { onDelete: "set null" }),
-});
-export type ApisixRouteSnapshot = typeof apisixRouteSnapshots.$inferSelect;
-
-// ─── Permify Policy Audit Log ─────────────────────────────────────────────────
-export const permifyPolicyLog = pgTable("permify_policy_log", {
-  id:              bigserial("id", { mode: "number" }).primaryKey(),
-  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
-  action:          varchar("action", { length: 128 }).notNull(),
-  resource:        varchar("resource", { length: 256 }),
-  decision:        varchar("decision", { length: 16 }).notNull(),
-  reason:          text("reason"),
-  checkedAt:       timestamp("checked_at").defaultNow().notNull(),
-});
-export type PermifyPolicyLog = typeof permifyPolicyLog.$inferSelect;
-
-// ─── OpenSearch Index Event Log ───────────────────────────────────────────────
-export const opensearchIndexLog = pgTable("opensearch_index_log", {
-  id:              bigserial("id", { mode: "number" }).primaryKey(),
-  indexName:       varchar("index_name", { length: 256 }).notNull(),
-  documentId:      varchar("document_id", { length: 256 }),
-  operation:       varchar("operation", { length: 16 }).notNull(),
-  status:          varchar("status", { length: 16 }).default("SUCCESS").notNull(),
-  errorMessage:    text("error_message"),
-  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
-  indexedAt:       timestamp("indexed_at").defaultNow().notNull(),
-});
-export type OpensearchIndexLog = typeof opensearchIndexLog.$inferSelect;
-
-// ─── Redis Cache Invalidation Log ────────────────────────────────────────────
-export const redisCacheLog = pgTable("redis_cache_log", {
-  id:              bigserial("id", { mode: "number" }).primaryKey(),
-  cacheKey:        varchar("cache_key", { length: 512 }).notNull(),
-  operation:       varchar("operation", { length: 16 }).notNull(),
-  ttlSeconds:      integer("ttl_seconds"),
-  userId:          integer("user_id").references(() => users.id, { onDelete: "set null" }),
-  triggeredBy:     varchar("triggered_by", { length: 128 }),
-  executedAt:      timestamp("executed_at").defaultNow().notNull(),
-});
-export type RedisCacheLog = typeof redisCacheLog.$inferSelect;
 
 // ─── Middleware Health Check Log ──────────────────────────────────────────────
 export const middlewareHealthLog = pgTable("middleware_health_log", {
@@ -3446,16 +3328,5 @@ export const ledgerEntries = pgTable("ledger_entries", {
 export type LedgerEntry = typeof ledgerEntries.$inferSelect;
 export type InsertLedgerEntry = typeof ledgerEntries.$inferInsert;
 
-export const ledgerJobs = pgTable("ledger_jobs", {
-  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
-  jobType: text("job_type").notNull(),
-  payload: jsonb("payload").notNull().default({}),
-  status: text("status").notNull().default("pending"),
-  attempts: integer("attempts").notNull().default(0),
-  maxAttempts: integer("max_attempts").notNull().default(3),
-  errorMessage: text("error_message"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull().defaultNow(),
-  processedAt: timestamp("processed_at", { withTimezone: true }),
-});
-export type LedgerJob = typeof ledgerJobs.$inferSelect;
+// FIX-KYB: KYB workflow + KYC lifecycle tables (see drizzle/schema-kyb.ts)
+export * from "./schema-kyb";

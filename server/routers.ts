@@ -39,6 +39,7 @@ import { disputesRouter } from "./routers/disputesRouter";
 import { securityRouter } from "./routers/securityRouter";
 import { withdrawalVerificationRouter } from "./routers/withdrawalVerificationRouter";
 import { webhookRouter } from "./routers/webhookRouter";
+import { privacyRouter } from "./routers/privacyRouter";
 import { ipAllowlistRouter } from "./routers/ipAllowlistRouter";
 import { totpRouter } from "./routers/totpRouter";
 import { deviceSessionRouter } from "./routers/deviceSessionRouter";
@@ -65,6 +66,8 @@ import { marketDataRouter } from "./routers/marketDataRouter";
 import { riskManagementRouter } from "./routers/riskManagement";
 import { tradingEngineRouter } from "./routers/tradingEngine";
 import { kycServiceRouter } from "./routers/kycServiceRouter";
+import { kybRouter } from "./routers/kybRouter";
+import { kycLifecycleRouter } from "./routers/kycLifecycleRouter";
 import { aiMlRouter } from "./routers/aiMlRouter";
 import { blockchainRouter } from "./routers/blockchainRouter";
 import { analyticsEngineRouter } from "./routers/analyticsEngineRouter";
@@ -143,6 +146,7 @@ export const appRouter = router({
   security: securityRouter,
   withdrawalVerification: withdrawalVerificationRouter,
   webhook: webhookRouter,
+  privacy: privacyRouter,
   ipAllowlist: ipAllowlistRouter,
   totp: totpRouter,
   deviceSession: deviceSessionRouter,
@@ -170,6 +174,8 @@ export const appRouter = router({
   riskManagement: riskManagementRouter,
   tradingEngine: tradingEngineRouter,
   kycService: kycServiceRouter,
+  kyb: kybRouter,
+  kycLifecycle: kycLifecycleRouter,
   aiMl: aiMlRouter,
   blockchain: blockchainRouter,
   analyticsEngine: analyticsEngineRouter,

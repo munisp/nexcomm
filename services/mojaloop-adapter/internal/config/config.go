@@ -46,7 +46,13 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid HTTP_WRITE_TIMEOUT: %w", err)
 	}
 
-	dbURL := getEnv("DATABASE_URL", "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom")
+	dbURL := getEnv("DATABASE_URL", "")
+	if dbURL == "" {
+		if getEnv("ENVIRONMENT", "development") == "production" {
+			panic("FATAL: DATABASE_URL is required in production - no default DB credentials exist")
+		}
+		dbURL = "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom" // DEV-ONLY local default
+	}
 
 	dfspID := getEnv("DFSP_ID", "nexcom-exchange")
 	callbackBase := getEnv("CALLBACK_URL", fmt.Sprintf("http://mojaloop-adapter:%d/callbacks", port))

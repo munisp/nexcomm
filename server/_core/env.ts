@@ -61,6 +61,13 @@ export const ENV = {
   // The first user to log in with this email is automatically promoted to admin.
   ownerEmail: process.env.OWNER_EMAIL ?? process.env.EMAIL_FROM ?? "admin@nexcom.exchange",
 
+  // ── Admin self-service invite code ─────────────────────────────────────────
+  // Required when a user submits an ADMIN onboarding application. The code is
+  // validated server-side (timing-safe) before the application is accepted;
+  // an existing admin must still review/approve before any privilege is granted.
+  // No default: when unset, ADMIN applications are always rejected.
+  adminInviteCode: valueFromEnvironmentOrFile("ADMIN_INVITE_CODE"),
+
   // ── Google Maps (replaces Manus forge Maps proxy) ─────────────────────────
   googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? "",
   mapsProxyUrl: process.env.MAPS_PROXY_URL ?? "",

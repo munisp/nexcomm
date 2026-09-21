@@ -235,6 +235,70 @@ pub async fn set_pin(db: &DbPool, phone: &str, user_id: Option<i32>, pin: &str) 
     Ok(uid)
 }
 
+// ─── Registration ─────────────────────────────────────────────────────────────
+
+/// Check whether a user account exists for this MSISDN.
+pub async fn user_exists_by_phone(db: &DbPool, phone: &str) -> Result<bool> {
+    let row = sqlx::query("SELECT 1 AS one FROM users WHERE phone = $1 LIMIT 1")
+        .bind(phone)
+        .fetch_optional(db)
+        .await?;
+    Ok(row.is_some())
+}
+
+/// Register a new USSD user atomically:
+///   1. users row (open_id = "ussd:{phone}", login_method = 'USSD')
+///   2. farmer_profiles row with kyc_status = 'PENDING' — routed to
+///      cooperative/agent verification before the user can trade
+///   3. ussd_pins row with the hashed PIN
+/// All-or-nothing inside a single transaction.
+pub async fn register_ussd_user(db: &DbPool, phone: &str, full_name: &str, pin: &str) -> Result<i32> {
+    let mut tx = db.begin().await?;
+
+    let open_id = format!("ussd:{}", phone);
+    let row = sqlx::query(
+        r#"INSERT INTO users (open_id, name, phone, login_method, role, created_at, updated_at, last_signed_in)
+           VALUES ($1, $2, $3, 'USSD', 'user', NOW(), NOW(), NOW())
+           ON CONFLICT (open_id) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone, updated_at = NOW()
+           RETURNING id"#,
+    )
+    .bind(&open_id)
+    .bind(full_name)
+    .bind(phone)
+    .fetch_one(&mut *tx)
+    .await?;
+    let user_id: i32 = row.get("id");
+
+    // PENDING farmer profile. state/lga are NOT NULL in the schema but unknown
+    // at USSD registration time; the verifying cooperative/agent completes them
+    // during KYC review (onboarding_step stays at 1).
+    sqlx::query(
+        r#"INSERT INTO farmer_profiles
+             (user_id, full_name, phone, state, lga, kyc_status, onboarding_step, created_at, updated_at)
+           VALUES ($1, $2, $3, 'UNSPECIFIED', 'UNSPECIFIED', 'PENDING', 1, NOW(), NOW())
+           ON CONFLICT (user_id) DO NOTHING"#,
+    )
+    .bind(user_id)
+    .bind(full_name)
+    .bind(phone)
+    .execute(&mut *tx)
+    .await?;
+
+    let hash = crate::pin::hash(pin)?;
+    sqlx::query(
+        r#"INSERT INTO ussd_pins (user_id, pin_hash, failed_attempts, created_at, updated_at)
+           VALUES ($1, $2, 0, NOW(), NOW())
+           ON CONFLICT (user_id) DO UPDATE SET pin_hash=$2, failed_attempts=0, locked_until=NULL, updated_at=NOW()"#,
+    )
+    .bind(user_id)
+    .bind(hash)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(user_id)
+}
+
 // ─── Session Persistence ─────────────────────────────────────────────────────
 
 pub async fn save_session(

@@ -40,7 +40,17 @@ impl Config {
     fn from_env() -> Self {
         Config {
             port: env::var("CRYPTO_GUARD_PORT").unwrap_or_else(|_| "7070".to_string()).parse().unwrap_or(7070),
-            hmac_secret: env::var("HMAC_SECRET").unwrap_or_else(|_| "nexcom-default-hmac-secret-change-in-production".to_string()),
+            // HMAC_SECRET: required in production (fail fast); the literal
+            // fallback is DEV-ONLY so local stacks keep booting without config.
+            hmac_secret: match env::var("HMAC_SECRET") {
+                Ok(s) if !s.is_empty() => s,
+                _ if env::var("APP_ENV").map(|e| e == "production").unwrap_or(false)
+                    || env::var("NODE_ENV").map(|e| e == "production").unwrap_or(false) =>
+                {
+                    panic!("FATAL: HMAC_SECRET is required in production — no default credentials exist")
+                }
+                _ => "nexcom-dev-only-hmac-secret".to_string(), // DEV-ONLY
+            },
             nonce_ttl_seconds: env::var("NONCE_TTL_SECONDS").unwrap_or_else(|_| "300".to_string()).parse().unwrap_or(300),
             idempotency_ttl_seconds: env::var("IDEMPOTENCY_TTL_SECONDS").unwrap_or_else(|_| "86400".to_string()).parse().unwrap_or(86400),
             max_timestamp_drift_seconds: env::var("MAX_TIMESTAMP_DRIFT_SECONDS").unwrap_or_else(|_| "30".to_string()).parse().unwrap_or(30),

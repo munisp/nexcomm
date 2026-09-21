@@ -16,6 +16,8 @@
 const ME_BASE = process.env.MATCHING_ENGINE_URL ?? "http://localhost:8080";
 const SE_BASE = process.env.SETTLEMENT_ENGINE_URL ?? "http://localhost:8005";
 
+import { logTbTransfer } from "./tbTransferLog";
+
 // ─── Generic fetch helper ─────────────────────────────────────────────────────
 
 async function meGet<T>(path: string): Promise<T> {
@@ -595,5 +597,22 @@ export async function createLedgerTransfer(params: {
   currency: string;
   reference: string;
 }): Promise<unknown> {
-  return sePost<unknown>("/api/v1/ledger/transfers", params);
+  const result = await sePost<{
+    id?: string;
+    transfer_id?: string;
+    status?: string;
+  }>("/api/v1/ledger/transfers", params);
+  // Real audit trail: tb_transfer_log (was an orphan, never-written table).
+  await logTbTransfer({
+    transferId: result.id ?? result.transfer_id ?? params.reference,
+    debitAccountId: params.debit_account_id,
+    creditAccountId: params.credit_account_id,
+    amount: params.amount,
+    currency: params.currency,
+    referenceId: params.reference,
+    referenceType: "settlement",
+    code: 0,
+    status: result.status?.toUpperCase() ?? "COMMITTED",
+  });
+  return result;
 }

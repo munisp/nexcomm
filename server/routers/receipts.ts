@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { warehouseReceipts, auditLog } from "../../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
 import { ingestWarehouseReceipt, ingestReceiptPledge } from "../lakehouse";
@@ -172,17 +172,40 @@ export const receiptsRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
-      const result = await db.select().from(warehouseReceipts)
-        .where(and(eq(warehouseReceipts.id, input.id), eq(warehouseReceipts.userId, ctx.user.id))).limit(1);
-      if (!result[0]) throw new TRPCError({ code: "NOT_FOUND" });
-      if (result[0].status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: "Only ACTIVE receipts can be pledged" });
+      // Atomic check-and-set inside a transaction: the conditional
+      // UPDATE ... WHERE status='ACTIVE' closes the double-pledge race —
+      // of two concurrent pledges exactly one row matches; the loser gets
+      // zero rows back and is rejected. Belt-and-braces with the unique
+      // partial index in migration 0064_receipt_pledge_guard.
+      const pledgeReceipt = await db.transaction(async (tx) => {
+        const [row] = await tx.update(warehouseReceipts)
+          .set({ status: "PLEDGED", updatedAt: new Date() })
+          .where(and(
+            eq(warehouseReceipts.id, input.id),
+            eq(warehouseReceipts.userId, ctx.user.id),
+            eq(warehouseReceipts.status, "ACTIVE"),
+          ))
+          .returning();
+        if (!row) return null;
+        await tx.insert(auditLog).values({
+          userId: ctx.user.id,
+          action: "RECEIPT_PLEDGE",
+          resource: "warehouse_receipts",
+          resourceId: String(input.id),
+          details: { receiptNumber: row.receiptNumber },
+        });
+        return row;
+      });
 
-      const pledgeReceipt = result[0];
-      await db.update(warehouseReceipts)
-        .set({ status: "PLEDGED", updatedAt: new Date() })
-        .where(eq(warehouseReceipts.id, input.id));
+      if (!pledgeReceipt) {
+        // Distinguish not-found/not-owned from lost-race/already-pledged.
+        const [existing] = await db.select().from(warehouseReceipts)
+          .where(eq(warehouseReceipts.id, input.id)).limit(1);
+        if (!existing || existing.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND" });
+        throw new TRPCError({ code: "CONFLICT", message: "Only ACTIVE receipts can be pledged (already pledged, redeemed, or cancelled)" });
+      }
       // Middleware: Dapr + Fluvio + Lakehouse + Redis
       void (async () => {
         try {
@@ -202,14 +225,35 @@ export const receiptsRouter = router({
       const db = await getDb();
             if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
 
-      const result = await db.select().from(warehouseReceipts)
-        .where(and(eq(warehouseReceipts.id, input.id), eq(warehouseReceipts.userId, ctx.user.id))).limit(1);
-      if (!result[0]) throw new TRPCError({ code: "NOT_FOUND" });
-      if (result[0].status === "REDEEMED") throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt already redeemed" });
+      // Atomic check-and-set: conditional UPDATE ... WHERE status<>'REDEEMED'
+      // closes the double-redeem race; the loser gets zero rows back.
+      const redeemed = await db.transaction(async (tx) => {
+        const [row] = await tx.update(warehouseReceipts)
+          .set({ status: "REDEEMED", updatedAt: new Date() })
+          .where(and(
+            eq(warehouseReceipts.id, input.id),
+            eq(warehouseReceipts.userId, ctx.user.id),
+            ne(warehouseReceipts.status, "REDEEMED"),
+          ))
+          .returning();
+        if (!row) return null;
+        await tx.insert(auditLog).values({
+          userId: ctx.user.id,
+          action: "RECEIPT_REDEEM",
+          resource: "warehouse_receipts",
+          resourceId: String(input.id),
+          details: { receiptNumber: row.receiptNumber },
+        });
+        return row;
+      });
 
-      await db.update(warehouseReceipts)
-        .set({ status: "REDEEMED", updatedAt: new Date() })
-        .where(eq(warehouseReceipts.id, input.id));
+      if (!redeemed) {
+        const [existing] = await db.select().from(warehouseReceipts)
+          .where(eq(warehouseReceipts.id, input.id)).limit(1);
+        if (!existing || existing.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND" });
+        throw new TRPCError({ code: "CONFLICT", message: "Receipt already redeemed" });
+      }
+      const result = [redeemed];
 
       // Lakehouse: immutable Bronze-layer record of receipt redemption
       void ingestWarehouseReceipt({

@@ -17,6 +17,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
+import { requireKycApproved } from "../pbac";
 import { orders, notifications, circuitBreakerEvents, savedOrders, orderAmendments } from "../../drizzle/schema";
 import { eq, and, desc, asc, isNull, ilike, gte, lte, sql } from "drizzle-orm";
 import type { Order } from "../../drizzle/schema";
@@ -116,7 +117,8 @@ export const ordersRouter = router({
       return { orders: rows, total: countRows[0]?.count ?? 0 };
     }),
 
-  create: protectedProcedure
+  // Gated on approved KYC (PBAC deny-unverified-trading, wired live)
+  create: requireKycApproved
     .input(z.object({
       symbol: z.string().min(1).max(32),
       assetClass: z.enum(assetClasses).default("COMMODITY"),

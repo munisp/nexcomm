@@ -24,6 +24,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { writeAuditLog } from "../audit";
+import { issueRefund } from "../gatewayClient";
 
 // ─── helper ──────────────────────────────────────────────────────────────────
 
@@ -410,42 +411,96 @@ export const disputesRouter = router({
 
       const newStatus = input.resolution === "SETTLED" ? "RESOLVED_SETTLED" : "RESOLVED_FAILED";
 
-      await db
-        .update(settlementDisputes)
-        .set({
-          status: newStatus,
-          resolution: input.resolution,
-          resolutionNotes: input.resolutionNotes,
-          resolvedBy: ctx.user.id,
-          updatedAt: new Date(),
-          resolvedAt: new Date(),
-        })
-        .where(eq(settlementDisputes.id, input.disputeId));
+      // ── Fund reversal ────────────────────────────────────────────────────────
+      // A resolution in the complainant's favour (SETTLED) must move real money:
+      // refund the settlement's net amount to the raiser via the gateway ledger
+      // (TigerBeetle double-entry). Fail closed: if the refund cannot execute,
+      // the dispute is NOT marked resolved — no status flip without money movement.
+      let refundTransferId: string | null = null;
+      let settlementRow: typeof settlements.$inferSelect | undefined;
+      if (input.resolution === "SETTLED") {
+        const [s] = await db
+          .select()
+          .from(settlements)
+          .where(eq(settlements.id, dispute.settlementId))
+          .limit(1);
+        settlementRow = s;
+        if (!settlementRow) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Linked settlement not found" });
+        }
+        const refundAmount = parseFloat(settlementRow.netAmount);
+        if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Settlement has no refundable net amount" });
+        }
+        const refund = await issueRefund({
+          userId: String(dispute.raisedBy),
+          amount: refundAmount,
+          currency: settlementRow.currency ?? "NGN",
+          reason: `Dispute #${input.disputeId} resolved in complainant's favour: ${input.resolutionNotes.slice(0, 120)}`,
+          originalTxId: `settlement-${dispute.settlementId}`,
+        });
+        if (!refund) {
+          throw new TRPCError({
+            code: "SERVICE_UNAVAILABLE",
+            message: "Ledger refund could not be executed (gateway/TigerBeetle unavailable) — dispute left UNRESOLVED so it can be retried",
+          });
+        }
+        refundTransferId = refund.id;
+      }
 
-      await appendAuditEntry(
-        db, input.disputeId, ctx.user.id, "RESOLVED",
-        dispute.status, newStatus, input.resolutionNotes.slice(0, 120),
-      );
+      // Status update + audit + notification atomically in one transaction.
+      await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(settlementDisputes)
+          .set({
+            status: newStatus,
+            resolution: input.resolution,
+            resolutionNotes: refundTransferId
+              ? `${input.resolutionNotes}\n[refund transfer: ${refundTransferId}]`
+              : input.resolutionNotes,
+            resolvedBy: ctx.user.id,
+            updatedAt: new Date(),
+            resolvedAt: new Date(),
+          })
+          .where(and(
+            eq(settlementDisputes.id, input.disputeId),
+            // Conditional guard: refuse the update if another admin resolved first.
+            sql`${settlementDisputes.status} NOT IN ('RESOLVED_SETTLED','RESOLVED_FAILED','WITHDRAWN')`,
+          ))
+          .returning();
+        if (!updated) {
+          throw new TRPCError({ code: "CONFLICT", message: "Dispute was resolved concurrently" });
+        }
 
-      // Update the settlement status to match the resolution
-      await db
-        .update(settlements)
-        .set({ status: input.resolution, updatedAt: new Date() })
-        .where(eq(settlements.id, dispute.settlementId));
+        await tx.insert(disputeAuditLog).values({
+          disputeId: input.disputeId,
+          performedBy: ctx.user.id,
+          action: "RESOLVED",
+          fromStatus: dispute.status as typeof disputeAuditLog.$inferInsert["fromStatus"],
+          toStatus: newStatus as typeof disputeAuditLog.$inferInsert["toStatus"],
+          notes: input.resolutionNotes.slice(0, 120),
+        });
 
-      // Notify the raiser of the outcome
-      const outcomeText = input.resolution === "SETTLED"
-        ? "has been resolved in your favour — the settlement will proceed as SETTLED"
-        : "has been reviewed and the original FAILED status has been upheld";
+        // Update the settlement status to match the resolution
+        await tx
+          .update(settlements)
+          .set({ status: input.resolution, updatedAt: new Date() })
+          .where(eq(settlements.id, dispute.settlementId));
 
-      await db.insert(notifications).values({
-        userId: dispute.raisedBy,
-        title: `Dispute ${input.resolution === "SETTLED" ? "Resolved ✓" : "Closed"}`,
-        message: `Your dispute for settlement #${dispute.settlementId} ${outcomeText}. Notes: ${input.resolutionNotes.slice(0, 200)}`,
-        type: "SETTLEMENT",
+        // Notify the raiser of the outcome
+        const outcomeText = input.resolution === "SETTLED"
+          ? `has been resolved in your favour — a refund of ${settlementRow?.netAmount ?? ""} ${settlementRow?.currency ?? "NGN"} has been issued to your ledger account (transfer ${refundTransferId})`
+          : "has been reviewed and the original FAILED status has been upheld";
+
+        await tx.insert(notifications).values({
+          userId: dispute.raisedBy,
+          title: `Dispute ${input.resolution === "SETTLED" ? "Resolved ✓" : "Closed"}`,
+          message: `Your dispute for settlement #${dispute.settlementId} ${outcomeText}. Notes: ${input.resolutionNotes.slice(0, 200)}`,
+          type: "SETTLEMENT",
+        });
       });
 
-      return { success: true, newStatus };
+      return { success: true, newStatus, refundTransferId };
     }),
 
   /** Admin: list overdue disputes (past SLA deadline and not yet resolved) */

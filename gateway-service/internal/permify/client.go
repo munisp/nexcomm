@@ -59,7 +59,8 @@ func NewAuthenticatedClient(endpoint, tenantID, authToken string) *Client {
 
 func newClient(endpoint, tenantID, authToken string, requireAuth bool) *Client {
 	if strings.TrimSpace(tenantID) == "" {
-		tenantID = "nexcom"
+		// Default tenant matches compose/permify-init + push-schema.sh ("t1").
+		tenantID = "t1"
 	}
 	c := &Client{
 		endpoint:    strings.TrimRight(endpoint, "/"),

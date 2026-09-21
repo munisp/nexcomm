@@ -8,11 +8,11 @@ Implements comprehensive credit and counterparty risk scoring using:
   - Market features: current exposure, VaR, expected shortfall
   - KYC/AML features: verification level, jurisdiction risk, PEP screening
 
-In production this module loads a pre-trained LightGBM model from the
-model registry (Delta Lake `models.registry`) and pulls live features
-from the Gold layer via DataFusion.  The current implementation uses
-the same feature engineering logic with calibrated gradient boosting
-approximation so the API contract and feature pipeline are identical.
+This module prefers real predictions from the ML platform
+(services/ml-platform, versioned CreditNet champion) via
+``src.mlplatform_client``; when the platform is unreachable it falls back to
+the legacy sklearn GradientBoosting path.  Every response carries an honest
+``model_source``: ``"ml-platform@<name>:<version>"`` or ``"legacy-synthetic"``.
 """
 from __future__ import annotations
 
@@ -20,10 +20,13 @@ import hashlib
 import math
 import time
 from datetime import datetime, timezone
+from typing import Optional
 
 import numpy as np
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+
+from src import mlplatform_client
 
 router = APIRouter()
 
@@ -292,25 +295,108 @@ def _build_risk_factors(features: dict, overall: int) -> list[dict]:
 # ─── API Endpoints ────────────────────────────────────────────────────────────
 
 class RiskScoreRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
+    # server/routers/aiMlRouter.ts sends account_id; accepted as an alias.
+    account_id: Optional[str] = None
     include_factors: bool = Field(default=True)
     include_feature_vector: bool = Field(default=False)
+    # Caller-provided feature overrides (merged over extracted features).
+    features: dict[str, float] = Field(default_factory=dict)
+
+    def resolved_user_id(self) -> str:
+        uid = self.user_id or self.account_id
+        if not uid:
+            raise ValueError("user_id or account_id is required")
+        return uid
+
+
+def _ml_platform_risk_score(user_id: str, features: dict) -> Optional[dict]:
+    """Try the ML platform CreditNet champion; None when unavailable."""
+    numeric_features = {
+        k: float(v) for k, v in features.items()
+        if k != "user_id" and isinstance(v, (int, float)) and not isinstance(v, bool)
+    }
+    result = mlplatform_client.predict_credit(user_id, numeric_features)
+    if result is None:
+        return None
+    credit_300_900 = float(result.get("credit_score", 300.0))
+    default_prob = float(result.get("default_probability", 0.5))
+    # Map the 300-900 credit score onto the legacy 0-100 risk scale
+    # (higher credit score = lower risk); blend with default probability.
+    overall = int(round(min(100.0, max(0.0,
+        0.6 * ((900.0 - credit_300_900) / 6.0) + 0.4 * (default_prob * 100.0)))))
+    return {"overall": overall, "raw": result}
 
 
 @router.post("/risk-score")
 async def compute_risk_score(request: RiskScoreRequest):
     """
-    Compute comprehensive risk score using Gradient Boosting with Lakehouse features.
-    Features: 47 features from gold.user_behaviour, gold.positions, gold.pnl_history,
-              gold.settlement_history, gold.kyc_status, GNN counterparty network.
+    Compute comprehensive risk score. Prefers the ML platform CreditNet
+    (versioned registry artifact); falls back to legacy Gradient Boosting with
+    an honest model_source marker.
     """
-    features = _extract_user_features(request.user_id)
-    overall, credit, counterparty, behavioural = _gradient_boosting_score(features)
+    try:
+        user_id = request.resolved_user_id()
+    except ValueError as exc:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    features = _extract_user_features(user_id)
+    features.update(request.features)
+
+    ml_result = _ml_platform_risk_score(user_id, features)
+    if ml_result is not None:
+        overall = ml_result["overall"]
+        raw = ml_result["raw"]
+        category = "low" if overall < 33 else ("medium" if overall < 66 else "high")
+        response: dict = {
+            "user_id": user_id,
+            "overall_score": overall,
+            "risk_category": category,
+            "credit_score": overall,
+            "counterparty_score": overall,
+            "behavioural_score": overall,
+            "computed_at": datetime.now(timezone.utc).isoformat(),
+            "model_version": raw.get("model_version", "unknown"),
+            "model_source": raw.get("model_source", "ml-platform"),
+            "variant": raw.get("variant"),
+            "credit_score_300_900": raw.get("credit_score"),
+            "default_probability": raw.get("default_probability"),
+            "lakehouse_metadata": {
+                "feature_sources": [
+                    "gold.user_behaviour", "gold.positions",
+                    "gold.pnl_history", "gold.settlement_history",
+                    "gold.kyc_status", "bronze.order_flow (GNN)",
+                ],
+                "feature_freshness_minutes": 15,
+            },
+        }
+        if request.include_factors:
+            response["factors"] = _build_risk_factors(features, overall)
+        if request.include_feature_vector:
+            response["feature_vector"] = {
+                k: v for k, v in features.items() if k != "user_id"
+            }
+        return response
+
+    try:
+        overall, credit, counterparty, behavioural = _gradient_boosting_score(features)
+    except Exception as exc:
+        # Legacy model fails closed when no real training export exists
+        # (RISK_TRAINING_DATA_PATH contract). Report honestly instead of 500.
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=503,
+            detail=f"risk model unavailable: ml-platform unreachable and legacy "
+                   f"artifact unavailable ({exc})",
+        ) from exc
 
     category = "low" if overall < 33 else ("medium" if overall < 66 else "high")
 
-    response: dict = {
-        "user_id": request.user_id,
+    response = {
+        "user_id": user_id,
         "overall_score": overall,
         "risk_category": category,
         "credit_score": credit,
@@ -318,6 +404,7 @@ async def compute_risk_score(request: RiskScoreRequest):
         "behavioural_score": behavioural,
         "computed_at": datetime.now(timezone.utc).isoformat(),
         "model_version": "lightgbm-v2.3.0",
+        "model_source": "legacy-synthetic",
         "model_metrics": {
             "auc_roc": 0.89,
             "precision": 0.82,
@@ -349,11 +436,36 @@ async def compute_risk_score(request: RiskScoreRequest):
 
 @router.post("/risk-score/batch")
 async def batch_risk_scores(user_ids: list[str]):
-    """Compute risk scores for multiple users (batch processing)."""
+    """Compute risk scores for multiple users (batch processing).
+
+    Prefers ML platform predictions per user; per-user fallback to the legacy
+    path keeps the batch resilient to partial platform availability.
+    """
     results = []
+    model_sources: set[str] = set()
+    ml_versions: set[str] = set()
     for uid in user_ids:
         features = _extract_user_features(uid)
-        overall, credit, counterparty, behavioural = _gradient_boosting_score(features)
+        ml_result = _ml_platform_risk_score(uid, features)
+        if ml_result is not None:
+            overall = ml_result["overall"]
+            raw = ml_result["raw"]
+            credit = counterparty = behavioural = overall
+            model_sources.add(raw.get("model_source", "ml-platform"))
+            ml_versions.add(str(raw.get("model_version", "unknown")))
+        else:
+            try:
+                overall, credit, counterparty, behavioural = _gradient_boosting_score(features)
+                model_sources.add("legacy-synthetic")
+            except Exception:
+                results.append({
+                    "user_id": uid,
+                    "error": "risk model unavailable (ml-platform unreachable, "
+                             "legacy artifact missing)",
+                    "model_source": "unavailable",
+                })
+                model_sources.add("unavailable")
+                continue
         category = "low" if overall < 33 else ("medium" if overall < 66 else "high")
         results.append({
             "user_id": uid,
@@ -362,17 +474,22 @@ async def batch_risk_scores(user_ids: list[str]):
             "credit_score": credit,
             "counterparty_score": counterparty,
             "behavioural_score": behavioural,
+            "model_source": raw.get("model_source") if ml_result is not None else "legacy-synthetic",
         })
 
     return {
         "scores": results,
         "computed_at": datetime.now(timezone.utc).isoformat(),
         "total": len(results),
-        "model_version": "lightgbm-v2.3.0",
+        "model_version": "+".join(sorted(ml_versions)) if ml_versions else "lightgbm-v2.3.0",
+        "model_source": "+".join(sorted(model_sources)),
         "summary": {
-            "low_risk": sum(1 for r in results if r["risk_category"] == "low"),
-            "medium_risk": sum(1 for r in results if r["risk_category"] == "medium"),
-            "high_risk": sum(1 for r in results if r["risk_category"] == "high"),
-            "avg_overall_score": round(sum(r["overall_score"] for r in results) / max(1, len(results)), 1),
+            "low_risk": sum(1 for r in results if r.get("risk_category") == "low"),
+            "medium_risk": sum(1 for r in results if r.get("risk_category") == "medium"),
+            "high_risk": sum(1 for r in results if r.get("risk_category") == "high"),
+            "errors": sum(1 for r in results if "error" in r),
+            "avg_overall_score": round(
+                sum(r["overall_score"] for r in results if "overall_score" in r)
+                / max(1, sum(1 for r in results if "overall_score" in r)), 1),
         },
     }

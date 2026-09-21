@@ -44,7 +44,9 @@ from middleware.redis_client import RedisClient
 from middleware.keycloak_client import KeycloakClient
 from middleware.permify_client import PermifyClient
 from middleware.temporal_client import TemporalClient
-from middleware.lakehouse import LakehouseClient
+from middleware.lakehouse import LakehouseClient, LakehouseUnavailableError
+from fastapi.responses import JSONResponse
+import re
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
@@ -145,40 +147,52 @@ async def health():
 
 # ─── Analytics Dashboard ──────────────────────────────────────────────────────
 
+def _lakehouse_unavailable(exc: Exception) -> JSONResponse:
+    """Honest 503 when the lakehouse cannot serve a request."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "success": False,
+            "error": f"lakehouse unavailable: {exc}",
+            "data_source": "unavailable",
+        },
+    )
+
+
+def _num(row: dict, *keys: str) -> float:
+    for k in keys:
+        v = row.get(k)
+        if isinstance(v, (int, float)):
+            return float(v)
+    return 0.0
+
+
 @app.get("/api/v1/analytics/dashboard")
 async def analytics_dashboard(user=Depends(get_current_user)):
     """
     Market overview dashboard.
-    Production: Spark SQL on Delta Lake gold.market_summary table.
-    SELECT symbol, last_price, change_24h_pct, volume_24h, market_cap
-    FROM gold.market_summary ORDER BY volume_24h DESC
+    Reads gold.market_summary from the lakehouse via the real query engine
+    (DataFusion or PyArrow scan). When the lakehouse cannot serve the query,
+    returns 503 with data_source="unavailable" — no fabricated numbers.
     """
     cached = redis_client.get("analytics:dashboard")
     if cached:
         return APIResponse(success=True, data=cached)
 
-    rng = np.random.default_rng(int(time.time() // 30))
+    try:
+        rows, engine = lakehouse.query_strict("SELECT * FROM market_summary LIMIT 500")
+    except LakehouseUnavailableError as exc:
+        return _lakehouse_unavailable(exc)
+
+    by_change = sorted(rows, key=lambda r: _num(r, "change_24h_pct", "change"), reverse=True)
     data = {
-        "marketCap": 2_470_000_000,
-        "volume24h": 456_000_000,
-        "activePairs": 42,
-        "activeTraders": 12500,
-        "topGainers": [
-            {"symbol": "VCU", "name": "Verified Carbon Units", "change": round(float(rng.uniform(2.0, 4.0)), 2), "price": 15.20},
-            {"symbol": "NAT_GAS", "name": "Natural Gas", "change": round(float(rng.uniform(1.5, 3.5)), 2), "price": 2.85},
-            {"symbol": "COFFEE", "name": "Arabica Coffee", "change": round(float(rng.uniform(1.0, 3.0)), 2), "price": 157.80},
-        ],
-        "topLosers": [
-            {"symbol": "CRUDE_OIL", "name": "Brent Crude", "change": round(float(rng.uniform(-2.5, -0.5)), 2), "price": 78.45},
-            {"symbol": "COCOA", "name": "Premium Cocoa", "change": round(float(rng.uniform(-2.0, -0.5)), 2), "price": 3245.00},
-            {"symbol": "WHEAT", "name": "Hard Red Wheat", "change": round(float(rng.uniform(-1.5, -0.2)), 2), "price": 342.75},
-        ],
-        "volumeByCategory": {"agricultural": 45, "metals": 25, "energy": 20, "carbon": 10},
-        "tradingActivity": [
-            {"hour": h, "volume": int(rng.integers(10_000_000, 30_000_000))}
-            for h in range(24)
-        ],
-        "lakehouse_source": "gold.market_summary (Delta Lake + Spark SQL)",
+        "volume24h": sum(_num(r, "volume_24h", "volume") for r in rows),
+        "activePairs": len(rows),
+        "topGainers": by_change[:3],
+        "topLosers": by_change[-3:] if len(by_change) >= 3 else [],
+        "marketSummary": rows,
+        "engine": engine,
+        "data_source": "lakehouse:gold.market_summary",
     }
     redis_client.set("analytics:dashboard", data, ttl=30)
     kafka.produce("nexcom.analytics", "dashboard_viewed", {
@@ -191,49 +205,72 @@ async def analytics_dashboard(user=Depends(get_current_user)):
 @app.get("/api/v1/analytics/pnl")
 async def pnl_report(period: str = "1M", user=Depends(get_current_user)):
     """
-    P&L report from Lakehouse Delta Lake tables via Spark SQL.
-    Production query:
-      SELECT date, SUM(pnl) as daily_pnl, COUNT(*) as trades
-      FROM gold.trades WHERE user_id = :user_id
-        AND date >= current_date - INTERVAL :days DAYS
-      GROUP BY date ORDER BY date
+    P&L report aggregated from the lakehouse gold.trades table via the real
+    query engine. When the lakehouse cannot serve the query, returns 503 with
+    data_source="unavailable" — no fabricated P&L is ever served.
     """
     user_id = user.get("sub", "usr-001")
     days = _period_to_days(period)
-    seed = int(hashlib.md5(f"{user_id}{period}".encode()).hexdigest(), 16) % (2**32)
-    rng = np.random.default_rng(seed)
+    if not re.fullmatch(r"[A-Za-z0-9_\-]+", str(user_id)):
+        raise HTTPException(status_code=400, detail="Invalid user identity")
+
+    try:
+        rows, engine = lakehouse.query_strict(
+            f"SELECT * FROM trades WHERE user_id = '{user_id}' LIMIT 10000"
+        )
+    except LakehouseUnavailableError as exc:
+        return _lakehouse_unavailable(exc)
+
+    # PyArrow fallback does not evaluate WHERE — filter defensively.
+    rows = [r for r in rows if str(r.get("user_id", user_id)) == str(user_id)]
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    daily: dict[str, dict] = {}
+    by_symbol: dict[str, dict] = {}
+    for r in rows:
+        pnl = r.get("pnl")
+        if not isinstance(pnl, (int, float)):
+            continue
+        date = str(r.get("date") or r.get("ts") or r.get("timestamp") or "")[:10]
+        if not date or date < cutoff:
+            continue
+        d = daily.setdefault(date, {"date": date, "pnl": 0.0, "trades": 0})
+        d["pnl"] += float(pnl)
+        d["trades"] += 1
+        sym = str(r.get("symbol", "UNKNOWN"))
+        s = by_symbol.setdefault(sym, {"symbol": sym, "pnl": 0.0, "trades": 0})
+        s["pnl"] += float(pnl)
+        s["trades"] += 1
 
     daily_pnl = []
     cumulative = 0.0
-    for i in range(days):
-        daily = float(rng.normal(200, 800))
-        cumulative += daily
+    wins = 0
+    for date in sorted(daily):
+        cumulative += daily[date]["pnl"]
+        if daily[date]["pnl"] > 0:
+            wins += 1
         daily_pnl.append({
-            "date": (datetime.now(timezone.utc) - timedelta(days=days - i)).strftime("%Y-%m-%d"),
-            "pnl": round(daily, 2),
+            "date": date,
+            "pnl": round(daily[date]["pnl"], 2),
             "cumulative": round(cumulative, 2),
-            "trades": int(rng.integers(2, 15)),
-            "winRate": round(float(rng.uniform(0.45, 0.75)), 3),
+            "trades": daily[date]["trades"],
         })
 
-    total_pnl = sum(d["pnl"] for d in daily_pnl)
-    total_trades = sum(d["trades"] for d in daily_pnl)
+    total_trades = sum(d["trades"] for d in daily.values())
     data = {
         "userId": user_id,
         "period": period,
-        "totalPnl": round(total_pnl, 2),
+        "totalPnl": round(cumulative, 2),
         "totalTrades": total_trades,
-        "winRate": round(float(rng.uniform(0.55, 0.72)), 3),
-        "sharpeRatio": round(float(rng.uniform(0.8, 2.2)), 3),
-        "maxDrawdown": round(float(rng.uniform(0.02, 0.15)), 4),
+        "winRate": round(wins / len(daily_pnl), 3) if daily_pnl else 0.0,
         "dailyPnl": daily_pnl,
-        "bySymbol": [
-            {"symbol": sym, "pnl": round(float(rng.normal(500, 2000)), 2),
-             "trades": int(rng.integers(5, 40))}
-            for sym in list(_BASE_PRICES.keys())[:8]
-        ],
-        "lakehouse_source": "gold.trades (Delta Lake + Spark SQL)",
-        "pipeline": "Apache Spark batch aggregation",
+        "bySymbol": sorted(
+            ({"symbol": v["symbol"], "pnl": round(v["pnl"], 2), "trades": v["trades"]}
+             for v in by_symbol.values()),
+            key=lambda x: x["pnl"], reverse=True,
+        ),
+        "engine": engine,
+        "data_source": "lakehouse:gold.trades",
     }
     return APIResponse(success=True, data=data)
 
@@ -459,7 +496,7 @@ async def ai_insights(user=Depends(get_current_user)):
                     time.time() - float(sym_rng.uniform(0, 21600)), tz=timezone.utc
                 ).isoformat(),
                 "model": "Isolation Forest (Ray distributed)",
-                "lakehouse_source": "gold.features",
+                "data_source": "simulated",
             })
 
     # ── 3. Sentiment Aggregation (BERT via Ray) ───────────────────────────────
@@ -504,7 +541,8 @@ async def ai_insights(user=Depends(get_current_user)):
             "bearish": bearish_count,
             "neutral": neutral_count,
             "bySymbol": sentiment_scores,
-            "sources": ["silver.alternative (news)", "silver.alternative (social)", "gold.features (technical)", "silver.clearing (COT)"],
+            "sources": [],
+            "data_source": "simulated",
             "confidence": round(float(rng.uniform(0.72, 0.88)), 3),
             "model": "BERT sentiment classifier (Ray distributed)",
         },
@@ -521,12 +559,7 @@ async def ai_insights(user=Depends(get_current_user)):
             "transition_matrix": _HMM_TRANSITIONS,
         },
         "pipeline": "Ray AIR (Data → Preprocessing → HMM + IF + BERT + GNN → Aggregation)",
-        "lakehouse_sources": [
-            "gold.features (technical indicators)",
-            "silver.alternative (news + social sentiment)",
-            "silver.clearing (COT data)",
-            "bronze.order_flow (GNN input)",
-        ],
+        "data_source": "simulated",
         "computed_at": datetime.now(timezone.utc).isoformat(),
     }
     return APIResponse(success=True, data=data)
@@ -627,7 +660,6 @@ async def generate_report(report_type: str, period: str = "1M", user=Depends(get
         "timestamp": int(time.time()),
     })
 
-    pipeline = "Apache Flink (streaming)" if report_type in ["pnl", "margin"] else "Apache Spark (batch)"
     lakehouse_table = {
         "pnl": "gold.trades",
         "tax": "gold.tax_events",
@@ -636,25 +668,31 @@ async def generate_report(report_type: str, period: str = "1M", user=Depends(get
         "regulatory": "gold.regulatory_filings",
     }.get(report_type, "gold.trades")
 
+    if not re.fullmatch(r"[A-Za-z0-9_\-]+", str(user_id)):
+        raise HTTPException(status_code=400, detail="Invalid user identity")
+
+    # Real report: rows from the lakehouse gold table for this user.
+    # No fabricated summaries, no fake PDF/download URLs — when the lakehouse
+    # cannot serve the table, return an honest 503.
+    try:
+        rows, engine = lakehouse.query_strict(
+            f"SELECT * FROM {lakehouse_table} WHERE user_id = '{user_id}' LIMIT 5000"
+        )
+    except LakehouseUnavailableError as exc:
+        return _lakehouse_unavailable(exc)
+
+    rows = [r for r in rows if str(r.get("user_id", user_id)) == str(user_id)]
+
     data = {
         "reportType": report_type,
         "period": period,
         "status": "generated",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "format": "PDF",
-        "pipeline": pipeline,
-        "lakehouse_source": f"{lakehouse_table} (Delta Lake)",
-        "downloadUrl": f"/api/v1/analytics/reports/{report_type}/download?period={period}",
-        "summary": _get_report_summary(report_type, period),
-        "spark_query": (
-            f"SELECT * FROM {lakehouse_table} "
-            f"WHERE user_id = \'{user_id}\' "
-            f"AND ts >= current_timestamp - INTERVAL {_period_to_days(period)} DAYS"
-        ) if report_type not in ["pnl", "margin"] else None,
-        "flink_job": (
-            f"FlinkJob(stream=bronze.trades, window=TumblingWindow(1h), "
-            f"agg=SUM(pnl), filter=user_id=\'{user_id}\')"
-        ) if report_type in ["pnl", "margin"] else None,
+        "format": "json",
+        "engine": engine,
+        "rowCount": len(rows),
+        "rows": rows,
+        "data_source": f"lakehouse:{lakehouse_table}",
     }
     return APIResponse(success=True, data=data)
 
@@ -682,102 +720,33 @@ async def datafusion_query(sql: str = "", user=Depends(get_current_user)):
             raise HTTPException(status_code=400, detail=f"Keyword {kw} not permitted")
 
     start_ts = time.time()
-    # Production: results = ctx.sql(sql).collect()
-    # Simulate DataFusion execution with schema-aware mock results
-    results = _simulate_datafusion_query(sql)
-    execution_ms = round((time.time() - start_ts) * 1000 + 12, 1)
+    # Real execution via the lakehouse query engine (DataFusion, or PyArrow
+    # parquet scan). On any failure: honest 503, never fabricated rows.
+    try:
+        results, engine = lakehouse.query_strict(sql)
+    except LakehouseUnavailableError as exc:
+        return _lakehouse_unavailable(exc)
+    execution_ms = round((time.time() - start_ts) * 1000, 1)
 
     data = {
         "query": sql,
-        "engine": "Apache DataFusion",
+        "engine": engine,
         "status": "executed",
         "rows": len(results),
         "executionTime": f"{execution_ms}ms",
         "result": results,
-        "registered_tables": [
-            "gold.trades", "gold.features", "gold.positions",
-            "gold.market_summary", "gold.production_regions",
-            "silver.trades", "silver.alternative", "silver.clearing",
-            "bronze.order_flow",
-        ],
+        "lakehouse_components": lakehouse.status(),
         "lakehouse_format": "Delta Lake (Parquet + transaction log)",
+        "data_source": "lakehouse",
     }
     return APIResponse(success=True, data=data)
 
-
-def _simulate_datafusion_query(sql: str) -> list[dict]:
-    """
-    Simulate DataFusion query results based on SQL content.
-    Production: replaced by actual DataFusion ctx.sql(sql).collect()
-    """
-    sql_lower = sql.lower()
-    rng = np.random.default_rng(int(hashlib.md5(sql.encode()).hexdigest(), 16) % (2**32))
-
-    if "market_summary" in sql_lower or "dashboard" in sql_lower:
-        return [
-            {"symbol": sym, "last_price": _BASE_PRICES.get(sym, 100.0),
-             "change_24h_pct": round(float(rng.normal(0, 1.5)), 3),
-             "volume_24h": int(rng.integers(1_000_000, 50_000_000))}
-            for sym in list(_BASE_PRICES.keys())[:5]
-        ]
-    elif "features" in sql_lower:
-        return [
-            {"symbol": "MAIZE", "ts": datetime.now(timezone.utc).isoformat(),
-             "ma_5": 215.2, "ma_20": 214.8, "rsi_14": 52.3, "macd": 0.42,
-             "vwap": 215.1, "volume_ratio": 1.12, "news_sentiment_24h": 0.15}
-        ]
-    elif "production_regions" in sql_lower:
-        return [
-            {"region_name": "Rift Valley Basin", "country": "Kenya",
-             "commodity": "MAIZE", "production_tonnes": 3_200_000,
-             "supply_chain_score": 82}
-        ]
-    else:
-        return [{"rows_scanned": int(rng.integers(1000, 100000)), "execution_plan": "DataFusion sequential scan"}]
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _period_to_days(period: str) -> int:
     return {"1D": 1, "1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365}.get(period, 30)
 
-
-def _get_report_summary(report_type: str, period: str) -> dict:
-    rng = np.random.default_rng(int(hashlib.md5(f"{report_type}{period}".encode()).hexdigest(), 16) % (2**32))
-    summaries = {
-        "pnl": {
-            "totalPnl": round(float(rng.normal(8000, 3000)), 2),
-            "totalTrades": int(rng.integers(80, 250)),
-            "winRate": round(float(rng.uniform(0.55, 0.72)), 3),
-            "sharpeRatio": round(float(rng.uniform(0.8, 2.2)), 3),
-            "maxDrawdown": round(float(rng.uniform(0.02, 0.12)), 4),
-        },
-        "tax": {
-            "taxableGains": round(float(rng.uniform(5000, 25000)), 2),
-            "taxRate": 15.0,
-            "estimatedTax": round(float(rng.uniform(750, 3750)), 2),
-            "shortTermGains": round(float(rng.uniform(2000, 10000)), 2),
-            "longTermGains": round(float(rng.uniform(3000, 15000)), 2),
-        },
-        "trade_confirmations": {
-            "totalConfirmations": int(rng.integers(80, 250)),
-            "settled": int(rng.integers(70, 230)),
-            "pending": int(rng.integers(0, 20)),
-            "failed": int(rng.integers(0, 5)),
-        },
-        "margin": {
-            "totalMarginUsed": round(float(rng.uniform(20000, 80000)), 2),
-            "marginUtilization": round(float(rng.uniform(0.25, 0.65)), 3),
-            "marginCalls": int(rng.integers(0, 3)),
-            "avgMarginRatio": round(float(rng.uniform(1.5, 3.0)), 3),
-        },
-        "regulatory": {
-            "complianceScore": round(float(rng.uniform(92, 99.5)), 1),
-            "pendingItems": int(rng.integers(0, 5)),
-            "lastAudit": "2026-01-15",
-            "filings": int(rng.integers(5, 20)),
-        },
-    }
-    return summaries.get(report_type, {})
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 

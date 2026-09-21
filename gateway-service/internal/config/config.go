@@ -46,16 +46,22 @@ func Load() *Config {
 		TigerBeetleAddresses: getEnv("TIGERBEETLE_ADDRESSES", "localhost:3000"),
 		DaprHTTPPort:         getEnv("DAPR_HTTP_PORT", "3500"),
 		DaprGRPCPort:         getEnv("DAPR_GRPC_PORT", "50001"),
-		FluvioEndpoint:       getEnv("FLUVIO_ENDPOINT", "localhost:9003"),
+		// FluvioEndpoint targets the fluvio-sidecar HTTP bridge (not raw SC :9003).
+		// Compose exposes it as fluvio-sidecar:8090 / localhost:8090.
+		FluvioEndpoint:       getEnv("FLUVIO_ENDPOINT", "localhost:8090"),
 		KeycloakURL:          getEnv("KEYCLOAK_URL", "http://localhost:8080"),
 		KeycloakRealm:        getEnv("KEYCLOAK_REALM", "nexcom"),
 		KeycloakClientID:     getEnv("KEYCLOAK_CLIENT_ID", "nexcom-gateway"),
 		PermifyEndpoint:      getEnv("PERMIFY_ENDPOINT", "localhost:3476"),
-		PermifyTenantID:      getEnv("PERMIFY_TENANT_ID", "nexcom"),
+		// PermifyTenantID must match the tenant that infra/permify/push-schema.sh
+		// and docker-compose permify-init use: "t1" (was "nexcom" — never provisioned).
+		PermifyTenantID:      getEnv("PERMIFY_TENANT_ID", "t1"),
 		PermifyAuthToken:     getSecretEnv("PERMIFY_AUTH_TOKEN"),
 		PostgresURL:          getEnv("POSTGRES_URL", "postgres://nexcom:nexcom@localhost:5432/nexcom?sslmode=disable"),
 		APISIXAdminURL:       getEnv("APISIX_ADMIN_URL", "http://localhost:9180"),
-		APISIXAdminKey:       getEnv("APISIX_ADMIN_KEY", "nexcom-apisix-key"),
+		// APISIX_ADMIN_KEY: required in production (fail fast); the literal
+		// fallback is DEV-ONLY and matches apisix.yaml's dev admin key.
+		APISIXAdminKey:       getAPISIXAdminKey(),
 		CORSOrigins:          getEnv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001"),
 		MatchingEngineURL:    getEnv("MATCHING_ENGINE_URL", "http://localhost:8080"),
 		IngestionEngineURL:   getEnv("INGESTION_ENGINE_URL", "http://localhost:8005"),
@@ -74,6 +80,18 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// getAPISIXAdminKey requires APISIX_ADMIN_KEY in production (fail fast);
+// in development it falls back to the DEV-ONLY key that apisix.yaml ships with.
+func getAPISIXAdminKey() string {
+	if v := getSecretEnv("APISIX_ADMIN_KEY"); v != "" {
+		return v
+	}
+	if getEnv("ENVIRONMENT", "development") == "production" {
+		panic("FATAL: APISIX_ADMIN_KEY is required in production — no default credentials exist")
+	}
+	return "nexcom-apisix-key" // DEV-ONLY: matches the apisix.yaml dev admin key
 }
 
 // getSecretEnv supports the chart's read-only Secret-file convention while

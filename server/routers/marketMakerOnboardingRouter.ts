@@ -10,6 +10,7 @@ import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { notifyOwner } from "../_core/notification";
 import { marketMakerOnboardingProfiles, kycAuditLog } from "../../drizzle/schema";
+import { applyKycDecisionSideEffects } from "../kycReview";
 import { storagePut } from "../storage";
 import { validateFileUpload } from "../security-middleware";
 import { writeAuditLog } from "../audit";
@@ -173,6 +174,17 @@ export const marketMakerOnboardingRouter = router({
         reviewerName: ctx.user.name ?? null,
         decision: input.decision,
         notes: input.notes ?? null,
+      });
+      // Sync generic profile store and notify the applicant in-app
+      await applyKycDecisionSideEffects(db, {
+        userId: profile.userId,
+        decision: input.decision,
+        reviewerId: ctx.user.id,
+        reviewerName: ctx.user.name,
+        notes: input.notes,
+        stakeholderLabel: "Market Maker",
+        accountType: "MARKET_MAKER",
+        metadata: { marketMakerProfileId: input.marketMakerId },
       });
       notifyOwner({
         title: `[Market Maker KYC] Application ${input.decision}`,

@@ -11,7 +11,7 @@
 import { z } from "zod";
 import { eq, desc } from "drizzle-orm";
 import { getDb } from "../db";
-import { dfspKycRecords } from "../../drizzle/schema";
+import { dfspKycRecords, notifications } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
@@ -38,10 +38,10 @@ export const dfspKycRouter = router({
   // ── Submit KYC (called from onboarding wizard) ─────────────────────────────
   submitKyc: protectedProcedure
     .input(kycInputSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       // Upsert: if the DFSP re-submits, update the record and reset to PENDING
       const db = await getDb();
-            if (!db) return { success: true };
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — KYC submission not recorded. Please retry." });
       const existing = await db
         .select({ id: dfspKycRecords.id })
         .from(dfspKycRecords)
@@ -52,6 +52,7 @@ export const dfspKycRouter = router({
         await db
           .update(dfspKycRecords)
           .set({
+            userId:                    ctx.user.id,
             legalEntityName:           input.legalEntityName,
             registrationNumber:        input.registrationNumber,
             taxId:                     input.taxId ?? null,
@@ -78,6 +79,7 @@ export const dfspKycRouter = router({
 
       await db.insert(dfspKycRecords).values({
         fspId:                     input.fspId,
+        userId:                    ctx.user.id,
         legalEntityName:           input.legalEntityName,
         registrationNumber:        input.registrationNumber,
         taxId:                     input.taxId ?? null,
@@ -160,13 +162,14 @@ export const dfspKycRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
       }
       const db = await getDb();
-            if (!db) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const rows = await db
-        .select({ id: dfspKycRecords.id })
+        .select({ id: dfspKycRecords.id, userId: dfspKycRecords.userId, legalEntityName: dfspKycRecords.legalEntityName })
         .from(dfspKycRecords)
         .where(eq(dfspKycRecords.fspId, input.fspId))
         .limit(1);
       if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "KYC record not found" });
+      const record = rows[0];
 
       await db
         .update(dfspKycRecords)
@@ -178,6 +181,35 @@ export const dfspKycRouter = router({
           updatedAt:   new Date(),
         })
         .where(eq(dfspKycRecords.fspId, input.fspId));
+
+      // Audit trail for every DFSP KYC decision
+      await writeAuditLog({
+        userId: ctx.user.id,
+        action: `DFSP_KYC_${input.status}`,
+        resource: "dfsp_kyc_records",
+        resourceId: input.fspId,
+        details: {
+          legalEntityName: record.legalEntityName,
+          reviewNotes: input.reviewNotes ?? null,
+        },
+      });
+
+      // Notify the applicant in-app when we know which portal user submitted
+      if (record.userId) {
+        const label = input.status === "APPROVED" ? "Approved" : input.status === "REJECTED" ? "Rejected" : " flagged for Enhanced Due Diligence";
+        await db.insert(notifications).values({
+          userId: record.userId,
+          title: `DFSP KYC ${input.status === "EDD_REQUIRED" ? "— EDD Required" : label}`,
+          message: input.status === "APPROVED"
+            ? `KYC/AML application for ${record.legalEntityName} (${input.fspId}) has been approved.`
+            : input.status === "REJECTED"
+              ? `KYC/AML application for ${record.legalEntityName} (${input.fspId}) has been rejected.${input.reviewNotes ? ` Reason: ${input.reviewNotes}` : ""}`
+              : `KYC/AML application for ${record.legalEntityName} (${input.fspId}) requires Enhanced Due Diligence.${input.reviewNotes ? ` ${input.reviewNotes}` : ""}`,
+          type: "KYC",
+          read: false,
+          metadata: { fspId: input.fspId, status: input.status, reviewedBy: ctx.user.id },
+        });
+      }
 
       return { success: true, fspId: input.fspId, status: input.status };
     }),

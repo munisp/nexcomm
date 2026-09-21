@@ -24,8 +24,15 @@ function resolveDbUrl(): string {
     console.log("[Database] Using NEXCOM_PG_URL");
     return pgUrl;
   }
-  // Fall back to local PostgreSQL (development sandbox)
-  console.log("[Database] Using local PostgreSQL postgresql://127.0.0.1:5432/nexcom");
+  // Fail fast in production — no hardcoded credentials.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "[Database] FATAL: NEXCOM_PG_URL is required in production; no default database credentials exist."
+    );
+  }
+  // DEV-ONLY fallback: local docker-compose Postgres (password matches the
+  // compose dev default; never usable in production because of the guard above).
+  console.warn("[Database] DEV-ONLY fallback: using local PostgreSQL default credentials (set NEXCOM_PG_URL!)");
   return "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom";
 }
 

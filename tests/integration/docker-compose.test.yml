@@ -5,7 +5,7 @@ version: "3.8"
 services:
   gateway:
     build:
-      context: ../../services/gateway
+      context: ../../gateway-service
       dockerfile: Dockerfile
     container_name: nexcom-test-gateway
     ports:
@@ -22,7 +22,7 @@ services:
 
   matching-engine:
     build:
-      context: ../../services/matching-engine
+      context: ../../matching-engine
       dockerfile: Dockerfile
     container_name: nexcom-test-matching-engine
     ports:

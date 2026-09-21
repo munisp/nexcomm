@@ -21,6 +21,11 @@ volumes:
   permify_data:          # Permify RBAC policy store
   apisix_data:           # APISIX etcd config store
   model_registry_data:   # AI/ML model registry — persists trained scikit-learn models
+  appsec_data:           # open-appsec agent data (waf profile)
+  appsec_logs:           # open-appsec agent logs (waf profile)
+  backup_data:           # Postgres/lakehouse backup dumps (backup profile)
+  mlflow_data:           # MLflow tracking server state (ml profile)
+  neo4j_data:            # Neo4j graph store (ml profile)
 
 services:
   # ─── Infrastructure ────────────────────────────────────────────────────────
@@ -86,6 +91,44 @@ services:
       timeout: 10s
       retries: 10
 
+  # ─── Fluvio Streaming Bridge ───────────────────────────────────────────────
+  # HTTP bridge in front of Fluvio used by the portal (server/fluvio/fluvioClient.ts),
+  # gateway-service (internal/fluvio/client.go) and journey-orchestrator.
+  # Works standalone: when no Fluvio SC cluster is reachable it serves traffic
+  # from in-memory fallback queues (see fluvio-sidecar/main.py).
+  fluvio-sidecar:
+    build:
+      context: ./fluvio-sidecar
+      dockerfile: Dockerfile
+    container_name: nexcom-fluvio-sidecar
+    environment:
+      FLUVIO_SIDECAR_PORT: "8090"
+      # Fluvio SC endpoint; the optional `fluvio` profile service below provides
+      # it in-cluster. Unreachable SC => automatic in-memory fallback mode.
+      FLUVIO_ENDPOINT: ${FLUVIO_SC_ENDPOINT:-fluvio:9003}
+    ports:
+      - "8090:8090"
+    healthcheck:
+      # python:3.11-slim has no curl/wget — use stdlib urllib
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [nexcom]
+
+  # Optional local Fluvio SC cluster (opt-in: docker compose --profile fluvio up).
+  # Dev-grade only (single SPU, in-container local cluster); production uses
+  # the k8s manifests under infrastructure/fluvio/.
+  fluvio:
+    image: infinyon/fluvio:0.11.11
+    container_name: nexcom-fluvio-sc
+    profiles: ["fluvio"]
+    command: ["fluvio", "cluster", "start", "--local", "--spu", "1"]
+    ports:
+      - "9003:9003"
+    networks: [nexcom]
+
   tigerbeetle:
     image: ghcr.io/tigerbeetle/tigerbeetle:0.16.73
     command: >
@@ -95,6 +138,16 @@ services:
       - tigerbeetle_data:/data
     ports:
       - "3001:3001"
+    # TigerBeetle has no HTTP endpoint and the image ships no curl; the tb
+    # binary itself is the probe — `version` exercises the binary in-image.
+    # Consumers should additionally gate on gateway-service health (which wraps
+    # the official TB SDK Nop() probe).
+    healthcheck:
+      test: ["CMD-SHELL", "tigerbeetle version >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks: [nexcom]
 
   # ─── Identity Provider ────────────────────────────────────────────────────
@@ -149,7 +202,6 @@ services:
       KYC_SERVICE_URL: http://kyc-service:8003
       NOTIFICATION_SERVICE_URL: http://notification:8008
       ANALYTICS_SERVICE_URL: http://analytics:8006
-      ANALYTICS_ENGINE_URL: http://analytics-engine:8011
       USER_MANAGEMENT_URL: http://user-management:8012
       MOJALOOP_ADAPTER_URL: http://mojaloop-adapter:4001
       AI_ML_SERVICE_URL: http://ai-ml:8007
@@ -157,6 +209,7 @@ services:
       INGESTION_SERVICE_URL: http://ingestion-engine:8009
       BLOCKCHAIN_SERVICE_URL: http://blockchain:8010
       TIGERBEETLE_ADDRESSES: tigerbeetle:3001
+      FLUVIO_HTTP_URL: ${FLUVIO_HTTP_URL:-http://fluvio-sidecar:8090}
       KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-nexcom}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_PORTAL_CLIENT_ID:-nexcom-portal}
@@ -187,7 +240,9 @@ services:
       # nexcom.order.placed, nexcom.trade.executed — consumed by ingestion-engine
       # Bronze layer for Lakehouse ingestion
     ports:
-      - "8080:8080"
+      # Host port 18080: 8080 on the host is already claimed by keycloak (L130).
+      # Container port stays 8080 — in-network consumers use matching-engine:8080.
+      - "18080:8080"
     depends_on:
       kafka: { condition: service_healthy }
     healthcheck:
@@ -204,6 +259,9 @@ services:
       dockerfile: Dockerfile
     environment:
       PORT: "8005"
+      # Ledger ops go through the gateway ledger API (gateway owns the official
+      # TigerBeetle SDK client); TB itself has no HTTP interface.
+      GATEWAY_URL: http://gateway:8200
       TIGERBEETLE_ADDRESSES: tigerbeetle:3001
       KAFKA_BROKERS: kafka:9092
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
@@ -234,7 +292,6 @@ services:
       RISK_SERVICE_URL: http://risk-management:8004
       KYC_SERVICE_URL: http://kyc-service:8003
       ANALYTICS_SERVICE_URL: http://analytics:8006
-      ANALYTICS_ENGINE_URL: http://analytics-engine:8011
       USER_MANAGEMENT_URL: http://user-management:8012
       MOJALOOP_ADAPTER_URL: http://mojaloop-adapter:4001
       AIML_SERVICE_URL: http://ai-ml:8007
@@ -256,7 +313,9 @@ services:
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-nexcom}
       DAPR_HTTP_PORT: ${DAPR_HTTP_PORT:-3500}
       DAPR_GRPC_PORT: ${DAPR_GRPC_PORT:-50001}
-      FLUVIO_ENDPOINT: ${FLUVIO_ENDPOINT:-fluvio-proxy:9003}
+      # gateway-service fluvio client prepends http:// itself — host:port only.
+      # Points at the fluvio-sidecar HTTP bridge (fluvio-proxy never existed).
+      FLUVIO_ENDPOINT: ${FLUVIO_ENDPOINT:-fluvio-sidecar:8090}
       APISIX_ADMIN_URL: ${APISIX_ADMIN_URL:-http://apisix:9180}
       APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
@@ -323,6 +382,7 @@ services:
     environment:
       PORT: "8003"
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
+      NEXCOM_PG_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
       OPENSANCTIONS_API_KEY: ${OPENSANCTIONS_API_KEY:-}
     ports:
@@ -434,6 +494,8 @@ services:
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       LAKEHOUSE_BASE_PATH: /data/lakehouse
       INGESTION_ENGINE_URL: http://ingestion-engine:8009
+      # Points at the ml-platform serving API (active with --profile ml)
+      ML_PLATFORM_URL: http://ml-platform:8015
     ports:
       - "8007:8007"
     depends_on:
@@ -459,45 +521,6 @@ services:
       - "8010:8010"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8010/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    networks: [nexcom]
-
-  trading-engine:
-    build:
-      context: services/trading-engine
-      dockerfile: Dockerfile
-    environment:
-      PORT: "8001"
-      KAFKA_BROKERS: kafka:9092
-      MATCHING_ENGINE_URL: http://matching-engine:8080
-    ports:
-      - "8001:8001"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    networks: [nexcom]
-
-  analytics-engine:
-    build:
-      context: services/analytics-engine
-      dockerfile: Dockerfile
-    environment:
-      PORT: "8011"
-      MATCHING_ENGINE_URL: http://matching-engine:8080
-      INGESTION_ENGINE_URL: http://ingestion-engine:8009
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
-    ports:
-      - "8011:8011"
-    depends_on:
-      postgres: { condition: service_healthy }
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8011/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -584,7 +607,9 @@ services:
       LOG_LEVEL: info
       HOSTNAME: central-ledger
     ports:
-      - "3001:3001"
+      # Host port 13001: 3001 on the host is TigerBeetle. In-network consumers use
+      # central-ledger:3001 (container port unchanged).
+      - "13001:3001"
     depends_on:
       mojaloop-mysql: { condition: service_healthy }
       kafka: { condition: service_started }
@@ -604,7 +629,8 @@ services:
       ML_API_ADAPTER_CENTRAL_LEDGER_URL: http://central-ledger:3001
       LOG_LEVEL: info
     ports:
-      - "3000:3000"
+      # Host port 13000: 3000 on the host is the portal. In-network refs unchanged.
+      - "13000:3000"
     depends_on:
       central-ledger: { condition: service_healthy }
     healthcheck:
@@ -803,6 +829,8 @@ services:
       POSTGRES_URL: postgres://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
+      # Ledger ops route via the gateway ledger API (TB has no HTTP interface)
+      GATEWAY_URL: http://gateway:8200
       TIGERBEETLE_ADDRESS: tigerbeetle:3001
       DAPR_HTTP_PORT: "3500"
       LOG_LEVEL: info
@@ -878,12 +906,201 @@ services:
       retries: 5
     networks: [nexcom]
 
+  # ─── Scheduled backups (opt-in: docker compose --profile backup up -d backup) ─
+  # Runs scripts/backup/postgres-backup.sh on a daily loop; dumps land in the
+  # backup_data volume (mirror it off-box for real DR — see docs/DISASTER_RECOVERY.md).
+  backup:
+    image: postgres:16-alpine   # pg_dump version must match the server (postgres:16-alpine)
+    container_name: nexcom-backup
+    profiles: ["backup"]
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: nexcom
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGDATABASE: nexcom
+      BACKUP_DIR: /backups/postgres
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - backup_data:/backups
+      - ./scripts/backup:/scripts:ro
+    command: ["/bin/sh", "-c", "while true; do /scripts/postgres-backup.sh || echo '[backup] run failed'; sleep $$BACKUP_INTERVAL_SECONDS; done"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [nexcom]
+
+  # ─── ML platform stack (opt-in: docker compose --profile ml up) ───────────
+  # Merged from the ML-SERVE overlay (docker-compose.ml.yml). ml-platform serving
+  # (:8015), MLflow tracking (:5000, sqlite backend on mlflow_data, artifacts on
+  # model_registry_data), Ray head+worker (CPU), Neo4j 5 community (GNN graph store).
+  ml-platform:
+    build:
+      context: services/ml-platform
+      dockerfile: Dockerfile
+    container_name: nexcom-ml-platform
+    profiles: ["ml"]
+    environment:
+      ML_PLATFORM_PORT: "8015"
+      LAKEHOUSE_PATH: /data/lakehouse
+      REGISTRY_PATH: /data/model_registry
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      RAY_ADDRESS: ray://ray-head:10001
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-nexcom-neo4j-dev}
+      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
+      ALERT_WEBHOOK_URL: http://middleware-hub:8093/api/fraud-alerts
+      AB_CHALLENGER_PCT: "0"
+      ML_PLATFORM_NUM_THREADS: "2"
+    volumes:
+      - lakehouse_data:/data/lakehouse
+      - model_registry_data:/data/model_registry
+    ports:
+      - "8015:8015"
+    depends_on:
+      mlflow: { condition: service_started }
+      neo4j: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8015/health').status==200 else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks: [nexcom]
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.22.0
+    container_name: nexcom-mlflow
+    profiles: ["ml"]
+    command: >
+      mlflow server
+      --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /artifacts
+    volumes:
+      - mlflow_data:/mlflow              # sqlite backend store
+      - model_registry_data:/artifacts   # artifact root (shared with ai-ml models)
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/health').status==200 else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks: [nexcom]
+    restart: unless-stopped
+
+  ray-head:
+    image: rayproject/ray:2.49.1-py312-cpu
+    container_name: nexcom-ray-head
+    profiles: ["ml"]
+    command: >
+      ray start --head --dashboard-host 0.0.0.0 --block
+    environment:
+      RAY_ADDRESS: ray://ray-head:10001
+    ports:
+      - "8265:8265"    # Ray dashboard
+      - "10001:10001"  # Ray client server
+      # Host port 16379: container GCS is 6379 but host 6379 is already redis.
+      - "16379:6379"   # Ray GCS
+    shm_size: "1g"
+    healthcheck:
+      test: ["CMD-SHELL", "ray status >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks: [nexcom]
+    restart: unless-stopped
+
+  ray-worker:
+    image: rayproject/ray:2.49.1-py312-cpu
+    container_name: nexcom-ray-worker
+    profiles: ["ml"]
+    command: >
+      ray start --address ray-head:6379 --block
+    environment:
+      RAY_ADDRESS: ray://ray-head:10001
+    depends_on:
+      ray-head: { condition: service_healthy }
+    shm_size: "1g"
+    networks: [nexcom]
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: nexcom-neo4j
+    profiles: ["ml"]
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-nexcom-neo4j-dev}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1g
+      NEO4J_server_memory_pagecache_size: 256m
+    volumes:
+      - neo4j_data:/data
+    ports:
+      - "7474:7474"  # HTTP browser
+      - "7687:7687"  # Bolt
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks: [nexcom]
+    restart: unless-stopped
+
+  # ─── open-appsec WAF agent (opt-in: docker compose --profile waf up) ──────
+  # Mirrors gateway/docker-compose.gateway.yml. The agent enforces the local
+  # policy (./gateway/open-appsec/appsec-localconfig/local_policy.yaml) offline.
+  # Full request interception requires the openappsec-bundled APISIX attachment
+  # (see gateway/docker-compose.gateway.yml); in this default stack the custom
+  # openappsec-waf Lua plugin is mounted into APISIX instead, and this agent is
+  # reachable in the apisix network namespace via network_mode: service:apisix.
+  openappsec-agent:
+    image: ghcr.io/openappsec/agent:latest
+    container_name: nexcom-openappsec-agent
+    profiles: ["waf"]
+    ipc: host                      # required for open-appsec IPC
+    restart: unless-stopped
+    environment:
+      - user_email=${APPSEC_USER_EMAIL:-security@nexcom.exchange}
+      - registered_server=APISIX
+      # AGENT_TOKEN only needed for cloud-connected mode; empty = offline local policy
+      - AGENT_TOKEN=${APPSEC_AGENT_TOKEN:-}
+    volumes:
+      - ./gateway/open-appsec/appsec-config:/etc/cp/conf
+      - ./gateway/open-appsec/appsec-localconfig:/ext/appsec
+      - appsec_data:/etc/cp/data
+      - appsec_logs:/var/log/nano_agent
+    command: /cp-nano-agent --standalone
+    network_mode: "service:apisix"
+    depends_on:
+      - apisix
+    healthcheck:
+      # The agent exposes no HTTP /health — presence of the nano agent log is
+      # the documented liveness signal (same as gateway/docker-compose.gateway.yml).
+      test: ["CMD", "test", "-f", "/var/log/nano_agent/nano_agent.log"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   apisix:
     image: apache/apisix:3.9.1-debian
     container_name: nexcom-apisix
     volumes:
       - ./services/middleware-hub/internal/apisix/apisix.yaml:/usr/local/apisix/conf/config.yaml:ro
       - ./services/middleware-hub/internal/apisix/nexcom-routes.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+      # Custom WAF plugin listed in apisix.yaml `plugins:` — must be mounted or
+      # APISIX fails to start (plugin not found). extra_lua_path resolves it.
+      - ./services/middleware-hub/internal/apisix/openappsec/openappsec-waf.lua:/usr/local/apisix/apisix/plugins/openappsec-waf.lua:ro
     environment:
       APISIX_STAND_ALONE: "true"
     ports:
@@ -1048,7 +1265,8 @@ services:
       KAFKA_CLUSTERS_0_NAME: nexcom
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     ports:
-      - "8090:8080"
+      # Host port 18091: 8090 is fluvio-sidecar, 8091 is aml-alert-subscriber.
+      - "18091:8080"
     depends_on:
       kafka: { condition: service_healthy }
     networks: [nexcom]
@@ -1058,7 +1276,8 @@ services:
     image: redislabs/redisinsight:latest
     container_name: nexcom-redis-insight
     ports:
-      - "8001:8001"
+      # Host port 5540 (redis-insight convention); host 8001 was trading-engine (service removed by FIX-MOCKWARE).
+      - "5540:8001"
     depends_on:
       - redis
     networks: [nexcom]
@@ -1105,7 +1324,8 @@ services:
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
-      ALERT_WEBHOOK_URL: ${AML_ALERT_WEBHOOK_URL:-http://nexcom:3000/api/aml-alerts}
+      # Portal service DNS name is `portal` (no `nexcom` service exists)
+      ALERT_WEBHOOK_URL: ${AML_ALERT_WEBHOOK_URL:-http://portal:3000/api/aml-alerts}
       SAR_AUTO_FILE_THRESHOLD: "3"
     ports:
       - "8091:8091"
@@ -1122,36 +1342,6 @@ services:
       start_period: 10s
 
   # ─── Market Data Service (Go) ─────────────────────────────────────────────
-  market-data:
-    build:
-      context: services/market-data
-      dockerfile: Dockerfile
-    container_name: nexcom-market-data
-    environment:
-      MARKET_DATA_PORT: "8092"
-      DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
-      REDIS_URL: redis://redis:6379
-      KAFKA_BROKERS: kafka:9092
-      YAHOO_FINANCE_ENABLED: "true"
-      BLOOMBERG_API_KEY: ${BLOOMBERG_API_KEY:-}
-      REFINITIV_API_KEY: ${REFINITIV_API_KEY:-}
-      PRICE_CACHE_TTL_SECONDS: "30"
-      WEBSOCKET_MAX_CONNECTIONS: "10000"
-    ports:
-      - "8092:8092"
-    depends_on:
-      kafka: { condition: service_healthy }
-      redis: { condition: service_healthy }
-    networks: [nexcom]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8092/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  # ─── Middleware Hub (TypeScript/Express) ──────────────────────────────────
   middleware-hub:
     build:
       context: services/middleware-hub
@@ -1159,6 +1349,8 @@ services:
     container_name: nexcom-middleware-hub
     environment:
       MIDDLEWARE_HUB_PORT: "8093"
+      # Ledger ops route via the gateway ledger API (TB has no HTTP interface)
+      GATEWAY_URL: http://gateway:8200
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: kafka:9092
@@ -1218,6 +1410,8 @@ services:
       RISK_THRESHOLD_MEDIUM: "0.4"
       VELOCITY_WINDOW_SECONDS: "300"
       ALERT_WEBHOOK_URL: http://middleware-hub:8093/api/fraud-alerts
+      # Points at the ml-platform serving API (active with --profile ml)
+      ML_PLATFORM_URL: http://ml-platform:8015
     ports:
       - "7071:7071"
     networks: [nexcom]
@@ -1270,7 +1464,6 @@ services:
       GATEWAY_URL: http://gateway:8200
       MATCHING_ENGINE_URL: http://matching-engine:8080
       SETTLEMENT_ENGINE_URL: http://settlement-engine:8005
-      TRADING_ENGINE_URL: http://trading-engine:8001
       KYC_SERVICE_URL: http://kyc-service:8003
       RISK_SERVICE_URL: http://risk-management:8004
       ANALYTICS_SERVICE_URL: http://analytics:8006
@@ -1278,13 +1471,12 @@ services:
       NOTIFICATION_SERVICE_URL: http://notification:8008
       INGESTION_SERVICE_URL: http://ingestion-engine:8009
       BLOCKCHAIN_SERVICE_URL: http://blockchain:8010
-      ANALYTICS_ENGINE_URL: http://analytics-engine:8011
       USER_MANAGEMENT_URL: http://user-management:8012
       CREDIT_SCORING_URL: http://credit-scoring:8089
       USSD_ENGINE_URL: http://ussd-engine:8020
       MIDDLEWARE_HUB_URL: http://middleware-hub:8013
       MOJALOOP_HUB_URL: http://mojaloop-adapter:4001
-      FLUVIO_HTTP_URL: http://fluvio-proxy:8090
+      FLUVIO_HTTP_URL: ${FLUVIO_HTTP_URL:-http://fluvio-sidecar:8090}
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
     networks: [nexcom]
@@ -1314,7 +1506,8 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: nexcom
     ports:
-      - "8015:8015"
+      # Host port 18015: 8015 on the host is ml-platform. Container port unchanged.
+      - "18015:8015"
     networks: [nexcom]
     restart: unless-stopped
     depends_on:

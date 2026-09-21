@@ -383,7 +383,7 @@ export async function deepHealthCheck(): Promise<Record<string, { status: "ok" |
 
   // Permify RBAC health check
   const permifyUrl = process.env.PERMIFY_URL ?? "http://localhost:3476";
-  const permifyTenant = process.env.PERMIFY_TENANT ?? "nexcom";
+  const permifyTenant = process.env.PERMIFY_TENANT ?? process.env.PERMIFY_TENANT_ID ?? "t1";
   const permifyStart = Date.now();
   try {
     const ctrl = new AbortController();

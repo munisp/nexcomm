@@ -3,7 +3,7 @@
  * Multi-step onboarding: account type → personal info → KYC docs → review
  * Fully wired to live tRPC onboarding.submit mutation
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   User, Building2, FileText, CheckCircle2, ChevronRight,
   Upload, Shield, AlertCircle, ArrowLeft, Loader2
@@ -45,9 +45,48 @@ export default function Register() {
     state: "", address: "", bvn: "", nin: "", companyName: "", rcNumber: "",
     taxId: "",
   });
-  const [docs, setDocs] = useState({
-    idDoc: false, addressProof: false, bankStatement: false, cacCert: false,
+  // Real uploaded document URLs (via onboarding.uploadKycDocument) — never
+  // checkbox placeholders with url:"pending".
+  type DocKey = "idDoc" | "addressProof" | "bankStatement" | "cacCert";
+  const [docs, setDocs] = useState<Record<DocKey, string | null>>({
+    idDoc: null, addressProof: null, bankStatement: null, cacCert: null,
   });
+  const [uploadingDoc, setUploadingDoc] = useState<Partial<Record<DocKey, boolean>>>({});
+  const docInputRefs = useRef<Partial<Record<DocKey, HTMLInputElement | null>>>({});
+
+  const uploadDocMut = trpc.onboarding.uploadKycDocument.useMutation({
+    onError: (e, vars) => {
+      setUploadingDoc(u => ({ ...u, [vars.docId]: false }));
+      toast.error(`Upload failed: ${e.message}`);
+    },
+  });
+
+  const handleDocFile = (key: DocKey, file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File exceeds 5 MB limit.");
+      return;
+    }
+    setUploadingDoc(u => ({ ...u, [key]: true }));
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Data = (reader.result as string).split(",")[1] ?? "";
+        const res = await uploadDocMut.mutateAsync({
+          docId: key,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          base64Data,
+        });
+        setDocs(d => ({ ...d, [key]: res.url }));
+        toast.success("Document uploaded");
+      } catch {
+        /* onError toast already fired */
+      } finally {
+        setUploadingDoc(u => ({ ...u, [key]: false }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
   const [submitted, setSubmitted] = useState(false);
 
   const setField = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -93,10 +132,10 @@ export default function Register() {
       },
       stakeholderSpecific: {},
       documentsUploaded: [
-        ...(docs.idDoc        ? [{ type: "ID_DOCUMENT",    url: "pending", name: "Government ID" }]     : []),
-        ...(docs.addressProof ? [{ type: "ADDRESS_PROOF",  url: "pending", name: "Proof of Address" }]  : []),
-        ...(docs.bankStatement? [{ type: "BANK_STATEMENT", url: "pending", name: "Bank Statement" }]    : []),
-        ...(docs.cacCert      ? [{ type: "CAC_CERTIFICATE",url: "pending", name: "CAC Certificate" }]   : []),
+        ...(docs.idDoc        ? [{ type: "ID_DOCUMENT",    url: docs.idDoc,        name: "Government ID" }]     : []),
+        ...(docs.addressProof ? [{ type: "ADDRESS_PROOF",  url: docs.addressProof, name: "Proof of Address" }]  : []),
+        ...(docs.bankStatement? [{ type: "BANK_STATEMENT", url: docs.bankStatement, name: "Bank Statement" }]    : []),
+        ...(docs.cacCert      ? [{ type: "CAC_CERTIFICATE",url: docs.cacCert,      name: "CAC Certificate" }]   : []),
       ],
       agreedToTerms: true,
       agreedToKyc: true,
@@ -314,11 +353,23 @@ export default function Register() {
                       <div className="text-xs text-muted-foreground">{desc}</div>
                     </div>
                   </div>
+                  <input
+                    ref={(el) => { docInputRefs.current[key] = el; }}
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleDocFile(key, f);
+                      e.target.value = "";
+                    }}
+                  />
                   <Button
                     variant={docs[key] ? "outline" : "default"}
                     size="sm"
                     className="gap-1.5 h-8 text-xs"
-                    onClick={() => setDocs(d => ({ ...d, [key]: !d[key] }))}
+                    disabled={!!uploadingDoc[key]}
+                    onClick={() => docInputRefs.current[key]?.click()}
                   >
                     {docs[key] ? <><CheckCircle2 className="w-3 h-3" />Uploaded</> : <><Upload className="w-3 h-3" />Upload</>}
                   </Button>

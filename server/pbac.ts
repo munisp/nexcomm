@@ -33,7 +33,15 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure } from "./_core/trpc";
 import type { TrpcContext as Context } from "./_core/context";
 import { getDb } from "./db";
-import { pbacPolicies } from "../drizzle/schema";
+import {
+  pbacPolicies,
+  profiles,
+  farmerProfiles,
+  traderProfiles,
+  brokerProfiles,
+  warehouseOperatorProfiles,
+  marketMakerOnboardingProfiles,
+} from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 // ── Policy Types ──────────────────────────────────────────────────────────────
@@ -686,6 +694,57 @@ export function checkAccess(
   return evaluate(request).allowed;
 }
 
+// ─── KYC trade gating ─────────────────────────────────────────────────────────
+// The deny policy above ("deny-unverified-trading") can only block role:user
+// callers statically. This middleware enforces it at runtime: any non-admin
+// user must hold an APPROVED KYC in at least one stakeholder profile (or a
+// VERIFIED generic profile) before they can place orders/trades.
+
+/**
+ * Returns true when the user has an approved KYC in ANY stakeholder store.
+ * Fails closed when the database is unreachable.
+ */
+export async function isUserKycApproved(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false; // fail closed — unverifiable KYC must not trade
+
+  const [generic] = await db
+    .select({ kycStatus: profiles.kycStatus })
+    .from(profiles)
+    .where(eq(profiles.userId, userId))
+    .limit(1);
+  if (generic?.kycStatus === "VERIFIED") return true;
+
+  const stakeholderQueries = [
+    db.select({ s: farmerProfiles.kycStatus }).from(farmerProfiles).where(eq(farmerProfiles.userId, userId)).limit(1),
+    db.select({ s: traderProfiles.kycStatus }).from(traderProfiles).where(eq(traderProfiles.userId, userId)).limit(1),
+    db.select({ s: brokerProfiles.kycStatus }).from(brokerProfiles).where(eq(brokerProfiles.userId, userId)).limit(1),
+    db.select({ s: warehouseOperatorProfiles.kycStatus }).from(warehouseOperatorProfiles).where(eq(warehouseOperatorProfiles.userId, userId)).limit(1),
+    db.select({ s: marketMakerOnboardingProfiles.kycStatus }).from(marketMakerOnboardingProfiles).where(eq(marketMakerOnboardingProfiles.userId, userId)).limit(1),
+  ];
+  for (const q of stakeholderQueries) {
+    const [row] = await q;
+    if (row?.s === "APPROVED") return true;
+  }
+  return false;
+}
+
+/**
+ * tRPC procedure with a middleware that blocks order/trade mutations for
+ * users without an approved KYC. Admins are exempt (they do not trade as
+ * stakeholders). Apply to any mutation that creates orders or executes trades.
+ */
+export const requireKycApproved = protectedProcedure.use(async ({ ctx, next }) => {
+  if (ctx.user.role === "admin") return next({ ctx });
+  if (!(await isUserKycApproved(ctx.user.id))) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "KYC approval is required before trading. Please complete and pass KYC verification first.",
+    });
+  }
+  return next({ ctx });
+});
+
 // ── Export Summary ────────────────────────────────────────────────────────────
 
 export const pbac = {
@@ -694,6 +753,7 @@ export const pbac = {
   createPolicy,
   policyStore,
   pbacProcedure,
+  isUserKycApproved,
 };
 
 export default pbac;

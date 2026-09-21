@@ -32,7 +32,7 @@ global:
     tigerbeetle:
       addresses: tigerbeetle.nexcom-staging.svc.cluster.local:3001
     fluvio:
-      endpoint: fluvio-proxy.nexcom-staging.svc.cluster.local:9003
+      endpoint: fluvio-sidecar.nexcom-staging.svc.cluster.local:9090
     apisix:
       adminUrl: http://apisix-admin.nexcom-staging.svc.cluster.local:9180
     redis:

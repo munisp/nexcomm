@@ -1,0 +1,10 @@
+{
+  "kind": "price",
+  "task": "price_forecast",
+  "seq_len": 20,
+  "seed": 42,
+  "name": "price",
+  "version": "v1",
+  "registered_at": 1790018281.101774,
+  "registry": "local"
+}

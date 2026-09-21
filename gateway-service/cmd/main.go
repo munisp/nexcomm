@@ -27,8 +27,11 @@ func main() {
 	// Initialize middleware clients
 	kafkaClient := kafkaclient.NewClient(cfg.KafkaBrokers)
 	redisClient := redisclient.NewClient(cfg.RedisURL)
-	temporalClient := temporal.NewClient(cfg.TemporalHost)
 	tigerBeetleClient := tigerbeetle.NewClient(cfg.TigerBeetleAddresses)
+	// Temporal activities get real dependencies (TigerBeetle ledger, kyc-service)
+	// so margin/settlement/KYC activities execute real operations or fail closed.
+	temporalClient := temporal.NewClient(cfg.TemporalHost,
+		temporal.NewActivities(tigerBeetleClient, cfg.KYCServiceURL))
 	daprClient := dapr.NewClient(cfg.DaprHTTPPort, cfg.DaprGRPCPort)
 	fluvioClient := fluvio.NewClient(cfg.FluvioEndpoint)
 	keycloakClient := keycloak.NewClient(cfg.KeycloakURL, cfg.KeycloakRealm, cfg.KeycloakClientID)

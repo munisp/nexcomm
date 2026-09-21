@@ -1,0 +1,109 @@
+{
+  "features": [
+    "log_txn_count",
+    "txns_per_day_norm",
+    "log_total_amount",
+    "cancel_rate",
+    "night_trading_ratio",
+    "settlement_on_time_rate",
+    "avg_settlement_delay_norm",
+    "failed_settlements_norm",
+    "account_age_norm",
+    "kyc_level_norm",
+    "distinct_commodities_norm",
+    "distinct_counterparties_norm"
+  ],
+  "n_features": 12,
+  "categoricals": [],
+  "numerics": [
+    {
+      "name": "log_txn_count",
+      "transform": "log1p(txn_count) / 8.0",
+      "mean": 0.18846907301619648,
+      "std": 0.05767898219476443
+    },
+    {
+      "name": "txns_per_day_norm",
+      "transform": "clip(txns_per_day / 20.0, 0, 1)",
+      "mean": 0.04997684640716761,
+      "std": 0.008288518541428189
+    },
+    {
+      "name": "log_total_amount",
+      "transform": "log1p(total_amount_ngn) / 25.0",
+      "mean": 0.5995999754294753,
+      "std": 0.09188939029199493
+    },
+    {
+      "name": "cancel_rate",
+      "transform": "clip(cancel_rate, 0, 1)",
+      "mean": 0.040333068927749995,
+      "std": 0.11292446775299624
+    },
+    {
+      "name": "night_trading_ratio",
+      "transform": "clip(night_trading_ratio, 0, 1)",
+      "mean": 0.024817820185795425,
+      "std": 0.09049446497815769
+    },
+    {
+      "name": "settlement_on_time_rate",
+      "transform": "clip(settlement_on_time_rate, 0, 1)",
+      "mean": 0.8900226193889975,
+      "std": 0.28715209829104626
+    },
+    {
+      "name": "avg_settlement_delay_norm",
+      "transform": "clip(avg_settlement_delay_hours / 72.0, 0, 1)",
+      "mean": 0.12060520505765453,
+      "std": 0.14750556009545868
+    },
+    {
+      "name": "failed_settlements_norm",
+      "transform": "clip(failed_settlement_count / 10.0, 0, 1)",
+      "mean": 0.001675000024959445,
+      "std": 0.012833330818936874
+    },
+    {
+      "name": "account_age_norm",
+      "transform": "clip((now - created_at).days / 2000.0, 0, 1)",
+      "mean": 0.5178893752950243,
+      "std": 0.2892289033802726
+    },
+    {
+      "name": "kyc_level_norm",
+      "transform": "kyc_level / 4.0",
+      "mean": 0.487,
+      "std": 0.2176286975561817
+    },
+    {
+      "name": "distinct_commodities_norm",
+      "transform": "clip(distinct_commodities / 10.0, 0, 1)",
+      "mean": 0.27417500571720305,
+      "std": 0.13890849488379906
+    },
+    {
+      "name": "distinct_counterparties_norm",
+      "transform": "clip(distinct_counterparties / 50.0, 0, 1)",
+      "mean": 0.07888999920990318,
+      "std": 0.040686212845894625
+    }
+  ],
+  "input_order": {
+    "x": [
+      "log_txn_count",
+      "txns_per_day_norm",
+      "log_total_amount",
+      "cancel_rate",
+      "night_trading_ratio",
+      "settlement_on_time_rate",
+      "avg_settlement_delay_norm",
+      "failed_settlements_norm",
+      "account_age_norm",
+      "kyc_level_norm",
+      "distinct_commodities_norm",
+      "distinct_counterparties_norm"
+    ]
+  },
+  "output": "score = sigmoid*600+300 (300-900); default_prob = sigmoid [0,1]"
+}

@@ -31,10 +31,48 @@ func main() {
 	defer logger.Sync()
 	sugar := logger.Sugar()
 
+	// ── Deprecated-service guard ──────────────────────────────────────────────
+	// This Go market-data service is LEGACY (superseded by the ingestion-engine
+	// lakehouse pipeline). Refuse to start unless explicitly allowed, so
+	// accidental deployment is loud instead of silent.
+	if os.Getenv("ALLOW_DEPRECATED") != "true" {
+		sugar.Fatalw("REFUSING TO START: services/market-data is LEGACY/DEPRECATED — " +
+			"use services/ingestion-engine (canonical ingestion path). " +
+			"Set ALLOW_DEPRECATED=true ONLY for local reference/testing.",
+			"replacement", "services/ingestion-engine")
+	}
+	sugar.Warnw("╔══════════════════════════════════════════════════════════════════╗")
+	sugar.Warnw("║  WARNING: LEGACY market-data starting (ALLOW_DEPRECATED=true)    ║")
+	sugar.Warnw("║  Canonical path: services/ingestion-engine. DO NOT DEPLOY        ║")
+	sugar.Warnw("╚══════════════════════════════════════════════════════════════════╝")
+
 	sugar.Info("Starting NEXCOM Market Data Service...")
+
+	// Staleness threshold: prices older than this are flagged stale in responses
+	staleThreshold := 60 * time.Second
+	if v := os.Getenv("MARKET_DATA_STALENESS_THRESHOLD"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			staleThreshold = d
+		} else {
+			sugar.Warnf("Invalid MARKET_DATA_STALENESS_THRESHOLD %q — using default 60s", v)
+		}
+	}
+	feeds.SetStaleThreshold(staleThreshold)
 
 	// Initialize feed processor for normalizing external data
 	feedProcessor := feeds.NewProcessor(logger)
+
+	// Upstream feed consumer with reconnect/backoff. When MARKET_DATA_FEED_URL
+	// is unset the service serves NO fabricated prices — endpoints return 404 /
+	// no_data health rather than silently stale numbers.
+	feedCtx, feedCancel := context.WithCancel(context.Background())
+	defer feedCancel()
+	if feedURL := os.Getenv("MARKET_DATA_FEED_URL"); feedURL != "" {
+		go feeds.RunFeedWithBackoff(feedCtx, feedURL, feedProcessor, logger)
+		sugar.Infof("Upstream market-data feed enabled: %s", feedURL)
+	} else {
+		sugar.Warn("MARKET_DATA_FEED_URL not set — no upstream feed; tickers will report no_data/stale")
+	}
 
 	// Initialize WebSocket hub for real-time distribution
 	wsHub := streaming.NewHub(logger)
@@ -79,7 +117,15 @@ func setupRouter(fp *feeds.Processor, hub *streaming.Hub, logger *zap.Logger) *g
 	router.Use(gin.Recovery())
 
 	router.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "healthy", "service": "market-data"})
+		fs := fp.FeedStatus()
+		status := "healthy"
+		code := http.StatusOK
+		if fs.Status != "fresh" {
+			// Report degraded honestly when prices are stale or no feed is wired.
+			status = "degraded"
+			code = http.StatusServiceUnavailable
+		}
+		c.JSON(code, gin.H{"status": status, "service": "market-data", "feed": fs})
 	})
 
 	v1 := router.Group("/api/v1")
@@ -112,6 +158,16 @@ func setupRouter(fp *feeds.Processor, hub *streaming.Hub, logger *zap.Logger) *g
 		v1.GET("/market/summary", func(c *gin.Context) {
 			summary := fp.GetMarketSummary()
 			c.JSON(http.StatusOK, summary)
+		})
+
+		// Feed freshness / staleness status
+		v1.GET("/market/health", func(c *gin.Context) {
+			fs := fp.FeedStatus()
+			code := http.StatusOK
+			if fs.Status != "fresh" {
+				code = http.StatusServiceUnavailable
+			}
+			c.JSON(code, fs)
 		})
 	}
 

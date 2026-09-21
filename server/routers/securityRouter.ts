@@ -380,7 +380,7 @@ export const securityRouter = router({
     .input(z.object({ enabled: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return { success: true };
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — preference not saved" });
       await db
         .insert(userPreferences)
         .values({ userId: ctx.user.id, biometricEnabled: input.enabled })

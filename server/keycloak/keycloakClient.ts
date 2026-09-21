@@ -18,6 +18,17 @@ const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM ?? "nexcom";
 const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID ?? "nexcom-exchange";
 const KEYCLOAK_CLIENT_SECRET = process.env.KEYCLOAK_CLIENT_SECRET ?? "";
 
+/**
+ * Dev-only credential fallback. In production the env var is REQUIRED —
+ * no hardcoded admin credentials are ever used there.
+ */
+function requireDevCredential(name: string): string {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(`[Keycloak] FATAL: ${name} is required in production — no default credentials exist.`);
+  }
+  return "admin"; // DEV-ONLY: matches the keycloak compose dev container default
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,9 +80,10 @@ async function getAdminToken(): Promise<string | null> {
         body: new URLSearchParams({
           grant_type: "client_credentials",
           client_id: "admin-cli",
-          client_secret: KEYCLOAK_CLIENT_SECRET || "admin",
-          username: process.env.KEYCLOAK_ADMIN_USER ?? "admin",
-          password: process.env.KEYCLOAK_ADMIN_PASSWORD ?? "admin",
+          // DEV-ONLY fallback ("admin"); in production these must come from env.
+          client_secret: KEYCLOAK_CLIENT_SECRET ?? requireDevCredential("KEYCLOAK_CLIENT_SECRET"),
+          username: process.env.KEYCLOAK_ADMIN_USER ?? requireDevCredential("KEYCLOAK_ADMIN_USER"),
+          password: process.env.KEYCLOAK_ADMIN_PASSWORD ?? requireDevCredential("KEYCLOAK_ADMIN_PASSWORD"),
         }).toString(),
         signal: AbortSignal.timeout(5000),
       }

@@ -226,14 +226,19 @@ class NexcomApiService {
   Future<Map<String, dynamic>> submitKycApplication(Map<String, dynamic> data) =>
       _mutate('onboarding.submit', data);
 
+  /// Uploads a KYC document. Contract matches server
+  /// `onboarding.uploadKycDocument`: { docId, fileName, mimeType, base64Data }.
+  /// Returns { url, docId, key }.
   Future<Map<String, dynamic>> uploadKycDocument({
-    required String documentType,
-    required String fileUrl,
+    required String docId,
     required String fileName,
+    required String mimeType,
+    required String base64Data,
   }) => _mutate('onboarding.uploadKycDocument', {
-    'documentType': documentType,
-    'fileUrl': fileUrl,
+    'docId': docId,
     'fileName': fileName,
+    'mimeType': mimeType,
+    'base64Data': base64Data,
   });
 
   // ─── TOTP (Two-Factor Authentication) ─────────────────────────────────────

@@ -10,7 +10,8 @@ import { COLORS, FONTS, SPACING } from "../../constants/config";
 import { trpc } from "../../lib/trpc";
 import { CONFIG } from "../../constants/config";
 
-const OAUTH_URL = `${CONFIG.BASE_URL}/api/oauth/login?returnPath=/`;
+// Matches the server's registered route (server/_core/oauth.ts): /api/auth/login
+const OAUTH_URL = `${CONFIG.BASE_URL}/api/auth/login?returnPath=/`;
 
 export default function AuthScreen() {
   const router = useRouter();

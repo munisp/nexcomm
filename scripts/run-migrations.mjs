@@ -10,18 +10,32 @@
  *   node scripts/run-migrations.mjs
  */
 
-import postgres from "/home/ubuntu/nexcom-exchange/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/src/index.js";
+import { createRequire } from "module";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const DB_URL =
-  process.env.NEXCOM_PG_URL ??
-  "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom";
+// Resolve `postgres` from the repo's node_modules (pnpm-installed dependency),
+// not a hardcoded absolute path.
+const require = createRequire(import.meta.url);
+const postgres = require("postgres");
 
-const DRIZZLE_DIR = "/home/ubuntu/nexcom-exchange/drizzle";
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// Credentials come from the environment. The fallback below is a LOCAL DEV
+// convenience only — it is rejected when NODE_ENV=production (fail fast).
+const DEV_ONLY_DB_URL = "postgresql://nexcom:nexcom_dev_only_password@127.0.0.1:5432/nexcom";
+const DB_URL = process.env.NEXCOM_PG_URL ?? process.env.DATABASE_URL;
+if (!DB_URL && process.env.NODE_ENV === "production") {
+  console.error("FATAL: NEXCOM_PG_URL (or DATABASE_URL) is required in production — no default credentials.");
+  process.exit(1);
+}
+const EFFECTIVE_DB_URL = DB_URL ?? DEV_ONLY_DB_URL;
+
+const DRIZZLE_DIR = path.join(REPO_ROOT, "drizzle");
 const JOURNAL_PATH = path.join(DRIZZLE_DIR, "meta/_journal.json");
 
-const sql = postgres(DB_URL, { max: 1, ssl: false });
+const sql = postgres(EFFECTIVE_DB_URL, { max: 1, ssl: false });
 
 async function main() {
   // Ensure drizzle schema and migrations table exist

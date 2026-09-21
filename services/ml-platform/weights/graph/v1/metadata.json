@@ -1,0 +1,9 @@
+{
+  "kind": "graph",
+  "task": "fraud_ring_node_classification",
+  "seed": 42,
+  "name": "graph",
+  "version": "v1",
+  "registered_at": 1790018283.1823983,
+  "registry": "local"
+}

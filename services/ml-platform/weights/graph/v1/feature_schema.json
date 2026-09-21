@@ -1,0 +1,89 @@
+{
+  "features": [
+    "is_account",
+    "is_device",
+    "is_ip",
+    "is_receipt",
+    "log_degree",
+    "log_total_amount",
+    "night_ratio",
+    "cancel_rate",
+    "community_fraud_density"
+  ],
+  "n_features": 9,
+  "categoricals": [],
+  "numerics": [
+    {
+      "name": "is_account",
+      "transform": "one-hot: node_type == account",
+      "mean": 1.0,
+      "std": 1.0
+    },
+    {
+      "name": "is_device",
+      "transform": "one-hot: node_type == device",
+      "mean": 0.0,
+      "std": 1.0
+    },
+    {
+      "name": "is_ip",
+      "transform": "one-hot: node_type == ip",
+      "mean": 0.0,
+      "std": 1.0
+    },
+    {
+      "name": "is_receipt",
+      "transform": "one-hot: node_type == receipt",
+      "mean": 0.0,
+      "std": 1.0
+    },
+    {
+      "name": "log_degree",
+      "transform": "log1p(transaction degree)",
+      "mean": 1.5014543060494538,
+      "std": 0.4564388889622273
+    },
+    {
+      "name": "log_total_amount",
+      "transform": "log1p(total transacted NGN) / 20.0",
+      "mean": 0.7487283650637627,
+      "std": 0.11483853248433466
+    },
+    {
+      "name": "night_ratio",
+      "transform": "share of txns in hours {22,23,0..4}",
+      "mean": 0.0241031503599464,
+      "std": 0.09167581783083235
+    },
+    {
+      "name": "cancel_rate",
+      "transform": "share of txns with status CANCELLED",
+      "mean": 0.04098788712240277,
+      "std": 0.11303035680108908
+    },
+    {
+      "name": "community_fraud_density",
+      "transform": "fraction of labeled-fraud members in the node's greedy-modularity community",
+      "mean": 0.03562831398617366,
+      "std": 0.00894769958597586
+    }
+  ],
+  "input_order": {
+    "node_features": [
+      "is_account",
+      "is_device",
+      "is_ip",
+      "is_receipt",
+      "log_degree",
+      "log_total_amount",
+      "night_ratio",
+      "cancel_rate",
+      "community_fraud_density"
+    ]
+  },
+  "graph": {
+    "edge_index_layout": "int64 (2, E): row 0 = src, row 1 = dst",
+    "labels": "-1 unlabeled, 0 clean, 1 fraud-ring member",
+    "output": "node logits (N, 2); fraud prob = softmax[..., 1]"
+  }
+}

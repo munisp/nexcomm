@@ -17,6 +17,8 @@ import { Loader2 } from "lucide-react";
 const Dashboard         = lazy(() => import("./pages/Dashboard"));
 const Home              = lazy(() => import("./pages/Home"));
 const ComponentShowcase = lazy(() => import("./pages/ComponentShowcase"));
+const KybOnboarding   = lazy(() => import("./pages/KybOnboarding"));
+const AdminKybReview  = lazy(() => import("./pages/AdminKybReview"));
 const Markets           = lazy(() => import("./pages/Markets"));
 const Trade             = lazy(() => import("./pages/Trade"));
 const Orders            = lazy(() => import("./pages/Orders"));
@@ -219,6 +221,8 @@ function Router() {
          <Route path="/admin"             component={Admin} />
          <Route path="/admin/bulk-kyc"    component={BulkKycAdmin} />
          <Route path="/admin/kyc-review"   component={AdminKycDocumentReview} />
+         <Route path="/admin/kyb-review"  component={AdminKybReview} />
+         <Route path="/kyb-onboarding"    component={KybOnboarding} />
         <Route path="/settlements"        component={Settlements} />
         <Route path="/settings"           component={Settings} />
         <Route path="/architecture"        component={Architecture} />

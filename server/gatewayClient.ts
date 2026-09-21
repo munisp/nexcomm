@@ -11,6 +11,8 @@
  * Calls return an explicit unavailable result when the gateway cannot respond.
  */
 
+import { logTbTransfer } from "./tbTransferLog";
+
 const GATEWAY_BASE = process.env.GATEWAY_URL ?? "http://localhost:8200";
 const GATEWAY_TIMEOUT_MS = 5000;
 
@@ -443,10 +445,26 @@ export async function issueRefund(params: {
   reason: string;
   originalTxId: string;
 }): Promise<LedgerTransfer | null> {
-  return gatewayFetch<LedgerTransfer>("/api/v1/ledger/refund", {
+  const transfer = await gatewayFetch<LedgerTransfer>("/api/v1/ledger/refund", {
     method: "POST",
     body: JSON.stringify({ ...params, code: 16 }),
   });
+  if (transfer) {
+    // Real audit trail: tb_transfer_log (was an orphan, never-written table).
+    await logTbTransfer({
+      transferId: transfer.id,
+      debitAccountId: transfer.debitAccountId ?? "exchange-refund",
+      creditAccountId: transfer.creditAccountId ?? `user-settlement-${params.userId}`,
+      amount: Math.round(params.amount * 100),
+      currency: params.currency,
+      userId: Number.isNaN(Number(params.userId)) ? null : Number(params.userId),
+      referenceId: params.originalTxId,
+      referenceType: "refund",
+      code: 16,
+      status: "COMMITTED",
+    });
+  }
+  return transfer;
 }
 
 // ─── Scenario 17: Stripe top-up ───────────────────────────────────────────────

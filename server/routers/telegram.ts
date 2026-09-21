@@ -203,7 +203,7 @@ export const telegramRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return { success: true };
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
       await db
         .update(telegramContacts)
@@ -376,7 +376,7 @@ export const telegramRouter = router({
     // ─── Protected: Unlink Account ────────────────────────────────────────────────
   unlinkAccount: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) return { success: true };
+        if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
     await db
       .update(telegramContacts)
       .set({ userId: null, isVerified: false, updatedAt: new Date() })

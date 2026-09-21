@@ -34,6 +34,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/nexcom/channel-gateway/internal/db"
+	"github.com/nexcom/channel-gateway/internal/dedup"
 	"github.com/nexcom/channel-gateway/internal/kafka"
 	"github.com/nexcom/channel-gateway/internal/middleware"
 	"github.com/nexcom/channel-gateway/internal/telegram"
@@ -50,7 +51,13 @@ func main() {
 	sugar := logger.Sugar()
 
 	// Database
-	dbURL := getEnv("DATABASE_URL", "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom")
+	dbURL := getEnv("DATABASE_URL", "")
+	if dbURL == "" {
+		if getEnv("ENVIRONMENT", "development") == "production" {
+			sugar.Fatal("FATAL: DATABASE_URL is required in production - no default DB credentials exist")
+		}
+		dbURL = "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom" // DEV-ONLY local default
+	}
 	pool, err := db.Connect(dbURL)
 	if err != nil {
 		sugar.Fatalf("DB connect failed: %v", err)
@@ -70,12 +77,22 @@ func main() {
 		BotLogicURL:    getEnv("BOT_LOGIC_URL", "http://localhost:8040"),
 	})
 
-	// Telegram handler
+	// Telegram handler (with Redis-backed update_id idempotency when REDIS_URL is set)
 	tgHandler := telegram.NewHandler(pool, kp, sugar, telegram.Config{
 		BotToken:    getEnv("TELEGRAM_BOT_TOKEN", ""),
 		WebhookPath: getEnv("TELEGRAM_WEBHOOK_PATH", "/webhook/telegram"),
 		BotLogicURL: getEnv("BOT_LOGIC_URL", "http://localhost:8040"),
 	})
+	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
+		if dc, err := dedup.NewRedisClient(redisURL); err != nil {
+			sugar.Errorf("Redis dedup client init failed (Telegram dedup disabled): %v", err)
+		} else {
+			tgHandler.SetDedup(dc)
+			sugar.Info("Telegram webhook update_id dedup enabled (Redis SET NX, 24h TTL)")
+		}
+	} else {
+		sugar.Warn("REDIS_URL not set — Telegram webhook update_id dedup DISABLED")
+	}
 
 	// Gin router
 	if os.Getenv("GIN_MODE") == "" {

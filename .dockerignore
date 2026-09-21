@@ -1,0 +1,19 @@
+# Keep build context small and avoid leaking local state into images
+.git
+node_modules
+**/node_modules
+dist
+**/dist
+target
+**/target
+.manus-logs
+test-results
+playwright-report
+*.log
+.env
+.env.*
+!.env.example
+upload
+uploads
+settlement-engine-binary
+services/*/target
