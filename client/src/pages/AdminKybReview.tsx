@@ -13,7 +13,6 @@
  */
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -146,7 +145,7 @@ export default function AdminKybReview() {
   }
 
   if (listQuery.isLoading) {
-    return <DashboardLayout><PageSkeleton /></DashboardLayout>;
+    return <><PageSkeleton /></>;
   }
 
   const stats = listQuery.data?.stats;
@@ -157,7 +156,7 @@ export default function AdminKybReview() {
   const uboWarnings: string[] = (app?.screeningResult as any)?.uboWarnings ?? [];
 
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -482,6 +481,6 @@ export default function AdminKybReview() {
           </DialogContent>
         </Dialog>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

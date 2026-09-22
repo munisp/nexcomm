@@ -3330,3 +3330,7 @@ export type InsertLedgerEntry = typeof ledgerEntries.$inferInsert;
 
 // FIX-KYB: KYB workflow + KYC lifecycle tables (see drizzle/schema-kyb.ts)
 export * from "./schema-kyb";
+export * from "./schema-credit-passport";
+export * from "./schema-offline-sync";
+export * from "./schema-transparency";
+export * from "./schema-channel-bridge";

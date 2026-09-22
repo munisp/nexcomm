@@ -3,7 +3,9 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * React Native hook for live order book data via WebSocket.
  * Connects to the NEXCOM Exchange /ws/orderbook endpoint and subscribes to
- * a given symbol. Falls back to static demo data if the connection fails.
+ * a given symbol. On connection failure the book is EMPTY with status
+ * 'disconnected'/'error' — callers render an OFFLINE state with retry (no
+ * silent demo data).
  *
  * Usage:
  *   const { bids, asks, spread, spreadPct, price, changePct, status } = useOrderBook('MAIZE');
@@ -39,72 +41,46 @@ export interface OrderBookState {
   ask: number;
   changePct: number;
   volume: number;
-  source: 'live' | 'simulated' | 'demo';
+  source: 'live' | 'simulated';
   status: 'connecting' | 'connected' | 'disconnected' | 'error';
   lastUpdated: number;
 }
 
-// ─── Demo fallback data ───────────────────────────────────────────────────────
+export interface UseOrderBookResult extends OrderBookState {
+  /** Reconnect after a failure — wire to a retry button in the UI. */
+  retry: () => void;
+}
 
-const DEMO_PRICES: Record<string, number> = {
-  MAIZE: 285000, SOYBEAN: 520000, COCOA: 4850000, GINGER: 1250000,
-  SESAME: 890000, SORGHUM: 195000, MILLET: 210000, CASSAVA: 85000,
-  PALM_OIL: 1650000, GROUNDNUT: 420000, WHEAT: 380000, RICE: 650000,
-};
+// ─── Empty book (initial / offline state) ─────────────────────────────────────
 
-function buildDemoBook(symbol: string): OrderBookState {
-  const basePrice = DEMO_PRICES[symbol] ?? 100000;
-  const spread = basePrice * 0.0004;
-  const bid = basePrice - spread / 2;
-  const ask = basePrice + spread / 2;
-
-  const bids: OrderBookLevel[] = Array.from({ length: 8 }, (_, i) => {
-    const price = bid - i * (basePrice * 0.001);
-    const qty = Math.floor(20 + Math.random() * 180);
-    const total = price * qty;
-    return { price, qty, total, depth: 0 };
-  });
-  const asks: OrderBookLevel[] = Array.from({ length: 8 }, (_, i) => {
-    const price = ask + i * (basePrice * 0.001);
-    const qty = Math.floor(20 + Math.random() * 180);
-    const total = price * qty;
-    return { price, qty, total, depth: 0 };
-  });
-
-  // Compute depth bars
-  const maxBid = bids.reduce((m, b) => Math.max(m, b.qty), 1);
-  const maxAsk = asks.reduce((m, a) => Math.max(m, a.qty), 1);
-  bids.forEach(b => (b.depth = (b.qty / maxBid) * 100));
-  asks.forEach(a => (a.depth = (a.qty / maxAsk) * 100));
-
+function emptyBook(): OrderBookState {
   return {
-    bids,
-    asks,
-    spread: parseFloat(spread.toFixed(2)),
-    spreadPct: parseFloat(((spread / basePrice) * 100).toFixed(4)),
-    price: basePrice,
-    bid,
-    ask,
-    changePct: (Math.random() - 0.5) * 4,
-    volume: Math.floor(500 + Math.random() * 2000),
-    source: 'demo',
-    status: 'disconnected',
-    lastUpdated: Date.now(),
+    bids: [],
+    asks: [],
+    spread: 0,
+    spreadPct: 0,
+    price: 0,
+    bid: 0,
+    ask: 0,
+    changePct: 0,
+    volume: 0,
+    source: 'live',
+    status: 'connecting',
+    lastUpdated: 0,
   };
 }
 
 // ─── Derive WebSocket URL from config ─────────────────────────────────────────
 
 function getWsUrl(): string {
-  const base = __DEV__ ? CONFIG.DEV_URL : CONFIG.BASE_URL;
   // Convert http(s) → ws(s)
-  return base.replace(/^http/, 'ws') + '/ws/orderbook';
+  return CONFIG.BASE_URL.replace(/^http/, 'ws') + '/ws/orderbook';
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useOrderBook(symbol: string): OrderBookState {
-  const [state, setState] = useState<OrderBookState>(() => buildDemoBook(symbol));
+export function useOrderBook(symbol: string): UseOrderBookResult {
+  const [state, setState] = useState<OrderBookState>(() => emptyBook());
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
@@ -188,5 +164,15 @@ export function useOrderBook(symbol: string): OrderBookState {
     };
   }, [connect]);
 
-  return state;
+  const retry = useCallback(() => {
+    if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      try { wsRef.current.close(); } catch { /* already closed */ }
+      wsRef.current = null;
+    }
+    connect();
+  }, [connect]);
+
+  return { ...state, retry };
 }

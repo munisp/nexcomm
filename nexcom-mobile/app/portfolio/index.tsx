@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS } from "../../constants/config";
+import { ScreenState } from "../../components/ScreenState";
 import { trpc } from "../../lib/trpc";
 
 export default function PortfolioScreen() {
@@ -37,7 +38,9 @@ export default function PortfolioScreen() {
           <Text style={s.title}>Portfolio</Text>
         </View>
 
-        {summaryQuery.isLoading ? (
+        {summaryQuery.isError ? (
+          <ScreenState error={summaryQuery.error} onRetry={() => summaryQuery.refetch()}>{null}</ScreenState>
+        ) : summaryQuery.isLoading ? (
           <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
         ) : (
           <>

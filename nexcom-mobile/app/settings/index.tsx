@@ -7,6 +7,8 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, ActivityI
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { COLORS, FONTS, SPACING } from "../../constants/config";
+import { signOut } from "../../lib/auth";
+import { useAuthStore } from "../../lib/store";
 import { trpc } from "../../lib/trpc";
 
 export default function SettingsScreen() {
@@ -22,7 +24,13 @@ export default function SettingsScreen() {
   const updatePrefsMut = trpc.preferences.update.useMutation({ onSuccess: () => utils.preferences.get.invalidate() });
   const updateNotifMut = trpc.preferences.updateNotifPrefs.useMutation({ onSuccess: () => utils.preferences.getNotifPrefs.invalidate() });
   const setBioMut = trpc.security.setBiometricPreference.useMutation({ onSuccess: () => utils.security.getBiometricPreference.invalidate() });
-  const logoutMut = trpc.auth.logout.useMutation({ onSuccess: () => router.replace("/auth") });
+  const logoutMut = trpc.auth.logout.useMutation();
+  const handleSignOut = async () => {
+    logoutMut.mutate();           // server-side session revocation (best-effort)
+    await signOut();              // Keycloak logout + SecureStore wipe
+    useAuthStore.getState().logout();
+    router.replace("/auth");
+  };
 
   const prefs = prefsQ.data as any;
   const notif = notifQ.data as any;
@@ -39,7 +47,7 @@ export default function SettingsScreen() {
   function handleLogout() {
     Alert.alert("Sign Out", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Sign Out", style: "destructive", onPress: () => logoutMut.mutate() },
+      { text: "Sign Out", style: "destructive", onPress: () => handleSignOut() },
     ]);
   }
 

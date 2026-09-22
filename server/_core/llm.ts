@@ -19,6 +19,7 @@ function getClient(): OpenAI {
 export function _resetLLMClient() { _client = null; }
 
 const DEFAULT_MODEL =
+  process.env.LLM_MODEL ??
   process.env.LLM_DEFAULT_MODEL ??
   process.env.OPENAI_MODEL ??
   "gpt-4o-mini";

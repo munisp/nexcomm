@@ -15,6 +15,7 @@ import { pushToUser } from "./pushNotificationsRouter";
 import { FX_PAIRS, EQUITIES, CRYPTO_ASSETS, type FxPair, type Equity, type CryptoAsset } from "../../shared/instruments";
 import { COMMODITIES } from "../../shared/commodities";
 import { writeAuditLog } from "../audit";
+import { smartAlertCheck } from "./forecastRouter";
 
 // ============================================================
 // Helpers
@@ -87,13 +88,31 @@ export function startAlertPollingJob() {
           const conditionText = alert.condition.replace("_", " ").toLowerCase();
           const priceStr = currentPrice.toLocaleString(undefined, { maximumFractionDigits: 6 });
           const targetStr = target.toLocaleString(undefined, { maximumFractionDigits: 6 });
+
+          // ── Smart alert: attach ML forecast context (never blocks notification) ─────────────
+          const forecastCtx = await smartAlertCheck(
+            alert.symbol, target, alert.condition,
+          ).catch(() => null);
+          const forecastSuffix = forecastCtx?.available && forecastCtx.assessment
+            ? `\nForecast: ${forecastCtx.assessment}`
+            : "";
+          const forecastMetadata = forecastCtx?.available
+            ? {
+                forecast: {
+                  expectedPrice: forecastCtx.expectedPrice,
+                  ci95: forecastCtx.ci95,
+                  modelVersion: forecastCtx.modelVersion,
+                },
+              }
+            : {};
+
           // ── In-app notification for the alert owner ─────────────────────────────────────────
           await createNotification({
             userId: alert.userId,
             type: "ALERT",
             title: `🔔 Price Alert: ${alert.symbol}`,
-            message: `${alert.symbol} is ${conditionText} ${targetStr} — now at ${priceStr}`,
-            metadata: { link: "/alerts", symbol: alert.symbol, triggeredPrice: currentPrice },
+            message: `${alert.symbol} is ${conditionText} ${targetStr} — now at ${priceStr}${forecastSuffix}`,
+            metadata: { link: "/alerts", symbol: alert.symbol, triggeredPrice: currentPrice, ...forecastMetadata },
           }).catch(e => console.warn("[PriceAlerts] In-app notification failed:", (e as Error).message));
 
           // ── Browser Push: notify the trader directly ─────────────────────────────────────────
@@ -101,7 +120,7 @@ export function startAlertPollingJob() {
             alert.userId,
             {
               title: `🔔 Price Alert: ${alert.symbol}`,
-              body: `${alert.symbol} is ${conditionText} ${targetStr} — now at ${priceStr}`,
+              body: `${alert.symbol} is ${conditionText} ${targetStr} — now at ${priceStr}${forecastSuffix}`,
               url: "/alerts",
               tag: `price-alert-${alert.id}`,
             },

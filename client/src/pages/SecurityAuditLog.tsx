@@ -11,7 +11,6 @@
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import DashboardLayout from "@/components/DashboardLayout";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -385,11 +384,11 @@ export default function SecurityAuditLog() {
   }
   if (user?.role !== "admin") {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex items-center justify-center h-64">
           <p className="text-muted-foreground">Access restricted to administrators.</p>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
@@ -397,7 +396,7 @@ export default function SecurityAuditLog() {
   const total = data?.total ?? 0;
 
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -612,6 +611,6 @@ export default function SecurityAuditLog() {
       {showCreate && (
         <CreateEventDialog onClose={() => setShowCreate(false)} />
       )}
-    </DashboardLayout>
+    </>
   );
 }

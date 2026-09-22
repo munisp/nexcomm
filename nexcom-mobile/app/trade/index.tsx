@@ -6,6 +6,7 @@ import React, { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS, FONTS, SPACING } from "../../constants/config";
+import { ScreenState } from "../../components/ScreenState";
 import { trpc } from "../../lib/trpc";
 
 export default function TradeScreen() {
@@ -86,7 +87,9 @@ export default function TradeScreen() {
         {/* Open Orders */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Open Orders ({openOrders.length})</Text>
-          {openOrdersQ.isLoading ? <ActivityIndicator color={COLORS.primary} /> : openOrders.slice(0, 8).map((o: any) => (
+          {openOrdersQ.isError ? (
+            <ScreenState error={openOrdersQ.error} onRetry={() => openOrdersQ.refetch()}>{null}</ScreenState>
+          ) : openOrdersQ.isLoading ? <ActivityIndicator color={COLORS.primary} /> : openOrders.slice(0, 8).map((o: any) => (
             <View key={o.id} style={s.row}>
               <View style={{ flex: 1 }}>
                 <Text style={s.symbol}>{o.symbol}</Text>

@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { LivenessChallenge, type LivenessVerdict } from "@/components/LivenessChallenge";
 import {
   Select,
   SelectContent,
@@ -112,6 +113,7 @@ export default function KybOnboarding() {
   const [directors, setDirectors] = useState<DirectorForm[]>([{ ...emptyDirector }]);
   const [owners, setOwners] = useState<OwnerForm[]>([{ ...emptyOwner }]);
   const [applicationId, setApplicationId] = useState<number | null>(null);
+  const [kybLiveness, setKybLiveness] = useState<LivenessVerdict | null>(null);
   const [uploadedDocs, setUploadedDocs] = useState<Partial<Record<DocSlot, string>>>({});
   const [uploading, setUploading] = useState<Partial<Record<DocSlot, boolean>>>({});
   const fileInputs = useRef<Partial<Record<DocSlot, HTMLInputElement | null>>>({});
@@ -387,7 +389,7 @@ export default function KybOnboarding() {
               </div>
             ))}
           </div>
-          <Button variant="outline" onClick={() => navigate("/dashboard")} className="border-slate-700 text-slate-300">
+          <Button variant="outline" onClick={() => navigate("/")} className="border-slate-700 text-slate-300">
             Back to dashboard
           </Button>
         </div>
@@ -426,8 +428,8 @@ export default function KybOnboarding() {
           <Card className="bg-slate-900 border-slate-800">
             <CardContent className="p-6 space-y-4">
               <div>
-                <Label>Business name (exactly as on CAC certificate)</Label>
-                <Input className="bg-slate-800 border-slate-700 mt-1" value={business.businessName}
+                <Label htmlFor="kyb-0">Business name (exactly as on CAC certificate)</Label>
+                <Input id="kyb-0" className="bg-slate-800 border-slate-700 mt-1" value={business.businessName}
                   onChange={(e) => setBusiness({ ...business, businessName: e.target.value })} placeholder="e.g. Greenfield Commodities Ltd" />
               </div>
               <div>
@@ -445,31 +447,31 @@ export default function KybOnboarding() {
                   onChange={(e) => setBusiness({ ...business, registeredAddress: e.target.value })} placeholder="Registered office address" />
               </div>
               <div>
-                <Label>Operating states (comma separated)</Label>
-                <Input className="bg-slate-800 border-slate-700 mt-1" value={business.operatingStates}
+                <Label htmlFor="kyb-1">Operating states (comma separated)</Label>
+                <Input id="kyb-1" className="bg-slate-800 border-slate-700 mt-1" value={business.operatingStates}
                   onChange={(e) => setBusiness({ ...business, operatingStates: e.target.value })} placeholder="Lagos, Kano, Kaduna" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Contact email</Label>
-                  <Input type="email" className="bg-slate-800 border-slate-700 mt-1" value={business.contactEmail}
+                  <Label htmlFor="kyb-2">Contact email</Label>
+                  <Input id="kyb-2" type="email" className="bg-slate-800 border-slate-700 mt-1" value={business.contactEmail}
                     onChange={(e) => setBusiness({ ...business, contactEmail: e.target.value })} />
                 </div>
                 <div>
-                  <Label>Contact phone</Label>
-                  <Input className="bg-slate-800 border-slate-700 mt-1" value={business.contactPhone}
+                  <Label htmlFor="kyb-3">Contact phone</Label>
+                  <Input id="kyb-3" className="bg-slate-800 border-slate-700 mt-1" value={business.contactPhone}
                     onChange={(e) => setBusiness({ ...business, contactPhone: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Website (optional)</Label>
-                  <Input className="bg-slate-800 border-slate-700 mt-1" value={business.websiteUrl}
+                  <Label htmlFor="kyb-4">Website (optional)</Label>
+                  <Input id="kyb-4" className="bg-slate-800 border-slate-700 mt-1" value={business.websiteUrl}
                     onChange={(e) => setBusiness({ ...business, websiteUrl: e.target.value })} placeholder="https://" />
                 </div>
                 <div>
-                  <Label>Expected monthly volume (₦, optional)</Label>
-                  <Input type="number" className="bg-slate-800 border-slate-700 mt-1" value={business.expectedMonthlyVolume}
+                  <Label htmlFor="kyb-5">Expected monthly volume (₦, optional)</Label>
+                  <Input id="kyb-5" type="number" className="bg-slate-800 border-slate-700 mt-1" value={business.expectedMonthlyVolume}
                     onChange={(e) => setBusiness({ ...business, expectedMonthlyVolume: e.target.value })} />
                 </div>
               </div>
@@ -487,8 +489,8 @@ export default function KybOnboarding() {
                 verification by our compliance team. Enter it exactly as printed on your certificate.
               </div>
               <div>
-                <Label>CAC Registration Number (RC / BN)</Label>
-                <Input className="bg-slate-800 border-slate-700 mt-1" value={reg.cacRcNumber}
+                <Label htmlFor="kyb-6">CAC Registration Number (RC / BN)</Label>
+                <Input id="kyb-6" className="bg-slate-800 border-slate-700 mt-1" value={reg.cacRcNumber}
                   onChange={(e) => setReg({ ...reg, cacRcNumber: e.target.value })} placeholder="RC1234567 or BN1234567" />
                 {reg.cacRcNumber && (
                   <p className={`text-xs mt-1 ${rcKind ? "text-emerald-400" : "text-red-400"}`}>
@@ -497,13 +499,13 @@ export default function KybOnboarding() {
                 )}
               </div>
               <div>
-                <Label>TIN (FIRS Tax Identification Number, optional)</Label>
-                <Input className="bg-slate-800 border-slate-700 mt-1" value={reg.tinNumber}
+                <Label htmlFor="kyb-7">TIN (FIRS Tax Identification Number, optional)</Label>
+                <Input id="kyb-7" className="bg-slate-800 border-slate-700 mt-1" value={reg.tinNumber}
                   onChange={(e) => setReg({ ...reg, tinNumber: e.target.value })} placeholder="8–13 digits" />
               </div>
               <div>
-                <Label>Incorporation date</Label>
-                <Input type="date" className="bg-slate-800 border-slate-700 mt-1" value={reg.incorporationDate}
+                <Label htmlFor="kyb-8">Incorporation date</Label>
+                <Input id="kyb-8" type="date" className="bg-slate-800 border-slate-700 mt-1" value={reg.incorporationDate}
                   onChange={(e) => setReg({ ...reg, incorporationDate: e.target.value })} />
               </div>
             </CardContent>
@@ -525,23 +527,23 @@ export default function KybOnboarding() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Full name</Label>
-                      <Input className="bg-slate-800 border-slate-700 mt-1" value={d.fullName}
+                      <Label htmlFor="kyb-9">Full name</Label>
+                      <Input id="kyb-9" className="bg-slate-800 border-slate-700 mt-1" value={d.fullName}
                         onChange={(e) => setDirectors(directors.map((x, j) => j === i ? { ...x, fullName: e.target.value } : x))} />
                     </div>
                     <div>
-                      <Label>Role</Label>
-                      <Input className="bg-slate-800 border-slate-700 mt-1" value={d.role}
+                      <Label htmlFor="kyb-10">Role</Label>
+                      <Input id="kyb-10" className="bg-slate-800 border-slate-700 mt-1" value={d.role}
                         onChange={(e) => setDirectors(directors.map((x, j) => j === i ? { ...x, role: e.target.value } : x))} />
                     </div>
                     <div>
-                      <Label>Appointment date (optional)</Label>
-                      <Input type="date" className="bg-slate-800 border-slate-700 mt-1" value={d.appointmentDate}
+                      <Label htmlFor="kyb-11">Appointment date (optional)</Label>
+                      <Input id="kyb-11" type="date" className="bg-slate-800 border-slate-700 mt-1" value={d.appointmentDate}
                         onChange={(e) => setDirectors(directors.map((x, j) => j === i ? { ...x, appointmentDate: e.target.value } : x))} />
                     </div>
                     <div>
-                      <Label>BVN (optional — stored hashed)</Label>
-                      <Input className="bg-slate-800 border-slate-700 mt-1" value={d.bvn} maxLength={11}
+                      <Label htmlFor="kyb-12">BVN (optional — stored hashed)</Label>
+                      <Input id="kyb-12" className="bg-slate-800 border-slate-700 mt-1" value={d.bvn} maxLength={11}
                         onChange={(e) => setDirectors(directors.map((x, j) => j === i ? { ...x, bvn: e.target.value.replace(/\D/g, "") } : x))} />
                     </div>
                   </div>
@@ -595,33 +597,33 @@ export default function KybOnboarding() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label>Full name</Label>
-                        <Input className="bg-slate-800 border-slate-700 mt-1" value={o.fullName}
+                        <Label htmlFor="kyb-13">Full name</Label>
+                        <Input id="kyb-13" className="bg-slate-800 border-slate-700 mt-1" value={o.fullName}
                           onChange={(e) => setOwners(owners.map((x, j) => j === i ? { ...x, fullName: e.target.value } : x))} />
                       </div>
                       <div>
-                        <Label>Ownership %</Label>
-                        <Input type="number" min={0} max={100} step="0.01" className="bg-slate-800 border-slate-700 mt-1" value={o.ownershipPercent}
+                        <Label htmlFor="kyb-14">Ownership %</Label>
+                        <Input id="kyb-14" type="number" min={0} max={100} step="0.01" className="bg-slate-800 border-slate-700 mt-1" value={o.ownershipPercent}
                           onChange={(e) => setOwners(owners.map((x, j) => j === i ? { ...x, ownershipPercent: e.target.value } : x))} />
                       </div>
                       <div>
-                        <Label>Date of birth (optional)</Label>
-                        <Input type="date" className="bg-slate-800 border-slate-700 mt-1" value={o.dateOfBirth}
+                        <Label htmlFor="kyb-15">Date of birth (optional)</Label>
+                        <Input id="kyb-15" type="date" className="bg-slate-800 border-slate-700 mt-1" value={o.dateOfBirth}
                           onChange={(e) => setOwners(owners.map((x, j) => j === i ? { ...x, dateOfBirth: e.target.value } : x))} />
                       </div>
                       <div>
-                        <Label>Nationality</Label>
-                        <Input className="bg-slate-800 border-slate-700 mt-1" value={o.nationality}
+                        <Label htmlFor="kyb-16">Nationality</Label>
+                        <Input id="kyb-16" className="bg-slate-800 border-slate-700 mt-1" value={o.nationality}
                           onChange={(e) => setOwners(owners.map((x, j) => j === i ? { ...x, nationality: e.target.value } : x))} />
                       </div>
                       <div>
-                        <Label>BVN (optional — stored hashed)</Label>
-                        <Input className="bg-slate-800 border-slate-700 mt-1" value={o.bvn} maxLength={11}
+                        <Label htmlFor="kyb-17">BVN (optional — stored hashed)</Label>
+                        <Input id="kyb-17" className="bg-slate-800 border-slate-700 mt-1" value={o.bvn} maxLength={11}
                           onChange={(e) => setOwners(owners.map((x, j) => j === i ? { ...x, bvn: e.target.value.replace(/\D/g, "") } : x))} />
                       </div>
                       <div>
-                        <Label>NIN (optional — stored hashed)</Label>
-                        <Input className="bg-slate-800 border-slate-700 mt-1" value={o.nin} maxLength={11}
+                        <Label htmlFor="kyb-18">NIN (optional — stored hashed)</Label>
+                        <Input id="kyb-18" className="bg-slate-800 border-slate-700 mt-1" value={o.nin} maxLength={11}
                           onChange={(e) => setOwners(owners.map((x, j) => j === i ? { ...x, nin: e.target.value.replace(/\D/g, "") } : x))} />
                       </div>
                     </div>
@@ -701,6 +703,36 @@ export default function KybOnboarding() {
                 owners have been declared. The entity, directors and UBOs will be screened against
                 international sanctions, PEP and adverse-media sources (OpenSanctions). False declarations
                 may lead to rejection or suspension.
+              </div>
+
+              {/* Signatory liveness (DOCAI challenge-response) — recommended, non-blocking */}
+              <div className="border border-slate-800 rounded-lg p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> Signatory liveness verification
+                  </h4>
+                  {kybLiveness?.passed && (
+                    <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Verified</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Recommended: prove the submitting officer is a live human (challenge-response, anti-spoof).
+                  Strengthens the application's fraud posture during compliance review.
+                </p>
+                {!kybLiveness?.passed && applicationId && (
+                  <LivenessChallenge
+                    applicationId={String(applicationId)}
+                    requireFaceMatch={false}
+                    onComplete={(v) => {
+                      setKybLiveness(v);
+                      if (v.passed) toast.success("Signatory liveness verified");
+                      else toast.warning("Liveness check did not pass — you may retry or submit anyway");
+                    }}
+                  />
+                )}
+                {!applicationId && (
+                  <p className="text-xs text-slate-600">Save the application first to enable liveness verification.</p>
+                )}
               </div>
             </CardContent>
           </Card>

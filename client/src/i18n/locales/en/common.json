@@ -7,7 +7,42 @@
     "wallet": "Wallet",
     "compliance": "Compliance",
     "settings": "Settings",
-    "logout": "Logout"
+    "logout": "Logout",
+    "allMarkets": "All Markets",
+    "analytics": "Analytics",
+    "commodities": "Commodities",
+    "forex": "Forex / FX",
+    "equities": "Equities (NGX/NYSE)",
+    "digitalAssets": "Digital Assets",
+    "indices": "Indices",
+    "warehouseReceipts": "Warehouse Receipts",
+    "deposits": "Deposits",
+    "payments": "Payments",
+    "warehouses": "Warehouses",
+    "delivery": "Delivery",
+    "marketMakers": "Market Makers",
+    "brokers": "Brokers",
+    "corporateActions": "Corporate Actions",
+    "surveillance": "Surveillance",
+    "policyManagement": "Policy Management",
+    "fixedIncome": "Fixed Income",
+    "abcpMarkets": "ABCP Markets",
+    "ledger": "Ledger",
+    "workbench": "WorkBench (SaaS)",
+    "inputFinancing": "Input Financing",
+    "fieldAgents": "Field Agents",
+    "cropReports": "Crop Reports",
+    "account": "Account",
+    "notifications": "Notifications",
+    "priceAlerts": "Price Alerts",
+    "kycOnboarding": "KYC / Onboarding",
+    "grpOverview": "Overview",
+    "grpAssets": "Trade by Asset Class",
+    "grpWarehouse": "Warehouse Ops",
+    "grpStructure": "Market Structure",
+    "grpCapitalMarkets": "Capital Markets",
+    "grpAgri": "Agri Ecosystem",
+    "grpMarkets": "Markets"
   },
   "auth": {
     "login": "Sign In",
@@ -17,7 +52,8 @@
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "loginWithPasskey": "Sign in with Passkey",
-    "loginWithManus": "Sign in with Manus"
+    "loginWithManus": "Sign in with Manus",
+    "authenticating": "Authenticating…"
   },
   "kyc": {
     "title": "KYC Verification",
@@ -83,5 +119,11 @@
     "title": "Notifications",
     "markAllRead": "Mark all as read",
     "noNotifications": "No notifications yet"
+  },
+  "onboarding": {
+    "badge": "Nigeria's Premier Commodity Exchange",
+    "title": "Join NEXCOM Exchange",
+    "subtitle": "Choose your role on the exchange. Each stakeholder type has a dedicated onboarding flow, KYC process, and dashboard tailored to their needs.",
+    "signInNote": "You'll be asked to sign in before completing your profile."
   }
 }

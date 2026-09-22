@@ -1233,70 +1233,43 @@ async def analyse_document(req: AnalyseRequest):
         suffix = os.path.splitext(req.document_url.split("?")[0])[1] or ".jpg"
         doc_path = await _download_to_temp(req.document_url, suffix)
 
-        # 1. OCR (PaddleOCR)
-        ocr = ocr_engine.extract_document_fields(doc_path, doc_type)
+        # DOCAI: delegate to the consolidated docai pipeline
+        # (docai/ocr.py + docai/vlm.py + docai/structure.py). Fail-closed:
+        # when OCR is unavailable the pipeline returns success=False (503),
+        # never a fabricated analysis.
+        from docai.api import run_document_pipeline, _analyse_selfie_async
 
-        # 2. Authenticity verification (VLM heuristics)
-        verification = doc_verifier.verify_document(doc_path, doc_type, ocr.raw_text)
+        result = run_document_pipeline(doc_path, doc_type,
+                                       application_id=req.application_id)
+        if not result.get("success"):
+            return JSONResponse(status_code=503, content=result)
 
-        # 3. Structured parse (Docling) — best effort
-        docling_analysis: dict = {}
-        try:
-            docling_analysis = doc_parser.parse_document(doc_path)
-        except Exception as exc:  # noqa: BLE001
-            _logger.warning("Docling parse failed: %s", exc)
-
-        # 4. Optional selfie passive-liveness / spoof classification
-        selfie_analysis: dict = {}
-        passive_liveness: dict = {}
+        # Optional selfie passive-liveness / face-match (async matcher)
         if req.selfie_url:
+            selfie_path: Optional[str] = None
             try:
-                matcher = get_face_matcher()
-                emb = await matcher.extract_embedding(req.selfie_url)
-                landmarks = getattr(emb, "landmarks_68", None)
-                img = await matcher._download_image(req.selfie_url)
-                spoof_type, spoof_conf = matcher._classify_spoof(img, landmarks)
-                selfie_analysis = {
-                    "face_detected": landmarks is not None,
-                    "embedding_extracted": True,
-                }
-                passive_liveness = {
-                    "spoof_type": str(getattr(spoof_type, "value", spoof_type)),
-                    "spoof_confidence": float(spoof_conf),
-                    "is_live": str(getattr(spoof_type, "value", spoof_type)) == "live",
-                }
+                selfie_path = await _download_to_temp(req.selfie_url, ".jpg")
+                selfie_analysis, passive_liveness = await _analyse_selfie_async(
+                    selfie_path, doc_path, doc_type)
+                result["selfie_analysis"] = selfie_analysis
+                result["passive_liveness"] = passive_liveness
+                if passive_liveness.get("is_live") is False and \
+                        "selfie_spoof_suspected" not in result["risk_flags"]:
+                    result["risk_flags"].append("selfie_spoof_suspected")
+                    result["recommendation"] = "manual_review"
+                    result["overall_risk_level"] = "high"
             except Exception as exc:  # noqa: BLE001
                 _logger.warning("Selfie analysis failed: %s", exc)
-                selfie_analysis = {"error": str(exc)}
-                passive_liveness = {"error": str(exc)}
+                result["selfie_analysis"] = {"error": str(exc)}
+                result["passive_liveness"] = {"error": str(exc)}
+            finally:
+                if selfie_path:
+                    try:
+                        os.unlink(selfie_path)
+                    except OSError:
+                        pass
 
-        # 5. Score + recommendation
-        overall_score = round(
-            0.5 * float(ocr.overall_confidence) + 0.5 * float(verification.confidence), 4
-        )
-        risk_flags = list(verification.issues)
-        if req.selfie_url and passive_liveness and not passive_liveness.get("is_live", True):
-            risk_flags.append("selfie_spoof_suspected")
-        if overall_score >= 0.8 and verification.is_authentic and not risk_flags:
-            risk_level, recommendation = "low", "auto_approve"
-        elif overall_score >= 0.55:
-            risk_level, recommendation = "medium", "manual_review"
-        else:
-            risk_level, recommendation = "high", "manual_review"
-
-        return {
-            "success": True,
-            "application_id": req.application_id,
-            "ocr": ocr.model_dump(),
-            "document_analysis": verification.model_dump(),
-            "selfie_analysis": selfie_analysis,
-            "passive_liveness": passive_liveness,
-            "docling_analysis": docling_analysis,
-            "overall_risk_level": risk_level,
-            "overall_score": overall_score,
-            "risk_flags": risk_flags,
-            "recommendation": recommendation,
-        }
+        return result
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -1321,7 +1294,12 @@ async def analyse_document(req: AnalyseRequest):
 # ── FIX-KYB: persistent KYB screening API (POST/GET /api/v1/kyb/screen) ──────
 from kyb.api import router as kyb_api_router  # noqa: E402  # FIX-KYB
 app.include_router(kyb_api_router)  # FIX-KYB
-# ── end FIX-KYB ───────────────────────────────────────────────────────────────
+# ── end FIX-KYB ──
+
+# ── DOCAI: consolidated document-AI pipeline (OCR/structure/VLM/liveness) ──
+from docai.api import router as docai_router  # noqa: E402  # DOCAI
+app.include_router(docai_router)  # DOCAI
+# ── end DOCAI ───────────────────────────────────────────────────────────────
 
 
 if __name__ == "__main__":

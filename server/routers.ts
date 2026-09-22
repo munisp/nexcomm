@@ -107,6 +107,16 @@ import { smartFillRouter } from "./routers/smartFillRouter";
 import { marketAssistantRouter } from "./routers/marketAssistantRouter";
 import { fileManagerRouter } from "./routers/fileManagerRouter";
 import { journeyRouter } from "./routers/journeyRouter";
+import { forecastRouter } from "./routers/forecastRouter";
+import { riskShieldRouter } from "./routers/riskShieldRouter";
+import { creditPassportRouter } from "./routers/creditPassportRouter";
+import { offlineSyncRouter } from "./routers/offlineSyncRouter";
+import { marketStreamRouter } from "./routers/marketStreamRouter";
+import { livenessRouter } from "./routers/livenessRouter";
+import { channelBridgeRouter } from "./routers/channelBridgeRouter";
+import { logisticsRouter } from "./routers/logisticsRouter";
+import { receiptTwinRouter } from "./routers/receiptTwinRouter";
+import { transparencyRouter } from "./routers/transparencyRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -214,6 +224,16 @@ export const appRouter = router({
   marketAssistant: marketAssistantRouter,
   fileManager: fileManagerRouter,
   journey: journeyRouter,
+  forecast: forecastRouter,
+  riskShield: riskShieldRouter,
+  creditPassport: creditPassportRouter,
+  offlineSync: offlineSyncRouter,
+  marketStream: marketStreamRouter,
+  liveness: livenessRouter,
+  channelBridge: channelBridgeRouter,
+  logistics: logisticsRouter,
+  receiptTwin: receiptTwinRouter,
+  transparency: transparencyRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure

@@ -8,9 +8,26 @@ import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
 import { PreferencesProvider } from "./contexts/PreferencesContext";
+import { registerServiceWorker } from "./lib/registerSW";
 import "./index.css";
 
-const queryClient = new QueryClient();
+// Global React Query defaults (UX-FIX): the zero-config default (staleTime 0,
+// infinite retries, refetch on every window focus) caused refetch storms on
+// 135 pages. 30s stale / 5min gc / 1 retry; pages with tighter freshness needs
+// (trading views) override per-query.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
@@ -53,19 +70,8 @@ async function bootstrapCsrf() {
 }
 bootstrapCsrf();
 
-// ─── Service Worker Registration ─────────────────────────────────────────────
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
-      .then((reg) => {
-        console.log("[SW] Registered:", reg.scope);
-        // Check for updates every 60 minutes
-        setInterval(() => reg.update(), 60 * 60 * 1000);
-      })
-      .catch((err) => console.warn("[SW] Registration failed:", err));
-  });
-}
+// ─── Service Worker Registration (single registrar — see lib/registerSW.ts) ──
+registerServiceWorker();
 
 const trpcClient = trpc.createClient({
   links: [

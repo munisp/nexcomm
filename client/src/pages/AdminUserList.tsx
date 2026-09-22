@@ -34,7 +34,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import DashboardLayout from "@/components/DashboardLayout";
 import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -166,7 +165,7 @@ export default function AdminUserList() {
 
   if (me && me.role !== "admin") {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center space-y-3">
             <Shield className="w-12 h-12 text-muted-foreground mx-auto" />
@@ -174,14 +173,14 @@ export default function AdminUserList() {
             <p className="text-muted-foreground text-sm">Admin access required.</p>
           </div>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6 bg-background min-h-screen">
 
         {/* Header */}
@@ -319,9 +318,7 @@ export default function AdminUserList() {
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-white hover:bg-muted">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
+                                  className="h-7 w-7 text-muted-foreground hover:text-white hover:bg-muted" aria-label="User actions"><MoreHorizontal className="h-4 w-4" /></Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end"
                                 className="bg-secondary border-border text-foreground">
@@ -462,6 +459,6 @@ export default function AdminUserList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </>
   );
 }

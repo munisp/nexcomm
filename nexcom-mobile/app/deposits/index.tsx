@@ -6,12 +6,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { COLORS } from '../../constants/config';
+import { ScreenState } from '../../components/ScreenState';
 import { trpc } from '../../lib/trpc';
 
 export default function DepositsScreen() {
   const [tab, setTab] = useState<'overview' | 'list'>('overview');
 
-  const { data, isLoading, refetch } = trpc.banking.getTransactions.useQuery(
+  const { data, isLoading, isError, error, refetch } = trpc.banking.getTransactions.useQuery(
     undefined,
     { retry: 1, staleTime: 30_000 }
   );
@@ -28,7 +29,9 @@ export default function DepositsScreen() {
         </TouchableOpacity>
       </View>
 
-      {isLoading ? (
+      {isError ? (
+        <ScreenState error={error} onRetry={() => refetch()}>{null}</ScreenState>
+      ) : isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Loading...</Text>

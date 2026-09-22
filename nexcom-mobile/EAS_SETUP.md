@@ -23,7 +23,7 @@ cd nexcom-mobile
 eas init
 ```
 
-This creates a project on expo.dev and returns a `projectId`. Replace the two `REPLACE_WITH_EAS_PROJECT_ID` placeholders in `app.json` with the actual ID:
+This creates a project on expo.dev and returns a `projectId`. Set it via the `EXPO_EAS_PROJECT_ID` environment variable — `app.config.ts` wires `extra.eas.projectId` and enables OTA updates automatically when present (no placeholders to edit):
 
 ```json
 "extra": {

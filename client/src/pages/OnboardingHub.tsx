@@ -3,6 +3,7 @@
  * Role-aware entry point that detects existing profiles and routes to the
  * correct onboarding PWA or dashboard for each stakeholder type.
  */
+import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -137,6 +138,7 @@ function KycBadge({ status }: { status: KycStatus }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function OnboardingHub() {
+  const { t } = useTranslation("common");
   const [, navigate] = useLocation();
   const { user, loading: authLoading, isAuthenticated } = useAuth();
 
@@ -184,7 +186,7 @@ export default function OnboardingHub() {
                 size="sm"
                 variant="outline"
                 className="border-border text-muted-foreground hover:bg-secondary"
-                onClick={() => navigate("/dashboard")}
+                onClick={() => navigate("/")}
               >
                 Go to Dashboard
               </Button>
@@ -206,18 +208,17 @@ export default function OnboardingHub() {
       <div className="max-w-6xl mx-auto px-4 pt-16 pb-12 text-center">
         <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 text-sm text-green-400 mb-6">
           <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          Nigeria's Premier Commodity Exchange
+          {t("onboarding.badge")}
         </div>
         <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-          Join NEXCOM Exchange
+          {t("onboarding.title")}
         </h1>
         <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-          Choose your role on the exchange. Each stakeholder type has a dedicated
-          onboarding flow, KYC process, and dashboard tailored to their needs.
+          {t("onboarding.subtitle")}
         </p>
         {!isAuthenticated && (
           <p className="mt-4 text-sm text-yellow-400/80">
-            You'll be asked to sign in before completing your profile.
+            {t("onboarding.signInNote")}
           </p>
         )}
       </div>
@@ -317,7 +318,7 @@ export default function OnboardingHub() {
             Already have an account?{" "}
             <button
               className="text-green-400 hover:text-green-300 underline underline-offset-2"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/")}
             >
               Go to the main trading dashboard
             </button>

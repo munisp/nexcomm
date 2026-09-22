@@ -12,7 +12,6 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import DashboardLayout from "@/components/DashboardLayout";
 import { TotpChallengeModal } from "@/components/TotpChallengeModal";
 import { WithdrawalChallengeModal } from "@/components/WithdrawalChallengeModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -326,7 +325,7 @@ export default function CashWithdrawal() {
   // ─── Render ─────────────────────────────────────────────────────────────────
   if (profileLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="page-container max-w-2xl mx-auto space-y-6">
         {/* Header */}
         <div>
@@ -600,6 +599,6 @@ export default function CashWithdrawal() {
           />
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 }

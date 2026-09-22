@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,7 +79,7 @@ export default function FuturesTrading() {
 
   if (contractsQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Futures Trading</h1>
@@ -345,6 +344,6 @@ export default function FuturesTrading() {
       <div className="px-6 pb-6">
         <OptionsChain />
       </div>
-    </DashboardLayout>
+    </>
   );
 }

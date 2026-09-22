@@ -1,13 +1,15 @@
 /**
  * NEXCOM Exchange — Service Worker
- * Offline-first strategy: cache-first for static assets, network-first for API calls
- * Push notification support for price alerts and order fills
+ * Static assets: cache-first. Navigation: network-first with offline.html fallback.
+ * /api/* (tRPC): network-only — personalised financial data is never cached.
+ * Push notifications (price alerts, order fills) + background sync of the
+ * offline operation queue (shared with client/src/lib/offlineConstants.ts).
+ *
+ * Registered exactly once by client/src/lib/registerSW.ts.
  */
 
-const CACHE_VERSION = "v2";
-const CACHE_NAME = `nexcom-${CACHE_VERSION}`;
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `nexcom-static-${CACHE_VERSION}`;
-const API_CACHE = `nexcom-api-${CACHE_VERSION}`;
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -29,7 +31,7 @@ self.addEventListener("install", (event) => {
 
 // ─── Activate ────────────────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
-  const validCaches = [STATIC_CACHE, API_CACHE];
+  const validCaches = [STATIC_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -39,6 +41,11 @@ self.addEventListener("activate", (event) => {
       );
     }).then(() => self.clients.claim())
   );
+});
+
+// ─── Message handling (registerSW.ts posts SKIP_WAITING for instant updates) ─
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 // ─── Fetch Strategy ──────────────────────────────────────────────────────────
@@ -51,19 +58,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API calls — network-first, fallback to cache
+  // API calls — NETWORK ONLY.
+  // tRPC responses are personalised & time-sensitive (balances, KYC status,
+  // positions). Caching them offline serves stale financial data — never do it.
+  // The app-level offline queue (useOfflineQueue + sync event) covers writes;
+  // market reference data freshness is handled by React Query, not the SW.
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(API_CACHE).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(request))
-    );
+    event.respondWith(fetch(request));
     return;
   }
 
@@ -184,22 +185,70 @@ self.addEventListener("sync", (event) => {
   }
 });
 
+// IMPORTANT: these values MUST match client/src/lib/offlineConstants.ts
+// (OFFLINE_DB_NAME / OFFLINE_DB_VERSION / OFFLINE_STORE_NAME /
+//  OFFLINE_TRPC_ENDPOINTS). The app writes queued operations to this exact
+// database/store; if the two drift apart, offline orders silently never sync.
+const OFFLINE_DB_NAME = "nexcom-offline-queue";      // keep in sync with offlineConstants.ts
+const OFFLINE_DB_VERSION = 1;                        // keep in sync with offlineConstants.ts
+const OFFLINE_STORE_NAME = "operations";             // keep in sync with offlineConstants.ts
+const OFFLINE_TRPC_ENDPOINTS = {                     // keep in sync with offlineConstants.ts
+  place_order: "/api/trpc/orders.create",
+  cancel_order: "/api/trpc/orders.cancel",
+  amend_order: "/api/trpc/orders.amend",
+  kyc_submit: "/api/trpc/kycService.submitApplication",
+  receipt_create: "/api/trpc/receipts.create",
+  alert_create: "/api/trpc/priceAlerts.create",
+  profile_update: "/api/trpc/profile.update",
+};
+const OFFLINE_MAX_RETRIES = 5;
+
 async function syncPendingOrders() {
-  // Retrieve pending orders from IndexedDB and retry submission
+  // Drain the offline operation queue written by the app (useOfflineQueue.ts)
+  // and retry each operation against its tRPC endpoint.
   try {
     const db = await openDB();
-    const pending = await getFromDB(db, "pending-orders");
-    for (const order of pending || []) {
+    const pending = await getFromDB(db, OFFLINE_STORE_NAME);
+    for (const item of pending || []) {
+      const endpoint = OFFLINE_TRPC_ENDPOINTS[item.type];
+      if (!endpoint) {
+        await deleteFromDB(db, OFFLINE_STORE_NAME, item.id);
+        continue;
+      }
       try {
-        await fetch("/api/trpc/trading.placeOrder", {
+        // Idempotency: the queued item's idempotencyKey (written by
+        // lib/offlineOrderQueue.ts / hooks/useOfflineQueue.ts) is forwarded as
+        // clientOrderId so orders.create's server-side dedupe catches replays
+        // of operations the server already accepted before connectivity dropped.
+        const body =
+          item.type === "place_order" && item.idempotencyKey
+            ? { ...item.payload, clientOrderId: item.idempotencyKey }
+            : item.payload;
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(order),
+          body: JSON.stringify(body),
+          credentials: "include",
         });
-        await deleteFromDB(db, "pending-orders", order.id);
+        if (res.ok) {
+          await deleteFromDB(db, OFFLINE_STORE_NAME, item.id);
+        } else {
+          const retries = (item.retries || 0) + 1;
+          if (retries >= OFFLINE_MAX_RETRIES) {
+            await deleteFromDB(db, OFFLINE_STORE_NAME, item.id); // drop poisoned item
+          } else {
+            await putToDB(db, OFFLINE_STORE_NAME, { ...item, retries, lastError: `HTTP ${res.status}` });
+          }
+        }
       } catch {
-        // Will retry on next sync
+        // Network still down — will retry on next sync event
       }
+    }
+    // Tell open clients the queue changed so UI badges can refresh
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const remaining = (await getFromDB(db, OFFLINE_STORE_NAME)).length;
+    for (const client of clients) {
+      client.postMessage({ type: "OFFLINE_QUEUE_FLUSHED", remaining });
     }
   } catch {
     // IndexedDB not available
@@ -209,11 +258,13 @@ async function syncPendingOrders() {
 // Simple IndexedDB helpers
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("nexcom-offline", 1);
+    const req = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains("pending-orders")) {
-        db.createObjectStore("pending-orders", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(OFFLINE_STORE_NAME)) {
+        const store = db.createObjectStore(OFFLINE_STORE_NAME, { keyPath: "id" });
+        store.createIndex("enqueuedAt", "enqueuedAt", { unique: false });
+        store.createIndex("type", "type", { unique: false });
       }
     };
     req.onsuccess = (e) => resolve(e.target.result);
@@ -226,6 +277,15 @@ function getFromDB(db, storeName) {
     const tx = db.transaction(storeName, "readonly");
     const req = tx.objectStore(storeName).getAll();
     req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = reject;
+  });
+}
+
+function putToDB(db, storeName, value) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const req = tx.objectStore(storeName).put(value);
+    req.onsuccess = resolve;
     req.onerror = reject;
   });
 }

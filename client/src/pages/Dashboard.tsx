@@ -2,6 +2,7 @@
  * NEXCOM Exchange — Dashboard
  * Overview: portfolio summary, live prices, watchlist, recent activity, quick actions
  */
+import { formatMoney } from "@/lib/format";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
@@ -24,6 +25,7 @@ import PortfolioPnLChart from "@/components/PortfolioPnLChart";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import PortfolioAllocationChart from "@/components/PortfolioAllocationChart";
 import FarmerProgressTracker from "@/components/FarmerProgressTracker";
+import { ChannelBridgeCard } from "@/components/ChannelBridgeCard";
 
 const FEATURED_SYMBOLS = [
   "GINGER-NG-SPOT","MAIZE-NG-SPOT","COCOA-SPOT","SOYBEAN-SPOT",
@@ -84,7 +86,7 @@ function PriceCard({ tick }: { tick: PriceTick }) {
         </Badge>
       </div>
       <div className="text-xl font-bold font-mono text-foreground">
-        ${tick.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        {formatMoney(tick.price, "currency" in tick && typeof tick.currency === "string" ? tick.currency : "USD", { decimals: true })}
       </div>
       <div className="text-xs text-muted-foreground mt-1">
         {commodity?.unit} · Vol {tick.volume.toLocaleString()}
@@ -190,7 +192,7 @@ function WatchlistWidget({ ticks }: { ticks: PriceTick[] }) {
                   {tick.symbol.replace("-SPOT","").replace("-NG","")}
                 </div>
                 <div className={"text-lg font-mono font-bold " + (isUp ? "text-positive" : "text-negative")}>
-                  ${tick.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  {formatMoney(tick.price, "currency" in tick && typeof tick.currency === "string" ? tick.currency : "USD", { decimals: true })}
                 </div>
                 <div className={"text-xs font-medium flex items-center gap-0.5 " + (isUp ? "text-positive" : "text-negative")}>
                   {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
@@ -301,6 +303,9 @@ export default function Dashboard() {
           <FarmerProgressTracker />
         </div>
       </div>
+
+      {/* Omnichannel bridge: USSD ↔ web session continuity */}
+      <ChannelBridgeCard />
 
       {/* Main grid: live prices + activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

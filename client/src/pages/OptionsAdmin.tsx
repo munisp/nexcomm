@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import DashboardLayout from "@/components/DashboardLayout";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -225,7 +224,7 @@ export default function OptionsAdmin() {
 
   if (statsQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -479,6 +478,6 @@ export default function OptionsAdmin() {
           </DialogContent>
         </Dialog>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

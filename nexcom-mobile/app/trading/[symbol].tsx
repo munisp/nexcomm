@@ -7,6 +7,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import { COLORS, FONTS, SPACING } from "../../constants/config";
+import { ScreenState } from "../../components/ScreenState";
 import { trpc } from "../../lib/trpc";
 
 export default function TradingScreen() {
@@ -74,7 +75,9 @@ export default function TradingScreen() {
 
         <View style={s.card}>
           <Text style={s.cardTitle}>My Open Orders for {sym} ({openOrders.length})</Text>
-          {openOrdersQ.isLoading ? <ActivityIndicator color={COLORS.primary} /> : openOrders.map((o: any) => (
+          {openOrdersQ.isError ? (
+            <ScreenState error={openOrdersQ.error} onRetry={() => openOrdersQ.refetch()}>{null}</ScreenState>
+          ) : openOrdersQ.isLoading ? <ActivityIndicator color={COLORS.primary} /> : openOrders.map((o: any) => (
             <View key={o.id} style={s.row}>
               <Text style={[s.symbol, o.side === "BUY" ? s.pos : s.neg]}>{o.side}</Text>
               <Text style={s.muted}>{o.orderType} · {Number(o.quantity).toLocaleString()} MT</Text>

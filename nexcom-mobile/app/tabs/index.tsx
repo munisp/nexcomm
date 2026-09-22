@@ -15,6 +15,7 @@ import { COLORS, TYPOGRAPHY } from '../../constants/config';
 import { useLoanNotifications, getLoanEventLabel } from '../../lib/useLoanNotifications';
 import { useAuthStore } from '../../lib/store';
 import { trpc } from '../../lib/trpc';
+import { ScreenState } from '../../components/ScreenState';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -75,6 +76,13 @@ export default function DashboardScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Global query error — honest failure with retry-all */}
+        {(portfolioQuery.isError || marketPricesQuery.isError || recentOrdersQuery.isError || notificationsQuery.isError) && (
+          <ScreenState
+            error={(portfolioQuery.error ?? marketPricesQuery.error ?? recentOrdersQuery.error ?? notificationsQuery.error) as { message: string }}
+            onRetry={onRefresh}
+          >{null}</ScreenState>
+        )}
         {/* Portfolio Card */}
         <View style={styles.portfolioCard}>
           <Text style={styles.portfolioLabel}>Portfolio Value</Text>

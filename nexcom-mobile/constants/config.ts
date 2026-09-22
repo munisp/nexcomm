@@ -1,12 +1,25 @@
 // NEXCOM Exchange Mobile App Configuration
-// Update BASE_URL to point to your deployed NEXCOM Exchange server
+// Runtime values come from app.config.ts `extra` (driven by EXPO_PUBLIC_*
+// environment variables / eas.json build profiles) via expo-constants.
+// No hardcoded hosts — set EXPO_PUBLIC_API_URL / EXPO_PUBLIC_KEYCLOAK_URL.
+import ExpoConstants from 'expo-constants';
+
+const extra = (ExpoConstants.expoConfig?.extra ?? {}) as {
+  apiUrl?: string;
+  keycloakUrl?: string;
+  keycloakRealm?: string;
+  keycloakClientId?: string;
+  appEnv?: string;
+};
 
 export const CONFIG = {
-  // Production URL - update when deploying
-  BASE_URL: 'https://nexcom-exchange.manus.space',
-  
-  // Development URL - use when testing locally
-  DEV_URL: 'http://localhost:3000',
+  // Portal/server base URL (tRPC at `${BASE_URL}/api/trpc`)
+  BASE_URL: extra.apiUrl ?? 'https://nexcom.exchange',
+
+  // Keycloak OIDC (PKCE public client) endpoints
+  KEYCLOAK_URL: extra.keycloakUrl ?? 'https://nexcom.exchange/auth',
+  KEYCLOAK_REALM: extra.keycloakRealm ?? 'nexcom',
+  KEYCLOAK_CLIENT_ID: extra.keycloakClientId ?? 'nexcom-mobile',
   
   // App metadata
   APP_NAME: 'NEXCOM Exchange',

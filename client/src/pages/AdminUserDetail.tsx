@@ -14,7 +14,6 @@
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -122,29 +121,29 @@ export default function AdminUserDetail() {
 
   if (me?.role !== "admin") {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex items-center justify-center h-64 text-muted-foreground">
           <ShieldX className="w-6 h-6 mr-2" />
           Admin access required
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   if (isLoading) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex items-center justify-center h-64 text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin mr-2" />
           Loading user details...
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   if (error || !data) {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex flex-col items-center justify-center h-64 gap-4 text-muted-foreground">
           <AlertTriangle className="w-8 h-8 text-destructive" />
           <p>{error?.message ?? "User not found"}</p>
@@ -153,7 +152,7 @@ export default function AdminUserDetail() {
             Back to Admin
           </Button>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
@@ -161,7 +160,7 @@ export default function AdminUserDetail() {
 
   if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="max-w-5xl mx-auto space-y-6 p-4 md:p-6">
 
         {/* ── Back + Header ───────────────────────────────────────────────── */}
@@ -480,6 +479,6 @@ export default function AdminUserDetail() {
         </div>
 
       </div>
-    </DashboardLayout>
+    </>
   );
 }

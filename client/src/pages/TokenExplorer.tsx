@@ -8,7 +8,6 @@
 
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -301,7 +300,7 @@ export default function TokenExplorer() {
 
   if (searchLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -516,6 +515,6 @@ export default function TokenExplorer() {
           onClose={() => setSelectedToken(null)}
         />
       )}
-    </DashboardLayout>
+    </>
   );
 }

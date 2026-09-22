@@ -30,6 +30,7 @@ import { TotpChallengeModal } from "@/components/TotpChallengeModal";
 import { usePreferences } from "@/contexts/PreferencesContext";
 import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 import SmartFormFill from "@/components/SmartFormFill";
+import { OrderRiskAssessment } from "@/components/OrderRiskAssessment";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n: number, dp = 2) {
@@ -727,6 +728,13 @@ export default function Trade() {
                   </div>
                 )}
 
+                <OrderRiskAssessment
+                  commodity={selectedCommodity.name}
+                  amount={orderValue}
+                  quantity={parseFloat(orderQty) || undefined}
+                  channel="web"
+                />
+
                 <SmartFormFill
                   fields={[
                     { key: "side", label: "Side", type: "select", options: ["BUY", "SELL"] },
@@ -742,22 +750,8 @@ export default function Trade() {
                   }}
                   placeholder='e.g. "Buy 500 bags of white maize at ₦85,000 per tonne, GTC limit order"'
                 />
-                                <SmartFormFill
-                  fields={[
-                    { key: "side", label: "Side", type: "select", options: ["BUY", "SELL"] },
-                    { key: "orderType", label: "Order Type", type: "select", options: ["LIMIT", "MARKET", "STOP_LIMIT"] },
-                    { key: "quantity", label: "Quantity", type: "number" },
-                    { key: "price", label: "Price", type: "number" },
-                  ]}
-                  onFill={(vals) => {
-                    if (vals.side === "BUY" || vals.side === "SELL") setOrderSide(vals.side);
-                    if (vals.orderType && ["LIMIT","MARKET","STOP_LIMIT"].includes(vals.orderType)) setOrderType(vals.orderType as "LIMIT"|"MARKET"|"STOP_LIMIT");
-                    if (vals.quantity) setOrderQty(vals.quantity);
-                    if (vals.price) setOrderPrice(vals.price);
-                  }}
-                  placeholder='e.g. "Buy 500 bags of white maize at ₦85,000 per tonne, GTC limit order"'
-                />
-                                <Button onClick={handleSubmitOrder}
+
+                <Button onClick={handleSubmitOrder}
                   className={`w-full h-10 font-semibold text-sm transition-all ${orderSide === "BUY" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-red-600 hover:bg-red-500 text-white"}`}>
                   {`${orderSide === "BUY" ? t("trade.buy") : t("trade.sell")} ${selectedCommodity.name}`}
                 </Button>

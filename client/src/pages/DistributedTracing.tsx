@@ -191,9 +191,7 @@ export default function DistributedTracing() {
                   onChange={(e) => setMinDurationInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleApplyFilter()}
                 />
-                <Button variant="outline" size="sm" onClick={handleApplyFilter}>
-                  <Search className="h-4 w-4" />
-                </Button>
+                <Button variant="outline" size="sm" onClick={handleApplyFilter} aria-label="Search traces"><Search className="h-4 w-4" /></Button>
               </div>
             </div>
             {(serviceFilter !== "all" || minDuration !== undefined) && (

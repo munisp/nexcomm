@@ -17,7 +17,8 @@
       },
       "env": {
         "APP_ENV": "development",
-        "API_BASE_URL": "http://localhost:3000"
+        "EXPO_PUBLIC_API_URL": "http://localhost:3000",
+        "EXPO_PUBLIC_KEYCLOAK_URL": "http://localhost:8080"
       }
     },
     "preview": {
@@ -32,7 +33,8 @@
       },
       "env": {
         "APP_ENV": "preview",
-        "API_BASE_URL": "https://nexcom-exchange-preview.manus.space"
+        "EXPO_PUBLIC_API_URL": "https://preview.nexcom.exchange",
+        "EXPO_PUBLIC_KEYCLOAK_URL": "https://preview.nexcom.exchange/auth"
       }
     },
     "production": {
@@ -48,16 +50,15 @@
       },
       "env": {
         "APP_ENV": "production",
-        "API_BASE_URL": "https://nexcom-exchange.manus.space"
+        "EXPO_PUBLIC_API_URL": "https://nexcom.exchange",
+        "EXPO_PUBLIC_KEYCLOAK_URL": "https://nexcom.exchange/auth"
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "developer@nexcom.exchange",
-        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "REPLACE_WITH_APPLE_TEAM_ID"
+        "appleId": "developer@nexcom.exchange"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",

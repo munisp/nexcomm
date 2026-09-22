@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
+import { ScreenState } from "../../components/ScreenState";
 import { trpc } from '../../lib/trpc';
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
@@ -107,7 +108,9 @@ export default function NotificationsScreen() {
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
-          notificationsQuery.isLoading ? (
+          notificationsQuery.isError ? (
+            <ScreenState error={notificationsQuery.error} onRetry={() => notificationsQuery.refetch()}>{null}</ScreenState>
+          ) : notificationsQuery.isLoading ? (
             <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
           ) : (
             <View style={styles.emptyState}>

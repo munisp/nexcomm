@@ -525,6 +525,34 @@
       "when": 1786507212000,
       "tag": "0075_kyb_workflows",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790063783940,
+      "tag": "0076_credit_passports",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1790063783940,
+      "tag": "0077_offline_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790063783940,
+      "tag": "0078_receipt_verifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1790063783940,
+      "tag": "0079_channel_handoffs",
+      "breakpoints": true
     }
   ]
 }

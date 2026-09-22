@@ -20,6 +20,12 @@ const ComponentShowcase = lazy(() => import("./pages/ComponentShowcase"));
 const KybOnboarding   = lazy(() => import("./pages/KybOnboarding"));
 const AdminKybReview  = lazy(() => import("./pages/AdminKybReview"));
 const Markets           = lazy(() => import("./pages/Markets"));
+const MarketDepth       = lazy(() => import("./pages/MarketDepth"));
+const CommodityForecast = lazy(() => import("./pages/CommodityForecast"));
+const CreditPassport    = lazy(() => import("./pages/CreditPassport"));
+const DeliveryTracking  = lazy(() => import("./pages/DeliveryTracking"));
+const Transparency      = lazy(() => import("./pages/Transparency"));
+const VerifyReceipt     = lazy(() => import("./pages/VerifyReceipt"));
 const Trade             = lazy(() => import("./pages/Trade"));
 const Orders            = lazy(() => import("./pages/Orders"));
 const Portfolio         = lazy(() => import("./pages/Portfolio"));
@@ -180,6 +186,14 @@ function Router() {
         <Route path="/home"               component={Home} />
         <Route path="/showcase"           component={ComponentShowcase} />
         <Route path="/markets"           component={Markets} />
+        <Route path="/market-depth"      component={MarketDepth} />
+        <Route path="/market-depth/:symbol" component={MarketDepth} />
+        <Route path="/forecast"          component={CommodityForecast} />
+        <Route path="/credit-passport"   component={CreditPassport} />
+        <Route path="/delivery-tracking" component={DeliveryTracking} />
+        <Route path="/transparency"      component={Transparency} />
+        <Route path="/verify-receipt"    component={VerifyReceipt} />
+        <Route path="/verify-receipt/:code" component={VerifyReceipt} />
         <Route path="/trade"             component={Trade} />
         <Route path="/trade/:symbol"     component={Trade} />
         <Route path="/orders"            component={Orders} />

@@ -1032,7 +1032,7 @@ export default function AdminStakeholders() {
           <XCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
           <p className="text-lg font-semibold text-white">Access Denied</p>
           <p className="text-sm mt-2">This page is restricted to administrators.</p>
-          <Button className="mt-4" onClick={() => navigate("/dashboard")}>
+          <Button className="mt-4" onClick={() => navigate("/")}>
             Go to Dashboard
           </Button>
         </div>

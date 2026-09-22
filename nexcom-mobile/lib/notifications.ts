@@ -271,3 +271,23 @@ export async function registerTokenWithBackend(
     return false;
   }
 }
+
+/**
+ * Full post-login registration: obtains the Expo push token and syncs it to
+ * the portal (pushNotificationsRouter contract: { token, platform, deviceName }).
+ * Auth token is pulled from SecureStore via getValidAccessToken — callers do
+ * not need to thread it through. Safe to fire-and-forget after login.
+ */
+export async function registerDevicePushToken(): Promise<boolean> {
+  try {
+    const { getValidAccessToken } = await import('./auth');
+    const authToken = await getValidAccessToken();
+    if (!authToken) return false;
+    const expoToken = await registerForPushNotifications();
+    if (!expoToken) return false;
+    return registerTokenWithBackend(expoToken, '', authToken);
+  } catch (err) {
+    console.warn('[Notifications] Push registration skipped:', err);
+    return false;
+  }
+}

@@ -12,7 +12,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -114,7 +113,7 @@ export default function MarginAccount() {
     onError: (err) => toast.error(err.message),
   });
 
-  if (authLoading) return <DashboardLayout><div className="p-8 text-muted-foreground">Loading…</div></DashboardLayout>;
+  if (authLoading) return <><div className="p-8 text-muted-foreground">Loading…</div></>;
   if (!user) {
     window.location.href = getLoginUrl();
     return null;
@@ -134,7 +133,7 @@ export default function MarginAccount() {
 
   if (summaryLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -456,6 +455,6 @@ export default function MarginAccount() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </>
   );
 }

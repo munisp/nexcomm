@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { ScreenState } from '../../components/ScreenState';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
 import { trpc } from '../../lib/trpc';
 
@@ -76,6 +77,12 @@ export default function MarketsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       {pricesQuery.isLoading && (
         <ActivityIndicator color={COLORS.primary} style={{ marginTop: 20 }} />
+      )}
+      {pricesQuery.isError && (
+        <ScreenState
+          error={pricesQuery.error}
+          onRetry={() => pricesQuery.refetch()}
+        >{null}</ScreenState>
       )}
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -162,11 +169,15 @@ export default function MarketsScreen() {
           />
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>
-              {pricesQuery.isLoading ? 'Loading...' : 'No prices found'}
-            </Text>
-          </View>
+          !pricesQuery.isLoading && !pricesQuery.isError ? (
+            <ScreenState
+              isEmpty
+              emptyIcon="🔍"
+              emptyTitle="No prices found"
+              emptyMessage="Try a different search or category."
+              onRetry={() => pricesQuery.refetch()}
+            >{null}</ScreenState>
+          ) : null
         }
       />
     </SafeAreaView>

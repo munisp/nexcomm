@@ -14,6 +14,7 @@ volumes:
   redis_data:
   kafka_data:
   tigerbeetle_data:
+  kyc-models:            # PaddleOCR / Docling / anti-spoof ONNX model cache (kyc-service)
   lakehouse_data:        # Shared Delta Lake / Parquet storage for Bronze/Silver/Gold layers
   mojaloop_mysql_data:   # Mojaloop Central Hub MySQL data (hub-internal, separate from NEXCOM PostgreSQL)
   opensearch_data:       # OpenSearch full-text search index
@@ -385,6 +386,14 @@ services:
       NEXCOM_PG_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
       OPENSANCTIONS_API_KEY: ${OPENSANCTIONS_API_KEY:-}
+      # DOCAI (PaddleOCR + Docling + VLM + next-gen liveness)
+      VLM_BASE_URL: ${VLM_BASE_URL:-}          # optional VLM verifier endpoint
+      VLM_API_KEY: ${VLM_API_KEY:-}
+      VLM_MODEL: ${VLM_MODEL:-}                # e.g. qwen2.5-vl-7b / minicpm-v
+      LIVENESS_ONNX_PATH: ${LIVENESS_ONNX_PATH:-}   # e.g. /models/antispoof/minifasnet.onnx
+      PADDLEOCR_HOME: /models/paddleocr
+    volumes:
+      - kyc-models:/models
     ports:
       - "8003:8003"
     depends_on:

@@ -13,6 +13,7 @@
  *
  * The button is hidden if the browser does not support WebAuthn.
  */
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ interface PasskeyLoginButtonProps {
 }
 
 export function PasskeyLoginButton({ email, className, onSuccess }: PasskeyLoginButtonProps) {
+  const { t } = useTranslation("common");
   const [supported, setSupported] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -136,7 +138,7 @@ export function PasskeyLoginButton({ email, className, onSuccess }: PasskeyLogin
       ) : (
         <KeyRound className="h-4 w-4" />
       )}
-      {loading ? "Authenticating…" : "Sign in with passkey"}
+      {loading ? t("auth.authenticating") : t("auth.loginWithPasskey")}
     </Button>
   );
 }
