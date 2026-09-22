@@ -22,11 +22,11 @@ export default function SecurityScreen() {
       utils.deviceSession.listMySessions.invalidate();
       Alert.alert("Done", "All other sessions have been revoked.");
     },
-    onError: (err) => Alert.alert("Error", err.message),
+    onError: (err: any) => Alert.alert("Error", err.message),
   });
   const revokeDeviceMutation = trpc.deviceSession.revokeDevice.useMutation({
     onSuccess: () => utils.deviceSession.listMySessions.invalidate(),
-    onError: (err) => Alert.alert("Error", err.message),
+    onError: (err: any) => Alert.alert("Error", err.message),
   });
 
   const sessions = sessionsQuery.data ?? [];

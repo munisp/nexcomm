@@ -11,7 +11,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system/legacy";
+// SDK 52 (expo-file-system 18): the classic API is the main export —
+// "expo-file-system/legacy" only exists on SDK 54+.
+import * as FileSystem from "expo-file-system";
 import { COLORS, FONTS, SPACING } from "../../constants/config";
 import { trpc } from "../../lib/trpc";
 
@@ -69,7 +71,7 @@ export default function KycScreen() {
       utils.onboarding.getStatus.invalidate();
       setStep("submitted");
     },
-    onError: (err) => Alert.alert("Submission Error", err.message),
+    onError: (err: any) => Alert.alert("Submission Error", err.message),
   });
 
   // ── document pick + upload ────────────────────────────────────────────────
@@ -261,6 +263,11 @@ export default function KycScreen() {
                 <FlatList
                   data={NIGERIAN_STATES}
                   keyExtractor={(item) => item}
+                  windowSize={7}
+                  maxToRenderPerBatch={8}
+                  initialNumToRender={10}
+                  updateCellsBatchingPeriod={50}
+                  removeClippedSubviews
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={s.pickerRow}

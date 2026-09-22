@@ -49,6 +49,7 @@
         "credentialsSource": "remote"
       },
       "env": {
+        "NODE_ENV": "production",
         "APP_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://nexcom.exchange",
         "EXPO_PUBLIC_KEYCLOAK_URL": "https://nexcom.exchange/auth"

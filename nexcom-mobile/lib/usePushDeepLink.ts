@@ -100,13 +100,13 @@ export function usePushDeepLink() {
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       // Optionally update badge count or show in-app toast
       const data = notification.request.content.data as PushDeepLinkData;
-      console.log("[PushDeepLink] Notification received:", data?.screen);
+      if (__DEV__) console.log("[PushDeepLink] Notification received:", data?.screen);
     });
 
     // Handle notification tapped (app in background or killed)
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as PushDeepLinkData;
-      console.log("[PushDeepLink] Notification tapped, navigating to:", data?.screen);
+      if (__DEV__) console.log("[PushDeepLink] Notification tapped, navigating to:", data?.screen);
       navigateToScreen(data);
     });
 

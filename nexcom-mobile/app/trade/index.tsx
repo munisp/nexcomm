@@ -5,6 +5,7 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as Crypto from "expo-crypto";
 import { COLORS, FONTS, SPACING } from "../../constants/config";
 import { ScreenState } from "../../components/ScreenState";
 import { trpc } from "../../lib/trpc";
@@ -26,7 +27,7 @@ export default function TradeScreen() {
       setPrice("");
       utils.orders.list.invalidate();
     },
-    onError: (e) => Alert.alert("Error", e.message),
+    onError: (e: any) => Alert.alert("Error", e.message),
   });
 
   const prices: any[] = (livePricesQ.data as any) ?? [];
@@ -42,6 +43,9 @@ export default function TradeScreen() {
       orderType,
       quantity: Number(quantity),
       ...(orderType === "LIMIT" ? { price: Number(price) } : {}),
+      // Idempotency key per user intent (portal Trade.tsx does the same):
+      // double-taps / lost responses can never double-place.
+      clientOrderId: Crypto.randomUUID(),
     });
   }
 

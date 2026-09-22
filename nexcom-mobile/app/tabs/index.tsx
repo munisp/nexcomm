@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,14 @@ import { useLoanNotifications, getLoanEventLabel } from '../../lib/useLoanNotifi
 import { useAuthStore } from '../../lib/store';
 import { trpc } from '../../lib/trpc';
 import { ScreenState } from '../../components/ScreenState';
+import { useCachedQueryMeta } from '../../lib/offlineCache';
+import { useConnectionQuality, refetchIntervalFor } from '../../lib/connectionQuality';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+/** react-query key of the ticker query (tRPC array form) — must match the
+ * offline read-cache allowlist in lib/offlineCache.ts. */
+const LIVE_PRICES_KEY = [['livePrices', 'getAll'], { type: 'query' }] as const;
 
 function formatCurrency(value: number, currency = 'NGN'): string {
   if (value >= 1_000_000_000) return `₦${(value / 1_000_000_000).toFixed(2)}B`;
@@ -26,16 +32,90 @@ function formatCurrency(value: number, currency = 'NGN'): string {
   return `₦${value.toLocaleString()}`;
 }
 
+interface MarketItem {
+  symbol: string;
+  name?: string | null;
+  lastPrice?: string | number | null;
+  changePct?: string | number | null;
+}
+
+/** Memoized: re-renders only when its price row changes, not on every
+ * dashboard state update (loan events, notifications, pull-refresh). */
+const MarketCard = memo(function MarketCard({ item }: { item: MarketItem }) {
+  const change = Number(item.changePct ?? 0);
+  const isPositive = change >= 0;
+  return (
+    <TouchableOpacity
+      style={styles.marketCard}
+      onPress={() => router.push(`/trading/${item.symbol}` as any)}
+    >
+      <Text style={styles.marketSymbol}>{item.symbol}</Text>
+      <Text style={styles.marketName}>{item.name ?? item.symbol}</Text>
+      <Text style={styles.marketPrice}>₦{Number(item.lastPrice ?? 0).toLocaleString()}</Text>
+      <View style={[styles.marketChangeBadge, { backgroundColor: isPositive ? `${COLORS.success}20` : `${COLORS.error}20` }]}>
+        <Text style={[styles.marketChange, { color: isPositive ? COLORS.success : COLORS.error }]}>
+          {isPositive ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+interface TradeItem {
+  id: number | string;
+  side: string;
+  symbol: string;
+  quantity: string | number;
+  price?: string | number | null;
+  createdAt: string | number | Date;
+  status: string;
+}
+
+/** Memoized recent-order row (see MarketCard note). */
+const TradeRow = memo(function TradeRow({ trade }: { trade: TradeItem }) {
+  const isBuy = trade.side === 'BUY';
+  return (
+    <View style={styles.tradeRow}>
+      <View style={[styles.tradeSideBadge, { backgroundColor: isBuy ? `${COLORS.buy}20` : `${COLORS.sell}20` }]}>
+        <Text style={[styles.tradeSide, { color: isBuy ? COLORS.buy : COLORS.sell }]}>{trade.side}</Text>
+      </View>
+      <View style={styles.tradeInfo}>
+        <Text style={styles.tradeSymbol}>{trade.symbol}</Text>
+        <Text style={styles.tradeDetails}>
+          {Number(trade.quantity).toLocaleString()} MT @ ₦{Number(trade.price ?? 0).toLocaleString()}
+        </Text>
+      </View>
+      <View style={styles.tradeRight}>
+        <Text style={styles.tradeTime}>
+          {new Date(trade.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+        <Text style={[styles.tradeStatus, {
+          color: trade.status === 'FILLED' ? COLORS.success
+            : trade.status === 'CANCELLED' ? COLORS.error
+            : COLORS.warning
+        }]}>{trade.status}</Text>
+      </View>
+    </View>
+  );
+});
+
 export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { user } = useAuthStore();
   const userId = user ? parseInt(user.id) : null;
   const { events: loanEvents, unreadCount, markAllRead } = useLoanNotifications(userId);
 
+  // Adaptive polling: aggressive on a fast link, backed off on slow 2G/3G,
+  // suspended while offline (the MMKV read cache serves last-known prices).
+  const connectionQuality = useConnectionQuality();
+  const tickerMeta = useCachedQueryMeta(LIVE_PRICES_KEY);
+
   // Real API calls
   const portfolioQuery = trpc.portfolio.summary.useQuery(undefined, { enabled: !!user });
   const recentOrdersQuery = trpc.orders.list.useQuery({ limit: 5 }, { enabled: !!user });
-  const marketPricesQuery = trpc.livePrices.getAll.useQuery();
+  const marketPricesQuery = trpc.livePrices.getAll.useQuery(undefined, {
+    refetchInterval: refetchIntervalFor(connectionQuality),
+  });
   const notificationsQuery = trpc.notifications.list.useQuery(
     { page: 1, limit: 5 },
     { enabled: !!user }
@@ -133,30 +213,22 @@ export default function DashboardScreen() {
               <Text style={styles.sectionLink}>View All →</Text>
             </TouchableOpacity>
           </View>
-          {marketPricesQuery.isLoading ? (
+          {/* Offline/stale marker: shown when prices came from the on-device
+              cache rather than a fresh network fetch (fail-closed ≤24h TTL). */}
+          {tickerMeta.servedFromCache && tickerMeta.cachedAt !== null && (
+            <View style={styles.staleChip}>
+              <Text style={styles.staleChipText}>
+                Last updated {new Date(tickerMeta.cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · offline
+              </Text>
+            </View>
+          )}
+          {marketPricesQuery.isLoading && !tickerMeta.servedFromCache ? (
             <ActivityIndicator color={COLORS.primary} />
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.marketScroll}>
-              {marketSummary.map((item) => {
-                const change = Number(item.changePct ?? 0);
-                const isPositive = change >= 0;
-                return (
-                  <TouchableOpacity
-                    key={item.symbol}
-                    style={styles.marketCard}
-                    onPress={() => router.push(`/trading/${item.symbol}` as any)}
-                  >
-                    <Text style={styles.marketSymbol}>{item.symbol}</Text>
-                    <Text style={styles.marketName}>{item.name ?? item.symbol}</Text>
-                    <Text style={styles.marketPrice}>₦{Number(item.lastPrice ?? 0).toLocaleString()}</Text>
-                    <View style={[styles.marketChangeBadge, { backgroundColor: isPositive ? `${COLORS.success}20` : `${COLORS.error}20` }]}>
-                      <Text style={[styles.marketChange, { color: isPositive ? COLORS.success : COLORS.error }]}>
-                        {isPositive ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+              {marketSummary.map((item: any) => (
+                <MarketCard key={item.symbol} item={item} />
+              ))}
             </ScrollView>
           )}
         </View>
@@ -174,32 +246,9 @@ export default function DashboardScreen() {
           ) : recentTrades.length === 0 ? (
             <Text style={{ color: COLORS.textMuted, fontSize: TYPOGRAPHY.sizes.sm, paddingVertical: 8 }}>No orders yet.</Text>
           ) : (
-            recentTrades.map((trade) => {
-              const isBuy = trade.side === 'BUY';
-              return (
-                <View key={trade.id} style={styles.tradeRow}>
-                  <View style={[styles.tradeSideBadge, { backgroundColor: isBuy ? `${COLORS.buy}20` : `${COLORS.sell}20` }]}>
-                    <Text style={[styles.tradeSide, { color: isBuy ? COLORS.buy : COLORS.sell }]}>{trade.side}</Text>
-                  </View>
-                  <View style={styles.tradeInfo}>
-                    <Text style={styles.tradeSymbol}>{trade.symbol}</Text>
-                    <Text style={styles.tradeDetails}>
-                      {Number(trade.quantity).toLocaleString()} MT @ ₦{Number(trade.price ?? 0).toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={styles.tradeRight}>
-                    <Text style={styles.tradeTime}>
-                      {new Date(trade.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                    <Text style={[styles.tradeStatus, {
-                      color: trade.status === 'FILLED' ? COLORS.success
-                        : trade.status === 'CANCELLED' ? COLORS.error
-                        : COLORS.warning
-                    }]}>{trade.status}</Text>
-                  </View>
-                </View>
-              );
-            })
+            recentTrades.map((trade: any) => (
+              <TradeRow key={trade.id} trade={trade} />
+            ))
           )}
         </View>
 
@@ -233,7 +282,7 @@ export default function DashboardScreen() {
                   </View>
                 </View>
               ))}
-              {notifItems.slice(0, 3).map((n) => (
+              {notifItems.slice(0, 3).map((n: any) => (
                 <View key={n.id} style={styles.alertRow}>
                   <Text style={styles.alertIcon}>
                     {n.type === 'TRADE' ? '📈' : n.type === 'PRICE_ALERT' ? '🔔' : n.type === 'WAREHOUSE' ? '🏭' : 'ℹ️'}
@@ -341,6 +390,23 @@ const styles = StyleSheet.create({
   sectionLink: {
     color: COLORS.primary,
     fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: '600',
+  },
+
+  // Offline stale chip
+  staleChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: `${COLORS.warning}20`,
+    borderWidth: 1,
+    borderColor: COLORS.warning,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 10,
+  },
+  staleChipText: {
+    color: COLORS.warning,
+    fontSize: TYPOGRAPHY.sizes.xs,
     fontWeight: '600',
   },
 

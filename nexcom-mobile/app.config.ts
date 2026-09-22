@@ -25,6 +25,12 @@ const keycloakUrl =
 
 const easProjectId = process.env.EXPO_EAS_PROJECT_ID;
 
+const androidReleaseFlags = {
+  enableProguardInReleaseBuilds: true,
+  enableShrinkResourcesInReleaseBuilds: true,
+  enableSeparateBuildPerCPUArchitecture: true,
+} as const;
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'NEXCOM Exchange',
@@ -34,6 +40,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/images/icon.png',
   scheme: 'nexcom',
   userInterfaceStyle: 'dark',
+  // Hermes is the default (and only supported) JS engine on Expo SDK 52 —
+  // declared explicitly so the perf-critical choice is deliberate.
+  jsEngine: 'hermes',
   splash: {
     image: './assets/images/splash.png',
     resizeMode: 'contain',
@@ -67,6 +76,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     package: 'exchange.nexcom.app',
     versionCode: 1,
+    // Release-size budget: per-ABI APK < 40MB. R8 + resource shrinking strip
+    // dead code/assets; per-ABI splits keep each APK small (the universal
+    // dev APK is unaffected — the eas development profile builds Debug).
+    // NOTE: with EAS Build (no committed android/ dir) these map to
+    // gradle.properties entries; if a future audit shows them not applied,
+    // wire expo-build-properties (no new deps were allowed for this pass).
+    // Spread (not literal) so ExpoConfig's excess-property check passes even
+    // on SDK versions whose typings omit these gradle-backed keys.
+    ...androidReleaseFlags,
     permissions: [
       'android.permission.CAMERA',
       'android.permission.USE_BIOMETRIC',

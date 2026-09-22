@@ -54,6 +54,7 @@ export interface TokenSet {
 }
 
 async function persistTokens(tokens: TokenSet): Promise<void> {
+  cachedTokens = tokens; // keep the in-memory cache in sync on login/refresh
   await SecureStore.setItemAsync(ACCESS_KEY, tokens.accessToken);
   if (tokens.refreshToken) {
     await SecureStore.setItemAsync(REFRESH_KEY, tokens.refreshToken);
@@ -75,6 +76,7 @@ export async function restoreTokens(): Promise<TokenSet | null> {
 }
 
 export async function clearTokens(): Promise<void> {
+  cachedTokens = null;
   await Promise.all([
     SecureStore.deleteItemAsync(ACCESS_KEY),
     SecureStore.deleteItemAsync(REFRESH_KEY),
@@ -110,19 +112,19 @@ export async function exchangeCodeForTokens(
   return tokens;
 }
 
-/**
- * Return a usable access token, refreshing via the refresh_token grant when
- * the access token is within 30s of expiry. Returns null when unauthenticated
- * or the refresh fails (caller should route to /auth).
- */
-export async function getValidAccessToken(): Promise<string | null> {
-  const tokens = await restoreTokens();
-  if (!tokens) return null;
-  if (Date.now() < tokens.expiresAt - 30_000) return tokens.accessToken;
-  if (!tokens.refreshToken) {
-    await clearTokens();
-    return null;
-  }
+// ─── In-memory token cache ──────────────────────────────────────────────────
+// getValidAccessToken() runs on EVERY tRPC request (lib/trpc.ts headers()).
+// Without a cache that means 3 SecureStore (Android Keystore) reads per API
+// call — measurable latency on low-end devices and pointless work: tokens
+// live for minutes. Cache the token set in memory with a 60s expiry margin
+// and de-duplicate concurrent refreshes behind a single in-flight promise.
+let cachedTokens: TokenSet | null = null;
+let refreshInFlight: Promise<string | null> | null = null;
+
+/** Safety margin: treat the token as expired this long before it really is. */
+const EXPIRY_MARGIN_MS = 60_000;
+
+async function refreshTokens(tokens: TokenSet): Promise<string | null> {
   try {
     const refreshed = await AuthSession.refreshAsync(
       {
@@ -137,11 +139,50 @@ export async function getValidAccessToken(): Promise<string | null> {
       expiresAt: Date.now() + (refreshed.expiresIn ?? 300) * 1000,
     };
     await persistTokens(next);
+    cachedTokens = next;
     return next.accessToken;
   } catch {
+    cachedTokens = null;
     await clearTokens();
     return null;
   }
+}
+
+/**
+ * Return a usable access token, refreshing via the refresh_token grant when
+ * the access token is within 60s of expiry. Returns null when unauthenticated
+ * or the refresh fails (caller should route to /auth).
+ *
+ * The token is served from an in-memory cache whenever possible; SecureStore
+ * is only read on cold start and after logout/login. Concurrent refreshes
+ * share one in-flight request (a burst of batched tRPC calls triggers at
+ * most one Keycloak round-trip).
+ */
+export async function getValidAccessToken(): Promise<string | null> {
+  if (cachedTokens && Date.now() < cachedTokens.expiresAt - EXPIRY_MARGIN_MS) {
+    return cachedTokens.accessToken;
+  }
+  const tokens = cachedTokens ?? (await restoreTokens());
+  if (!tokens) return null;
+  if (Date.now() < tokens.expiresAt - EXPIRY_MARGIN_MS) {
+    cachedTokens = tokens;
+    return tokens.accessToken;
+  }
+  if (!tokens.refreshToken) {
+    cachedTokens = null;
+    await clearTokens();
+    return null;
+  }
+  // Refresh lock: concurrent callers await the same refresh.
+  refreshInFlight ??= refreshTokens(tokens).finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+/** Drop the in-memory cache (called on login/logout/token rotation). */
+export function invalidateTokenCache(): void {
+  cachedTokens = null;
 }
 
 /** Best-effort Keycloak logout + local token wipe. */

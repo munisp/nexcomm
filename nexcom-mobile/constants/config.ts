@@ -10,6 +10,7 @@ const extra = (ExpoConstants.expoConfig?.extra ?? {}) as {
   keycloakRealm?: string;
   keycloakClientId?: string;
   appEnv?: string;
+  eas?: { projectId?: string };
 };
 
 export const CONFIG = {
@@ -24,6 +25,10 @@ export const CONFIG = {
   // App metadata
   APP_NAME: 'NEXCOM Exchange',
   APP_VERSION: '1.0.0',
+
+  // EAS project id (only present when EXPO_EAS_PROJECT_ID was set at build
+  // time — see app.config.ts). Used for Expo push token registration.
+  EAS_PROJECT_ID: extra.eas?.projectId,
   
   // Feature flags
   FEATURES: {

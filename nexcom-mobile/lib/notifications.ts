@@ -6,10 +6,25 @@
  * Connects to the NEXCOM Exchange backend to sync alert subscriptions.
  */
 
-import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { CONFIG } from '../constants/config';
+
+// expo-device is not a declared dependency of this app (it arrives
+// transitively in some environments). Load it lazily so the entry bundle
+// never hard-fails on a missing module and startup stays lean.
+type DeviceModule = typeof import('expo-device');
+let deviceModule: DeviceModule | null | undefined;
+async function getDevice(): Promise<DeviceModule | null> {
+  if (deviceModule === undefined) {
+    try {
+      deviceModule = await import('expo-device');
+    } catch {
+      deviceModule = null;
+    }
+  }
+  return deviceModule ?? null;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Notification handler configuration
@@ -38,7 +53,8 @@ export function configureNotificationHandler() {
  * Returns null if permissions are denied or the device is a simulator.
  */
 export async function registerForPushNotifications(): Promise<string | null> {
-  if (!Device.isDevice) {
+  const Device = await getDevice();
+  if (Device && !Device.isDevice) {
     console.warn('[Notifications] Push notifications require a physical device');
     return null;
   }
@@ -261,7 +277,7 @@ export async function registerTokenWithBackend(
         json: {
           token,
           platform: Platform.OS,
-          deviceName: Device.deviceName || 'Unknown Device',
+          deviceName: (await getDevice())?.deviceName || 'Unknown Device',
         },
       }),
     });

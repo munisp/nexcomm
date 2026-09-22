@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,54 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
   WAREHOUSE: { icon: '🏭', color: '#16a34a' },
 };
 
+function formatTime(ts: number | string | null | undefined): string {
+  if (!ts) return '';
+  const date = new Date(ts);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffHours < 1) return 'Just now';
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+/** Memoized row: polling/invalidation re-renders the screen; read rows
+ * skip reconciliation. */
+const NotificationRow = memo(function NotificationRow({
+  item,
+  onPress,
+}: {
+  item: any;
+  onPress: (id: number) => void;
+}) {
+  const config = TYPE_CONFIG[item.type as string] ?? TYPE_CONFIG.SYSTEM;
+  return (
+    <TouchableOpacity
+      style={[styles.notifCard, !item.read && styles.unreadCard]}
+      onPress={() => !item.read && onPress(item.id)}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.iconContainer, { backgroundColor: config.color + '20' }]}>
+        <Text style={styles.icon}>{config.icon}</Text>
+      </View>
+      <View style={styles.notifContent}>
+        <View style={styles.notifHeader}>
+          <Text style={[styles.notifTitle, !item.read && styles.unreadTitle]}>
+            {item.title}
+          </Text>
+          <Text style={styles.notifTime}>{formatTime(item.createdAt)}</Text>
+        </View>
+        <Text style={styles.notifMessage} numberOfLines={2}>
+          {item.message}
+        </Text>
+        {!item.read && <View style={styles.unreadDot} />}
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 export default function NotificationsScreen() {
   const utils = trpc.useUtils();
   const notificationsQuery = trpc.notifications.list.useQuery({ limit: 50 });
@@ -33,45 +81,15 @@ export default function NotificationsScreen() {
   const notifications = notificationsQuery.data?.notifications ?? [];
   const unreadCount = notifications.filter((n: any) => !n.read).length;
 
-  const formatTime = (ts: number | string | null | undefined) => {
-    if (!ts) return '';
-    const date = new Date(typeof ts === 'number' ? ts : ts);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffHours < 1) return 'Just now';
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
-  };
+  const handleMarkRead = useCallback(
+    (id: number) => markReadMutation.mutate({ id }),
+    [markReadMutation],
+  );
 
-  const renderItem = ({ item }: { item: any }) => {
-    const config = TYPE_CONFIG[item.type as string] ?? TYPE_CONFIG.SYSTEM;
-    return (
-      <TouchableOpacity
-        style={[styles.notifCard, !item.read && styles.unreadCard]}
-        onPress={() => !item.read && markReadMutation.mutate({ id: item.id })}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.iconContainer, { backgroundColor: config.color + '20' }]}>
-          <Text style={styles.icon}>{config.icon}</Text>
-        </View>
-        <View style={styles.notifContent}>
-          <View style={styles.notifHeader}>
-            <Text style={[styles.notifTitle, !item.read && styles.unreadTitle]}>
-              {item.title}
-            </Text>
-            <Text style={styles.notifTime}>{formatTime(item.createdAt)}</Text>
-          </View>
-          <Text style={styles.notifMessage} numberOfLines={2}>
-            {item.message}
-          </Text>
-          {!item.read && <View style={styles.unreadDot} />}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = useCallback(
+    ({ item }: { item: any }) => <NotificationRow item={item} onPress={handleMarkRead} />,
+    [handleMarkRead],
+  );
 
   return (
     <View style={styles.container}>
@@ -97,6 +115,11 @@ export default function NotificationsScreen() {
         data={notifications}
         keyExtractor={(item: any) => String(item.id)}
         renderItem={renderItem}
+        windowSize={7}
+        maxToRenderPerBatch={8}
+        initialNumToRender={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews
         refreshControl={
           <RefreshControl
             refreshing={notificationsQuery.isFetching}

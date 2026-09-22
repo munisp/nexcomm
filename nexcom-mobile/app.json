@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0a0e1a"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "exchange.nexcom.app",
@@ -23,7 +25,10 @@
         "NSPhotoLibraryUsageDescription": "NEXCOM accesses your photo library to upload KYC documents.",
         "NSLocationWhenInUseUsageDescription": "NEXCOM uses your location to help field agents navigate to farmer locations.",
         "NSMicrophoneUsageDescription": "NEXCOM uses the microphone for voice-based commodity search.",
-        "UIBackgroundModes": ["fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ]
       },
       "associatedDomains": [
         "applinks:nexcom-exchange.manus.space",
@@ -62,9 +67,15 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
-      ]
+      ],
+      "enableProguardInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true,
+      "enableSeparateBuildPerCPUArchitecture": true
     },
     "web": {
       "bundler": "metro",
@@ -85,7 +96,9 @@
         {
           "icon": "./assets/images/notification-icon.png",
           "color": "#00d4aa",
-          "sounds": ["./assets/sounds/trade-alert.wav"]
+          "sounds": [
+            "./assets/sounds/trade-alert.wav"
+          ]
         }
       ],
       [

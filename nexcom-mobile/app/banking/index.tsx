@@ -33,7 +33,7 @@ export default function BankingScreen() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const { user: authUser } = useAuthStore();
-  const { events: loanEvents, unreadCount, markAllRead } = useLoanNotifications(authUser?.id);
+  const { events: loanEvents, unreadCount, markAllRead } = useLoanNotifications(authUser ? parseInt(authUser.id, 10) : null);
 
   const dashboardQuery = trpc.banking.getDashboard.useQuery();
   const loansQuery = trpc.banking.listLoans.useQuery({ limit: 20 });
@@ -48,7 +48,7 @@ export default function BankingScreen() {
       loansQuery.refetch();
       Alert.alert('Application Submitted', 'Your loan application has been submitted successfully. You will be notified once it is reviewed.');
     },
-    onError: (err) => Alert.alert('Error', err.message ?? 'Failed to submit loan application'),
+    onError: (err: any) => Alert.alert('Error', err.message ?? 'Failed to submit loan application'),
   });
 
   const isRefreshing = dashboardQuery.isFetching || loansQuery.isFetching || txQuery.isFetching;

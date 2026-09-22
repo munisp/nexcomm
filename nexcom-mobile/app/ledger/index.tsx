@@ -54,6 +54,11 @@ export default function LedgerScreen() {
       <FlatList
         data={entries}
         keyExtractor={(item, i) => item.id?.toString() ?? i.toString()}
+        windowSize={7}
+        maxToRenderPerBatch={8}
+        initialNumToRender={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={() => { setPage(1); ledgerQ.refetch(); }} tintColor={COLORS.primary} />}
         contentContainerStyle={{ paddingBottom: 40 }}
         ListEmptyComponent={
