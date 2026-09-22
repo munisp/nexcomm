@@ -19,7 +19,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { requireKycApproved } from "../pbac";
 import { orders, notifications, circuitBreakerEvents, savedOrders, orderAmendments } from "../../drizzle/schema";
-import { eq, and, desc, asc, isNull, ilike, gte, lte, sql } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, ilike, gte, lte, sql, inArray } from "drizzle-orm";
 import type { Order } from "../../drizzle/schema";
 import {
   submitOrder as rustSubmitOrder,
@@ -643,13 +643,14 @@ export const ordersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { cancelled: 0, failed: input.ids.length };
-      // Fetch only the user's own cancellable orders that match the requested IDs
-      const allUserOrders = await db
-        .select({ id: orders.id, symbol: orders.symbol, assetClass: orders.assetClass, status: orders.status })
+      // Batch-fetch only the requested orders (was: full table scan of ALL user
+      // orders filtered in memory — an N+1-style anti-pattern on large accounts)
+      const candidates = await db
+        .select({ id: orders.id, symbol: orders.symbol, assetClass: orders.assetClass, status: orders.status, notes: orders.notes })
         .from(orders)
-        .where(eq(orders.userId, ctx.user.id));
-      const rows = allUserOrders.filter(
-        (o) => input.ids.includes(o.id) && ["OPEN", "PARTIALLY_FILLED"].includes(o.status ?? "")
+        .where(and(eq(orders.userId, ctx.user.id), inArray(orders.id, input.ids)));
+      const rows = candidates.filter(
+        (o) => ["OPEN", "PARTIALLY_FILLED"].includes(o.status ?? "")
       );
 
       let cancelled = 0;
@@ -673,6 +674,16 @@ export const ordersRouter = router({
           }
         })
       );
+
+      // Invalidate the order-book snapshot and portfolio cache for affected symbols
+      if (cancelled > 0) {
+        setImmediate(() => {
+          for (const symbol of new Set(rows.map((r) => r.symbol))) {
+            cacheDel(CacheKeys.orderBook(symbol)).catch(() => {});
+          }
+          cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        });
+      }
 
       return { cancelled, failed };
     }),
@@ -838,6 +849,12 @@ export const ordersRouter = router({
         }
       });
 
+      // Invalidate order-book snapshot + portfolio cache for the amended symbol
+      setImmediate(() => {
+        cacheDel(CacheKeys.orderBook(updated.symbol)).catch(() => {});
+        cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+      });
+
       return updated;
     }),
 
@@ -893,15 +910,17 @@ export const ordersRouter = router({
       const db = await getDb();
             if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
 
-      // Fetch only the user's own amendable orders that match the requested IDs
+      // Batch-fetch only the requested orders (was: full scan of ALL user orders
+      // filtered in memory — an N+1-style anti-pattern on large accounts)
       const rows = await db
         .select()
         .from(orders)
         .where(and(
           eq(orders.userId, ctx.user.id),
+          inArray(orders.id, input.ids),
         ))
-        .then((all) => all.filter(
-          (o) => input.ids.includes(o.id) && ["OPEN", "PARTIALLY_FILLED"].includes(o.status ?? "")
+        .then((matching) => matching.filter(
+          (o) => ["OPEN", "PARTIALLY_FILLED"].includes(o.status ?? "")
         ));
 
       let amended = 0;
@@ -962,6 +981,16 @@ export const ordersRouter = router({
           }
         })
       );
+
+      // Invalidate the order-book snapshot and portfolio cache for affected symbols
+      if (amended > 0) {
+        setImmediate(() => {
+          for (const symbol of new Set(rows.map((r) => r.symbol))) {
+            cacheDel(CacheKeys.orderBook(symbol)).catch(() => {});
+          }
+          cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
+        });
+      }
 
       return { amended, failed, errors };
     }),

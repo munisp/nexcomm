@@ -11,7 +11,7 @@
  *   <CopilotPanel />   // renders its own floating button
  * or control externally via the `open`/`onOpenChange` props.
  */
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,11 @@ interface CopilotPanelProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function CopilotPanel({ open, onOpenChange }: CopilotPanelProps) {
+// PERF-CLIENT: memoised — CopilotPanel is mounted permanently in Layout, so
+// every Layout re-render (each ticker poll, route change, theme toggle) used
+// to re-render the whole chat sheet subtree. With no props passed, memo skips
+// all of that.
+function CopilotPanel({ open, onOpenChange }: CopilotPanelProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = open ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
@@ -82,17 +86,21 @@ export default function CopilotPanel({ open, onOpenChange }: CopilotPanelProps) 
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isOpen]);
 
-  const send = (question: string) => {
-    const q = question.trim();
-    if (!q || askMutation.isPending) return;
-    const userMsg: ChatMessage = { role: "user", content: q, timestamp: new Date().toISOString() };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
-    askMutation.mutate({
-      question: q,
-      history: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
-    });
-  };
+  // PERF-CLIENT: stable handler identity for the suggestion chips / form.
+  const send = useCallback(
+    (question: string) => {
+      const q = question.trim();
+      if (!q || askMutation.isPending) return;
+      const userMsg: ChatMessage = { role: "user", content: q, timestamp: new Date().toISOString() };
+      setMessages((prev) => [...prev, userMsg]);
+      setInput("");
+      askMutation.mutate({
+        question: q,
+        history: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
+      });
+    },
+    [askMutation, messages],
+  );
 
   return (
     <>
@@ -215,3 +223,5 @@ export default function CopilotPanel({ open, onOpenChange }: CopilotPanelProps) 
     </>
   );
 }
+
+export default memo(CopilotPanel);

@@ -1,0 +1,17 @@
+{
+  "$comment": "PERF-CLIENT Web Vitals budgets — Fast 3G + 4x CPU (Moto G4 profile). Enforced via Lighthouse CI (--assert.assertions-file) or lighthouse --budget-path.",
+  "resourceSizes": [
+    { "resourceType": "script", "budget": 600 },
+    { "resourceType": "stylesheet", "budget": 120 },
+    { "resourceType": "image", "budget": 300 },
+    { "resourceType": "font", "budget": 150 },
+    { "resourceType": "total", "budget": 1500 }
+  ],
+  "timings": [
+    { "metric": "first-contentful-paint", "budget": 1800, "tolerance": 100 },
+    { "metric": "largest-contentful-paint", "budget": 2500, "tolerance": 100 },
+    { "metric": "total-blocking-time", "budget": 200, "tolerance": 50 },
+    { "metric": "cumulative-layout-shift", "budget": 0.1, "tolerance": 0.02 },
+    { "metric": "interactive", "budget": 3500, "tolerance": 200 }
+  ]
+}

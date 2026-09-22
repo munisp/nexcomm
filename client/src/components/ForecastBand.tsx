@@ -7,8 +7,13 @@
  *
  * States are honest: cold/unavailable panels instead of fabricated charts.
  * Colors are low-saturation slate/teal per the design tokens.
+ *
+ * PERF-CLIENT: component is wrapped in React.memo (parents like
+ * CommodityForecast re-render on every ticker tick) and all static chart
+ * config (margins, tick styles, formatters) is hoisted to module scope so
+ * recharts props stay referentially stable across renders.
  */
-import { useMemo } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
 import { useConnectionQuality } from "@/lib/connectionQuality";
 import { tunedStaleTime } from "@/lib/queryTuning";
@@ -25,6 +30,7 @@ import {
   ReferenceDot,
   CartesianGrid,
 } from "recharts";
+import type { Formatter, ValueType, NameType } from "recharts/types/component/DefaultTooltipContent";
 
 interface ForecastBandProps {
   symbol: string;
@@ -47,7 +53,24 @@ const COLORS = {
   grid: "#e2e8f0", // slate-200
 };
 
-export default function ForecastBand({ symbol, horizonDays, height = 320 }: ForecastBandProps) {
+// PERF-CLIENT: static recharts config hoisted out of the render path —
+// inline object/function literals made every recharts prop a new reference on
+// every render, defeating memoisation inside recharts' own SVG layer.
+const CHART_MARGIN = { top: 8, right: 12, bottom: 4, left: 4 } as const;
+const AXIS_TICK = { fontSize: 11, fill: "#64748b" } as const;
+const TOOLTIP_LABEL_STYLE = { fontSize: 12 } as const;
+const yTickFormatter = (v: number) =>
+  v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+const tooltipFormatter: Formatter<ValueType, NameType> = (value, name) => {
+  // The "band" series is the invisible stacked base of the confidence interval —
+  // hide it from the tooltip entirely (recharts accepts [null, null] at runtime).
+  if (name === "band" || value == null || typeof value !== "number") {
+    return [null, null] as unknown as [ReactNode, NameType];
+  }
+  return [value.toLocaleString(undefined, { maximumFractionDigits: 2 }), name];
+};
+
+function ForecastBand({ symbol, horizonDays, height = 320 }: ForecastBandProps) {
   // OFFLINE-RES: staleTime stretches ×4 on slow links so symbol switches and
   // remounts don't re-trigger fetches a metered connection can't afford.
   const { quality: connQuality } = useConnectionQuality();
@@ -136,22 +159,19 @@ export default function ForecastBand({ symbol, horizonDays, height = 320 }: Fore
       </div>
 
       <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+        <ComposedChart data={rows} margin={CHART_MARGIN}>
           <CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} />
+          <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} />
           <YAxis
-            tick={{ fontSize: 11, fill: "#64748b" }}
+            tick={AXIS_TICK}
             tickLine={false}
             axisLine={false}
             domain={["auto", "auto"]}
-            tickFormatter={(v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            tickFormatter={yTickFormatter}
           />
           <Tooltip
-            formatter={(value, name) => {
-              if (name === "band" || value == null || typeof value !== "number") return [null, null];
-              return [value.toLocaleString(undefined, { maximumFractionDigits: 2 }), name];
-            }}
-            labelStyle={{ fontSize: 12 }}
+            formatter={tooltipFormatter}
+            labelStyle={TOOLTIP_LABEL_STYLE}
           />
           {/* Invisible base of the stacked band */}
           <Area dataKey="lo" stackId="ci" stroke="none" fill="transparent" isAnimationActive={false} name="lo" />
@@ -210,3 +230,5 @@ export default function ForecastBand({ symbol, horizonDays, height = 320 }: Fore
     </div>
   );
 }
+
+export default memo(ForecastBand);

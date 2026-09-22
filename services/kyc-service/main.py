@@ -125,6 +125,41 @@ async def _init_application_store() -> None:
         )
 
 
+@app.on_event("startup")
+async def _warm_models() -> None:
+    """Pre-load heavy ML models at boot so the first request doesn't pay the
+    PaddleOCR/Docling/liveness initialisation cost (multi-second cold start).
+
+    Controlled by MODEL_WARMUP (default "1"). Runs in a background thread so
+    startup/readiness is not blocked; failures are logged and non-fatal —
+    engines fall back to lazy initialisation on first use, and /readyz keeps
+    reflecting storage readiness as before.
+    """
+    if os.environ.get("MODEL_WARMUP", "1") != "1":
+        _logger.info("MODEL_WARMUP disabled — models will lazy-load on first request")
+        return
+    import asyncio
+
+    def _warm() -> None:
+        for name, engine in (
+            ("paddle-ocr", ocr_engine),
+            ("docling-parser", doc_parser),
+            ("vlm-verifier", doc_verifier),
+            ("liveness-detector", liveness_detector),
+        ):
+            try:
+                init = getattr(engine, "_ensure_initialized", None)
+                if callable(init):
+                    init()
+                    _logger.info("model warmup: %s ready", name)
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning(
+                    "model warmup: %s failed (%s) — will lazy-load on first request", name, exc
+                )
+
+    asyncio.get_event_loop().run_in_executor(None, _warm)
+
+
 async def _persist_kyc(app_obj: KYCApplication) -> None:
     try:
         await application_store.persist("kyc", app_obj.id, app_obj.model_dump(mode="json"))
@@ -1305,4 +1340,12 @@ app.include_router(docai_router)  # DOCAI
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", "3002"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    workers = int(os.environ.get("UVICORN_WORKERS", "2"))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        workers=workers,
+        timeout_keep_alive=30,
+        limit_concurrency=200,
+    )

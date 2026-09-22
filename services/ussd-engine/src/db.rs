@@ -9,8 +9,20 @@ use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 pub type DbPool = PgPool;
 
 pub async fn connect(url: &str) -> Result<DbPool> {
+    // Pool sizing is env-tunable (DB_MAX_CONNECTIONS, default 20) so the
+    // engine can be right-sized against Postgres max_connections without a
+    // rebuild. Acquire/connect waits are bounded so USSD sessions fail fast
+    // (and retry at the gateway) instead of hanging past the session TTL.
+    let max_connections: u32 = std::env::var("DB_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20);
     let pool = PgPoolOptions::new()
-        .max_connections(10)
+        .max_connections(max_connections)
+        .min_connections(2)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .idle_timeout(Some(std::time::Duration::from_secs(60)))
+        .max_lifetime(Some(std::time::Duration::from_secs(300)))
         .connect(url)
         .await?;
     Ok(pool)

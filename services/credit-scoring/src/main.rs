@@ -820,7 +820,21 @@ async fn main() -> std::io::Result<()> {
     info!("Starting NEXCOM Credit Scoring Engine on port {}", port);
 
     // Connect to PostgreSQL (non-fatal — scoring still works without DB persistence)
-    let db_pool = sqlx::PgPool::connect(&config.db_url).await.ok();
+    // Pool sizing env-tunable via DB_MAX_CONNECTIONS (default 20); bounded
+    // acquire/connect waits keep scoring latency predictable under DB stress.
+    let db_max_connections: u32 = std::env::var("DB_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20);
+    let db_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(db_max_connections)
+        .min_connections(2)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .idle_timeout(Some(std::time::Duration::from_secs(60)))
+        .max_lifetime(Some(std::time::Duration::from_secs(300)))
+        .connect(&config.db_url)
+        .await
+        .ok();
     if db_pool.is_none() {
         tracing::warn!("PostgreSQL not available — score persistence disabled");
     }

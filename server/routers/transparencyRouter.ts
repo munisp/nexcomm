@@ -17,8 +17,25 @@ import {
   livePrices,
 } from "../../drizzle/schema";
 import { eq, gte, sql, and, inArray } from "drizzle-orm";
+import { cacheWrap, type CacheStatus } from "../cache";
+import { measureDb } from "../_core/perfMiddleware";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Transparency aggregates are expensive scans — cache 60s, serve stale 5min. */
+const TRANSPARENCY_TTL_S = 60;
+const TRANSPARENCY_STALE_TTL_S = 300;
+
+/** Set the X-Cache marker header when the express response object is reachable. */
+function setCacheHeader(res: { setHeader?: (k: string, v: string) => void } | undefined) {
+  return (status: CacheStatus) => {
+    try {
+      res?.setHeader?.("X-Cache", status);
+    } catch {
+      // headers already sent — non-critical
+    }
+  };
+}
 
 export const transparencyRouter = router({
   /**
@@ -26,14 +43,15 @@ export const transparencyRouter = router({
    * fill price), distinct commodities (symbols) and distinct states of the
    * accounts that traded (via profiles.state).
    */
-  marketStats: publicProcedure.query(async () => {
+  marketStats: publicProcedure.query(async ({ ctx }) => {
+    return cacheWrap("transparency:market_stats", TRANSPARENCY_TTL_S, async () => {
     const db = await getDb();
     if (!db) {
       return { windowDays: 30, tradeCount: 0, grossValueNgn: null, distinctCommodities: 0, distinctStates: null };
     }
     const since = new Date(Date.now() - THIRTY_DAYS_MS);
 
-    const [filled] = await db
+    const [filled] = await measureDb("transparency.marketStats.filled", () => db
       .select({
         tradeCount: sql<number>`count(*)`,
         grossValue: sql<string | null>`sum(${orders.filledQty} * ${orders.avgFillPrice})`,
@@ -45,10 +63,10 @@ export const transparencyRouter = router({
           gte(orders.createdAt, since),
           inArray(orders.status, ["FILLED", "PARTIALLY_FILLED"]),
         ),
-      );
+      ));
 
     // Distinct states of the accounts that traded in the window.
-    const [states] = await db
+    const [states] = await measureDb("transparency.marketStats.states", () => db
       .select({ distinctStates: sql<number>`count(distinct ${profiles.state})` })
       .from(profiles)
       .where(
@@ -56,7 +74,7 @@ export const transparencyRouter = router({
           sql`${profiles.state} is not null`,
           sql`${profiles.userId} in (select ${orders.userId} from ${orders} where ${orders.createdAt} >= ${since})`,
         ),
-      );
+      ));
 
     return {
       windowDays: 30,
@@ -65,6 +83,7 @@ export const transparencyRouter = router({
       distinctCommodities: Number(filled?.distinctCommodities ?? 0),
       distinctStates: states ? Number(states.distinctStates) : null,
     };
+    }, { staleTtl: TRANSPARENCY_STALE_TTL_S, onStatus: setCacheHeader(ctx.res) });
   }),
 
   /**
@@ -73,7 +92,8 @@ export const transparencyRouter = router({
    * settlement_date) where derivable — null when no settled rows carry a
    * settlement_date.
    */
-  settlementStats: publicProcedure.query(async () => {
+  settlementStats: publicProcedure.query(async ({ ctx }) => {
+    return cacheWrap("transparency:settlement_stats", TRANSPARENCY_TTL_S, async () => {
     const db = await getDb();
     if (!db) {
       return { windowDays: 30, settledCount: 0, failedCount: 0, medianSettlementHours: null };
@@ -119,13 +139,15 @@ export const transparencyRouter = router({
       failedCount: Number(counts?.failedCount ?? 0),
       medianSettlementHours,
     };
+    }, { staleTtl: TRANSPARENCY_STALE_TTL_S, onStatus: setCacheHeader(ctx.res) });
   }),
 
   /**
    * Platform participation counts: accredited/active warehouses, active field
    * agents, and registered users grouped by role.
    */
-  platformHealth: publicProcedure.query(async () => {
+  platformHealth: publicProcedure.query(async ({ ctx }) => {
+    return cacheWrap("transparency:platform_health", TRANSPARENCY_TTL_S, async () => {
     const db = await getDb();
     if (!db) {
       return { activeWarehouses: null, accreditedWarehouses: null, activeAgents: null, usersByRole: [] };
@@ -154,6 +176,7 @@ export const transparencyRouter = router({
       activeAgents: Number(agents?.active ?? 0),
       usersByRole: usersByRole.map((r) => ({ role: r.role, count: Number(r.count) })),
     };
+    }, { staleTtl: TRANSPARENCY_STALE_TTL_S, onStatus: setCacheHeader(ctx.res) });
   }),
 
   /**
@@ -161,10 +184,11 @@ export const transparencyRouter = router({
    * changePct is the feed-provided change versus previous close (labeled as
    * such client-side). Returns an empty array when no prices are available.
    */
-  priceDiscovery: publicProcedure.query(async () => {
+  priceDiscovery: publicProcedure.query(async ({ ctx }) => {
+    return cacheWrap("transparency:price_discovery", TRANSPARENCY_TTL_S, async () => {
     const db = await getDb();
     if (!db) return { commodities: [] };
-    const rows = await db
+    const rows = await measureDb("transparency.priceDiscovery", () => db
       .select({
         symbol: livePrices.symbol,
         name: livePrices.name,
@@ -176,7 +200,7 @@ export const transparencyRouter = router({
       })
       .from(livePrices)
       .where(eq(livePrices.assetClass, "COMMODITY"))
-      .orderBy(livePrices.symbol);
+      .orderBy(livePrices.symbol));
 
     return {
       commodities: rows.map((r) => ({
@@ -189,5 +213,6 @@ export const transparencyRouter = router({
         updatedAt: r.updatedAt,
       })),
     };
+    }, { staleTtl: TRANSPARENCY_STALE_TTL_S, onStatus: setCacheHeader(ctx.res) });
   }),
 });

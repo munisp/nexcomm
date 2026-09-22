@@ -5,6 +5,13 @@
 
 version: "3.9"
 
+# ─── Shared logging policy — applied to every service via YAML anchor ──
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 networks:
   nexcom:
     driver: bridge
@@ -32,7 +39,26 @@ services:
   # ─── Infrastructure ────────────────────────────────────────────────────────
 
   postgres:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
     image: postgres:16-alpine
+    # ── Performance tuning (container-local postgresql.conf via -c flags) ──
+    command: >
+      postgres
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c work_mem=16MB
+      -c maintenance_work_mem=256MB
+      -c max_connections=300
+      -c wal_compression=on
+      -c log_min_duration_statement=250
+      -c shared_preload_libraries=pg_stat_statements
     environment:
       POSTGRES_DB: nexcom
       POSTGRES_USER: nexcom
@@ -50,8 +76,16 @@ services:
       retries: 10
 
   redis:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 128M
     image: redis:7-alpine
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
@@ -64,6 +98,21 @@ services:
       retries: 10
 
   zookeeper:
+    logging: *default-logging
+    restart: unless-stopped
+    healthcheck:
+      # cp-zookeeper ships bash; /dev/tcp connect probe (ruok needs nc, not in image)
+      test: ["CMD-SHELL", "timeout 3 bash -c 'echo > /dev/tcp/127.0.0.1/2181' || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: confluentinc/cp-zookeeper:7.6.0
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -71,6 +120,14 @@ services:
     networks: [nexcom]
 
   kafka:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 512M
     image: confluentinc/cp-kafka:7.6.0
     depends_on: [zookeeper]
     environment:
@@ -98,6 +155,14 @@ services:
   # Works standalone: when no Fluvio SC cluster is reachable it serves traffic
   # from in-memory fallback queues (see fluvio-sidecar/main.py).
   fluvio-sidecar:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: ./fluvio-sidecar
       dockerfile: Dockerfile
@@ -122,6 +187,18 @@ services:
   # Dev-grade only (single SPU, in-container local cluster); production uses
   # the k8s manifests under infrastructure/fluvio/.
   fluvio:
+    logging: *default-logging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "fluvio", "version"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     image: infinyon/fluvio:0.11.11
     container_name: nexcom-fluvio-sc
     profiles: ["fluvio"]
@@ -131,6 +208,14 @@ services:
     networks: [nexcom]
 
   tigerbeetle:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
     image: ghcr.io/tigerbeetle/tigerbeetle:0.16.73
     command: >
       sh -c "tigerbeetle format --cluster=0 --replica=0 --replica-count=1 /data/0_0.tigerbeetle 2>/dev/null || true
@@ -154,6 +239,21 @@ services:
   # ─── Identity Provider ────────────────────────────────────────────────────
 
   keycloak:
+    logging: *default-logging
+    restart: unless-stopped
+    healthcheck:
+      # keycloak image (ubi-minimal) has no curl/wget; bash /dev/tcp probe against the management port
+      test: ["CMD-SHELL", "timeout 3 bash -c 'echo > /dev/tcp/127.0.0.1/8080' || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
     build:
       context: ./infra/keycloak
       dockerfile: Dockerfile
@@ -189,10 +289,25 @@ services:
   # ─── Core Exchange Services ────────────────────────────────────────────────
 
   portal:
+    logging: *default-logging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 512M
     build:
       context: .
       dockerfile: Dockerfile
     environment:
+      NODE_OPTIONS: --max-old-space-size=3072
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
@@ -230,10 +345,19 @@ services:
     networks: [nexcom]
 
   matching-engine:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: matching-engine
       dockerfile: Dockerfile
     environment:
+      TOKIO_WORKER_THREADS: "8"
       PORT: "8080"
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
@@ -255,10 +379,19 @@ services:
     networks: [nexcom]
 
   settlement-engine:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: settlement-engine
       dockerfile: Dockerfile
     environment:
+      TOKIO_WORKER_THREADS: "4"
       PORT: "8005"
       # Ledger ops go through the gateway ledger API (gateway owns the official
       # TigerBeetle SDK client); TB itself has no HTTP interface.
@@ -283,6 +416,20 @@ services:
     networks: [nexcom]
 
   gateway:
+    logging: *default-logging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8200/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: gateway-service
       dockerfile: Dockerfile
@@ -331,6 +478,12 @@ services:
     networks: [nexcom]
 
   gateway-dapr:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     image: daprio/daprd:1.13.4
     container_name: nexcom-gateway-dapr
     command:
@@ -356,6 +509,12 @@ services:
     network_mode: "service:gateway"
 
   risk-management:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: services/risk-management
       dockerfile: Dockerfile
@@ -377,10 +536,20 @@ services:
     networks: [nexcom]
 
   kyc-service:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+        reservations:
+          memory: 512M
     build:
       context: services/kyc-service
       dockerfile: Dockerfile
     environment:
+      UVICORN_WORKERS: "2"
+      MODEL_WARMUP: "1"
       PORT: "8003"
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       NEXCOM_PG_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
@@ -407,10 +576,19 @@ services:
     networks: [nexcom]
 
   notification:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: services/notification
       dockerfile: Dockerfile
     environment:
+      NODE_OPTIONS: --max-old-space-size=384
       PORT: "8008"
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
@@ -433,6 +611,14 @@ services:
   # ─── Data Platform (Lakehouse + AI/ML) ────────────────────────────────────
 
   ingestion-engine:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M
     build:
       context: services/ingestion-engine
       dockerfile: Dockerfile
@@ -462,6 +648,14 @@ services:
     networks: [nexcom]
 
   analytics:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: services/analytics
       dockerfile: Dockerfile
@@ -490,6 +684,14 @@ services:
     networks: [nexcom]
 
   ai-ml:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
     build:
       context: services/ai-ml
       dockerfile: Dockerfile
@@ -519,6 +721,12 @@ services:
     networks: [nexcom]
 
   blockchain:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: services/blockchain
       dockerfile: Dockerfile
@@ -537,10 +745,19 @@ services:
     networks: [nexcom]
 
   user-management:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: services/user-management
       dockerfile: Dockerfile
     environment:
+      NODE_OPTIONS: --max-old-space-size=384
       PORT: "8012"
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
@@ -558,6 +775,12 @@ services:
 
   # ─── Mojaloop DFSP Adapter (Go) ───────────────────────────────────────────
   mojaloop-adapter:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: services/mojaloop-adapter
       dockerfile: Dockerfile
@@ -591,6 +814,14 @@ services:
   # This MySQL instance is isolated to Mojaloop inter-service communication
   # and is NEVER accessed by NEXCOM application code (portal, routers, services).
   mojaloop-mysql:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: ${MOJALOOP_MYSQL_ROOT_PASSWORD:-mojaloop_root}
@@ -608,6 +839,14 @@ services:
     networks: [nexcom]
 
   central-ledger:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: mojaloop/central-ledger:v17.3.3
     environment:
       CLEDGER_DATABASE_URI: mysql://mojaloop:${MOJALOOP_MYSQL_PASSWORD:-mojaloop_pass}@mojaloop-mysql:3306/central_ledger
@@ -631,6 +870,14 @@ services:
     networks: [nexcom]
 
   ml-api-adapter:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: mojaloop/ml-api-adapter:v14.0.5
     environment:
       ML_API_ADAPTER_KAFKA_HOST: kafka
@@ -651,6 +898,14 @@ services:
     networks: [nexcom]
 
   account-lookup-service:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: mojaloop/account-lookup-service:v14.2.2
     environment:
       ALS_DATABASE_URI: mysql://mojaloop:${MOJALOOP_MYSQL_PASSWORD:-mojaloop_pass}@mojaloop-mysql:3306/central_ledger
@@ -670,6 +925,14 @@ services:
     networks: [nexcom]
 
   quoting-service:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: mojaloop/quoting-service:v15.5.0
     environment:
       QS_DATABASE_URI: mysql://mojaloop:${MOJALOOP_MYSQL_PASSWORD:-mojaloop_pass}@mojaloop-mysql:3306/central_ledger
@@ -691,6 +954,14 @@ services:
     networks: [nexcom]
 
   central-settlement:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: mojaloop/central-settlement:v16.0.0
     environment:
       CS_DATABASE_URI: mysql://mojaloop:${MOJALOOP_MYSQL_PASSWORD:-mojaloop_pass}@mojaloop-mysql:3306/central_ledger
@@ -714,6 +985,14 @@ services:
   # ─── OpenSearch (Full-Text Search + Postgres CDC Sync) ─────────────────────
 
   opensearch:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 768M
     image: opensearchproject/opensearch:2.13.0
     container_name: nexcom-opensearch
     environment:
@@ -741,6 +1020,14 @@ services:
     networks: [nexcom]
 
   opensearch-dashboards:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M
     image: opensearchproject/opensearch-dashboards:2.13.0
     container_name: nexcom-opensearch-dashboards
     environment:
@@ -753,6 +1040,11 @@ services:
     networks: [nexcom]
 
   opensearch-sync:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: ./services/opensearch-sync
       dockerfile: Dockerfile
@@ -771,6 +1063,14 @@ services:
   # ─── Temporal Workflow Engine ──────────────────────────────────────────────
 
   temporal:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
     image: temporalio/auto-setup:1.24.2
     container_name: nexcom-temporal
     environment:
@@ -793,6 +1093,11 @@ services:
     networks: [nexcom]
 
   temporal-setup:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     image: temporalio/admin-tools:1.24.2
     container_name: nexcom-temporal-setup
     entrypoint: ["/bin/sh", "-c"]
@@ -814,6 +1119,12 @@ services:
     networks: [nexcom]
 
   temporal-ui:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     image: temporalio/ui:2.26.2
     container_name: nexcom-temporal-ui
     environment:
@@ -826,6 +1137,13 @@ services:
     networks: [nexcom]
 
   temporal-worker:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: ./services/middleware-hub
       dockerfile: Dockerfile
@@ -855,6 +1173,14 @@ services:
   # ─── Permify RBAC Engine ───────────────────────────────────────────────────
 
   permify:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: ghcr.io/permify/permify:v0.9.6
     container_name: nexcom-permify
     command:
@@ -881,6 +1207,11 @@ services:
   # ─── Permify schema init (runs once after Permify is healthy) ─────────────
   # Run with: docker compose --profile init up permify-init
   permify-init:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: .                           # project root so permify.perm is in scope
       dockerfile: infra/permify/Dockerfile
@@ -900,6 +1231,14 @@ services:
   # ─── APISIX API Gateway + etcd ─────────────────────────────────────────────
 
   etcd:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: bitnami/etcd:3.5.12
     container_name: nexcom-etcd
     environment:
@@ -919,6 +1258,11 @@ services:
   # Runs scripts/backup/postgres-backup.sh on a daily loop; dumps land in the
   # backup_data volume (mirror it off-box for real DR — see docs/DISASTER_RECOVERY.md).
   backup:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     image: postgres:16-alpine   # pg_dump version must match the server (postgres:16-alpine)
     container_name: nexcom-backup
     profiles: ["backup"]
@@ -945,12 +1289,20 @@ services:
   # (:8015), MLflow tracking (:5000, sqlite backend on mlflow_data, artifacts on
   # model_registry_data), Ray head+worker (CPU), Neo4j 5 community (GNN graph store).
   ml-platform:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
     build:
       context: services/ml-platform
       dockerfile: Dockerfile
     container_name: nexcom-ml-platform
     profiles: ["ml"]
     environment:
+      UVICORN_WORKERS: "2"
       ML_PLATFORM_PORT: "8015"
       LAKEHOUSE_PATH: /data/lakehouse
       REGISTRY_PATH: /data/model_registry
@@ -981,6 +1333,13 @@ services:
     restart: unless-stopped
 
   mlflow:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M
     image: ghcr.io/mlflow/mlflow:v2.22.0
     container_name: nexcom-mlflow
     profiles: ["ml"]
@@ -1004,6 +1363,13 @@ services:
     restart: unless-stopped
 
   ray-head:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
     image: rayproject/ray:2.49.1-py312-cpu
     container_name: nexcom-ray-head
     profiles: ["ml"]
@@ -1027,6 +1393,13 @@ services:
     restart: unless-stopped
 
   ray-worker:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
     image: rayproject/ray:2.49.1-py312-cpu
     container_name: nexcom-ray-worker
     profiles: ["ml"]
@@ -1041,6 +1414,13 @@ services:
     restart: unless-stopped
 
   neo4j:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 512M
     image: neo4j:5-community
     container_name: nexcom-neo4j
     profiles: ["ml"]
@@ -1073,6 +1453,13 @@ services:
   # openappsec-waf Lua plugin is mounted into APISIX instead, and this agent is
   # reachable in the apisix network namespace via network_mode: service:apisix.
   openappsec-agent:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: ghcr.io/openappsec/agent:latest
     container_name: nexcom-openappsec-agent
     profiles: ["waf"]
@@ -1102,6 +1489,14 @@ services:
       start_period: 30s
 
   apisix:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     image: apache/apisix:3.9.1-debian
     container_name: nexcom-apisix
     volumes:
@@ -1129,6 +1524,12 @@ services:
   # ─── Dapr Placement Service ────────────────────────────────────────────────
 
   dapr-placement:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     image: daprio/dapr:1.13.4
     container_name: nexcom-dapr-placement
     command: ["./placement", "-port", "50006"]
@@ -1137,6 +1538,12 @@ services:
     networks: [nexcom]
 
   portal-dapr:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     image: daprio/daprd:1.13.4
     container_name: nexcom-portal-dapr
     command:
@@ -1159,11 +1566,25 @@ services:
   # ─── Channel Services (USSD / WhatsApp / Telegram) ────────────────────────
 
   ussd-engine:
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8020/ussd/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: services/ussd-engine
       dockerfile: Dockerfile
     container_name: nexcom-ussd-engine
     environment:
+      TOKIO_WORKER_THREADS: "4"
       PORT: "8020"
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       REDIS_URL: redis://redis:6379
@@ -1181,11 +1602,17 @@ services:
     restart: unless-stopped
 
   channel-gateway:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: services/channel-gateway
       dockerfile: Dockerfile
     container_name: nexcom-channel-gateway
     environment:
+      CHANNEL_GATEWAY_PORT: "8021"
       PORT: "8021"
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
@@ -1202,6 +1629,18 @@ services:
     restart: unless-stopped
 
   bot-logic:
+    logging: *default-logging
+    healthcheck:
+      # app binds fixed --port 8040 (Dockerfile CMD); compose publishes 8021 (host-side only)
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8040/health', timeout=3).raise_for_status()"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: services/bot-logic
       dockerfile: Dockerfile
@@ -1223,11 +1662,20 @@ services:
   # ─── Core Banking Integration ──────────────────────────────────────────────
 
   core-banking:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: services/core-banking
       dockerfile: Dockerfile
     container_name: nexcom-core-banking
     environment:
+      GOMEMLIMIT: 450MiB
+      GOGC: "50"
       PORT: "8023"
       DATABASE_URL: postgresql://nexcom:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/nexcom
       KAFKA_BROKERS: kafka:9092
@@ -1246,6 +1694,11 @@ services:
   # ─── Commodity Indices Service (gRPC) ─────────────────────────────────────
 
   indices:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: services/indices
       dockerfile: Dockerfile
@@ -1268,6 +1721,12 @@ services:
   # ─── Developer Tools (opt-in with --profile tools) ────────────────────────
 
   kafka-ui:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     image: provectuslabs/kafka-ui:latest
     container_name: nexcom-kafka-ui
     environment:
@@ -1282,6 +1741,12 @@ services:
     profiles: ["tools"]
 
   redis-insight:
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     image: redislabs/redisinsight:latest
     container_name: nexcom-redis-insight
     ports:
@@ -1294,6 +1759,13 @@ services:
 
   # ─── Credit Scoring Engine (Rust) ─────────────────────────────────────────
   credit-scoring:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: services/credit-scoring
       dockerfile: Dockerfile
@@ -1324,6 +1796,11 @@ services:
 
   # ─── AML Alert Subscriber (Go/Dapr) ───────────────────────────────────────
   aml-alert-subscriber:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: services/aml-alert-subscriber
       dockerfile: Dockerfile
@@ -1352,11 +1829,20 @@ services:
 
   # ─── Market Data Service (Go) ─────────────────────────────────────────────
   middleware-hub:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
     build:
       context: services/middleware-hub
       dockerfile: Dockerfile
     container_name: nexcom-middleware-hub
     environment:
+      GOMEMLIMIT: 450MiB
+      GOGC: "50"
       MIDDLEWARE_HUB_PORT: "8093"
       # Ledger ops route via the gateway ledger API (TB has no HTTP interface)
       GATEWAY_URL: http://gateway:8200
@@ -1386,6 +1872,11 @@ services:
 
   # ─── Crypto Guard (Rust — Replay Prevention, HMAC, Idempotency) ──────────
   crypto-guard:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: services/crypto-guard
       dockerfile: Dockerfile
@@ -1409,6 +1900,13 @@ services:
 
   # ─── Fraud Engine (Python/ML — Wash Trade, AML, Behavioral Anomaly) ──────
   fraud-engine:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M
     build:
       context: services/fraud-engine
       dockerfile: Dockerfile
@@ -1434,6 +1932,11 @@ services:
 
   # ─── DDoS Guard (Go — Rate Limiting, IP Reputation, Circuit Breaker) ─────
   ddos-guard:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: services/ddos-guard
       dockerfile: Dockerfile
@@ -1461,6 +1964,11 @@ services:
 
   # ─── Journey Orchestrator (Go — Temporal Worker + HTTP API for all 20 journeys) ─
   journey-orchestrator-worker:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: journey-orchestrator
       dockerfile: Dockerfile
@@ -1505,6 +2013,11 @@ services:
       start_period: 30s
 
   journey-orchestrator-api:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     build:
       context: journey-orchestrator
       dockerfile: Dockerfile

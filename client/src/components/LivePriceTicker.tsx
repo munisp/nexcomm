@@ -10,7 +10,7 @@
  * - Configurable symbol list (defaults to key NEXCOM instruments)
  * - Connection status indicator
  */
-import { useEffect, useRef, useState, useCallback } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { Wifi, WifiOff, Pause, Play } from "lucide-react";
 
@@ -65,7 +65,10 @@ function formatPrice(price: number): string {
   return price.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 5 });
 }
 
-export function LivePriceTicker({
+// PERF-CLIENT: memoised at the bottom (both named + default export) — with
+// the default symbols/speed props the ticker subtree is skipped whenever the
+// parent page re-renders for unrelated state.
+function LivePriceTickerComponent({
   symbols = DEFAULT_SYMBOLS,
   className,
   speed = 60,
@@ -253,7 +256,10 @@ export function LivePriceTicker({
   }, [paused, speed]);
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const items = symbols.map((sym) => {
+  // PERF-CLIENT: memoise the ticker item list — it is only a function of
+  // (symbols, prices, prevPrices), so re-renders triggered by the parent or
+  // by the pause/connected flags no longer rebuild 2×20 ticker cells.
+  const items = useMemo(() => symbols.map((sym) => {
     const tick = prices.get(sym.symbol);
     const prev = prevPrices.get(sym.symbol);
     const price = tick?.price ?? null;
@@ -296,7 +302,7 @@ export function LivePriceTicker({
         <span className="text-blue-800 ml-2">|</span>
       </span>
     );
-  });
+  }), [symbols, prices, prevPrices]);
 
   return (
     <div
@@ -341,4 +347,5 @@ export function LivePriceTicker({
   );
 }
 
+export const LivePriceTicker = memo(LivePriceTickerComponent);
 export default LivePriceTicker;

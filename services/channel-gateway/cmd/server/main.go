@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"net/http"
+	_ "net/http/pprof" // pprof admin endpoints; served only when GO_PPROF=1
 	"os"
 	"os/signal"
 	"syscall"
@@ -123,13 +124,27 @@ func main() {
 	})
 	r.GET("/metrics", middleware.PrometheusHandler())
 
+	// Optional pprof admin server (GO_PPROF=1 only; loopback by default).
+	if os.Getenv("GO_PPROF") == "1" {
+		pprofAddr := getEnv("PPROF_ADDR", "127.0.0.1:6060")
+		go func() {
+			sugar.Infof("pprof admin server listening on %s", pprofAddr)
+			// handlers registered on http.DefaultServeMux by the net/http/pprof import
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				sugar.Warnf("pprof server exited: %v", err)
+			}
+		}()
+	}
+
 	port := getEnv("CHANNEL_GATEWAY_PORT", "8030")
 	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              ":" + port,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 16,
 	}
 
 	// Start server

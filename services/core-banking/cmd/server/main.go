@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof" // pprof admin endpoints; served only when GO_PPROF=1
 	"os"
 	"os/signal"
 	"strings"
@@ -308,14 +309,28 @@ func main() {
 		})
 	})
 
+	// ── Optional pprof admin server (GO_PPROF=1 only; loopback by default) ────
+	if os.Getenv("GO_PPROF") == "1" {
+		pprofAddr := getEnv("PPROF_ADDR", "127.0.0.1:6060")
+		go func() {
+			log.Info("pprof admin server listening", zap.String("addr", pprofAddr))
+			// handlers registered on http.DefaultServeMux by the net/http/pprof import
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				log.Warn("pprof server exited", zap.Error(err))
+			}
+		}()
+	}
+
 	// ── Start server ──────────────────────────────────────────────────────────
 	port := getEnv("PORT", "8090")
 	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              ":" + port,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 16,
 	}
 
 	go func() {

@@ -16,10 +16,24 @@ import { FX_PAIRS, EQUITIES, CRYPTO_ASSETS, type FxPair, type Equity, type Crypt
 import { COMMODITIES } from "../../shared/commodities";
 import { writeAuditLog } from "../audit";
 import { smartAlertCheck } from "./forecastRouter";
+import { measureDb } from "../_core/perfMiddleware";
 
 // ============================================================
 // Helpers
 // ============================================================
+
+/** Deterministic base price from shared instrument catalogues (no DB, no randomness). */
+function basePriceFor(symbol: string): number | null {
+  const commodity = COMMODITIES.find(c => c.symbol === symbol);
+  if (commodity) return commodity.basePrice;
+  const fxInstrument = FX_PAIRS.find((i: FxPair) => i.symbol === symbol);
+  if (fxInstrument) return fxInstrument.basePrice;
+  const equity = EQUITIES.find((i: Equity) => i.symbol === symbol);
+  if (equity) return equity.basePrice;
+  const crypto = CRYPTO_ASSETS.find((i: CryptoAsset) => i.symbol === symbol);
+  if (crypto) return crypto.basePrice;
+  return null;
+}
 
 /** Get the current price for a symbol from the livePrices table, falling back to base price */
 async function getCurrentPrice(symbol: string): Promise<number | null> {
@@ -33,16 +47,39 @@ async function getCurrentPrice(symbol: string): Promise<number | null> {
   } catch {
     // fall through to base price
   }
-  // Fallback: use base price from shared instruments (deterministic, no randomness)
-  const commodity = COMMODITIES.find(c => c.symbol === symbol);
-  if (commodity) return commodity.basePrice;
-  const fxInstrument = FX_PAIRS.find((i: FxPair) => i.symbol === symbol);
-  if (fxInstrument) return fxInstrument.basePrice;
-  const equity = EQUITIES.find((i: Equity) => i.symbol === symbol);
-  if (equity) return equity.basePrice;
-  const crypto = CRYPTO_ASSETS.find((i: CryptoAsset) => i.symbol === symbol);
-  if (crypto) return crypto.basePrice;
-  return null;
+  return basePriceFor(symbol);
+}
+
+/**
+ * Batch-fetch current prices for many symbols in ONE inArray query, falling
+ * back to catalogue base prices for symbols missing from live_prices.
+ *
+ * N+1 fix: the polling job and nearTriggerCount previously issued one SELECT
+ * per alert symbol; with N active alerts that was N round-trips every 30s.
+ */
+async function getCurrentPrices(symbols: string[]): Promise<Map<string, number | null>> {
+  const prices = new Map<string, number | null>();
+  const distinct = [...new Set(symbols)];
+  if (distinct.length === 0) return prices;
+  try {
+    const db = await getDb();
+    if (db) {
+      const rows = await measureDb("priceAlerts.batchPrices", () =>
+        db
+          .select({ symbol: livePrices.symbol, price: livePrices.price })
+          .from(livePrices)
+          .where(inArray(livePrices.symbol, distinct)));
+      for (const row of rows) {
+        if (row.price) prices.set(row.symbol, Number(row.price));
+      }
+    }
+  } catch {
+    // fall through to base prices
+  }
+  for (const symbol of distinct) {
+    if (!prices.has(symbol)) prices.set(symbol, basePriceFor(symbol));
+  }
+  return prices;
 }
 
 // ============================================================
@@ -66,8 +103,11 @@ export function startAlertPollingJob() {
           eq(priceAlerts.notified, false)
         ));
 
+      // ONE batch query for all alert symbols (was: one SELECT per alert)
+      const prices = await getCurrentPrices(activeAlerts.map(a => a.symbol));
+
       for (const alert of activeAlerts) {
-        const currentPrice = await getCurrentPrice(alert.symbol);
+        const currentPrice = prices.get(alert.symbol) ?? null;
         if (currentPrice === null) continue;
 
         const target = parseFloat(alert.targetPrice);
@@ -329,9 +369,11 @@ export const priceAlertsRouter = router({
           )
         );
       const threshold = input.thresholdPct / 100;
+      // ONE batch query for all alert symbols (was: one SELECT per alert)
+      const prices = await getCurrentPrices(active.map(a => a.symbol));
       let count = 0;
       for (const alert of active) {
-        const current = await getCurrentPrice(alert.symbol);
+        const current = prices.get(alert.symbol) ?? null;
         if (current == null) continue;
         const target = Number(alert.targetPrice);
         const pctDiff = Math.abs(current - target) / target;

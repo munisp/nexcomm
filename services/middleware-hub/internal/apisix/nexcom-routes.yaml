@@ -188,6 +188,11 @@ routes:
     uri: /api/v1/orderbook/*
     methods: [GET]
     upstream_id: trading-engine
+    # SSE/long-poll exception: override the 30s proxy_read_timeout default.
+    timeout:
+      connect: 5
+      send: 30
+      read: 300
     plugins:
       limit-req:
         rate: 200

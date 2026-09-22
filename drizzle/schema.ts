@@ -120,7 +120,9 @@ export const orders = pgTable("orders", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   expiresAt: timestamp("expires_at"),
-});
+}, (t) => ({
+  userStatusCreatedIdx: index("idx_orders_user_status_created").on(t.userId, t.status, t.createdAt),
+}));
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = typeof orders.$inferInsert;
 
@@ -141,7 +143,7 @@ export const orderAmendments = pgTable("order_amendments", {
   /** True when this amendment was applied as part of a bulk amendMany operation */
   isBulk: boolean("is_bulk").default(false).notNull(),
   amendedAt: timestamp("amended_at").defaultNow().notNull(),
-});
+}, (t) => ({ orderIdx: index("idx_order_amendments_order_id").on(t.orderId), userIdx: index("idx_order_amendments_user_id").on(t.userId) }));
 export type OrderAmendment = typeof orderAmendments.$inferSelect;
 export type InsertOrderAmendment = typeof orderAmendments.$inferInsert;
 
@@ -168,7 +170,7 @@ export const watchlist = pgTable("watchlist", {
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   symbol: varchar("symbol", { length: 32 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({ userSymbolIdx: index("idx_watchlist_user_symbol").on(t.userId, t.symbol) }));
 
 // ============================================================
 // Price Alerts
@@ -198,7 +200,7 @@ export const savedOrders = pgTable("saved_orders", {
   quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
   price: numeric("price", { precision: 18, scale: 6 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({ userIdx: index("idx_saved_orders_user_id").on(t.userId) }));
 
 // ============================================================
 // Notifications
@@ -212,7 +214,7 @@ export const notifications = pgTable("notifications", {
   read: boolean("read").default(false).notNull(),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({ userUnreadIdx: index("idx_notifications_user_unread").on(t.userId, t.createdAt) }));
 export type Notification = typeof notifications.$inferSelect;
 
 // ============================================================
@@ -228,7 +230,7 @@ export const kycQueue = pgTable("kyc_queue", {
   documents: jsonb("documents"),
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
   reviewedAt: timestamp("reviewed_at"),
-});
+}, (t) => ({ statusSubmittedIdx: index("idx_kyc_queue_status_submitted").on(t.status, t.submittedAt) }));
 export type KycQueue = typeof kycQueue.$inferSelect;
 
 // ============================================================
@@ -243,7 +245,7 @@ export const auditLog = pgTable("audit_log", {
   details: jsonb("details"),
   ipAddress: varchar("ip_address", { length: 45 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({ userCreatedIdx: index("idx_audit_log_user_created").on(t.userId, t.createdAt) }));
 export type AuditLog = typeof auditLog.$inferSelect;
 
 // ============================================================
@@ -290,7 +292,7 @@ export const depositRequests = pgTable("deposit_requests", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({ userCreatedIdx: index("idx_deposit_requests_user_created").on(t.userId, t.createdAt) }));
 export type DepositRequest = typeof depositRequests.$inferSelect;
 
 // ============================================================
@@ -311,7 +313,7 @@ export const deliveryOrders = pgTable("delivery_orders", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({ userIdx: index("idx_delivery_orders_user_id").on(t.userId) }));
 export type DeliveryOrder = typeof deliveryOrders.$inferSelect;
 
 // ============================================================
@@ -328,7 +330,7 @@ export const apiKeys = pgTable("api_keys", {
   lastUsedAt: timestamp("last_used_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   expiresAt: timestamp("expires_at"),
-});
+}, (t) => ({ userIdx: index("idx_api_keys_user_id").on(t.userId) }));
 export type ApiKey = typeof apiKeys.$inferSelect;
 
 // ============================================================
@@ -628,7 +630,7 @@ export const withdrawalVerifications = pgTable("withdrawal_verifications", {
   verifiedAt: timestamp("verified_at"),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({ userStatusIdx: index("idx_withdrawal_verifications_user_status").on(t.userId, t.status) }));
 export type WithdrawalVerification = typeof withdrawalVerifications.$inferSelect;
 
 // Security event webhooks: outbound HTTP POST for HIGH/CRITICAL events
@@ -1867,7 +1869,12 @@ export const tradeFills = pgTable("trade_fills", {
   settlementId:      bigint("settlement_id", { mode: "number" }),
   sequenceNo:        bigint("sequence_no", { mode: "number" }).notNull().default(0),
   createdAt:         timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  buyerCreatedIdx: index("idx_trade_fills_buyer_created").on(t.buyerUserId, t.createdAt),
+  sellerCreatedIdx: index("idx_trade_fills_seller_created").on(t.sellerUserId, t.createdAt),
+  aggressorOrderIdx: index("idx_trade_fills_aggressor_order").on(t.aggressorOrderId),
+  restingOrderIdx: index("idx_trade_fills_resting_order").on(t.restingOrderId),
+}));
 export type TradeFill = typeof tradeFills.$inferSelect;
 export type InsertTradeFill = typeof tradeFills.$inferInsert;
 
@@ -2791,7 +2798,7 @@ export const bankAccounts = pgTable("bank_accounts", {
   cbsAccountId: varchar("cbs_account_id", { length: 100 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({ userIdx: index("idx_bank_accounts_user_id").on(t.userId), userStatusIdx: index("idx_bank_accounts_user_status").on(t.userId, t.status), }));
 export type BankAccount = typeof bankAccounts.$inferSelect;
 
 export const bankTransactionTypeEnum = pgEnum("bank_transaction_type", [
@@ -2837,7 +2844,7 @@ export const stripePayments = pgTable("stripe_payments", {
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({ userCreatedIdx: index("idx_stripe_payments_user_created").on(t.userId, t.createdAt) }));
 export type StripePayment = typeof stripePayments.$inferSelect;
 
 // ─── Credit Scoring ───────────────────────────────────────────────────────────
@@ -3080,7 +3087,7 @@ export const refreshTokens = pgTable("refresh_tokens", {
   issuedIp:    varchar("issued_ip", { length: 45 }),
   /** User-agent at time of issuance */
   userAgent:   text("user_agent"),
-});
+}, (t) => ({ userIdx: index("idx_refresh_tokens_user_id").on(t.userId), familyIdx: index("idx_refresh_tokens_family").on(t.family) }));
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
 
@@ -3334,3 +3341,6 @@ export * from "./schema-credit-passport";
 export * from "./schema-offline-sync";
 export * from "./schema-transparency";
 export * from "./schema-channel-bridge";
+export * from "./schema-payments";
+// DATA-FEEDS: external market data-feed snapshots (see drizzle/schema-feeds.ts)
+export * from "./schema-feeds";

@@ -12,7 +12,19 @@ import { publicProcedure, router } from "../_core/trpc";
 import { COMMODITY_MAP, COMMODITIES, GRADE_SPECS, WAREHOUSES } from '../../shared/commodities';
 import { getReadDb } from "../db";
 import { livePrices } from "../../drizzle/schema";
-import { getOrSet, CacheKeys, TTL } from "../cache";
+import { cacheWrap, CacheKeys, TTL, type CacheStatus } from "../cache";
+import { measureDb } from "../_core/perfMiddleware";
+
+/** Set the X-Cache marker header when the express response object is reachable. */
+function setCacheHeader(res: { setHeader?: (k: string, v: string) => void } | undefined) {
+  return (status: CacheStatus) => {
+    try {
+      res?.setHeader?.("X-Cache", status);
+    } catch {
+      // headers already sent — non-critical
+    }
+  };
+}
 
 export interface OHLCVBar {
   time: number;
@@ -70,8 +82,8 @@ async function getAuthoritativeLivePrice(symbol: string) {
 
 export const commoditiesRouter = router({
   /** List declared commodity instruments; this is static catalogue metadata, not market data. */
-  list: publicProcedure.query(() => {
-    return getOrSet(CacheKeys.commodities(), TTL.COMMODITIES, async () =>
+  list: publicProcedure.query(({ ctx }) => {
+    return cacheWrap(CacheKeys.commodities(), TTL.COMMODITIES, async () =>
       COMMODITIES.map(c => ({
         symbol: c.symbol,
         name: c.name,
@@ -81,7 +93,7 @@ export const commoditiesRouter = router({
         description: c.description,
         country: c.country ?? null,
       }))
-    );
+    , { staleTtl: 300, onStatus: setCacheHeader(ctx.res) });
   }),
 
   /**
@@ -94,12 +106,19 @@ export const commoditiesRouter = router({
       symbol: z.string().min(1),
       days: z.number().int().min(7).max(365).default(90),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const commodity = COMMODITY_MAP.get(input.symbol);
       if (!commodity) {
         throw new TRPCError({ code: "NOT_FOUND", message: `Unknown commodity ${input.symbol}` });
       }
-      const livePrice = await getAuthoritativeLivePrice(input.symbol);
+      // Cache the authoritative price lookup (5s fresh / 30s stale) — the
+      // instrument metadata below is static and stays uncached.
+      const livePrice = await cacheWrap(
+        `commodities:live_price:${input.symbol}`,
+        TTL.PRICE_FEED,
+        () => measureDb("commodities.livePrice", () => getAuthoritativeLivePrice(input.symbol)),
+        { staleTtl: 30, onStatus: setCacheHeader(ctx.res) },
+      );
       return {
         symbol: input.symbol,
         instrument: {
@@ -126,11 +145,16 @@ export const commoditiesRouter = router({
       symbol: z.string().min(1),
       days: z.number().int().min(7).max(365).default(90),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       if (!COMMODITY_MAP.has(input.symbol)) {
         throw new TRPCError({ code: "NOT_FOUND", message: `Unknown commodity ${input.symbol}` });
       }
-      await getAuthoritativeLivePrice(input.symbol);
+      await cacheWrap(
+        `commodities:live_price:${input.symbol}`,
+        TTL.PRICE_FEED,
+        () => measureDb("commodities.livePrice", () => getAuthoritativeLivePrice(input.symbol)),
+        { staleTtl: 30, onStatus: setCacheHeader(ctx.res) },
+      );
       return {
         grades: [] as Array<{ code: string; name: string; premiumPct: number; bars: Array<{ time: number; close: number }> }>,
         historyStatus: "UNAVAILABLE",

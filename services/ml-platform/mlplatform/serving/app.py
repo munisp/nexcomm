@@ -628,7 +628,17 @@ def main() -> None:
     import uvicorn
 
     port = int(_env("ML_PLATFORM_PORT", "8015"))
-    uvicorn.run("mlplatform.serving.app:app", host="0.0.0.0", port=port, workers=1)
+    # Model cache is a per-process singleton: each worker loads its own copy.
+    # Keep UVICORN_WORKERS modest (default 2) against the container memory limit.
+    workers = int(_env("UVICORN_WORKERS", "2"))
+    uvicorn.run(
+        "mlplatform.serving.app:app",
+        host="0.0.0.0",
+        port=port,
+        workers=workers,
+        timeout_keep_alive=30,
+        limit_concurrency=200,
+    )
 
 
 if __name__ == "__main__":

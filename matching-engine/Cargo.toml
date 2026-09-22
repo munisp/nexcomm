@@ -30,6 +30,11 @@ reqwest = { version = "0.12", features = ["json"] }
 
 [profile.release]
 opt-level = 3
+# Fat LTO retained (not "thin"): the matching hot path benefits measurably
+# from cross-crate inlining; build time is a CI concern, not runtime.
 lto = true
 codegen-units = 1
-panic = "abort"
+# unwind (not abort): panics in a request handler must not kill the engine;
+# tokio catches task panics and keeps the runtime alive.
+panic = "unwind"
+strip = true

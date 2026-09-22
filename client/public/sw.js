@@ -9,13 +9,27 @@
  * offline operation queue (shared with client/src/lib/offlineConstants.ts).
  *
  * Registered exactly once by client/src/lib/registerSW.ts.
+ *
+ * PERF-CLIENT v5 (additive only — every v4 behaviour is preserved):
+ *   - CACHE_VERSION bumped v4 → v5 (old caches are deleted on activate,
+ *     forcing a clean refresh of every client).
+ *   - Install precache is now fault-tolerant: each URL is cached with its own
+ *     catch so a single missing asset can never fail SW installation.
+ *   - Runtime caching is split into two dedicated caches with TTL + entry
+ *     caps (hand-rolled, no workbox):
+ *       nexcom-assets-v5 — /assets/* + *.js/*.css (Vite-hashed, immutable,
+ *                          30d backstop TTL)
+ *       nexcom-media-v5  — fonts/images/icons (7d TTL, 60 entries FIFO)
  */
 
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const STATIC_CACHE = `nexcom-static-${CACHE_VERSION}`;
 // OFFLINE-RES: separate cache for allowlisted public market-data reads so a
 // deploy can invalidate it independently of the app shell.
 const READ_CACHE = `nexcom-read-${CACHE_VERSION}`;
+// PERF-CLIENT: dedicated runtime caches (see header).
+const ASSETS_CACHE = `nexcom-assets-${CACHE_VERSION}`;
+const MEDIA_CACHE = `nexcom-media-${CACHE_VERSION}`;
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -26,18 +40,28 @@ const PRECACHE_URLS = [
   "/icons/icon-512.png",
 ];
 
+// PERF-CLIENT: runtime cache policy constants.
+const ASSETS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30d (hashed = immutable backstop)
+const MEDIA_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;   // 7d
+const MEDIA_MAX_ENTRIES = 60;
+
 // ─── Install ─────────────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
+    caches.open(STATIC_CACHE).then(async (cache) => {
+      // PERF-CLIENT: precache each URL with its own catch — one missing
+      // asset (e.g. offline.html not yet deployed) must never reject the
+      // whole install and leave the app without a service worker.
+      await Promise.all(
+        PRECACHE_URLS.map((url) => cache.add(url).catch(() => undefined))
+      );
     }).then(() => self.skipWaiting())
   );
 });
 
 // ─── Activate ────────────────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
-  const validCaches = [STATIC_CACHE, READ_CACHE];
+  const validCaches = [STATIC_CACHE, READ_CACHE, ASSETS_CACHE, MEDIA_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -69,6 +93,12 @@ const CACHEABLE_READ_ENDPOINTS = [
   "/api/trpc/transparency.marketStats",
   "/api/trpc/transparency.priceDiscovery",
   "/api/trpc/priceAlerts.currentPrice",
+  // DATA-FEEDS: public agro-weather + reference-price reads (identical for every user)
+  "/api/trpc/feeds.getWeather",
+  "/api/trpc/feeds.listWeatherLocations",
+  "/api/trpc/feeds.getReferencePrices",
+  "/api/trpc/feeds.getStatistics",
+  "/api/trpc/feeds.referencePricesHistory",
 ];
 // Max age for offline fallback: 24h. Older data is treated as absent — we
 // fail closed rather than show a farmer a dangerously stale price.
@@ -159,6 +189,60 @@ function stampCachedResponse(response) {
   });
 }
 
+// ─── PERF-CLIENT: hand-rolled CacheFirst with TTL + entry cap (no workbox) ──
+/**
+ * Cache-first with a TTL backstop and an optional max-entries trim.
+ *   - Fresh cached entry (younger than maxAgeMs) → served without network.
+ *   - Stale cached entry → refresh from network; on network failure the
+ *     STALE copy is still served (hashed assets stay valid across deploys
+ *     because a deploy bumps CACHE_VERSION and wipes the cache anyway).
+ *   - Miss → network; successful responses are stored (stamped with
+ *     X-SW-Cached-At) and the cache trimmed to maxEntries (FIFO; keys() is
+ *     in insertion order).
+ * maxAgeMs === Infinity means "immutable — never expire on age".
+ */
+async function cacheFirstWithExpiry(request, cacheName, maxAgeMs, maxEntries) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) {
+    const cachedAt = Number(cached.headers.get("X-SW-Cached-At")) || 0;
+    const fresh =
+      maxAgeMs === Infinity || (cachedAt > 0 && Date.now() - cachedAt <= maxAgeMs);
+    if (fresh) return cached;
+    // Stale — try to refresh, but never strand the user without the asset.
+    try {
+      const response = await fetch(request);
+      if (response.ok) {
+        await cache.put(request, stampCachedResponse(response));
+        if (maxEntries) trimCache(cache, maxEntries).catch(() => undefined);
+        return response;
+      }
+      return cached;
+    } catch {
+      return cached;
+    }
+  }
+  const response = await fetch(request);
+  if (response.ok) {
+    try {
+      await cache.put(request, stampCachedResponse(response));
+      if (maxEntries) trimCache(cache, maxEntries).catch(() => undefined);
+    } catch {
+      // Quota exceeded etc. — serve the network response regardless.
+    }
+  }
+  return response;
+}
+
+// Evict oldest entries (insertion order) beyond maxEntries.
+async function trimCache(cache, maxEntries) {
+  const keys = await cache.keys();
+  const excess = keys.length - maxEntries;
+  for (let i = 0; i < excess; i++) {
+    await cache.delete(keys[i]);
+  }
+}
+
 // ─── Fetch Strategy ──────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   const { request } = event;
@@ -184,28 +268,28 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets — cache-first
+  // PERF-CLIENT: hashed build assets (Vite emits /assets/*.<hash>.js|css) —
+  // CacheFirst, effectively immutable, 30d TTL backstop. Same behaviour as
+  // v4's cache-first branch, now with expiry + its own cache namespace.
   if (
     url.pathname.startsWith("/assets/") ||
-    url.pathname.startsWith("/icons/") ||
     url.pathname.endsWith(".js") ||
-    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".css")
+  ) {
+    event.respondWith(cacheFirstWithExpiry(request, ASSETS_CACHE, ASSETS_MAX_AGE_MS, 0));
+    return;
+  }
+
+  // PERF-CLIENT: fonts and images — CacheFirst, 7d TTL, 60 entries (FIFO
+  // eviction) so a long session of receipt/QR images can't grow the cache
+  // unboundedly on low-storage devices.
+  if (
+    url.pathname.startsWith("/icons/") ||
     url.pathname.endsWith(".woff2") ||
     url.pathname.endsWith(".png") ||
     url.pathname.endsWith(".svg")
   ) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        });
-      })
-    );
+    event.respondWith(cacheFirstWithExpiry(request, MEDIA_CACHE, MEDIA_MAX_AGE_MS, MEDIA_MAX_ENTRIES));
     return;
   }
 

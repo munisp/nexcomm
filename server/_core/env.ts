@@ -132,4 +132,46 @@ export const ENV = {
   // ── PostgreSQL direct connection ───────────────────────────────────────────
   nexcomPgUrl: valueFromEnvironmentOrFile("NEXCOM_PG_URL"),
   nexcomPgReadUrl: valueFromEnvironmentOrFile("NEXCOM_PG_READ_URL"),
+
+  // ── Payment collection rails (PAY-RAILS) ──────────────────────────────────
+  paymentProviders: process.env.PAYMENT_PROVIDERS ?? "mock",
+  paymentProviderPriority: process.env.PAYMENT_PROVIDER_PRIORITY ?? "",
+  paymentCallbackBaseUrl: process.env.PAYMENT_CALLBACK_BASE_URL ?? "",
+  paymentWebhookBaseUrl: process.env.PAYMENT_WEBHOOK_BASE_URL ?? "",
+  paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
+  paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
+  paystackWebhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET ?? "",
+  flutterwaveSecretKey: process.env.FLUTTERWAVE_SECRET_KEY ?? "",
+  flutterwavePublicKey: process.env.FLUTTERWAVE_PUBLIC_KEY ?? "",
+  flutterwaveWebhookHash: process.env.FLUTTERWAVE_WEBHOOK_HASH ?? "",
+  monnifyApiKey: process.env.MONNIFY_API_KEY ?? "",
+  monnifySecretKey: process.env.MONNIFY_SECRET_KEY ?? "",
+  monnifyContractCode: process.env.MONNIFY_CONTRACT_CODE ?? "",
+  monnifyBaseUrl: process.env.MONNIFY_BASE_URL ?? "https://api.monnify.com",
+  interswitchClientId: process.env.INTERSWITCH_CLIENT_ID ?? "",
+  interswitchClientSecret: process.env.INTERSWITCH_CLIENT_SECRET ?? "",
+  interswitchMerchantCode: process.env.INTERSWITCH_MERCHANT_CODE ?? "",
+  interswitchBaseUrl: process.env.INTERSWITCH_BASE_URL ?? "https://api-d.interswitchng.com",
+  interswitchPassportUrl: process.env.INTERSWITCH_PASSPORT_URL ?? "https://passport.interswitchng.com",
+  mockSettleSeconds: parseInt(process.env.MOCK_SETTLE_SECONDS ?? "5", 10),
+  mockWebhookSecret: process.env.MOCK_WEBHOOK_SECRET ?? "mock-webhook-dev-secret",
+
+  // ── External data feeds (DATA-FEEDS) ───────────────────────────────────────
+  // Comma list of enabled feeds ("openmeteo" default; catalog: openmeteo, afex, nbs, manual_csv; "*" = all).
+  feedsEnabled: process.env.FEEDS_ENABLED ?? "openmeteo",
+  // JSON array override of weather locations [{key,name,state,lat,lon}].
+  feedsWeatherLocations: process.env.FEEDS_WEATHER_LOCATIONS ?? "",
+  feedsWeatherRainfallHistory: process.env.FEEDS_WEATHER_RAINFALL_HISTORY === "true",
+  afexFeedUrl: process.env.AFEX_FEED_URL ?? "",
+  afexFieldMap: process.env.AFEX_FIELD_MAP ?? "",
+  afexApiKey: valueFromEnvironmentOrFile("AFEX_API_KEY"),
+  nbsFeedUrl: process.env.NBS_FEED_URL ?? "",
+  nbsFieldMap: process.env.NBS_FIELD_MAP ?? "",
+  nbsFeedFormat: process.env.NBS_FEED_FORMAT ?? "",
+  feedsManualCsvPath: process.env.FEEDS_MANUAL_CSV_PATH ?? "",
+
+  // ── Performance / observability (PERF-SERVER) ──────────────────────────────
+  // Token protecting GET /api/perf/snapshot. When empty, the endpoint is
+  // restricted to loopback clients (dev default).
+  perfMetricsToken: valueFromEnvironmentOrFile("PERF_METRICS_TOKEN"),
 };

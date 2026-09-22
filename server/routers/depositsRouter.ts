@@ -18,6 +18,7 @@ import { FLUVIO_TOPICS } from "../fluvio/fluvioClient";
 import { triggerTemporalWorkflow } from "../temporal/temporalClient";
 import { ingestDeposit } from "../lakehouse";
 import { FundFlow } from "../fundFlow";
+import { cacheDel, CacheKeys } from "../cache";
 
 export const depositsRouter = router({
   // LIST deposit requests for current user
@@ -107,6 +108,11 @@ export const depositsRouter = router({
         resource: "deposit_requests",
         resourceId: String(deposit.id),
         details: { commodity: input.commodity, quantity: input.quantity },
+      });
+
+      // Invalidate cached portfolio summary (balances change once the ledger credit lands)
+      setImmediate(() => {
+        cacheDel(CacheKeys.portfolioSummary(ctx.user.id)).catch(() => {});
       });
 
       // ── Kafka: emit deposit-initiated event ────────────────────────────────
@@ -227,7 +233,7 @@ export const depositsRouter = router({
       if (input.notes) updateData.notes = input.notes;
       if (input.grade) updateData.grade = input.grade;
 
-      await db.update(depositRequests).set(updateData).where(eq(depositRequests.id, input.id));
+      const [updated] = await db.update(depositRequests).set(updateData).where(eq(depositRequests.id, input.id)).returning({ userId: depositRequests.userId });
 
       await db.insert(auditLog).values({
         userId: ctx.user.id,
@@ -235,6 +241,13 @@ export const depositsRouter = router({
         resource: "deposit_requests",
         resourceId: String(input.id),
         details: { newStatus: input.status },
+      });
+
+      // Deposit confirmation changes balances/inventory — drop affected caches
+      setImmediate(() => {
+        if (updated?.userId) cacheDel(CacheKeys.portfolioSummary(updated.userId)).catch(() => {});
+        cacheDel("transparency:*").catch(() => {});
+        cacheDel(CacheKeys.warehouseList()).catch(() => {});
       });
 
       return { success: true };

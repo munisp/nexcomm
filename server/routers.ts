@@ -26,6 +26,7 @@ import { notificationsRouter } from "./routers/notificationsRouter";
 import { receiptsRouter } from "./routers/receipts";
 import { depositsRouter } from "./routers/depositsRouter";
 import { stripeRouter } from "./routers/stripeRouter";
+import { paymentsRouter } from "./routers/paymentsRouter";
 import { deliveryRouter } from "./routers/deliveryRouter";
 import { analyticsRouter } from "./routers/analyticsRouter";
 import { apiKeysRouter } from "./routers/apiKeysRouter";
@@ -117,6 +118,7 @@ import { channelBridgeRouter } from "./routers/channelBridgeRouter";
 import { logisticsRouter } from "./routers/logisticsRouter";
 import { receiptTwinRouter } from "./routers/receiptTwinRouter";
 import { transparencyRouter } from "./routers/transparencyRouter";
+import { feedsRouter } from "./routers/feedsRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -143,6 +145,7 @@ export const appRouter = router({
   receipts: receiptsRouter,
   deposits: depositsRouter,
   stripe: stripeRouter,
+  payments: paymentsRouter,
   delivery: deliveryRouter,
   analytics: analyticsRouter,
   apiKeys: apiKeysRouter,
@@ -234,6 +237,7 @@ export const appRouter = router({
   logistics: logisticsRouter,
   receiptTwin: receiptTwinRouter,
   transparency: transparencyRouter,
+  feeds: feedsRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure
