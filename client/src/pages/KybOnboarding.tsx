@@ -118,7 +118,7 @@ export default function KybOnboarding() {
   const [kybLiveness, setKybLiveness] = useState<LivenessVerdict | null>(null);
   const [uploadedDocs, setUploadedDocs] = useState<Partial<Record<DocSlot, string>>>({});
   const [uploading, setUploading] = useState<Partial<Record<DocSlot, boolean>>>({});
-  const fileInputs = useRef<Partial<Record<DocSlot, HTMLInputElement | null>>({});
+  const fileInputs = useRef<Partial<Record<DocSlot, HTMLInputElement | null>>>({});
 
   // OFFLINE-RES: autosave wizard progress (step + all typed fields) so a
   // dropped 2G connection or killed browser never loses an in-progress KYB

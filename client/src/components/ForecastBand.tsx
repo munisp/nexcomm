@@ -147,8 +147,8 @@ export default function ForecastBand({ symbol, horizonDays, height = 320 }: Fore
             tickFormatter={(v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           />
           <Tooltip
-            formatter={(value: number | undefined, name: string) => {
-              if (name === "band" || value == null) return [null, null];
+            formatter={(value, name) => {
+              if (name === "band" || value == null || typeof value !== "number") return [null, null];
               return [value.toLocaleString(undefined, { maximumFractionDigits: 2 }), name];
             }}
             labelStyle={{ fontSize: 12 }}

@@ -31,7 +31,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { PasskeyUpgradeBanner } from "@/components/PasskeyUpgradeBanner";
 import { SyncStatusPill } from "@/components/SyncStatusPill";
-import { CopilotPanel } from "@/components/CopilotPanel";
+import CopilotPanel from "@/components/CopilotPanel";
 import { NAV_LABEL_KEYS } from "@/i18n/navLabels";
 
 const NAV_GROUPS: { key: string; label: string; items: { href: string; icon: React.ElementType; label: string }[] }[] = [
