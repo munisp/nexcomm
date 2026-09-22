@@ -1,15 +1,21 @@
 /**
  * NEXCOM Exchange — Service Worker
  * Static assets: cache-first. Navigation: network-first with offline.html fallback.
- * /api/* (tRPC): network-only — personalised financial data is never cached.
+ * /api/* (tRPC): network-only EXCEPT a strict allowlist of read-only public
+ * market-data GETs (CACHEABLE_READ_ENDPOINTS below) served stale-while-
+ * revalidate with a 24h offline cap — personalised financial data is never
+ * cached (all POSTs/mutations/user-specific routers stay network-only).
  * Push notifications (price alerts, order fills) + background sync of the
  * offline operation queue (shared with client/src/lib/offlineConstants.ts).
  *
  * Registered exactly once by client/src/lib/registerSW.ts.
  */
 
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const STATIC_CACHE = `nexcom-static-${CACHE_VERSION}`;
+// OFFLINE-RES: separate cache for allowlisted public market-data reads so a
+// deploy can invalidate it independently of the app shell.
+const READ_CACHE = `nexcom-read-${CACHE_VERSION}`;
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -31,7 +37,7 @@ self.addEventListener("install", (event) => {
 
 // ─── Activate ────────────────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
-  const validCaches = [STATIC_CACHE];
+  const validCaches = [STATIC_CACHE, READ_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -48,6 +54,111 @@ self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
+// ─── OFFLINE-RES: cached market-data reads (stale-while-revalidate) ─────────
+// STRICT allowlist of read-only PUBLIC tRPC procedures. These return market
+// reference data identical for every user — safe to cache. NEVER add any
+// procedure that varies by user (auth.*, orders.*, portfolio.*, kycService.*,
+// notifications.*, profile.*, receipts.*, priceAlerts.mine, …). The allowlist
+// is the security boundary: anything not listed here falls through to
+// network-only above.
+const CACHEABLE_READ_ENDPOINTS = [
+  "/api/trpc/livePrices.getAll",
+  "/api/trpc/commodities.list",
+  "/api/trpc/commodities.priceHistory",
+  "/api/trpc/marketStream.tickerSnapshot",
+  "/api/trpc/transparency.marketStats",
+  "/api/trpc/transparency.priceDiscovery",
+  "/api/trpc/priceAlerts.currentPrice",
+];
+// Max age for offline fallback: 24h. Older data is treated as absent — we
+// fail closed rather than show a farmer a dangerously stale price.
+const READ_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function isCacheableMarketRead(url) {
+  // tRPC GET batch format: /api/trpc/<procA>,<procB>?batch=1&input=…
+  // Cacheable ONLY if EVERY procedure in the batch is on the allowlist —
+  // a single user-specific procedure in the batch disqualifies the request.
+  const prefix = "/api/trpc/";
+  if (!url.pathname.startsWith(prefix)) return false;
+  const procs = url.pathname.slice(prefix.length).split(",");
+  return procs.length > 0 && procs.every((proc) => CACHEABLE_READ_ENDPOINTS.includes(prefix + proc));
+}
+
+/**
+ * Stale-while-revalidate:
+ *   1. Serve the cached response immediately (if any) — annotated with the
+ *      original store time via X-SW-Cached-At.
+ *   2. Revalidate in the background and refresh the cache.
+ *   3. When the network fails (offline), serve cache up to 24h with an
+ *      X-Served-Offline: 1 header so the client can badge the data as stale.
+ *   4. No cache + network down → rethrow; React Query surfaces its normal
+ *      error state (fail-closed, never fabricated data).
+ */
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(READ_CACHE);
+  const cached = await cache.match(request);
+  const cachedAt = cached ? Number(cached.headers.get("X-SW-Cached-At")) || 0 : 0;
+  // Enforce the 24h cap — beyond it the cache is treated as absent.
+  const cachedUsable = cached && Date.now() - cachedAt <= READ_CACHE_MAX_AGE_MS ? cached : null;
+
+  // Definitively offline: serve the cache immediately with the marker header
+  // the client keys its "OFFLINE — cached prices" badge on. No network attempt.
+  if (self.navigator.onLine === false) {
+    if (cachedUsable) return markOfflineServed(cachedUsable);
+    throw new TypeError("Offline and no cached market data");
+  }
+
+  const networkPromise = fetch(request)
+    .then((response) => {
+      if (response.ok) {
+        cache.put(request, stampCachedResponse(response)).catch(() => undefined);
+      }
+      return response;
+    })
+    .catch(() => null);
+
+  if (cachedUsable) {
+    // Stale-while-revalidate: serve cache now, refresh in the background.
+    // (Lie-fi 2G case: if the background revalidation fails, the client still
+    // has the cached payload + X-SW-Cached-At to reason about staleness.)
+    networkPromise.then(() => undefined);
+    return cachedUsable;
+  }
+
+  // No usable cache — we must hit the network.
+  const networkResponse = await networkPromise;
+  if (networkResponse) return networkResponse;
+
+  // Offline with nothing cached for this exact query — fail closed.
+  throw new TypeError("Network unavailable and no cached market data");
+}
+
+// Rebuild a cached response with the offline marker header (cached response
+// headers are immutable post-construction).
+function markOfflineServed(response) {
+  const headers = new Headers(response.headers);
+  headers.set("X-Served-Offline", "1");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+// Store a copy of the response with a server-observed cache timestamp so the
+// client can reason about staleness; mark offline-served responses. Headers
+// on cached responses are immutable post-construction, so rebuild.
+function stampCachedResponse(response) {
+  const clone = response.clone();
+  const headers = new Headers(clone.headers);
+  headers.set("X-SW-Cached-At", String(Date.now()));
+  return new Response(clone.body, {
+    status: clone.status,
+    statusText: clone.statusText,
+    headers,
+  });
+}
+
 // ─── Fetch Strategy ──────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   const { request } = event;
@@ -58,13 +169,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API calls — NETWORK ONLY.
-  // tRPC responses are personalised & time-sensitive (balances, KYC status,
-  // positions). Caching them offline serves stale financial data — never do it.
-  // The app-level offline queue (useOfflineQueue + sync event) covers writes;
-  // market reference data freshness is handled by React Query, not the SW.
+  // API calls.
+  // OFFLINE-RES: a STRICT ALLOWLIST of read-only, public (non-personalised)
+  // market-data tRPC GET endpoints is served stale-while-revalidate so the
+  // app still has price data when connectivity drops. EVERYTHING else under
+  // /api/* — every POST, every mutation, every authenticated/user-specific
+  // router (balances, KYC status, positions, orders…) — stays NETWORK-ONLY.
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(fetch(request));
+    if (isCacheableMarketRead(url)) {
+      event.respondWith(staleWhileRevalidate(request));
+    } else {
+      event.respondWith(fetch(request));
+    }
     return;
   }
 

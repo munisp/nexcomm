@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFormDraft } from "@/hooks/useFormDraft";
 import { KycAnalysisPanel } from "@/components/KycAnalysisPanel";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import LivenessChallengeModal, { LivenessResult } from "@/components/LivenessChallengeModal";
@@ -107,6 +108,7 @@ export default function FarmerKYC() {
   const submitKYCMut = trpc.farmer.submitKYC.useMutation({
     onSuccess: () => {
       setSubmitted(true);
+      draft.clearDraft(); // submitted — the checklist draft must never resurface
       toast.success(
         "KYC submitted successfully!",
         {
@@ -129,6 +131,22 @@ export default function FarmerKYC() {
         : (profile.kycDocuments as Record<string, string>))
     : {};
   const allDocs = { ...serverDocs, ...uploadedDocs };
+
+  // OFFLINE-RES: autosave the document checklist so a dropped connection or
+  // killed browser doesn't lose track of which uploads completed (doc URLs,
+  // not file bytes — uploads hit S3 immediately and are idempotent). Restored
+  // on remount (toast inside the hook); cleared after successful submission.
+  const draft = useFormDraft({
+    formKey: "farmer-kyc-docs",
+    scope: profile?.userId != null ? String(profile.userId) : "anon",
+    value: { uploadedDocs },
+    onRestore: (d) => {
+      if (d?.uploadedDocs && typeof d.uploadedDocs === "object") {
+        setUploadedDocs(d.uploadedDocs);
+      }
+    },
+    enabled: !submitted,
+  });
 
   function handleFileChange(docId: string, file: File) {
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {

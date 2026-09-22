@@ -87,6 +87,9 @@ export function LivePriceTicker({
 
   const connectSSE = useCallback(() => {
     if (sseRef.current) return;
+    // OFFLINE-RES: don't connect while offline or hidden — resumed via the
+    // online/visibilitychange listeners in the mount effect.
+    if (!navigator.onLine || document.hidden) return;
     const url = `/api/v1/fluvio/stream/nexcom.price-updates?from_offset=latest`;
     const es = new EventSource(url);
     sseRef.current = es;
@@ -141,6 +144,8 @@ export function LivePriceTicker({
   // Also maintain WebSocket connection as secondary data source
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    // OFFLINE-RES: don't connect while offline or hidden
+    if (!navigator.onLine || document.hidden) return;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const url = `${protocol}//${window.location.host}/ws/orderbook`;
     const ws = new WebSocket(url);
@@ -182,10 +187,37 @@ export function LivePriceTicker({
   useEffect(() => {
     connectSSE(); // Primary: Fluvio SSE
     connect();    // Secondary: WebSocket fallback
+
+    // OFFLINE-RES: pause both streams while hidden/offline, resume with reset backoff
+    const pause = () => {
+      if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
+      sseRef.current?.close();
+      sseRef.current = null;
+      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); wsRef.current = null; }
+      setConnected(false);
+    };
+    const resume = () => {
+      reconnectDelayRef.current = 1000;
+      connectSSE();
+      connect();
+    };
+    const handleOnline = () => resume();
+    const handleOffline = () => pause();
+    const handleVisibility = () => {
+      if (document.hidden) pause();
+      else resume();
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       sseRef.current?.close();
       wsRef.current?.close();
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [connectSSE, connect]);
 

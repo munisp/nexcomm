@@ -14,6 +14,8 @@ import { useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useConnectionQuality } from "@/lib/connectionQuality";
+import { tunedInterval, tunedStaleTime } from "@/lib/queryTuning";
 import { COMMODITIES } from "../../../shared/commodities";
 import { OrderBookDepth } from "@/components/OrderBookDepth";
 import { DepthChart } from "@/components/DepthChart";
@@ -33,13 +35,16 @@ export default function MarketDepth() {
     initial && COMMODITIES.some((c) => c.symbol === initial) ? initial : COMMODITIES[0].symbol
   );
 
+  // OFFLINE-RES: 5s polling stretches to 20s on slow links and pauses entirely
+  // when offline / Save-Data (SW read cache serves tickerSnapshot meanwhile).
+  const { quality: connQuality } = useConnectionQuality();
   const tickerQ = trpc.marketStream.tickerSnapshot.useQuery(
     { symbol },
-    { refetchInterval: 5000, staleTime: 2000 }
+    { refetchInterval: tunedInterval(5000, connQuality), staleTime: tunedStaleTime(2000, connQuality) }
   );
   const tradesQ = trpc.marketStream.recentTrades.useQuery(
     { symbol, limit: 25 },
-    { refetchInterval: 5000, staleTime: 2000 }
+    { refetchInterval: tunedInterval(5000, connQuality), staleTime: tunedStaleTime(2000, connQuality) }
   );
 
   const ticker = tickerQ.data?.tickers.find((t) => t.symbol === symbol) ?? null;

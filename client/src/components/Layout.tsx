@@ -25,6 +25,8 @@ import { getLoginUrl } from "@/const";
 import { PasskeyLoginButton } from "@/components/PasskeyLoginButton";
 import { formatCompact } from "@/lib/format";
 import { useOrderFillSSE } from "@/hooks/useOrderFillSSE";
+import { useConnectionQuality } from "@/lib/connectionQuality";
+import { tunedInterval, tunedStaleTime } from "@/lib/queryTuning";
 import { useTheme } from "@/contexts/ThemeContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { PasskeyUpgradeBanner } from "@/components/PasskeyUpgradeBanner";
@@ -145,14 +147,19 @@ export default function Layout({ children }: LayoutProps) {
   // Real market data for the header ticker (priceFeedJob → live_prices table,
   // refreshed by Yahoo Finance every ~5 min). refetchInterval only polls while
   // the tab is visible by default; 30s cadence is far inside the 5-min update.
+  // OFFLINE-RES: on slow 2G/3G the cadence stretches ×4 (30s→120s); polling is
+  // disabled entirely when offline or when the user has Save-Data on — the
+  // service-worker read cache (sw.js v4) serves cached prices instead and the
+  // ticker badge already flips to OFFLINE.
+  const { quality: connQuality } = useConnectionQuality();
   const pricesQuery = trpc.livePrices.getAll.useQuery(undefined, {
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    refetchInterval: tunedInterval(30_000, connQuality),
+    staleTime: tunedStaleTime(15_000, connQuality),
   });
   const unreadQuery = trpc.notifications.unreadCount.useQuery(undefined, {
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    refetchInterval: tunedInterval(60_000, connQuality),
+    staleTime: tunedStaleTime(30_000, connQuality),
   });
   const unreadCount = typeof unreadQuery.data === "number" ? unreadQuery.data : 0;
 

@@ -114,38 +114,90 @@ export default function TraderPnL() {
   const [recentFills, setRecentFills] = useState<Array<{ id: number; symbol: string; side: string; quantity: string; price: string; createdAt: Date | null }>>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Subscribe to real-time position updates via the order book WS
+  // Subscribe to real-time position updates via the order book WS.
+  // OFFLINE-RES: previously no reconnection at all — a dropped 2G link left
+  // the live P&L permanently stale. Now: exponential backoff + jitter
+  // (1s → 60s cap), paused while document.hidden / offline, resumed on
+  // online/visibility events.
   useEffect(() => {
     if (!user?.id) return;
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${proto}//${window.location.host}/ws/orderbook`);
-    wsRef.current = ws;
 
-    ws.onopen = () => {
-      setWsConnected(true);
-      ws.send(JSON.stringify({ type: "subscribe_positions", userId: user.id }));
+    let disposed = false;
+    let attempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const shouldBeConnected = () => !disposed && navigator.onLine && !document.hidden;
+
+    const closeSocket = () => {
+      if (wsRef.current) {
+        wsRef.current.onclose = null; // deliberate close — no reconnect from it
+        wsRef.current.onerror = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data as string);
-        if (msg.type === "position_update") {
-          const update = msg as LivePositionUpdate;
-          setLiveUnrealizedPnl(update.totalUnrealizedPnl);
-        } else if (msg.type === "fill_event" && Array.isArray(msg.fills)) {
-          setRecentFills(prev => [...msg.fills, ...prev].slice(0, 5));
-          // Invalidate the tRPC query so the realized P&L table refreshes
-          refetch();
-        }
-      } catch { /* ignore */ }
+    const connect = () => {
+      if (!shouldBeConnected()) return;
+      closeSocket();
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${proto}//${window.location.host}/ws/orderbook`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        attempts = 0;
+        setWsConnected(true);
+        ws.send(JSON.stringify({ type: "subscribe_positions", userId: user.id }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data as string);
+          if (msg.type === "position_update") {
+            const update = msg as LivePositionUpdate;
+            setLiveUnrealizedPnl(update.totalUnrealizedPnl);
+          } else if (msg.type === "fill_event" && Array.isArray(msg.fills)) {
+            setRecentFills(prev => [...msg.fills, ...prev].slice(0, 5));
+            // Invalidate the tRPC query so the realized P&L table refreshes
+            refetch();
+          }
+        } catch { /* ignore */ }
+      };
+
+      ws.onclose = () => {
+        setWsConnected(false);
+        if (!shouldBeConnected() || reconnectTimer) return;
+        const exp = Math.min(1_000 * 2 ** attempts, 60_000);
+        const delay = Math.max(1_000, exp + exp * 0.3 * (Math.random() * 2 - 1));
+        attempts += 1;
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, delay);
+      };
+      ws.onerror = () => setWsConnected(false);
     };
 
-    ws.onclose = () => setWsConnected(false);
-    ws.onerror = () => setWsConnected(false);
+    const handleOnline = () => { attempts = 0; connect(); };
+    const handleOffline = () => {
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      closeSocket();
+      setWsConnected(false);
+    };
+    const handleVisibility = () => {
+      if (document.hidden) handleOffline();
+      else handleOnline();
+    };
+
+    connect();
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      ws.close();
-      wsRef.current = null;
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      closeSocket();
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [user?.id]);
 

@@ -42,6 +42,8 @@ import {
   Landmark,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 type BusinessType = "SOLE_PROP" | "LLC" | "PLC" | "COOPERATIVE" | "PARTNERSHIP" | "NGO";
 type DocSlot = "cacCertificate" | "memart" | "statusReport" | "boardResolution" | "proofOfAddress";
@@ -116,7 +118,28 @@ export default function KybOnboarding() {
   const [kybLiveness, setKybLiveness] = useState<LivenessVerdict | null>(null);
   const [uploadedDocs, setUploadedDocs] = useState<Partial<Record<DocSlot, string>>>({});
   const [uploading, setUploading] = useState<Partial<Record<DocSlot, boolean>>>({});
-  const fileInputs = useRef<Partial<Record<DocSlot, HTMLInputElement | null>>>({});
+  const fileInputs = useRef<Partial<Record<DocSlot, HTMLInputElement | null>>({});
+
+  // OFFLINE-RES: autosave wizard progress (step + all typed fields) so a
+  // dropped 2G connection or killed browser never loses an in-progress KYB
+  // application. Restored on remount (toast inside the hook); cleared after
+  // successful screening submission. Docs (base64) are NOT persisted — too
+  // large for localStorage and re-upload is idempotent.
+  const { user } = useAuth();
+  const draft = useFormDraft({
+    formKey: "kyb-onboarding",
+    scope: user?.id != null ? String(user.id) : "anon",
+    value: { step, business, reg, directors, owners },
+    onRestore: (d) => {
+      // Clamp to the editable wizard steps — never restore into the
+      // post-submit status steps (6/7).
+      setStep(Math.min(Math.max(1, d.step), 5));
+      setBusiness(d.business);
+      setReg(d.reg);
+      if (Array.isArray(d.directors) && d.directors.length > 0) setDirectors(d.directors);
+      if (Array.isArray(d.owners) && d.owners.length > 0) setOwners(d.owners);
+    },
+  });
 
   const submitMutation = trpc.kyb.submitKybApplication.useMutation();
   const uploadMutation = trpc.kyb.uploadKybDocument.useMutation();
@@ -279,6 +302,7 @@ export default function KybOnboarding() {
         toast.info("Screening service is currently unavailable — your application is queued for screening. No action needed.");
       }
       statusQuery.refetch();
+      draft.clearDraft(); // submitted — the local draft must never resurface
       setStep(7);
     } catch (e: any) {
       toast.error(e?.message ?? "Screening request failed");

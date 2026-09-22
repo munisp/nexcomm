@@ -10,6 +10,8 @@
  */
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useConnectionQuality } from "@/lib/connectionQuality";
+import { tunedStaleTime } from "@/lib/queryTuning";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, CloudOff, TrendingUp } from "lucide-react";
 import {
@@ -46,13 +48,16 @@ const COLORS = {
 };
 
 export default function ForecastBand({ symbol, horizonDays, height = 320 }: ForecastBandProps) {
+  // OFFLINE-RES: staleTime stretches ×4 on slow links so symbol switches and
+  // remounts don't re-trigger fetches a metered connection can't afford.
+  const { quality: connQuality } = useConnectionQuality();
   const historyQuery = trpc.commodities.priceHistory.useQuery(
     { symbol, days: 90 },
-    { staleTime: 60_000, retry: 1 },
+    { staleTime: tunedStaleTime(60_000, connQuality), retry: 1 },
   );
   const bandQuery = trpc.forecast.getBand.useQuery(
     { commodity: symbol, horizonDays },
-    { staleTime: 60_000, retry: 0 },
+    { staleTime: tunedStaleTime(60_000, connQuality), retry: 0 },
   );
 
   const rows = useMemo<ChartRow[]>(() => {

@@ -9,18 +9,38 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import { PreferencesProvider } from "./contexts/PreferencesContext";
 import { registerServiceWorker } from "./lib/registerSW";
+import { getConnectionClass } from "./lib/connectionQuality";
 import "./index.css";
 
 // Global React Query defaults (UX-FIX): the zero-config default (staleTime 0,
 // infinite retries, refetch on every window focus) caused refetch storms on
 // 135 pages. 30s stale / 5min gc / 1 retry; pages with tighter freshness needs
 // (trading views) override per-query.
+//
+// OFFLINE-RES retry policy (rural 2G/3G):
+//   - fast connection → 1 retry (unchanged behaviour)
+//   - slow/offline    → 3 attempts with exponential backoff + jitter (cap 30s);
+//     transient drops on flaky links otherwise surface as hard errors
+//   - mutations       → never retried here (idempotency is handled by the
+//     offline order queue + clientOrderId dedupe, not blind retry)
+const MAX_RETRY_DELAY_MS = 30_000;
+function retryDelayMs(attemptIndex: number): number {
+  const exp = Math.min(1_000 * 2 ** attemptIndex, MAX_RETRY_DELAY_MS);
+  // Full jitter: uniform in [exp/2, exp] — avoids thundering herd when a
+  // rural tower comes back and every queued query retries simultaneously.
+  return exp / 2 + Math.random() * (exp / 2);
+}
+function shouldRetryQuery(failureCount: number): boolean {
+  return getConnectionClass() === "fast" ? failureCount < 1 : failureCount < 3;
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
       gcTime: 5 * 60_000,
-      retry: 1,
+      retry: shouldRetryQuery,
+      retryDelay: retryDelayMs,
       refetchOnWindowFocus: false,
     },
     mutations: {
@@ -81,10 +101,27 @@ const trpcClient = trpc.createClient({
       fetch(input, init) {
         const headers = new Headers((init as RequestInit)?.headers);
         if (_csrfToken) headers.set("x-csrf-token", _csrfToken);
+        // OFFLINE-RES: hard 20s timeout. On 2G a request with no timeout can
+        // hang for minutes, pinning the batch and stalling every query in it.
+        // Manual AbortController (not AbortSignal.timeout) for older Android
+        // WebViews; forwards tRPC's own abort signal so query cancellation
+        // still works.
+        const controller = new AbortController();
+        const upstreamSignal = (init as RequestInit | undefined)?.signal;
+        const onUpstreamAbort = () => controller.abort();
+        if (upstreamSignal) {
+          if (upstreamSignal.aborted) controller.abort();
+          else upstreamSignal.addEventListener("abort", onUpstreamAbort, { once: true });
+        }
+        const timeout = setTimeout(() => controller.abort(), 20_000);
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
           headers,
+          signal: controller.signal,
+        }).finally(() => {
+          clearTimeout(timeout);
+          if (upstreamSignal) upstreamSignal.removeEventListener("abort", onUpstreamAbort);
         });
       },
     }),

@@ -8,6 +8,8 @@
  */
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useConnectionQuality } from "@/lib/connectionQuality";
+import { tunedInterval, tunedStaleTime } from "@/lib/queryTuning";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -23,9 +25,16 @@ function fmt(n: number | null | undefined, dp = 2): string {
 }
 
 export function OrderBookDepth({ symbol, levels = 15, className }: Props) {
+  // OFFLINE-RES: 5s polling stretches to 20s on slow links, pauses when
+  // offline / Save-Data. refetchOnWindowFocus preserved for fast connections.
+  const { quality: connQuality } = useConnectionQuality();
   const { data, isLoading, isError, dataUpdatedAt } = trpc.marketStream.orderBookDepth.useQuery(
     { symbol, levels },
-    { refetchInterval: 5000, staleTime: 2000, refetchOnWindowFocus: true }
+    {
+      refetchInterval: tunedInterval(5000, connQuality),
+      staleTime: tunedStaleTime(2000, connQuality),
+      refetchOnWindowFocus: true,
+    }
   );
 
   const maxCum = useMemo(() => {
