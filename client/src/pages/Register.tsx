@@ -3,7 +3,7 @@
  * Multi-step onboarding: account type → personal info → KYC docs → review
  * Fully wired to live tRPC onboarding.submit mutation
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   User, Building2, FileText, CheckCircle2, ChevronRight,
   Upload, Shield, AlertCircle, ArrowLeft, Loader2
@@ -45,9 +45,48 @@ export default function Register() {
     state: "", address: "", bvn: "", nin: "", companyName: "", rcNumber: "",
     taxId: "",
   });
-  const [docs, setDocs] = useState({
-    idDoc: false, addressProof: false, bankStatement: false, cacCert: false,
+  // Real uploaded document URLs (via onboarding.uploadKycDocument) — never
+  // checkbox placeholders with url:"pending".
+  type DocKey = "idDoc" | "addressProof" | "bankStatement" | "cacCert";
+  const [docs, setDocs] = useState<Record<DocKey, string | null>>({
+    idDoc: null, addressProof: null, bankStatement: null, cacCert: null,
   });
+  const [uploadingDoc, setUploadingDoc] = useState<Partial<Record<DocKey, boolean>>>({});
+  const docInputRefs = useRef<Partial<Record<DocKey, HTMLInputElement | null>>>({});
+
+  const uploadDocMut = trpc.onboarding.uploadKycDocument.useMutation({
+    onError: (e, vars) => {
+      setUploadingDoc(u => ({ ...u, [vars.docId]: false }));
+      toast.error(`Upload failed: ${e.message}`);
+    },
+  });
+
+  const handleDocFile = (key: DocKey, file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File exceeds 5 MB limit.");
+      return;
+    }
+    setUploadingDoc(u => ({ ...u, [key]: true }));
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Data = (reader.result as string).split(",")[1] ?? "";
+        const res = await uploadDocMut.mutateAsync({
+          docId: key,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          base64Data,
+        });
+        setDocs(d => ({ ...d, [key]: res.url }));
+        toast.success("Document uploaded");
+      } catch {
+        /* onError toast already fired */
+      } finally {
+        setUploadingDoc(u => ({ ...u, [key]: false }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
   const [submitted, setSubmitted] = useState(false);
 
   const setField = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -93,10 +132,10 @@ export default function Register() {
       },
       stakeholderSpecific: {},
       documentsUploaded: [
-        ...(docs.idDoc        ? [{ type: "ID_DOCUMENT",    url: "pending", name: "Government ID" }]     : []),
-        ...(docs.addressProof ? [{ type: "ADDRESS_PROOF",  url: "pending", name: "Proof of Address" }]  : []),
-        ...(docs.bankStatement? [{ type: "BANK_STATEMENT", url: "pending", name: "Bank Statement" }]    : []),
-        ...(docs.cacCert      ? [{ type: "CAC_CERTIFICATE",url: "pending", name: "CAC Certificate" }]   : []),
+        ...(docs.idDoc        ? [{ type: "ID_DOCUMENT",    url: docs.idDoc,        name: "Government ID" }]     : []),
+        ...(docs.addressProof ? [{ type: "ADDRESS_PROOF",  url: docs.addressProof, name: "Proof of Address" }]  : []),
+        ...(docs.bankStatement? [{ type: "BANK_STATEMENT", url: docs.bankStatement, name: "Bank Statement" }]    : []),
+        ...(docs.cacCert      ? [{ type: "CAC_CERTIFICATE",url: docs.cacCert,      name: "CAC Certificate" }]   : []),
       ],
       agreedToTerms: true,
       agreedToKyc: true,
@@ -214,37 +253,37 @@ export default function Register() {
               {accountType === "COMPANY" ? (
                 <>
                   <div className="col-span-2 space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Company Name *</Label>
-                    <Input value={form.companyName} onChange={e => setField("companyName", e.target.value)} placeholder="ACME Trading Ltd." />
+                    <Label htmlFor="reg-companyName" className="text-xs text-muted-foreground">Company Name *</Label>
+                    <Input id="reg-companyName" value={form.companyName} onChange={e => setField("companyName", e.target.value)} placeholder="ACME Trading Ltd." />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">RC Number *</Label>
-                    <Input value={form.rcNumber} onChange={e => setField("rcNumber", e.target.value)} placeholder="RC123456" />
+                    <Label htmlFor="reg-rcNumber" className="text-xs text-muted-foreground">RC Number *</Label>
+                    <Input id="reg-rcNumber" value={form.rcNumber} onChange={e => setField("rcNumber", e.target.value)} placeholder="RC123456" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Tax ID</Label>
-                    <Input value={form.taxId} onChange={e => setField("taxId", e.target.value)} placeholder="TIN-XXXXXXX" />
+                    <Label htmlFor="reg-taxId" className="text-xs text-muted-foreground">Tax ID</Label>
+                    <Input id="reg-taxId" value={form.taxId} onChange={e => setField("taxId", e.target.value)} placeholder="TIN-XXXXXXX" />
                   </div>
                 </>
               ) : (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">First Name *</Label>
-                    <Input value={form.firstName} onChange={e => setField("firstName", e.target.value)} placeholder="John" />
+                    <Label htmlFor="reg-firstName" className="text-xs text-muted-foreground">First Name *</Label>
+                    <Input id="reg-firstName" value={form.firstName} onChange={e => setField("firstName", e.target.value)} placeholder="John" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Last Name *</Label>
-                    <Input value={form.lastName} onChange={e => setField("lastName", e.target.value)} placeholder="Doe" />
+                    <Label htmlFor="reg-lastName" className="text-xs text-muted-foreground">Last Name *</Label>
+                    <Input id="reg-lastName" value={form.lastName} onChange={e => setField("lastName", e.target.value)} placeholder="Doe" />
                   </div>
                 </>
               )}
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Email Address *</Label>
-                <Input type="email" value={form.email} onChange={e => setField("email", e.target.value)} placeholder="john@example.com" />
+                <Label htmlFor="reg-email" className="text-xs text-muted-foreground">Email Address *</Label>
+                <Input id="reg-email" type="email" value={form.email} onChange={e => setField("email", e.target.value)} placeholder="john@example.com" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Phone Number *</Label>
-                <Input value={form.phone} onChange={e => setField("phone", e.target.value)} placeholder="+234 800 000 0000" />
+                <Label htmlFor="reg-phone" className="text-xs text-muted-foreground">Phone Number *</Label>
+                <Input id="reg-phone" value={form.phone} onChange={e => setField("phone", e.target.value)} placeholder="+234 800 000 0000" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Country *</Label>
@@ -256,22 +295,22 @@ export default function Register() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">State / Region</Label>
-                <Input value={form.state} onChange={e => setField("state", e.target.value)} placeholder="Lagos" />
+                <Label htmlFor="reg-state" className="text-xs text-muted-foreground">State / Region</Label>
+                <Input id="reg-state" value={form.state} onChange={e => setField("state", e.target.value)} placeholder="Lagos" />
               </div>
               <div className="col-span-2 space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Address</Label>
-                <Input value={form.address} onChange={e => setField("address", e.target.value)} placeholder="123 Main Street, Victoria Island" />
+                <Label htmlFor="reg-address" className="text-xs text-muted-foreground">Address</Label>
+                <Input id="reg-address" value={form.address} onChange={e => setField("address", e.target.value)} placeholder="123 Main Street, Victoria Island" />
               </div>
               {form.country === "Nigeria" && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">BVN</Label>
-                    <Input value={form.bvn} onChange={e => setField("bvn", e.target.value)} placeholder="22XXXXXXXXX" />
+                    <Label htmlFor="reg-bvn" className="text-xs text-muted-foreground">BVN</Label>
+                    <Input id="reg-bvn" value={form.bvn} onChange={e => setField("bvn", e.target.value)} placeholder="22XXXXXXXXX" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">NIN</Label>
-                    <Input value={form.nin} onChange={e => setField("nin", e.target.value)} placeholder="XXXXXXXXXXX" />
+                    <Label htmlFor="reg-nin" className="text-xs text-muted-foreground">NIN</Label>
+                    <Input id="reg-nin" value={form.nin} onChange={e => setField("nin", e.target.value)} placeholder="XXXXXXXXXXX" />
                   </div>
                 </>
               )}
@@ -314,11 +353,23 @@ export default function Register() {
                       <div className="text-xs text-muted-foreground">{desc}</div>
                     </div>
                   </div>
+                  <input
+                    ref={(el) => { docInputRefs.current[key] = el; }}
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleDocFile(key, f);
+                      e.target.value = "";
+                    }}
+                  />
                   <Button
                     variant={docs[key] ? "outline" : "default"}
                     size="sm"
                     className="gap-1.5 h-8 text-xs"
-                    onClick={() => setDocs(d => ({ ...d, [key]: !d[key] }))}
+                    disabled={!!uploadingDoc[key]}
+                    onClick={() => docInputRefs.current[key]?.click()}
                   >
                     {docs[key] ? <><CheckCircle2 className="w-3 h-3" />Uploaded</> : <><Upload className="w-3 h-3" />Upload</>}
                   </Button>

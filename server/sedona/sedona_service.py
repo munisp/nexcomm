@@ -39,10 +39,12 @@ _raw_db_url = os.environ.get("DATABASE_URL", "")
 if _raw_db_url.startswith("postgresql://") or _raw_db_url.startswith("postgres://"):
     DATABASE_URL = _raw_db_url
 else:
-    DATABASE_URL = os.environ.get(
-        "POSTGIS_URL",
-        "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom",
-    )
+    DATABASE_URL = os.environ.get("POSTGIS_URL")
+    if not DATABASE_URL:
+        if os.environ.get("APP_ENV") == "production" or os.environ.get("ENVIRONMENT") == "production":
+            raise RuntimeError("FATAL: POSTGIS_URL is required in production - no default DB credentials exist")
+        # DEV-ONLY local default (dev compose password)
+        DATABASE_URL = "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom"
 SEDONA_PORT = int(os.environ.get("SEDONA_PORT", "7474"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

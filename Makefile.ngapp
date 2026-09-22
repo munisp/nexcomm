@@ -43,7 +43,9 @@ k8s-namespaces: ## Create Kubernetes namespaces
 k8s-infra: ## Deploy infrastructure components
 	$(HELM) upgrade --install kafka bitnami/kafka -n $(NAMESPACE)-infra -f infrastructure/kafka/values.yaml
 	$(HELM) upgrade --install redis bitnami/redis-cluster -n $(NAMESPACE)-infra -f infrastructure/redis/values.yaml
-	$(HELM) upgrade --install postgres bitnami/postgresql-ha -n $(NAMESPACE)-infra -f infrastructure/postgres/values.yaml
+	# NOTE: infrastructure/postgres/values.yaml never existed; PostgreSQL k8s
+	# assets live in infra/postgres/ (configmap, pgbouncer, tuning SQL).
+	$(KUBECTL) apply -f infra/postgres/
 	$(HELM) upgrade --install opensearch opensearch/opensearch -n $(NAMESPACE)-infra -f infrastructure/opensearch/values.yaml
 	$(KUBECTL) apply -f infrastructure/tigerbeetle/
 	$(KUBECTL) apply -f infrastructure/temporal/
@@ -53,33 +55,29 @@ k8s-infra: ## Deploy infrastructure components
 	$(KUBECTL) apply -f infrastructure/mojaloop/
 
 k8s-security: ## Deploy security components
-	$(HELM) upgrade --install keycloak bitnami/keycloak -n $(NAMESPACE)-security -f security/keycloak/values.yaml
+	# NOTE: security/keycloak/ holds only realm JSON; the real Helm values are infra/keycloak/values.yaml
+	$(HELM) upgrade --install keycloak bitnami/keycloak -n $(NAMESPACE)-security -f infra/keycloak/values.yaml
 	$(KUBECTL) apply -f security/openappsec/
 	$(KUBECTL) apply -f security/wazuh/
 	$(KUBECTL) apply -f security/opencti/
 
 k8s-services: ## Deploy application services
-	$(KUBECTL) apply -f services/trading-engine/k8s/
-	$(KUBECTL) apply -f services/market-data/k8s/
-	$(KUBECTL) apply -f services/risk-management/k8s/
-	$(KUBECTL) apply -f services/settlement/k8s/
-	$(KUBECTL) apply -f services/user-management/k8s/
-	$(KUBECTL) apply -f services/notification/k8s/
-	$(KUBECTL) apply -f services/ai-ml/k8s/
-	$(KUBECTL) apply -f services/blockchain/k8s/
+	# NOTE: services/*/k8s/ directories never existed. Real per-service
+	# manifests (30 Deployments) live in infra/k8s/ with a kustomization.yaml.
+	$(KUBECTL) apply -k infra/k8s/
 
 k8s-monitoring: ## Deploy monitoring stack
-	$(KUBECTL) apply -f monitoring/opensearch-dashboards/
-	$(KUBECTL) apply -f monitoring/kubecost/
+	# NOTE: monitoring/opensearch-dashboards/ never existed; the dashboards
+	# export (trading-dashboard.ndjson) lives at monitoring/opensearch/dashboards/
+	# and must be imported via the OpenSearch Dashboards UI/API, not kubectl.
+	# monitoring/kubecost/ holds Helm values, not raw manifests.
+	$(HELM) upgrade --install kubecost kubecost/cost-analyzer -n kubecost --create-namespace -f monitoring/kubecost/values.yaml
 	$(KUBECTL) apply -f monitoring/alerts/
 
-k8s-data-platform: ## Deploy data platform (Lakehouse)
-	$(KUBECTL) apply -f data-platform/lakehouse/
-	$(KUBECTL) apply -f data-platform/flink-jobs/
-	$(KUBECTL) apply -f data-platform/spark-jobs/
-	$(KUBECTL) apply -f data-platform/datafusion/
-	$(KUBECTL) apply -f data-platform/ray/
-	$(KUBECTL) apply -f data-platform/sedona/
+k8s-data-platform: ## DEPRECATED: data-platform/ contains SQL/Python job assets, not k8s manifests
+	@echo "DEPRECATED: data-platform/{flink-jobs,spark-jobs,ray,...} were nonexistent kubectl paths."
+	@echo "The directory holds job assets only (flink/jobs/*.sql, spark/jobs/*.py, sedona, datafusion/queries, lakehouse/config)."
+	@echo "Submit those jobs to your Flink/Spark/Ray clusters directly; there is nothing to kubectl-apply here."
 
 # ----------------------------------------------------------------------------
 # Build
@@ -95,7 +93,7 @@ build-risk-management: ## Build risk management service
 	cd services/risk-management && go build -o bin/risk-management ./cmd/...
 
 build-settlement: ## Build settlement service
-	cd services/settlement && cargo build --release
+	cd settlement-engine && cargo build --release
 
 build-blockchain: ## Build blockchain service
 	cd services/blockchain && cargo build --release
@@ -110,7 +108,7 @@ docker-build: ## Build all Docker images
 	docker build -t nexcom/trading-engine:latest services/trading-engine/
 	docker build -t nexcom/market-data:latest services/market-data/
 	docker build -t nexcom/risk-management:latest services/risk-management/
-	docker build -t nexcom/settlement:latest services/settlement/
+	docker build -t nexcom/settlement:latest settlement-engine/
 	docker build -t nexcom/user-management:latest services/user-management/
 	docker build -t nexcom/notification:latest services/notification/
 	docker build -t nexcom/ai-ml:latest services/ai-ml/
@@ -128,7 +126,7 @@ test-go: ## Run Go tests
 	cd services/risk-management && go test ./...
 
 test-rust: ## Run Rust tests
-	cd services/settlement && cargo test
+	cd settlement-engine && cargo test
 	cd services/blockchain && cargo test
 
 test-node: ## Run Node.js tests
@@ -150,7 +148,7 @@ lint-go: ## Lint Go code
 	cd services/risk-management && golangci-lint run
 
 lint-rust: ## Lint Rust code
-	cd services/settlement && cargo clippy
+	cd settlement-engine && cargo clippy
 	cd services/blockchain && cargo clippy
 
 lint-node: ## Lint Node.js code
@@ -171,7 +169,7 @@ clean: ## Clean build artifacts
 	rm -rf services/trading-engine/bin
 	rm -rf services/market-data/bin
 	rm -rf services/risk-management/bin
-	cd services/settlement && cargo clean
+	cd settlement-engine && cargo clean
 	cd services/blockchain && cargo clean
 
 # ----------------------------------------------------------------------------

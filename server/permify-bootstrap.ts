@@ -21,149 +21,61 @@
  */
 
 const PERMIFY_URL = process.env.PERMIFY_URL ?? "http://localhost:3476";
-const PERMIFY_TENANT = process.env.PERMIFY_TENANT ?? "nexcom";
+const PERMIFY_TENANT = process.env.PERMIFY_TENANT ?? process.env.PERMIFY_TENANT_ID ?? "t1";
 const PERMIFY_TIMEOUT_MS = 5_000;
 
-/** The canonical NEXCOM RBAC schema in Permify DSL */
-const NEXCOM_SCHEMA = `
-entity user {}
+/**
+ * The canonical NEXCOM RBAC schema in Permify DSL.
+ *
+ * Single source of truth: the repo-root `permify.perm` file, which is also
+ * validated by permify validate on CI and deployed to Permify's bundle service.
+ * The previously inline "reduced" schema here had drifted from that file
+ * (split-brain) — we now load it from disk and refuse to bootstrap a reduced
+ * substitute.
+ */
+import { readFileSync } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 
-entity exchange {
-  relation admin @user
-  relation operator @user
-  relation compliance @user
-
-  permission admin   = admin
-  permission manage  = admin or operator
-  permission view    = admin or operator or compliance
-  permission export  = admin or compliance
+function loadPermifySchema(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(here, "../permify.perm"),       // repo root, relative to this module
+    resolve(process.cwd(), "permify.perm"), // repo root, when cwd = repo root
+  ];
+  for (const candidate of candidates) {
+    try {
+      const schema = readFileSync(candidate, "utf8").trim();
+      if (schema.length > 0) return schema;
+    } catch { /* try next candidate */ }
+  }
+  throw new Error(
+    `[Permify Bootstrap] Could not load permify.perm from repo root (tried: ${candidates.join(", ")}). ` +
+    "Refusing to bootstrap with a reduced inline schema — fix the file path or restore permify.perm."
+  );
 }
 
-entity order {
-  relation owner @user
-  relation broker @user
-  relation exchange_admin @exchange#admin
+let _schemaCache: string | null = null;
 
-  permission view    = owner or broker or exchange_admin
-  permission create  = owner or broker
-  permission edit    = owner or broker
-  permission delete  = owner or exchange_admin
-  permission approve = exchange_admin
+/**
+ * Lazily load the canonical schema. Returns null (with an operator-visible
+ * warning) when permify.perm cannot be found, so a missing file degrades
+ * authorization to fail-closed instead of crashing the process at import time.
+ */
+function getPermifySchema(): string | null {
+  if (_schemaCache) return _schemaCache;
+  try {
+    _schemaCache = loadPermifySchema();
+    return _schemaCache;
+  } catch (err) {
+    console.warn((err as Error).message);
+    return null;
+  }
 }
-
-entity settlement {
-  relation initiator @user
-  relation approver @user
-  relation exchange_admin @exchange#admin
-
-  permission view    = initiator or approver or exchange_admin
-  permission approve = approver or exchange_admin
-  permission reject  = approver or exchange_admin
-  permission export  = exchange_admin
-}
-
-entity kyc_application {
-  relation applicant @user
-  relation reviewer @user
-  relation exchange_admin @exchange#admin
-
-  permission view    = applicant or reviewer or exchange_admin
-  permission approve = reviewer or exchange_admin
-  permission reject  = reviewer or exchange_admin
-  permission manage  = exchange_admin
-}
-
-entity aml_flag {
-  relation reporter @user
-  relation compliance_officer @user
-  relation exchange_admin @exchange#admin
-
-  permission view      = reporter or compliance_officer or exchange_admin
-  permission escalate  = compliance_officer or exchange_admin
-  permission resolve   = compliance_officer or exchange_admin
-  permission export    = exchange_admin
-}
-
-entity user_account {
-  relation owner @user
-  relation admin @exchange#admin
-
-  permission view   = owner or admin
-  permission edit   = owner or admin
-  permission manage = admin
-  permission delete = admin
-}
-
-entity deposit {
-  relation owner @user
-  relation exchange_admin @exchange#admin
-
-  permission view    = owner or exchange_admin
-  permission create  = owner
-  permission approve = exchange_admin
-  permission reject  = exchange_admin
-  permission manage  = exchange_admin
-}
-
-entity withdrawal {
-  relation owner @user
-  relation exchange_admin @exchange#admin
-
-  permission view    = owner or exchange_admin
-  permission create  = owner
-  permission approve = exchange_admin
-  permission reject  = exchange_admin
-  permission manage  = exchange_admin
-}
-
-entity warehouse_receipt {
-  relation owner @user
-  relation issuer @user
-  relation exchange_admin @exchange#admin
-
-  permission view    = owner or issuer or exchange_admin
-  permission create  = issuer or exchange_admin
-  permission edit    = exchange_admin
-  permission delete  = exchange_admin
-  permission pledge  = owner
-  permission redeem  = owner
-}
-
-entity loan {
-  relation borrower @user
-  relation lender @user
-  relation exchange_admin @exchange#admin
-
-  permission view     = borrower or lender or exchange_admin
-  permission create   = borrower
-  permission approve  = lender or exchange_admin
-  permission disburse = exchange_admin
-  permission repay    = borrower
-  permission manage   = exchange_admin
-}
-
-entity margin_call {
-  relation trader @user
-  relation exchange_admin @exchange#admin
-
-  permission view      = trader or exchange_admin
-  permission create    = exchange_admin
-  permission resolve   = trader or exchange_admin
-  permission liquidate = exchange_admin
-}
-
-entity cross_border_transfer {
-  relation initiator @user
-  relation exchange_admin @exchange#admin
-
-  permission view    = initiator or exchange_admin
-  permission create  = initiator
-  permission approve = exchange_admin
-  permission cancel  = initiator or exchange_admin
-}
-`.trim();
 
 async function writeSchema(): Promise<string | null> {
+  const schema = getPermifySchema();
+  if (!schema) return null; // warning already logged by getPermifySchema()
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), PERMIFY_TIMEOUT_MS);
@@ -172,7 +84,7 @@ async function writeSchema(): Promise<string | null> {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ schema: NEXCOM_SCHEMA }),
+        body: JSON.stringify({ schema }),
         signal: controller.signal,
       }
     );

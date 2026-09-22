@@ -32,8 +32,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
+	"github.com/nexcom/channel-gateway/internal/dedup"
 	"github.com/nexcom/channel-gateway/internal/kafka"
 )
+
+// telegramDedupTTL is how long a processed update_id is remembered.
+// Telegram redelivers unacknowledged updates for up to ~24h.
+const telegramDedupTTL = 24 * time.Hour
 
 // Config holds Telegram Bot API credentials
 type Config struct {
@@ -50,6 +55,7 @@ type Handler struct {
 	config Config
 	client *http.Client
 	apiURL string
+	dedup  *dedup.RedisClient // nil when REDIS_URL is not set
 }
 
 func NewHandler(db *pgxpool.Pool, kp *kafka.Producer, log *zap.SugaredLogger, cfg Config) *Handler {
@@ -61,6 +67,11 @@ func NewHandler(db *pgxpool.Pool, kp *kafka.Producer, log *zap.SugaredLogger, cf
 		client: &http.Client{Timeout: 10 * time.Second},
 		apiURL: fmt.Sprintf("https://api.telegram.org/bot%s", cfg.BotToken),
 	}
+}
+
+// SetDedup attaches a Redis dedup client used for update_id idempotency.
+func (h *Handler) SetDedup(d *dedup.RedisClient) {
+	h.dedup = d
 }
 
 // ─── Telegram Update Types ────────────────────────────────────────────────────
@@ -107,6 +118,28 @@ func (h *Handler) HandleUpdate(c *gin.Context) {
 	if err := c.ShouldBindJSON(&update); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
 		return
+	}
+
+	// Idempotency: Telegram redelivers updates until it gets a 200. Deduplicate
+	// on update_id via Redis SET NX with a 24h TTL so redeliveries are acked
+	// but never processed twice. If Redis is down we fail with 503 so Telegram
+	// retries later instead of us processing a possible duplicate.
+	if h.dedup != nil && update.UpdateID != 0 {
+		first, err := h.dedup.SetNX(c.Request.Context(),
+			fmt.Sprintf("nexcom:telegram:update:%d", update.UpdateID), "1", telegramDedupTTL)
+		if err != nil {
+			h.log.Errorw("Telegram dedup store unavailable — refusing to risk duplicate processing",
+				"update_id", update.UpdateID, "error", err)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"ok": false, "error": "dedup store unavailable"})
+			return
+		}
+		if !first {
+			h.log.Infow("Duplicate Telegram update ignored", "update_id", update.UpdateID)
+			c.JSON(http.StatusOK, gin.H{"ok": true, "duplicate": true})
+			return
+		}
+	} else if h.dedup == nil {
+		h.log.Warnw("Telegram webhook running WITHOUT update_id dedup (REDIS_URL not set)")
 	}
 
 	// Process asynchronously

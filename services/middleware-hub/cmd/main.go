@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof" // pprof admin endpoints; served only when GO_PPROF=1
 	"os"
 	"os/signal"
 	"syscall"
@@ -398,10 +399,12 @@ func main() {
 			c.JSON(http.StatusOK, result)
 		})
 
-		// TigerBeetle account balance
+		// Ledger account balance (routed through gateway-service ledger API —
+		// TigerBeetle itself has no HTTP interface). Account IDs are gateway
+		// ledger UUID strings.
 		api.GET("/ledger/balance/:account_id", func(c *gin.Context) {
-			var accountID uint64
-			if _, err := fmt.Sscanf(c.Param("account_id"), "%d", &accountID); err != nil {
+			accountID := c.Param("account_id")
+			if accountID == "" {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account_id"})
 				return
 			}
@@ -414,30 +417,30 @@ func main() {
 			c.JSON(http.StatusOK, gin.H{
 				"account_id": accountID,
 				"balance":    balance,
-				"currency":   "USD",
+				"currency":   "NGN",
 			})
 		})
 
-		// TigerBeetle transfer
+		// Ledger transfer (routed through gateway-service ledger API)
 		api.POST("/ledger/transfer", func(c *gin.Context) {
 			var req struct {
-				TransferID    uint64 `json:"transfer_id"`
-				DebitAccount  uint64 `json:"debit_account"`
-				CreditAccount uint64 `json:"credit_account"`
-				Amount        uint64 `json:"amount"`
-				Ledger        uint32 `json:"ledger"`
+				DebitAccount  string `json:"debit_account" binding:"required"`
+				CreditAccount string `json:"credit_account" binding:"required"`
+				Amount        int64  `json:"amount" binding:"required,min=1"`
 				Code          uint16 `json:"code"`
+				Reference     string `json:"reference"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
 			ctx := c.Request.Context()
-			if err := hub.tigerbeetle.CreateTransfer(ctx, req.TransferID, req.DebitAccount, req.CreditAccount, req.Amount, req.Ledger, req.Code); err != nil {
+			transfer, err := hub.tigerbeetle.CreateTransfer(ctx, req.DebitAccount, req.CreditAccount, req.Amount, req.Code, req.Reference)
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			c.JSON(http.StatusOK, gin.H{"status": "transferred", "transfer_id": req.TransferID})
+			c.JSON(http.StatusOK, gin.H{"status": "transferred", "transfer_id": transfer.ID})
 		})
 
 		// Dapr state store
@@ -494,8 +497,28 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%s", port),
-		Handler: router,
+		Addr:              fmt.Sprintf(":%s", port),
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 16,
+	}
+
+	// Optional pprof admin server (GO_PPROF=1 only; loopback by default).
+	if os.Getenv("GO_PPROF") == "1" {
+		pprofAddr := os.Getenv("PPROF_ADDR")
+		if pprofAddr == "" {
+			pprofAddr = "127.0.0.1:6060"
+		}
+		go func() {
+			logger.Infow("pprof admin server listening", "addr", pprofAddr)
+			// handlers registered on http.DefaultServeMux by the net/http/pprof import
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				logger.Warnw("pprof server exited", "error", err)
+			}
+		}()
 	}
 
 	// Graceful shutdown

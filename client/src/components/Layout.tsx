@@ -3,12 +3,13 @@
  * Dark emerald design system: sidebar + header + live ticker
  * All 22 pages across 6 navigation groups
  */
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, TrendingUp, ShoppingCart, FileText,
   Package, Warehouse, Briefcase, Truck,
-  Menu, X, Bell, ChevronDown, LogOut, Settings,
+  Menu, X, Bell, ChevronDown, LogOut, Settings, Sun, Moon,
   Shield, Activity, Zap, User,
   DollarSign, Cpu, BarChart2, Users, Eye,
   ClipboardList, BarChart, Star, Calendar, Globe, BellRing,
@@ -22,7 +23,16 @@ import {
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { PasskeyLoginButton } from "@/components/PasskeyLoginButton";
-import { generateAllTicks, type PriceTick } from "../../../shared/commodities";
+import { formatCompact } from "@/lib/format";
+import { useOrderFillSSE } from "@/hooks/useOrderFillSSE";
+import { useConnectionQuality } from "@/lib/connectionQuality";
+import { tunedInterval, tunedStaleTime } from "@/lib/queryTuning";
+import { useTheme } from "@/contexts/ThemeContext";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { PasskeyUpgradeBanner } from "@/components/PasskeyUpgradeBanner";
+import { SyncStatusPill } from "@/components/SyncStatusPill";
+import CopilotPanel from "@/components/CopilotPanel";
+import { NAV_LABEL_KEYS } from "@/i18n/navLabels";
 
 const NAV_GROUPS: { key: string; label: string; items: { href: string; icon: React.ElementType; label: string }[] }[] = [
   {
@@ -116,23 +126,50 @@ const TICKER_SYMBOLS = [
 interface LayoutProps { children: React.ReactNode; }
 
 export default function Layout({ children }: LayoutProps) {
+  const { t } = useTranslation("common");
+  /** Translate a nav label; falls back to English source string. */
+  const navT = (label: string) => {
+    const key = NAV_LABEL_KEYS[label];
+    return key ? t(`nav.${key}`, label) : label;
+  };
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [ticks, setTicks] = useState<PriceTick[]>(() => generateAllTicks());
+  const { theme, toggleTheme } = useTheme();
+  // Real-time order-fill toasts via SSE (previously only inside DashboardLayout;
+  // moved here so all pages — not just the 27 dashboard ones — get them).
+  useOrderFillSSE();
 
   const { data: user } = trpc.auth.me.useQuery();
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => { window.location.href = "/"; },
   });
 
-  useEffect(() => {
-    const id = setInterval(() => setTicks(generateAllTicks()), 5000);
-    return () => clearInterval(id);
-  }, []);
+  // Real market data for the header ticker (priceFeedJob → live_prices table,
+  // refreshed by Yahoo Finance every ~5 min). refetchInterval only polls while
+  // the tab is visible by default; 30s cadence is far inside the 5-min update.
+  // OFFLINE-RES: on slow 2G/3G the cadence stretches ×4 (30s→120s); polling is
+  // disabled entirely when offline or when the user has Save-Data on — the
+  // service-worker read cache (sw.js v4) serves cached prices instead and the
+  // ticker badge already flips to OFFLINE.
+  const { quality: connQuality } = useConnectionQuality();
+  const pricesQuery = trpc.livePrices.getAll.useQuery(undefined, {
+    refetchInterval: tunedInterval(30_000, connQuality),
+    staleTime: tunedStaleTime(15_000, connQuality),
+  });
+  const unreadQuery = trpc.notifications.unreadCount.useQuery(undefined, {
+    enabled: !!user,
+    refetchInterval: tunedInterval(60_000, connQuality),
+    staleTime: tunedStaleTime(30_000, connQuality),
+  });
+  const unreadCount = typeof unreadQuery.data === "number" ? unreadQuery.data : 0;
 
+  const prices = pricesQuery.data?.prices ?? [];
   const tickerTicks = TICKER_SYMBOLS
-    .map(s => ticks.find(t => t.symbol === s))
-    .filter((t): t is PriceTick => !!t);
+    .map((s) => prices.find((p) => p.symbol === s))
+    .filter((p): p is NonNullable<typeof p> => !!p);
+  const lastUpdated = pricesQuery.data?.lastUpdated ? new Date(pricesQuery.data.lastUpdated) : null;
+  const isStale = !lastUpdated || Date.now() - lastUpdated.getTime() > 10 * 60_000;
+  const isLive = pricesQuery.isSuccess && tickerTicks.length > 0 && !isStale;
 
   const isActive = (href: string) => {
     if (href === "/") return location === "/";
@@ -185,9 +222,9 @@ export default function Layout({ children }: LayoutProps) {
         <nav className="flex-1 px-3 py-3 overflow-y-auto scrollbar-thin space-y-3">
           {NAV_GROUPS.map(group => (
             <div key={group.key}>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40 px-3 mb-1">{group.label}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40 px-3 mb-1">{navT(group.label)}</p>
               {group.items.map(item => (
-                <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} />
+                <NavLink key={item.href} href={item.href} icon={item.icon} label={navT(item.label)} />
               ))}
             </div>
           ))}
@@ -263,11 +300,13 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu"
+          onKeyDown={(e) => { if (e.key === "Escape") setSidebarOpen(false); }}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-64 flex flex-col bg-sidebar shadow-2xl">
             <button
               className="absolute top-4 right-4 text-sidebar-foreground/60 hover:text-sidebar-foreground z-10"
+              aria-label="Close navigation menu"
               onClick={() => setSidebarOpen(false)}
             >
               <X className="w-5 h-5" />
@@ -282,26 +321,39 @@ export default function Layout({ children }: LayoutProps) {
         {/* Header */}
         <header className="flex items-center justify-between px-4 lg:px-5 py-2.5 bg-card border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Button variant="ghost" size="icon" className="lg:hidden h-8 w-8 flex-shrink-0" onClick={() => setSidebarOpen(true)}>
+            <Button variant="ghost" size="icon" className="lg:hidden h-8 w-8 flex-shrink-0" aria-label="Open navigation menu" onClick={() => setSidebarOpen(true)}>
               <Menu className="w-4 h-4" />
             </Button>
-            {/* Live ticker */}
+            {/* Market ticker — real data from live_prices (priceFeedJob).
+                Badge reflects honesty of the feed: LIVE / DELAYED / OFFLINE. */}
             <div className="hidden md:flex items-center gap-2 overflow-hidden flex-1 min-w-0">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex-shrink-0 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse inline-block" />
-                LIVE
+                <span className={`w-1.5 h-1.5 rounded-full inline-block ${isLive ? "bg-primary animate-pulse" : "bg-amber-500"}`} />
+                {isLive ? "LIVE" : pricesQuery.isSuccess && tickerTicks.length > 0 ? "DELAYED" : "OFFLINE"}
               </span>
-              <div className="overflow-hidden flex-1">
+              <div className="overflow-hidden flex-1" aria-live="off">
                 <div className="ticker-scroll flex gap-6 whitespace-nowrap">
-                  {[...tickerTicks, ...tickerTicks].map((tick, i) => (
-                    <span key={i} className="text-xs font-mono flex items-center gap-1.5">
-                      <span className="text-muted-foreground">{tick.symbol.replace("-SPOT","").replace("-NG","")}</span>
-                      <span className="font-semibold text-foreground">${tick.price.toLocaleString()}</span>
-                      <span className={tick.changePct >= 0 ? "text-positive" : "text-negative"}>
-                        {tick.changePct >= 0 ? "▲" : "▼"}{Math.abs(tick.changePct).toFixed(2)}%
-                      </span>
+                  {tickerTicks.length === 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      Market data unavailable — prices refresh when the feed reconnects.
                     </span>
-                  ))}
+                  ) : (
+                    [...tickerTicks, ...tickerTicks].map((tick, i) => {
+                      const price = Number(tick.price);
+                      const changePct = Number(tick.changePct ?? 0);
+                      return (
+                        <span key={i} className="text-xs font-mono flex items-center gap-1.5">
+                          <span className="text-muted-foreground">{tick.symbol.replace("-SPOT","").replace("-NG","")}</span>
+                          <span className="font-semibold text-foreground">
+                            {tick.currency === "USD" ? "$" : "₦"}{formatCompact(price)}
+                          </span>
+                          <span className={changePct >= 0 ? "text-positive" : "text-negative"}>
+                            {changePct >= 0 ? "▲" : "▼"}{Math.abs(changePct).toFixed(2)}%
+                          </span>
+                        </span>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -309,16 +361,22 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* Header right */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-              <Button variant="ghost" size="icon" className="h-8 w-8 relative" asChild>
+              <SyncStatusPill />
+              <LanguageSwitcher />
+              <Button variant="ghost" size="icon" className="h-8 w-8 relative" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"} asChild>
                 <Link href="/notifications">
                   <Bell className="w-4 h-4" />
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-[9px] font-bold text-primary-foreground flex items-center justify-center">3</span>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 rounded-full bg-primary text-[9px] font-bold text-primary-foreground flex items-center justify-center">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
                 </Link>
               </Button>
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 gap-2 px-2">
+                  <Button variant="ghost" size="sm" className="h-8 gap-2 px-2" aria-label="Account menu">
                     <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-primary-foreground">
                       {initials}
                     </div>
@@ -332,6 +390,10 @@ export default function Layout({ children }: LayoutProps) {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/analytics" className="flex items-center gap-2 cursor-pointer"><BarChart2 className="w-4 h-4" />Analytics</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={toggleTheme} className="cursor-pointer">
+                  {theme === "dark" ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
+                  {theme === "dark" ? "Light Mode" : "Dark Mode"}
                 </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -355,6 +417,10 @@ export default function Layout({ children }: LayoutProps) {
         <main className="flex-1 overflow-y-auto scrollbar-thin">
           {children}
         </main>
+
+        {/* Upgrade banner + grounded AI copilot */}
+        <PasskeyUpgradeBanner />
+        <CopilotPanel />
 
         {/* Mobile bottom nav — 5 most important pages */}
         <nav className="lg:hidden flex items-center justify-around border-t border-border bg-card pb-safe flex-shrink-0 px-2 pt-1">

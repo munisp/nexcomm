@@ -15,7 +15,8 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -53,6 +54,7 @@ from liveness.detector import LivenessDetector
 from liveness.face_matcher import get_face_matcher, SpoofType
 from liveness.session_store import save_session, load_session, delete_session, publish_liveness_event
 from kyb.screening import KYBScreeningEngine, StakeholderOnboarding, OPENSANCTIONS_API_KEY
+import application_store
 import logging
 logging.basicConfig(level=logging.INFO)
 _logger = logging.getLogger("nexcom-kyc")
@@ -79,7 +81,11 @@ liveness_detector = LivenessDetector()
 kyb_screener = KYBScreeningEngine()
 onboarding = StakeholderOnboarding()
 
-# ── In-memory stores (production: PostgreSQL) ──────────────────────────────────
+# ── Application stores ─────────────────────────────────────────────────────────
+# Applications are persisted to PostgreSQL when NEXCOM_PG_URL is set (see
+# application_store.py) and hydrated into these dicts at startup; otherwise the
+# service runs in explicitly-labelled memory mode (X-Storage: memory header,
+# degraded /readyz). No demo/seed data is ever injected.
 kyc_applications: dict[str, KYCApplication] = {}
 kyb_applications: dict[str, KYBApplication] = {}
 liveness_sessions: dict[str, dict] = {}  # session_id -> LivenessSession dict (in-memory fallback; PG used when NEXCOM_PG_URL is set)
@@ -91,361 +97,81 @@ UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "/tmp/kyc-uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-# ── Seed data ──────────────────────────────────────────────────────────────────
-def _seed_data() -> None:
-    """Seed demo KYC/KYB applications for testing."""
-    # Seed KYC applications
-    kyc_seeds = [
-        {
-            "id": "kyc-001",
-            "account_id": "ACC-001",
-            "stakeholder_type": StakeholderType.RETAIL_TRADER,
-            "status": KYCStatus.APPROVED,
-            "full_name": "Adeyemi Oluwaseun",
-            "email": "adeyemi@example.com",
-            "phone_number": "+234-801-234-5678",
-            "date_of_birth": "1990-03-15",
-            "nationality": "Nigerian",
-            "address": "42 Marina Road, Lagos Island, Lagos",
-            "bvn": "22345678901",
-            "nin": "12345678901",
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.1,
-            "approved_at": datetime(2025, 6, 15),
-        },
-        {
-            "id": "kyc-002",
-            "account_id": "ACC-002",
-            "stakeholder_type": StakeholderType.INSTITUTIONAL_INVESTOR,
-            "status": KYCStatus.UNDER_REVIEW,
-            "full_name": "Chukwuma Nnamdi",
-            "email": "chukwuma@capital.ng",
-            "phone_number": "+234-802-345-6789",
-            "date_of_birth": "1985-11-22",
-            "nationality": "Nigerian",
-            "address": "15 Broad Street, Victoria Island, Lagos",
-            "bvn": "33456789012",
-            "nin": "23456789012",
-            "risk_level": RiskLevel.MEDIUM,
-            "risk_score": 0.25,
-        },
-        {
-            "id": "kyc-003",
-            "account_id": "ACC-003",
-            "stakeholder_type": StakeholderType.RETAIL_TRADER,
-            "status": KYCStatus.LIVENESS_COMPLETE,
-            "full_name": "Fatima Abubakar",
-            "email": "fatima@gmail.com",
-            "phone_number": "+234-803-456-7890",
-            "date_of_birth": "1995-07-08",
-            "nationality": "Nigerian",
-            "address": "78 Independence Way, Kaduna",
-            "nin": "34567890123",
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.05,
-        },
-        {
-            "id": "kyc-004",
-            "account_id": "ACC-004",
-            "stakeholder_type": StakeholderType.API_CONSUMER,
-            "status": KYCStatus.DOCUMENT_UPLOADED,
-            "full_name": "Emeka Okafor",
-            "email": "emeka@fintech.ng",
-            "phone_number": "+234-804-567-8901",
-            "nationality": "Nigerian",
-            "address": "22 Allen Avenue, Ikeja, Lagos",
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.08,
-        },
-        {
-            "id": "kyc-005",
-            "account_id": "ACC-005",
-            "stakeholder_type": StakeholderType.RETAIL_TRADER,
-            "status": KYCStatus.REJECTED,
-            "full_name": "Ibrahim Musa",
-            "email": "ibrahim@mail.com",
-            "phone_number": "+234-805-678-9012",
-            "nationality": "Nigerian",
-            "address": "5 Ahmadu Bello Way, Abuja",
-            "risk_level": RiskLevel.HIGH,
-            "risk_score": 0.7,
-            "risk_factors": ["Document tampering detected", "Liveness check failed"],
-            "rejection_reason": "Failed document verification and liveness check",
-        },
-    ]
-
-    for seed in kyc_seeds:
-        app_obj = KYCApplication(**{
-            **seed,
-            "created_at": datetime(2025, 5, 1),
-            "updated_at": datetime(2025, 6, 15),
-        })
-        kyc_applications[seed["id"]] = app_obj
-
-    # Seed KYB applications
-    kyb_seeds = [
-        {
-            "id": "kyb-001",
-            "account_id": "ACC-BRK-001",
-            "stakeholder_type": StakeholderType.BROKER_DEALER,
-            "status": KYBStatus.APPROVED,
-            "business_name": "Stanbic Securities Ltd",
-            "registration_number": "RC-1234567",
-            "tax_id": "TIN-98765432",
-            "business_type": "Private Limited Company",
-            "incorporation_date": "2015-03-20",
-            "registered_address": "42 Marina Road, Lagos Island",
-            "business_address": "42 Marina Road, Lagos Island",
-            "industry": "Securities Trading",
-            "annual_revenue": "2,500,000,000",
-            "employee_count": 150,
-            "website": "https://stanbicsecurities.ng",
-            "aml_screening_passed": True,
-            "sanctions_screening_passed": True,
-            "pep_screening_passed": True,
-            "adverse_media_clear": True,
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.1,
-            "approved_at": datetime(2025, 4, 10),
-        },
-        {
-            "id": "kyb-002",
-            "account_id": "ACC-MM-001",
-            "stakeholder_type": StakeholderType.MARKET_MAKER,
-            "status": KYBStatus.UNDER_REVIEW,
-            "business_name": "Optiver Africa Trading",
-            "registration_number": "RC-2345678",
-            "tax_id": "TIN-87654321",
-            "business_type": "Foreign Subsidiary",
-            "incorporation_date": "2020-08-15",
-            "registered_address": "15 Broad Street, Victoria Island",
-            "business_address": "15 Broad Street, Victoria Island",
-            "industry": "Market Making",
-            "annual_revenue": "5,000,000,000",
-            "employee_count": 45,
-            "risk_level": RiskLevel.MEDIUM,
-            "risk_score": 0.3,
-        },
-        {
-            "id": "kyb-003",
-            "account_id": "ACC-ISS-001",
-            "stakeholder_type": StakeholderType.DIGITAL_ASSET_ISSUER,
-            "status": KYBStatus.PROCESSING,
-            "business_name": "Dangote Commodities Digital",
-            "registration_number": "RC-3456789",
-            "tax_id": "TIN-76543210",
-            "business_type": "Public Limited Company",
-            "incorporation_date": "2022-01-10",
-            "registered_address": "1 Alfred Rewane Road, Ikoyi",
-            "business_address": "1 Alfred Rewane Road, Ikoyi",
-            "industry": "Commodity Trading",
-            "annual_revenue": "50,000,000,000",
-            "employee_count": 500,
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.05,
-        },
-    ]
-
-    for seed in kyb_seeds:
-        app_obj = KYBApplication(**{
-            **seed,
-            "created_at": datetime(2025, 3, 1),
-            "updated_at": datetime(2025, 4, 10),
-        })
-        kyb_applications[seed["id"]] = app_obj
-
-    # Seed farmer KYC applications
-    farmer_seeds = [
-        {
-            "id": "kyc-f01",
-            "account_id": "ACC-FARM-001",
-            "stakeholder_type": StakeholderType.SMALLHOLDER_FARMER,
-            "status": KYCStatus.APPROVED,
-            "full_name": "Adamu Bello",
-            "email": "",
-            "phone_number": "+234-806-111-2222",
-            "nationality": "Nigerian",
-            "address": "Kura LGA, Kano State",
-            "farm_location_gps": "11.7704,8.4361",
-            "farm_size_hectares": 3.5,
-            "primary_crop": "Maize",
-            "cooperative_id": "kyb-coop-01",
-            "cooperative_vouched": True,
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.05,
-            "approved_at": datetime(2025, 7, 1),
-        },
-        {
-            "id": "kyc-f02",
-            "account_id": "ACC-FARM-002",
-            "stakeholder_type": StakeholderType.SMALLHOLDER_FARMER,
-            "status": KYCStatus.UNDER_REVIEW,
-            "full_name": "Hauwa Yakubu",
-            "email": "",
-            "phone_number": "+234-807-333-4444",
-            "nationality": "Nigerian",
-            "address": "Giwa LGA, Kaduna State",
-            "farm_location_gps": "11.2167,7.3333",
-            "farm_size_hectares": 1.2,
-            "primary_crop": "Sorghum",
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.08,
-        },
-        {
-            "id": "kyc-f03",
-            "account_id": "ACC-FARM-003",
-            "stakeholder_type": StakeholderType.COMMERCIAL_FARMER,
-            "status": KYCStatus.APPROVED,
-            "full_name": "Oluwaseun Adebayo",
-            "email": "seun@adebayofarms.ng",
-            "phone_number": "+234-808-555-6666",
-            "nationality": "Nigerian",
-            "address": "Iseyin, Oyo State",
-            "bvn": "44567890123",
-            "nin": "55678901234",
-            "farm_location_gps": "7.9667,3.5833",
-            "farm_size_hectares": 120.0,
-            "primary_crop": "Cocoa",
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.03,
-            "approved_at": datetime(2025, 6, 20),
-        },
-    ]
-    for seed in farmer_seeds:
-        app_obj = KYCApplication(**{**seed, "created_at": datetime(2025, 5, 1), "updated_at": datetime(2025, 7, 1)})
-        kyc_applications[seed["id"]] = app_obj
-
-    # Seed cooperative KYB applications
-    coop_seeds = [
-        {
-            "id": "kyb-coop-01",
-            "account_id": "ACC-COOP-001",
-            "stakeholder_type": StakeholderType.FARMER_COOPERATIVE,
-            "status": KYBStatus.APPROVED,
-            "business_name": "Kura Farmers Cooperative Society",
-            "registration_number": "COOP-KN-00123",
-            "tax_id": "TIN-COOP-001",
-            "business_type": "Cooperative Society",
-            "incorporation_date": "2018-06-15",
-            "registered_address": "Kura LGA, Kano State",
-            "business_address": "Kura LGA, Kano State",
-            "industry": "Agriculture",
-            "member_count": 245,
-            "aggregation_capacity_tonnes": 500.0,
-            "commodity_types": ["Maize", "Sorghum", "Millet"],
-            "coverage_lgas": ["Kura", "Garun Mallam", "Bunkure"],
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.08,
-            "approved_at": datetime(2025, 5, 1),
-        },
-        {
-            "id": "kyb-coop-02",
-            "account_id": "ACC-COOP-002",
-            "stakeholder_type": StakeholderType.FARMER_COOPERATIVE,
-            "status": KYBStatus.UNDER_REVIEW,
-            "business_name": "Iseyin Cocoa Producers Association",
-            "registration_number": "COOP-OY-00456",
-            "tax_id": "TIN-COOP-002",
-            "business_type": "Cooperative Society",
-            "incorporation_date": "2020-01-10",
-            "registered_address": "Iseyin, Oyo State",
-            "business_address": "Iseyin, Oyo State",
-            "industry": "Agriculture - Cash Crops",
-            "member_count": 89,
-            "aggregation_capacity_tonnes": 200.0,
-            "commodity_types": ["Cocoa", "Cashew"],
-            "coverage_lgas": ["Iseyin", "Itesiwaju"],
-            "risk_level": RiskLevel.LOW,
-            "risk_score": 0.1,
-        },
-    ]
-    for seed in coop_seeds:
-        app_obj = KYBApplication(**{**seed, "created_at": datetime(2025, 3, 1), "updated_at": datetime(2025, 5, 1)})
-        kyb_applications[seed["id"]] = app_obj
-
-    # Seed warehouse receipts
-    wr_seeds = [
-        WarehouseReceipt(
-            id="WR-00001", depositor_id="kyc-f01", depositor_name="Adamu Bello",
-            warehouse_id="WH-KN-001", warehouse_name="Kano Commodity Warehouse",
-            warehouse_location="Bompai Industrial Area, Kano",
-            commodity="Maize", commodity_category=CommodityCategory.GRAINS,
-            quantity_tonnes=12.5, quality_grade=CommodityGrade.GRADE_A,
-            unit_price=280000, total_value=3500000, currency="NGN",
-            status=WarehouseReceiptStatus.ACTIVE, tradeable=True,
-            deposit_date="2025-09-15", expiry_date="2026-03-15",
-        ),
-        WarehouseReceipt(
-            id="WR-00002", depositor_id="kyc-f03", depositor_name="Oluwaseun Adebayo",
-            warehouse_id="WH-OY-001", warehouse_name="Iseyin Cocoa Store",
-            warehouse_location="Iseyin, Oyo State",
-            commodity="Cocoa Beans", commodity_category=CommodityCategory.CASH_CROPS,
-            quantity_tonnes=5.0, quality_grade=CommodityGrade.PREMIUM,
-            unit_price=4500000, total_value=22500000, currency="NGN",
-            status=WarehouseReceiptStatus.ACTIVE, tradeable=True, collateralized=True,
-            collateral_bank_id="kyb-tfb-01",
-            deposit_date="2025-10-01", expiry_date="2026-04-01",
-        ),
-    ]
-    for wr in wr_seeds:
-        warehouse_receipts[wr.id] = wr
-
-    # Seed produce registrations
-    produce_seeds = [
-        ProduceRegistration(
-            id="PRD-00001", producer_id="kyc-f01", producer_name="Adamu Bello",
-            cooperative_id="kyb-coop-01", commodity="Maize",
-            commodity_category=CommodityCategory.GRAINS, variety="SAMMAZ-15",
-            estimated_quantity_tonnes=8.0, quality_grade=CommodityGrade.GRADE_A,
-            farm_location="Kura LGA, Kano State", farm_gps="11.7704,8.4361",
-            farm_size_hectares=3.5, planting_date="2025-06-15",
-            expected_harvest_date="2025-10-15", asking_price_per_tonne=280000,
-            status="harvested", listed_on_exchange=True,
-            warehouse_receipt_id="WR-00001",
-        ),
-        ProduceRegistration(
-            id="PRD-00002", producer_id="kyc-f03", producer_name="Oluwaseun Adebayo",
-            commodity="Cocoa Beans", commodity_category=CommodityCategory.CASH_CROPS,
-            variety="Amelonado", estimated_quantity_tonnes=5.0,
-            quality_grade=CommodityGrade.PREMIUM,
-            farm_location="Iseyin, Oyo State", farm_gps="7.9667,3.5833",
-            farm_size_hectares=120.0, planting_date="2025-03-01",
-            expected_harvest_date="2025-09-30", asking_price_per_tonne=4500000,
-            status="harvested", listed_on_exchange=True,
-            warehouse_receipt_id="WR-00002",
-        ),
-        ProduceRegistration(
-            id="PRD-00003", producer_id="kyc-f02", producer_name="Hauwa Yakubu",
-            commodity="Sorghum", commodity_category=CommodityCategory.GRAINS,
-            variety="SAMSORG-17", estimated_quantity_tonnes=2.0,
-            quality_grade=CommodityGrade.GRADE_B,
-            farm_location="Giwa LGA, Kaduna State", farm_gps="11.2167,7.3333",
-            farm_size_hectares=1.2, planting_date="2025-06-20",
-            expected_harvest_date="2025-11-01", asking_price_per_tonne=220000,
-            status="growing",
-        ),
-    ]
-    for p in produce_seeds:
-        produce_registrations[p.id] = p
-
-    # Seed agent profiles
-    agent_seeds = [
-        AgentProfile(
-            id="AGT-001", full_name="Musa Ibrahim", phone_number="+234-809-111-0001",
-            email="musa.agent@nexcom.ng", region="North West", lga="Kura",
-            state="Kano", farmers_onboarded=45, active=True, verified=True,
-        ),
-        AgentProfile(
-            id="AGT-002", full_name="Blessing Okonkwo", phone_number="+234-809-222-0002",
-            email="blessing.agent@nexcom.ng", region="South West", lga="Iseyin",
-            state="Oyo", farmers_onboarded=28, active=True, verified=True,
-        ),
-    ]
-    for a in agent_seeds:
-        agent_profiles[a.id] = a
+@app.on_event("startup")
+async def _init_application_store() -> None:
+    """Initialise Postgres persistence and hydrate in-memory views."""
+    await application_store.init_store()
+    if application_store.using_postgres():
+        for data in await application_store.load_all("kyc"):
+            try:
+                obj = KYCApplication(**data)
+                kyc_applications[obj.id] = obj
+            except Exception as exc:  # noqa: BLE001
+                _logger.error("Failed to hydrate KYC application: %s", exc)
+        for data in await application_store.load_all("kyb"):
+            try:
+                obj = KYBApplication(**data)
+                kyb_applications[obj.id] = obj
+            except Exception as exc:  # noqa: BLE001
+                _logger.error("Failed to hydrate KYB application: %s", exc)
+        _logger.info(
+            "Hydrated %d KYC and %d KYB applications from PostgreSQL",
+            len(kyc_applications), len(kyb_applications),
+        )
+    else:
+        _logger.warning(
+            "NEXCOM_PG_URL not set — KYC/KYB applications stored in MEMORY only "
+            "(data lost on restart). /readyz reports degraded."
+        )
 
 
-_seed_data()
+@app.on_event("startup")
+async def _warm_models() -> None:
+    """Pre-load heavy ML models at boot so the first request doesn't pay the
+    PaddleOCR/Docling/liveness initialisation cost (multi-second cold start).
+
+    Controlled by MODEL_WARMUP (default "1"). Runs in a background thread so
+    startup/readiness is not blocked; failures are logged and non-fatal —
+    engines fall back to lazy initialisation on first use, and /readyz keeps
+    reflecting storage readiness as before.
+    """
+    if os.environ.get("MODEL_WARMUP", "1") != "1":
+        _logger.info("MODEL_WARMUP disabled — models will lazy-load on first request")
+        return
+    import asyncio
+
+    def _warm() -> None:
+        for name, engine in (
+            ("paddle-ocr", ocr_engine),
+            ("docling-parser", doc_parser),
+            ("vlm-verifier", doc_verifier),
+            ("liveness-detector", liveness_detector),
+        ):
+            try:
+                init = getattr(engine, "_ensure_initialized", None)
+                if callable(init):
+                    init()
+                    _logger.info("model warmup: %s ready", name)
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning(
+                    "model warmup: %s failed (%s) — will lazy-load on first request", name, exc
+                )
+
+    asyncio.get_event_loop().run_in_executor(None, _warm)
+
+
+async def _persist_kyc(app_obj: KYCApplication) -> None:
+    try:
+        await application_store.persist("kyc", app_obj.id, app_obj.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        _logger.error("Failed to persist KYC application %s: %s", app_obj.id, exc)
+
+
+async def _persist_kyb(app_obj: KYBApplication) -> None:
+    try:
+        await application_store.persist("kyb", app_obj.id, app_obj.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        _logger.error("Failed to persist KYB application %s: %s", app_obj.id, exc)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -573,12 +299,30 @@ async def list_stakeholder_types():
 # KYC APPLICATIONS
 # ══════════════════════════════════════════════════════════════════════════════
 
+@app.get("/readyz")
+async def readyz():
+    """Readiness probe — degraded when applications are memory-only."""
+    degraded = not application_store.using_postgres()
+    payload = {
+        "status": "degraded" if degraded else "ready",
+        "service": "kyc-kyb",
+        "storage": application_store.storage_mode(),
+    }
+    if degraded:
+        payload["degraded_reason"] = (
+            "NEXCOM_PG_URL not set or unreachable — applications are stored in memory only"
+        )
+    return JSONResponse(status_code=200 if not degraded else 503, content=payload)
+
+
 @app.get("/api/v1/kyc/applications")
 async def list_kyc_applications(
+    response: Response,
     status: Optional[str] = None,
     stakeholder_type: Optional[str] = None,
 ):
     """List all KYC applications with optional filters."""
+    response.headers["X-Storage"] = application_store.storage_mode()
     apps = list(kyc_applications.values())
     if status:
         apps = [a for a in apps if a.status.value == status]
@@ -622,6 +366,7 @@ async def create_kyc_application(req: CreateKYCRequest):
         cooperative_id=req.cooperative_id,
     )
     kyc_applications[app_id] = app_obj
+    await _persist_kyc(app_obj)
     return {"success": True, "data": _serialize_kyc(app_obj)}
 
 
@@ -929,9 +674,11 @@ async def passive_liveness_check(
 
 @app.get("/api/v1/kyb/applications")
 async def list_kyb_applications(
+    response: Response,
     status: Optional[str] = None,
     stakeholder_type: Optional[str] = None,
 ):
+    response.headers["X-Storage"] = application_store.storage_mode()
     apps = list(kyb_applications.values())
     if status:
         apps = [a for a in apps if a.status.value == status]
@@ -979,6 +726,7 @@ async def create_kyb_application(req: CreateKYBRequest):
         coverage_lgas=req.coverage_lgas,
     )
     kyb_applications[app_id] = app_obj
+    await _persist_kyb(app_obj)
     return {"success": True, "data": _serialize_kyb(app_obj)}
 
 
@@ -1084,6 +832,7 @@ async def review_kyc_application(application_id: str, decision: ReviewDecision):
         raise HTTPException(status_code=400, detail="Decision must be 'approve' or 'reject'")
 
     app_obj.updated_at = datetime.utcnow()
+    await _persist_kyc(app_obj)
     return {"success": True, "data": _serialize_kyc(app_obj)}
 
 
@@ -1106,6 +855,7 @@ async def review_kyb_application(application_id: str, decision: ReviewDecision):
         raise HTTPException(status_code=400, detail="Decision must be 'approve' or 'reject'")
 
     app_obj.updated_at = datetime.utcnow()
+    await _persist_kyb(app_obj)
     return {"success": True, "data": _serialize_kyb(app_obj)}
 
 
@@ -1465,7 +1215,137 @@ def _get_challenge_instructions(challenge: LivenessChallenge) -> str:
     return instructions.get(challenge, "Follow the on-screen instructions")
 
 
+# ── Portal analysis alias (/analyse) ───────────────────────────────────────────
+# Contract expected by the TS portal (server/routers/kycAnalysisRouter.ts):
+#   POST /analyse  { document_url, selfie_url?, document_type_hint, application_id }
+#   → { success, ocr, document_analysis, selfie_analysis, passive_liveness,
+#       docling_analysis, overall_risk_level, overall_score, risk_flags, recommendation }
+# This delegates to the existing PaddleOCR / VLM-verifier / Docling / face-matcher
+# engines — it is a thin orchestration wrapper, not a stub.
+
+class AnalyseRequest(BaseModel):
+    document_url: str
+    selfie_url: Optional[str] = None
+    document_type_hint: Optional[str] = None
+    application_id: Optional[str] = None
+
+
+_DOC_TYPE_ALIASES = {
+    "national_id": DocumentType.NATIONAL_ID,
+    "nin_slip": DocumentType.NIN_SLIP,
+    "nin": DocumentType.NIN_SLIP,
+    "bvn": DocumentType.BVN_PRINTOUT,
+    "bvn_printout": DocumentType.BVN_PRINTOUT,
+    "passport": DocumentType.INTERNATIONAL_PASSPORT,
+    "international_passport": DocumentType.INTERNATIONAL_PASSPORT,
+    "drivers_license": DocumentType.DRIVERS_LICENSE,
+    "voters_card": DocumentType.VOTERS_CARD,
+    "utility_bill": DocumentType.UTILITY_BILL,
+    "bank_statement": DocumentType.BANK_STATEMENT,
+}
+
+
+async def _download_to_temp(url: str, suffix: str) -> str:
+    import httpx
+    import tempfile
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+    fd, path = tempfile.mkstemp(suffix=suffix, dir=UPLOAD_DIR)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(resp.content)
+    return path
+
+
+@app.post("/analyse")
+async def analyse_document(req: AnalyseRequest):
+    """Analyse an uploaded KYC document (alias used by the TypeScript portal)."""
+    doc_path: Optional[str] = None
+    try:
+        doc_type = _DOC_TYPE_ALIASES.get(
+            (req.document_type_hint or "").strip().lower(), DocumentType.NATIONAL_ID
+        )
+        suffix = os.path.splitext(req.document_url.split("?")[0])[1] or ".jpg"
+        doc_path = await _download_to_temp(req.document_url, suffix)
+
+        # DOCAI: delegate to the consolidated docai pipeline
+        # (docai/ocr.py + docai/vlm.py + docai/structure.py). Fail-closed:
+        # when OCR is unavailable the pipeline returns success=False (503),
+        # never a fabricated analysis.
+        from docai.api import run_document_pipeline, _analyse_selfie_async
+
+        result = run_document_pipeline(doc_path, doc_type,
+                                       application_id=req.application_id)
+        if not result.get("success"):
+            return JSONResponse(status_code=503, content=result)
+
+        # Optional selfie passive-liveness / face-match (async matcher)
+        if req.selfie_url:
+            selfie_path: Optional[str] = None
+            try:
+                selfie_path = await _download_to_temp(req.selfie_url, ".jpg")
+                selfie_analysis, passive_liveness = await _analyse_selfie_async(
+                    selfie_path, doc_path, doc_type)
+                result["selfie_analysis"] = selfie_analysis
+                result["passive_liveness"] = passive_liveness
+                if passive_liveness.get("is_live") is False and \
+                        "selfie_spoof_suspected" not in result["risk_flags"]:
+                    result["risk_flags"].append("selfie_spoof_suspected")
+                    result["recommendation"] = "manual_review"
+                    result["overall_risk_level"] = "high"
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning("Selfie analysis failed: %s", exc)
+                result["selfie_analysis"] = {"error": str(exc)}
+                result["passive_liveness"] = {"error": str(exc)}
+            finally:
+                if selfie_path:
+                    try:
+                        os.unlink(selfie_path)
+                    except OSError:
+                        pass
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        _logger.exception("analyse failed for %s", req.document_url)
+        # Honest failure — the portal surfaces this instead of a fake pass.
+        return JSONResponse(
+            status_code=502,
+            content={
+                "success": False,
+                "error": f"analysis_failed: {exc}",
+                "application_id": req.application_id,
+            },
+        )
+    finally:
+        if doc_path:
+            try:
+                os.unlink(doc_path)
+            except OSError:
+                pass
+
+
+# ── FIX-KYB: persistent KYB screening API (POST/GET /api/v1/kyb/screen) ──────
+from kyb.api import router as kyb_api_router  # noqa: E402  # FIX-KYB
+app.include_router(kyb_api_router)  # FIX-KYB
+# ── end FIX-KYB ──
+
+# ── DOCAI: consolidated document-AI pipeline (OCR/structure/VLM/liveness) ──
+from docai.api import router as docai_router  # noqa: E402  # DOCAI
+app.include_router(docai_router)  # DOCAI
+# ── end DOCAI ───────────────────────────────────────────────────────────────
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", "3002"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    workers = int(os.environ.get("UVICORN_WORKERS", "2"))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        workers=workers,
+        timeout_keep_alive=30,
+        limit_concurrency=200,
+    )

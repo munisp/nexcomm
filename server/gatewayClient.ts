@@ -11,36 +11,66 @@
  * Calls return an explicit unavailable result when the gateway cannot respond.
  */
 
+import { logTbTransfer } from "./tbTransferLog";
+import type { Method } from "axios";
+import { httpRequest, wrapWithBreaker, CircuitOpenError } from "./_core/httpClient";
+
 const GATEWAY_BASE = process.env.GATEWAY_URL ?? "http://localhost:8200";
 const GATEWAY_TIMEOUT_MS = 5000;
+
+/**
+ * Raw gateway call over the shared keep-alive axios client (see
+ * server/_core/httpClient.ts). Retries once on connection resets / 5xx for
+ * idempotent methods; POSTs are never retried (ledger transfers must not
+ * double-post — idempotency is handled at the application layer).
+ * Throws on transport errors and 5xx so the circuit breaker can count them.
+ */
+async function rawGatewayFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T | null> {
+  const method = (options.method ?? "GET").toUpperCase();
+  const res = await httpRequest<{ success: boolean; data: T }>({
+    method: method as Method,
+    url: `${GATEWAY_BASE}${path}`,
+    timeout: GATEWAY_TIMEOUT_MS,
+    headers: {
+      "Content-Type": "application/json",
+      ...((options.headers ?? {}) as Record<string, string>),
+    },
+    data: typeof options.body === "string" ? (JSON.parse(options.body) as unknown) : undefined,
+  });
+  if (res.status < 200 || res.status >= 300) {
+    console.warn(`[Gateway] ${method} ${path} → ${res.status}`);
+    return null;
+  }
+  return res.data?.data ?? null;
+}
+
+/** Circuit breaker: after 5 consecutive failures, fast-fail for 30s. */
+const brokenGatewayFetch = wrapWithBreaker("gateway", rawGatewayFetch, {
+  failureThreshold: 5,
+  resetMs: 30_000,
+});
 
 async function gatewayFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T | null> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), GATEWAY_TIMEOUT_MS);
-    const res = await fetch(`${GATEWAY_BASE}${path}`, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers ?? {}),
-      },
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      console.warn(`[Gateway] ${options.method ?? "GET"} ${path} → ${res.status}`);
-      return null;
-    }
-    const json = (await res.json()) as { success: boolean; data: T };
-    return json.data ?? null;
+    return await brokenGatewayFetch<T>(path, options);
   } catch (err: unknown) {
-    if ((err as Error)?.name === "AbortError") {
-      console.warn(`[Gateway] Timeout on ${path}`);
+    if (err instanceof CircuitOpenError) {
+      console.warn(`[Gateway] Circuit open — fast-failing ${path}`);
     } else {
-      console.warn(`[Gateway] Unavailable (${path}):`, (err as Error)?.message);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status) {
+        console.warn(`[Gateway] ${options.method ?? "GET"} ${path} → ${status}`);
+      } else if ((err as Error)?.name === "AbortError" || (err as { code?: string })?.code === "ECONNABORTED") {
+        console.warn(`[Gateway] Timeout on ${path}`);
+      } else {
+        console.warn(`[Gateway] Unavailable (${path}):`, (err as Error)?.message);
+      }
     }
     return null;
   }
@@ -443,10 +473,26 @@ export async function issueRefund(params: {
   reason: string;
   originalTxId: string;
 }): Promise<LedgerTransfer | null> {
-  return gatewayFetch<LedgerTransfer>("/api/v1/ledger/refund", {
+  const transfer = await gatewayFetch<LedgerTransfer>("/api/v1/ledger/refund", {
     method: "POST",
     body: JSON.stringify({ ...params, code: 16 }),
   });
+  if (transfer) {
+    // Real audit trail: tb_transfer_log (was an orphan, never-written table).
+    await logTbTransfer({
+      transferId: transfer.id,
+      debitAccountId: transfer.debitAccountId ?? "exchange-refund",
+      creditAccountId: transfer.creditAccountId ?? `user-settlement-${params.userId}`,
+      amount: Math.round(params.amount * 100),
+      currency: params.currency,
+      userId: Number.isNaN(Number(params.userId)) ? null : Number(params.userId),
+      referenceId: params.originalTxId,
+      referenceType: "refund",
+      code: 16,
+      status: "COMMITTED",
+    });
+  }
+  return transfer;
 }
 
 // ─── Scenario 17: Stripe top-up ───────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   ActivityIndicator, Dimensions,
@@ -27,6 +27,12 @@ export default function AnalyticsScreen() {
   const { data: topMovers } = trpc.analytics.getTopMovers.useQuery(
     { limit: 5 },
     { retry: 1, staleTime: 30_000 }
+  );
+
+  // Stable navigation callback so memoized mover rows don't re-render.
+  const openSymbol = useCallback(
+    (symbol?: string) => symbol && router.push(`/trading/${symbol}`),
+    []
   );
 
   return (
@@ -70,23 +76,8 @@ export default function AnalyticsScreen() {
 
           {/* Top Movers */}
           <Text style={styles.sectionTitle}>Top Movers</Text>
-          {(topMovers ?? []).map((item, i) => (
-            <TouchableOpacity
-              key={item.symbol ?? i}
-              style={styles.moverRow}
-              onPress={() => router.push(`/trading/${item.symbol}`)}
-            >
-              <View style={styles.moverLeft}>
-                <Text style={styles.moverSymbol}>{item.symbol}</Text>
-                <Text style={styles.moverName}>{item.name}</Text>
-              </View>
-              <View style={styles.moverRight}>
-                <Text style={styles.moverPrice}>₦{(item.price ?? 0).toLocaleString()}</Text>
-                <Text style={[styles.moverChange, { color: (item.change ?? 0) >= 0 ? COLORS.positive : COLORS.negative }]}>
-                  {(item.change ?? 0) >= 0 ? '+' : ''}{(item.change ?? 0).toFixed(2)}%
-                </Text>
-              </View>
-            </TouchableOpacity>
+          {((topMovers ?? []) as MoverItem[]).map((item, i) => (
+            <MoverRow key={item.symbol ?? i} item={item} onPress={openSymbol} />
           ))}
 
           {/* Market Breadth */}
@@ -102,16 +93,48 @@ export default function AnalyticsScreen() {
   );
 }
 
-function StatCard({ label, value, prefix = '', suffix = '' }: { label: string; value: number; prefix?: string; suffix?: string }) {
+interface MoverItem {
+  symbol?: string;
+  name?: string;
+  price?: number;
+  change?: number;
+}
+
+/** Memoized top-mover row: period switching re-renders the screen; rows
+ * whose data did not change skip reconciliation. */
+const MoverRow = memo(function MoverRow({ item, onPress }: { item: MoverItem; onPress: (symbol?: string) => void }) {
+  const change = item.change ?? 0;
+  return (
+    <TouchableOpacity
+      style={styles.moverRow}
+      onPress={() => onPress(item.symbol)}
+    >
+      <View style={styles.moverLeft}>
+        <Text style={styles.moverSymbol}>{item.symbol}</Text>
+        <Text style={styles.moverName}>{item.name}</Text>
+      </View>
+      <View style={styles.moverRight}>
+        <Text style={styles.moverPrice}>₦{(item.price ?? 0).toLocaleString()}</Text>
+        <Text style={[styles.moverChange, { color: change >= 0 ? POSITIVE : NEGATIVE }]}>
+          {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+/** Memoized: stat cards re-render only when their own value changes. */
+const StatCard = memo(function StatCard({ label, value, prefix = '', suffix = '' }: { label: string; value: number; prefix?: string; suffix?: string }) {
   return (
     <View style={styles.statCard}>
       <Text style={styles.statValue}>{prefix}{value.toLocaleString()}{suffix}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
-}
+});
 
-function BreadthBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+/** Memoized breadth bar (see StatCard note). */
+const BreadthBar = memo(function BreadthBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
   const pct = total > 0 ? (value / total) * 100 : 0;
   return (
     <View style={styles.breadthRow}>
@@ -122,7 +145,7 @@ function BreadthBar({ label, value, total, color }: { label: string; value: numb
       <Text style={styles.breadthValue}>{value}</Text>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },

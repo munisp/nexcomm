@@ -84,8 +84,15 @@ async fn main() -> anyhow::Result<()> {
 
     dotenvy::dotenv().ok();
 
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom".to_string());
+    // DATABASE_URL: required in production (fail fast); DEV-ONLY fallback otherwise.
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        if std::env::var("APP_ENV").map(|e| e == "production").unwrap_or(false)
+            || std::env::var("ENVIRONMENT").map(|e| e == "production").unwrap_or(false)
+        {
+            panic!("FATAL: DATABASE_URL is required in production - no default DB credentials exist");
+        }
+        "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom".to_string() // DEV-ONLY
+    });
     let redis_url = std::env::var("REDIS_URL")
         .unwrap_or_else(|_| "redis://localhost:6379".to_string());
     let kafka_brokers = std::env::var("KAFKA_BROKERS")
@@ -140,6 +147,28 @@ async fn ussd_callback(
 ) -> impl IntoResponse {
     metrics::USSD_REQUESTS_TOTAL.inc();
     let timer = metrics::USSD_RESPONSE_DURATION.start_timer();
+
+    // Replay protection: AT retransmits callbacks on timeout. Deduplicate on
+    // (session_id, accumulated text) via Redis SET NX with the session TTL as
+    // the replay window (AT USSD payloads carry no event id or timestamp, so
+    // the session-step pair is the event identity and the TTL is the window).
+    let mut dedup_store = state.sessions.clone();
+    match dedup_store.mark_request_once(&req.session_id, &req.text).await {
+        Ok(false) => {
+            info!("Duplicate AT USSD callback ignored: session={} text={:?}", req.session_id, req.text);
+            metrics::USSD_ERRORS_TOTAL.inc();
+            return (
+                StatusCode::OK,
+                "END Duplicate request ignored. Please continue your session.".to_string(),
+            );
+        }
+        Ok(true) => {}
+        Err(e) => {
+            // Dedup store unavailable: fail open to keep the USSD service
+            // reachable, but log loudly so the gap is visible.
+            error!("USSD dedup store unavailable; processing without replay protection: {}", e);
+        }
+    }
 
     let result = handle_input(&state, &req).await;
 

@@ -138,7 +138,8 @@ const ProgressSteps = ({ currentStep, totalSteps }: { currentStep: number; total
   </View>
 );
 
-const TransferCard = ({ transfer, onPress }: { transfer: Transfer; onPress: () => void }) => (
+// eslint-disable-next-line react/display-name
+const TransferCard = React.memo(({ transfer, onPress }: { transfer: Transfer; onPress: () => void }) => (
   <TouchableOpacity style={styles.transferCard} onPress={onPress}>
     <View style={styles.transferCardHeader}>
       <View>
@@ -167,7 +168,7 @@ const TransferCard = ({ transfer, onPress }: { transfer: Transfer; onPress: () =
     )}
     <Text style={styles.transferDate}>{new Date(transfer.createdAt).toLocaleString()}</Text>
   </TouchableOpacity>
-);
+));
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
@@ -396,6 +397,11 @@ export default function CrossBorderFxScreen() {
         <FlatList
           data={transfers}
           keyExtractor={(item) => item.id}
+          windowSize={7}
+          maxToRenderPerBatch={8}
+          initialNumToRender={10}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
           ListEmptyComponent={

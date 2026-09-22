@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 LAKEHOUSE_BASE_PATH = os.getenv("LAKEHOUSE_BASE_PATH", "/data/lakehouse")
 
 
+class LakehouseUnavailableError(RuntimeError):
+    """Raised when no lakehouse query engine can serve a request.
+
+    Callers must surface this honestly (e.g. HTTP 503) instead of fabricating
+    results.
+    """
+
+
 class LakehouseClient:
     """Unified interface to the Lakehouse data platform."""
 
@@ -117,6 +125,55 @@ class LakehouseClient:
                 logger.error("[Lakehouse/DataFusion] Query failed: %s", exc)
         # Fallback: PyArrow parquet scan
         return self._pyarrow_query(query)
+
+    def query_strict(self, query: str) -> tuple[list[dict], str]:
+        """Execute an analytical query, returning (rows, engine_name).
+
+        Unlike datafusion_query(), this raises LakehouseUnavailableError when
+        no engine can serve the query or the backing table does not exist —
+        callers must never substitute fabricated rows.
+        """
+        if self._datafusion_available and self._datafusion_ctx is not None:
+            try:
+                batches = self._datafusion_ctx.sql(query).collect()
+                rows: list[dict] = []
+                for batch in batches:
+                    rows.extend(batch.to_pylist())
+                return rows, "Apache DataFusion"
+            except Exception as exc:
+                raise LakehouseUnavailableError(f"DataFusion query failed: {exc}") from exc
+
+        # PyArrow fallback over Parquet/Delta files on disk.
+        import re
+        try:
+            import pyarrow.dataset as ds
+        except ImportError as exc:
+            raise LakehouseUnavailableError(
+                "no lakehouse query engine available (datafusion and pyarrow both missing)"
+            ) from exc
+
+        m = re.search(r"FROM\s+([A-Za-z0-9_.]+)", query, re.IGNORECASE)
+        if not m:
+            raise LakehouseUnavailableError("cannot determine table name from query")
+        table_name = m.group(1)
+        candidates = [
+            f"{LAKEHOUSE_BASE_PATH}/{table_name.replace('.', '/')}",
+            f"{LAKEHOUSE_BASE_PATH}/gold/{table_name}",
+            f"{LAKEHOUSE_BASE_PATH}/silver/{table_name}",
+            f"{LAKEHOUSE_BASE_PATH}/bronze/{table_name}",
+        ]
+        path = next((p for p in candidates if os.path.exists(p)), None)
+        if path is None:
+            raise LakehouseUnavailableError(
+                f"lakehouse table '{table_name}' not found under {LAKEHOUSE_BASE_PATH}"
+            )
+        limit_m = re.search(r"LIMIT\s+(\d+)", query, re.IGNORECASE)
+        limit = int(limit_m.group(1)) if limit_m else 1000
+        try:
+            dataset = ds.dataset(path, format="parquet")
+            return dataset.head(limit).to_pylist(), "PyArrow (parquet scan)"
+        except Exception as exc:
+            raise LakehouseUnavailableError(f"lakehouse scan of '{table_name}' failed: {exc}") from exc
 
     def _pyarrow_query(self, query: str) -> list[dict]:
         """Minimal PyArrow-based query fallback (SELECT * FROM table LIMIT n)."""

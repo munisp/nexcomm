@@ -1,0 +1,140 @@
+{
+  "stages": {
+    "generate": {
+      "module": "mlplatform.data.synthetic_nigeria",
+      "status": "ok",
+      "argv": [
+        "--transactions",
+        "20000",
+        "--out",
+        "/tmp/mlval-lake/bronze",
+        "--seed",
+        "42"
+      ],
+      "stdout_tail": "  users: 5000 rows -> /tmp/mlval-lake/bronze/users/\n  devices: 6255 rows -> /tmp/mlval-lake/bronze/devices/\n  prices_daily: 1810 rows -> /tmp/mlval-lake/bronze/prices_daily/\n  transactions: 20000 rows -> /tmp/mlval-lake/bronze/transactions/\n  fraud_labels: 376 rows -> /tmp/mlval-lake/bronze/fraud_labels/\n"
+    },
+    "bronze": {
+      "module": "mlplatform.lakehouse.bronze",
+      "status": "ok",
+      "argv": [
+        "--base-path",
+        "/tmp/mlval-lake"
+      ],
+      "stdout_tail": ""
+    },
+    "silver": {
+      "module": "mlplatform.lakehouse.silver",
+      "status": "ok",
+      "argv": [
+        "--base-path",
+        "/tmp/mlval-lake"
+      ],
+      "stdout_tail": "  silver/transactions: 20000 rows\n  silver/users: 5000 rows\n  silver/devices: 6255 rows\n  silver/prices_daily: 1810 rows\n  silver/fraud_labels: 376 rows\n"
+    },
+    "gold": {
+      "module": "mlplatform.lakehouse.gold",
+      "status": "ok",
+      "argv": [
+        "--base-path",
+        "/tmp/mlval-lake"
+      ],
+      "stdout_tail": "  gold/price_features: 1810 rows\n  gold/volume_features: 1577 rows\n  gold/risk_features: 1810 rows\n  gold/user_behavior: 4906 rows\n  gold/graph_edges: 19754 rows\n  gold/price_sequences: 1600 rows\n  gold/serving_features: 4906 rows\n"
+    },
+    "train": {
+      "fraud": {
+        "model": "fraud",
+        "module": "mlplatform.training.train_fraud",
+        "status": "ok",
+        "argv": [
+          "--base-path",
+          "/tmp/mlval-lake",
+          "--epochs",
+          "6"
+        ],
+        "stdout_tail": "{'metrics': {'auc': 0.977285083248386, 'pr_auc': 0.6577369798876938, 'f1': 0.42443729903536975, 'precision': 0.2796610169491525, 'recall': 0.88, 'accuracy': 0.9552388097024256, 'val_size': 3999, 'train_size': 16001}, 'version': 'v1'}\n"
+      },
+      "credit": {
+        "model": "credit",
+        "module": "mlplatform.training.train_credit",
+        "status": "ok",
+        "argv": [
+          "--base-path",
+          "/tmp/mlval-lake",
+          "--epochs",
+          "6"
+        ],
+        "stdout_tail": "{'metrics': {'rmse': 46.03536664198197, 'mae': 33.65351672363281, 'default_auc': 0.9420202065525468, 'default_pr_auc': 0.8927764599767042, 'default_f1': 0.8620689655172413, 'default_precision': 0.9541984732824428, 'default_recall': 0.7861635220125787, 'default_accuracy': 0.96, 'baseline_rmse': 57.822757720947266}, 'version': 'v1'}\n"
+      },
+      "price": {
+        "model": "price",
+        "module": "mlplatform.training.train_price",
+        "status": "ok",
+        "argv": [
+          "--base-path",
+          "/tmp/mlval-lake",
+          "--epochs",
+          "6"
+        ],
+        "stdout_tail": "{'metrics': {'rmse': 0.011296931678243683, 'mae': 0.009030193282019284, 'nll': 1.402843713760376, 'target_scale': 0.011469997465610504, 'baseline_rmse': 0.011352254077792168, 'mean_pred_std': 0.011461077257990837}, 'version': 'v1'}\n"
+      },
+      "graph": {
+        "model": "graph",
+        "module": "mlplatform.training.train_gnn",
+        "status": "ok",
+        "argv": [
+          "--base-path",
+          "/tmp/mlval-lake",
+          "--epochs",
+          "6"
+        ],
+        "stdout_tail": "{'metrics': {'auc': 0.7078110842645727, 'pr_auc': 0.08202963792403717, 'f1': 0.0867579908675799, 'precision': 0.04567307692307692, 'recall': 0.8636363636363636, 'accuracy': 0.358974358974359, 'n_nodes': 30773, 'n_edges': 119868, 'val_size': 1248}, 'version': 'v1'}\n"
+      }
+    },
+    "promotion": {
+      "fraud": {
+        "model": "fraud",
+        "status": "no_candidate",
+        "champion_version": "v1"
+      },
+      "credit": {
+        "model": "credit",
+        "status": "no_candidate",
+        "champion_version": "v1"
+      },
+      "price": {
+        "model": "price",
+        "status": "no_candidate",
+        "champion_version": "v1"
+      },
+      "graph": {
+        "model": "graph",
+        "status": "no_candidate",
+        "champion_version": "v1"
+      }
+    },
+    "drift_baselines": {
+      "fraud": {
+        "model": "fraud",
+        "status": "exists",
+        "path": "/tmp/mlval-reg/fraud/v1/reference_stats.json"
+      },
+      "credit": {
+        "model": "credit",
+        "status": "exists",
+        "path": "/tmp/mlval-reg/credit/v1/reference_stats.json"
+      },
+      "price": {
+        "model": "price",
+        "status": "exists",
+        "path": "/tmp/mlval-reg/price/v1/reference_stats.json"
+      },
+      "graph": {
+        "model": "graph",
+        "status": "exists",
+        "path": "/tmp/mlval-reg/graph/v1/reference_stats.json"
+      }
+    }
+  },
+  "lakehouse_path": "/tmp/mlval-lake",
+  "elapsed_seconds": 112.9
+}

@@ -10,6 +10,7 @@ import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { submitOrder, cancelOrder, getMarketDepth } from "../matchingEngineClient";
 import { writeAuditLog } from "../audit";
+import { requireKycApproved } from "../pbac";
 
 const TE_URL = process.env.TRADING_ENGINE_URL ?? "http://localhost:8001";
 const TIMEOUT_MS = 3000;
@@ -36,7 +37,7 @@ export const tradingEngineRouter = router({
   }),
 
   /** Submit an order via the Go trading engine (FIX protocol routing) */
-  submitOrder: protectedProcedure
+  submitOrder: requireKycApproved
     .input(z.object({
       symbol: z.string().trim(),
       side: z.enum(["BUY", "SELL"]),

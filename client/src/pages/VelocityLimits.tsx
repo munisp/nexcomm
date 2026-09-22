@@ -1,5 +1,4 @@
 import { useState } from "react";
-import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,7 +71,7 @@ export default function VelocityLimits() {
 
   if (allLimitsLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="max-w-4xl mx-auto space-y-6 p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -250,6 +249,6 @@ export default function VelocityLimits() {
           </DialogContent>
         </Dialog>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

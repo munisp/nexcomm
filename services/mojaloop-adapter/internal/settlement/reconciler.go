@@ -42,13 +42,24 @@ type Reconciler struct {
 	logger     *slog.Logger
 }
 
+// outboundTransport is a process-wide tuned HTTP transport for settlement
+// callback delivery (connection reuse, bounded handshake).
+var outboundTransport = &http.Transport{
+	MaxIdleConns:          100,
+	MaxIdleConnsPerHost:   32,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   5 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
+
 // NewReconciler creates a Reconciler that will POST committed transfers to
 // portalURL/api/internal/mojaloop/settlement-callback.
 func NewReconciler(portalURL string, logger *slog.Logger) *Reconciler {
 	return &Reconciler{
 		portalURL: portalURL,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Transport: outboundTransport,
+			Timeout:   10 * time.Second,
 		},
 		logger: logger,
 	}

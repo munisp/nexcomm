@@ -52,14 +52,23 @@ type Client struct {
 	tc           temporalclient.Client
 	workers      []worker.Worker
 	host         string
+	activities   *Activities
 	connected    bool
 	fallbackMode bool
 	mu           sync.RWMutex
 }
 
 // NewClient creates a Temporal client that connects via the official SDK.
-func NewClient(host string) *Client {
+// An optional pre-wired Activities instance (with TigerBeetle/KYC dependencies)
+// may be supplied; otherwise a fail-closed zero-dependency set is used, in
+// which ledger/KYC activities return errors instead of faking success.
+func NewClient(host string, acts ...*Activities) *Client {
 	c := &Client{host: host}
+	if len(acts) > 0 && acts[0] != nil {
+		c.activities = acts[0]
+	} else {
+		c.activities = NewActivities(nil, "")
+	}
 	c.connect()
 	return c
 }
@@ -115,7 +124,7 @@ func (c *Client) startWorkers() {
 		},
 	}
 
-	activities := &Activities{}
+	activities := c.activities
 
 	for _, q := range queues {
 		w := worker.New(c.tc, q.name, worker.Options{
@@ -627,7 +636,7 @@ func MarginCallWorkflow(ctx workflow.Context, input MarginCallInput) error {
 	if !gracePeriodExpired {
 		// User topped up — verify and close margin call
 		var stillDeficient bool
-		_ = workflow.ExecuteActivity(ctx, activities.VerifyMarginTopUp, input.UserID, topUpSignal.Amount).Get(ctx, &stillDeficient)
+		_ = workflow.ExecuteActivity(ctx, activities.VerifyMarginTopUp, input, topUpSignal.Amount).Get(ctx, &stillDeficient)
 		if !stillDeficient {
 			_ = workflow.ExecuteActivity(ctx, activities.CloseMarginCall, input.UserID, "topped-up").Get(ctx, nil)
 			logger.Info("Margin call resolved by top-up", "userId", input.UserID)

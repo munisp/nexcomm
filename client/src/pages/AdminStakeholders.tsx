@@ -33,6 +33,7 @@ import {
   FileText,
   Eye,
   Download,
+  ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -41,7 +42,7 @@ import { PageSkeleton } from "@/components/PageSkeleton";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type KycStatus = "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED";
-type TabKey = "farmer" | "trader" | "broker" | "warehouseOp" | "marketMaker";
+type TabKey = "farmer" | "trader" | "broker" | "warehouseOp" | "marketMaker" | "fieldAgent";
 
 interface TabConfig {
   key: TabKey;
@@ -56,6 +57,7 @@ const TABS: TabConfig[] = [
   { key: "broker", label: "Brokers", icon: <Building2 className="w-4 h-4" />, color: "text-purple-400" },
   { key: "warehouseOp", label: "Warehouse Ops", icon: <Warehouse className="w-4 h-4" />, color: "text-orange-400" },
   { key: "marketMaker", label: "Market Makers", icon: <BarChart3 className="w-4 h-4" />, color: "text-yellow-400" },
+  { key: "fieldAgent", label: "Field Agents", icon: <ClipboardCheck className="w-4 h-4" />, color: "text-cyan-400" },
 ];
 
 function KycBadge({ status }: { status: KycStatus }) {
@@ -878,12 +880,144 @@ function CrossStakeholderSummary() {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
+// ── Field Agent Tab ────────────────────────────────────────────────────────────
+type AgentStatus = "PENDING" | "ACTIVE" | "SUSPENDED" | "TERMINATED";
+
+function AgentStatusBadge({ status }: { status: AgentStatus }) {
+  const styles: Record<AgentStatus, string> = {
+    PENDING: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
+    ACTIVE: "bg-positive/10 text-positive border-positive/30",
+    SUSPENDED: "bg-orange-500/10 text-orange-400 border-orange-500/30",
+    TERMINATED: "bg-red-500/10 text-red-400 border-red-500/30",
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${styles[status]}`}>
+      {status}
+    </span>
+  );
+}
+
+function FieldAgentTab() {
+  const [filter, setFilter] = useState<AgentStatus | "ALL">("PENDING");
+  const utils = trpc.useUtils();
+
+  const { data, isLoading, refetch } = trpc.fieldAgent.adminListFieldAgents.useQuery({
+    status: filter,
+    limit: 50,
+  });
+  const reviewMutation = trpc.fieldAgent.adminReviewFieldAgent.useMutation({
+    onSuccess: (res) => {
+      toast.success(`Agent ${res.status === "ACTIVE" ? "approved" : res.status.toLowerCase()}`);
+      utils.fieldAgent.adminListFieldAgents.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const onApprove = (agentId: number) => reviewMutation.mutate({ agentId, action: "APPROVE" });
+  const onSuspend = (agentId: number) => {
+    const reason = window.prompt("Suspension reason (optional):") ?? undefined;
+    reviewMutation.mutate({ agentId, action: "SUSPEND", reason });
+  };
+  const onTerminate = (agentId: number) => {
+    const reason = window.prompt("Termination reason (required):");
+    if (!reason) {
+      toast.error("A reason is required to terminate a field agent");
+      return;
+    }
+    reviewMutation.mutate({ agentId, action: "TERMINATE", reason });
+  };
+
+  const agents = data?.agents ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          {(["PENDING", "ACTIVE", "SUSPENDED", "TERMINATED", "ALL"] as const).map((st) => (
+            <button
+              key={st}
+              onClick={() => setFilter(st)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                filter === st ? "bg-muted text-white" : "text-muted-foreground hover:bg-muted/40"
+              }`}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+        <Button size="sm" variant="outline" onClick={() => refetch()} className="gap-1.5">
+          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+        </Button>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-xs text-muted-foreground">
+              <th className="px-4 py-3">Agent</th>
+              <th className="px-4 py-3">Code</th>
+              <th className="px-4 py-3">State</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 text-right">Farmers</th>
+              <th className="px-4 py-3 text-right">Loans</th>
+              <th className="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading…</td></tr>
+            ) : agents.length === 0 ? (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No field agents in this state</td></tr>
+            ) : agents.map((a) => (
+              <tr key={a.id} className="border-b border-border/50 hover:bg-muted/20">
+                <td className="px-4 py-3">
+                  <div className="font-medium text-foreground">{a.fullName}</div>
+                  <div className="text-xs text-muted-foreground">{a.phone}</div>
+                </td>
+                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{a.agentCode}</td>
+                <td className="px-4 py-3 text-muted-foreground">{a.stateOfOperation}</td>
+                <td className="px-4 py-3"><AgentStatusBadge status={a.status as AgentStatus} /></td>
+                <td className="px-4 py-3 text-right">{a.totalFarmersOnboarded}</td>
+                <td className="px-4 py-3 text-right">{a.totalLoansOriginated}</td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-2">
+                    {(a.status === "PENDING" || a.status === "SUSPENDED") && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-positive border-positive/30"
+                        disabled={reviewMutation.isPending} onClick={() => onApprove(a.id)}>
+                        <CheckCircle2 className="w-3 h-3 mr-1" />Approve
+                      </Button>
+                    )}
+                    {a.status === "ACTIVE" && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-orange-400 border-orange-500/30"
+                        disabled={reviewMutation.isPending} onClick={() => onSuspend(a.id)}>
+                        <Clock className="w-3 h-3 mr-1" />Suspend
+                      </Button>
+                    )}
+                    {a.status !== "TERMINATED" && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-red-400 border-red-500/30"
+                        disabled={reviewMutation.isPending} onClick={() => onTerminate(a.id)}>
+                        <XCircle className="w-3 h-3 mr-1" />Terminate
+                      </Button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">{data?.total ?? 0} agent(s) · approve → ACTIVE, suspend/terminate with reason recorded in the audit log.</p>
+    </div>
+  );
+}
+
 const TAB_COMPONENTS: Record<TabKey, React.ComponentType> = {
   farmer: FarmerTab,
   trader: TraderTab,
   broker: BrokerTab,
   warehouseOp: WarehouseOpTab,
   marketMaker: MarketMakerTab,
+  fieldAgent: FieldAgentTab,
 };
 
 export default function AdminStakeholders() {
@@ -898,7 +1032,7 @@ export default function AdminStakeholders() {
           <XCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
           <p className="text-lg font-semibold text-white">Access Denied</p>
           <p className="text-sm mt-2">This page is restricted to administrators.</p>
-          <Button className="mt-4" onClick={() => navigate("/dashboard")}>
+          <Button className="mt-4" onClick={() => navigate("/")}>
             Go to Dashboard
           </Button>
         </div>

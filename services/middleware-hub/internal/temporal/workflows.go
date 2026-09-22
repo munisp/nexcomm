@@ -40,7 +40,7 @@ type SettlementInput struct {
 type SettlementResult struct {
 	SettlementID string    `json:"settlement_id"`
 	Status       string    `json:"status"` // SETTLED | FAILED | REVERSED
-	TigerBeetleID uint64   `json:"tigerbeetle_id"`
+	TigerBeetleID string   `json:"tigerbeetle_id"`
 	MojaloopTxID string    `json:"mojaloop_tx_id"`
 	SettledAt    time.Time `json:"settled_at"`
 	IsT0         bool      `json:"is_t0"`
@@ -139,7 +139,7 @@ func SettlementWorkflow(ctx workflow.Context, input SettlementInput) (*Settlemen
 	}
 
 	// Step 4: Record in TigerBeetle double-entry ledger
-	var tbID uint64
+	var tbID string
 	if err := workflow.ExecuteActivity(ctx, RecordTigerBeetleActivity, input, mojaloopTxID).Get(ctx, &tbID); err != nil {
 		return nil, fmt.Errorf("tigerbeetle recording failed: %w", err)
 	}
@@ -309,7 +309,7 @@ type LoanDisbursementInput struct {
 type LoanDisbursementResult struct {
 	DisbursementID  string    `json:"disbursement_id"`
 	Status          string    `json:"status"`
-	TigerBeetleID   uint64    `json:"tiger_beetle_id"`
+	TigerBeetleID   string    `json:"tiger_beetle_id"`
 	CompletedAt     time.Time `json:"completed_at"`
 }
 
@@ -344,7 +344,7 @@ func LoanDisbursementWorkflow(ctx workflow.Context, input LoanDisbursementInput)
 	}
 
 	// Step 2: Reserve funds in TigerBeetle
-	var tbID uint64
+	var tbID string
 	if err := workflow.ExecuteActivity(ctx, ReserveFundsActivity, input).Get(ctx, &tbID); err != nil {
 		return nil, fmt.Errorf("reserve funds failed: %w", err)
 	}

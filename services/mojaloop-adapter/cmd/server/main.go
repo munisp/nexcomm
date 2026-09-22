@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof" // pprof admin endpoints; served only when GO_PPROF=1
 	"os"
 	"os/signal"
 	"syscall"
@@ -99,13 +100,30 @@ func main() {
 	mux.HandleFunc("PUT /callbacks/transfers/{transferId}/error", h.PutTransferErrorCallback)
 	mux.HandleFunc("PUT /callbacks/quotes/{quoteId}", h.PutQuoteCallback)
 
+	// ── Optional pprof admin server (GO_PPROF=1 only; loopback by default) ────
+	if os.Getenv("GO_PPROF") == "1" {
+		pprofAddr := os.Getenv("PPROF_ADDR")
+		if pprofAddr == "" {
+			pprofAddr = "127.0.0.1:6060"
+		}
+		go func() {
+			logger.Info("pprof admin server listening", "addr", pprofAddr)
+			// handlers registered on http.DefaultServeMux by the net/http/pprof import
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				logger.Warn("pprof server exited", "err", err)
+			}
+		}()
+	}
+
 	// ── HTTP Server ───────────────────────────────────────────────────────────
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      loggingMiddleware(corsMiddleware(mux), logger),
-		ReadTimeout:  time.Duration(cfg.ReadTimeoutSec) * time.Second,
-		WriteTimeout: time.Duration(cfg.WriteTimeoutSec) * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              fmt.Sprintf(":%d", cfg.Port),
+		Handler:           loggingMiddleware(corsMiddleware(mux), logger),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       time.Duration(cfg.ReadTimeoutSec) * time.Second,
+		WriteTimeout:      time.Duration(cfg.WriteTimeoutSec) * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 16,
 	}
 
 	// ── Graceful shutdown ─────────────────────────────────────────────────────

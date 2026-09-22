@@ -2,6 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // expo/tsconfig.base leaves `module` unset (defaults to ES2015 for
+    // ESNext targets), which rejects dynamic import() during tsc --noEmit.
+    // Metro/babel handle module interop at bundle time regardless.
+    "module": "ESNext",
     "paths": {
       "@/*": ["./*"]
     }

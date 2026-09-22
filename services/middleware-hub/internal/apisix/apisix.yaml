@@ -13,13 +13,44 @@ apisix:
     port: 9091
   admin_key:
     - name: admin
-      key: ${{APISIX_ADMIN_KEY:=}}
+      # Standalone YAML does not expand env vars, so the previous
+      # ${{APISIX_ADMIN_KEY:=}} placeholder was literal. This is the shared
+      # DEV default — gateway-service reads the same value from
+      # APISIX_ADMIN_KEY (which fails fast in production if unset).
+      # Override for any real deployment (edit here or switch to etcd mode).
+      key: nexcom-apisix-key
       role: admin
 
 deployment:
   role: standalone
   role_standalone:
     config_provider: yaml
+
+# ── Performance tuning (nginx substrate) ────────────────────────────────────
+nginx_config:
+  worker_processes: auto
+  event:
+    worker_connections: 4096
+  http:
+    # Upstream keepalive: reuse connections to backend microservices instead
+    # of a TCP+TLS handshake per request (dominant p95 contributor at gateway).
+    keepalive_timeout: 75s
+    client_header_timeout: 10s
+    client_body_timeout: 30s
+    send_timeout: 30s
+    upstream:
+      keepalive: 64
+      keepalive_timeout: 90s
+      keepalive_requests: 1000
+  # gzip for JSON/text responses (API payloads dominate egress bytes).
+  http_server_configuration_snippet: |
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types application/json application/javascript text/plain text/css;
+    proxy_read_timeout 30s;
+    proxy_send_timeout 30s;
+    proxy_connect_timeout 5s;
 
 etcd:
   host:
@@ -76,5 +107,9 @@ plugins:
 stream_plugins:
   - mqtt-proxy
 
-# Custom plugin directory — openappsec-waf.lua lives here
-extra_lua_path: "/usr/local/lib/apisix/plugins/?.lua"
+# Custom plugin resolution for `openappsec-waf` (in `plugins:` list above).
+# APISIX resolves plugins as require("apisix.plugins.<name>"); the compose
+# apisix service bind-mounts openappsec-waf.lua to
+# /usr/local/apisix/apisix/plugins/openappsec-waf.lua, which this path covers
+# (it is also in APISIX's default lua_package_path).
+extra_lua_path: "/usr/local/apisix/?.lua"

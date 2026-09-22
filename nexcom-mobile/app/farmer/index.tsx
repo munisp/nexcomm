@@ -24,7 +24,7 @@ function OnboardFarmerModal({ visible, onClose }: { visible: boolean; onClose: (
   const utils = trpc.useUtils();
   const registerFarmer = trpc.inputFinancing.register.useMutation({
     onSuccess: () => { utils.inputFinancing.myProfile.invalidate(); Alert.alert('Success', 'Farmer registered!'); setForm({ fullName: '', phone: '', state: '', lga: '' }); onClose(); },
-    onError: (e) => Alert.alert('Error', e.message),
+    onError: (e: any) => Alert.alert('Error', e.message),
   });
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -53,7 +53,7 @@ function CropReportModal({ visible, onClose }: { visible: boolean; onClose: () =
   const utils = trpc.useUtils();
   const createReport = trpc.cropReports.create.useMutation({
     onSuccess: () => { utils.cropReports.list.invalidate(); Alert.alert('Success', 'Crop report submitted!'); setForm({ farmId: '', cropType: '', season: '', plantingDate: '', expectedHarvestDate: '', estimatedYieldTons: '' }); onClose(); },
-    onError: (e) => Alert.alert('Error', e.message),
+    onError: (e: any) => Alert.alert('Error', e.message),
   });
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -84,7 +84,7 @@ function LoanRequestModal({ visible, onClose }: { visible: boolean; onClose: () 
   const utils = trpc.useUtils();
   const applyLoan = trpc.inputFinancing.applyForLoan.useMutation({
     onSuccess: () => { utils.inputFinancing.myLoans.invalidate(); Alert.alert('Success', 'Loan application submitted!'); setForm({ farmerId: '', amount: '', purpose: '', tenorMonths: '12' }); onClose(); },
-    onError: (e) => Alert.alert('Error', e.message),
+    onError: (e: any) => Alert.alert('Error', e.message),
   });
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -113,7 +113,7 @@ function FieldVisitModal({ visible, onClose }: { visible: boolean; onClose: () =
   const utils = trpc.useUtils();
   const scheduleVisit = trpc.inputFinancing.scheduleVisit.useMutation({
     onSuccess: () => { utils.inputFinancing.myVisits.invalidate(); Alert.alert('Success', 'Field visit scheduled!'); setForm({ farmerId: '', visitType: 'ONBOARDING', scheduledAt: '' }); onClose(); },
-    onError: (e) => Alert.alert('Error', e.message),
+    onError: (e: any) => Alert.alert('Error', e.message),
   });
   const visitTypes = ['ONBOARDING','CROP_INSPECTION','LOAN_ASSESSMENT','HARVEST_VERIFICATION','REPAYMENT_COLLECTION','FOLLOW_UP'];
   return (

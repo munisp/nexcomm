@@ -12,6 +12,7 @@ import { brokerProfiles, kycAuditLog, brokerClients, brokerCommissions, tradeFil
 import { storagePut } from "../storage";
 import { validateFileUpload } from "../security-middleware";
 import { writeAuditLog } from "../audit";
+import { applyKycDecisionSideEffects } from "../kycReview";
 
 
 // ─── in-memory fallback stores (used when DB is unavailable, e.g. in tests) ─
@@ -208,6 +209,18 @@ export const brokerRouter = router({
         reviewerName: ctx.user.name ?? null,
         decision: input.decision,
         notes: input.notes ?? null,
+      });
+      // Sync generic profile store, grant broker role on approval, notify applicant
+      await applyKycDecisionSideEffects(db, {
+        userId: profile.userId,
+        decision: input.decision,
+        reviewerId: ctx.user.id,
+        reviewerName: ctx.user.name,
+        notes: input.notes,
+        stakeholderLabel: "Broker",
+        approvedRole: "broker",
+        accountType: "BROKER",
+        metadata: { brokerProfileId: input.brokerId },
       });
       const brokerFirm = updated.firmName ?? `Broker #${updated.id}`;
       if (input.decision === "APPROVED") {

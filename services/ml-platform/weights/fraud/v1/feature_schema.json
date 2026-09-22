@@ -1,0 +1,238 @@
+{
+  "features": [
+    "state",
+    "commodity",
+    "channel",
+    "type",
+    "payer_bin",
+    "payee_bin",
+    "log_amount_norm",
+    "hour_sin",
+    "hour_cos",
+    "is_weekend",
+    "log_qty_norm",
+    "price_dev",
+    "payer_prior_txn_velocity",
+    "sub_threshold_flag",
+    "is_cancelled",
+    "device_user_count_norm",
+    "ip_user_count_norm",
+    "payer_device_new",
+    "amount_vs_payer_median"
+  ],
+  "n_features": 19,
+  "categoricals": [
+    {
+      "name": "state",
+      "cardinality": 38,
+      "encoding": "vocab",
+      "vocab": [
+        "Kaduna",
+        "Kano",
+        "Katsina",
+        "Benue",
+        "Plateau",
+        "Oyo",
+        "Niger",
+        "Taraba",
+        "Adamawa",
+        "Borno",
+        "Bauchi",
+        "Gombe",
+        "Jigawa",
+        "Zamfara",
+        "Sokoto",
+        "Kebbi",
+        "Kwara",
+        "Nasarawa",
+        "Kogi",
+        "Ogun",
+        "Ondo",
+        "Osun",
+        "Ekiti",
+        "Lagos",
+        "Abia",
+        "Anambra",
+        "Ebonyi",
+        "Enugu",
+        "Imo",
+        "Cross River",
+        "Akwa Ibom",
+        "Rivers",
+        "Bayelsa",
+        "Delta",
+        "Edo",
+        "Yobe",
+        "FCT"
+      ],
+      "unknown_index": 0,
+      "index_spec": "vocab.index(value) + 1; unknown -> 0"
+    },
+    {
+      "name": "commodity",
+      "cardinality": 11,
+      "encoding": "vocab",
+      "vocab": [
+        "maize",
+        "paddy_rice",
+        "soybean",
+        "sorghum",
+        "sesame",
+        "cocoa",
+        "cashew",
+        "ginger",
+        "hibiscus",
+        "millet"
+      ],
+      "unknown_index": 0,
+      "index_spec": "vocab.index(value) + 1; unknown -> 0"
+    },
+    {
+      "name": "channel",
+      "cardinality": 5,
+      "encoding": "vocab",
+      "vocab": [
+        "web",
+        "ussd",
+        "whatsapp",
+        "agent"
+      ],
+      "unknown_index": 0,
+      "index_spec": "vocab.index(value) + 1; unknown -> 0"
+    },
+    {
+      "name": "type",
+      "cardinality": 6,
+      "encoding": "vocab",
+      "vocab": [
+        "ORDER",
+        "TRADE",
+        "SETTLEMENT",
+        "DEPOSIT",
+        "WITHDRAWAL"
+      ],
+      "unknown_index": 0,
+      "index_spec": "vocab.index(value) + 1; unknown -> 0"
+    },
+    {
+      "name": "payer_bin",
+      "cardinality": 257,
+      "encoding": "md5_bucket",
+      "unknown_index": 0,
+      "hash_spec": "int(md5(value).hexdigest(), 16) % (cardinality - 1) + 1"
+    },
+    {
+      "name": "payee_bin",
+      "cardinality": 257,
+      "encoding": "md5_bucket",
+      "unknown_index": 0,
+      "hash_spec": "int(md5(value).hexdigest(), 16) % (cardinality - 1) + 1"
+    }
+  ],
+  "numerics": [
+    {
+      "name": "log_amount_norm",
+      "transform": "log1p(amount_ngn) / 20.0",
+      "mean": 0.6824141054829614,
+      "std": 0.05716764018601244
+    },
+    {
+      "name": "hour_sin",
+      "transform": "sin(2*pi*(hour + minute/60)/24) of timestamp",
+      "mean": -0.17832245120053924,
+      "std": 0.6307922504442586
+    },
+    {
+      "name": "hour_cos",
+      "transform": "cos(2*pi*(hour + minute/60)/24) of timestamp",
+      "mean": -0.5723694719984275,
+      "std": 0.49264127689189025
+    },
+    {
+      "name": "is_weekend",
+      "transform": "1.0 if timestamp.weekday >= 5 else 0.0",
+      "mean": 0.12967939503781015,
+      "std": 0.3359503676742112
+    },
+    {
+      "name": "log_qty_norm",
+      "transform": "log1p(quantity_mt) / 10.0",
+      "mean": 0.08156025802527625,
+      "std": 0.07484571730196693
+    },
+    {
+      "name": "price_dev",
+      "transform": "clip(price_ngn_per_mt / median(price_ngn_per_mt | commodity) - 1, -2, 2); NaN->0",
+      "mean": -0.0033390335911346945,
+      "std": 0.06078629378472757
+    },
+    {
+      "name": "payer_prior_txn_velocity",
+      "transform": "clip(cumulative prior txn count of payer (backward-looking, sorted by timestamp) / 100, 0, 1)",
+      "mean": 0.02085119649501534,
+      "std": 0.0213649101667998
+    },
+    {
+      "name": "sub_threshold_flag",
+      "transform": "1.0 if type==DEPOSIT and 5000000 <= amount_ngn < 10000000 else 0.0",
+      "mean": 0.008561964877195176,
+      "std": 0.09213391142590685
+    },
+    {
+      "name": "is_cancelled",
+      "transform": "1.0 if status==CANCELLED else 0.0",
+      "mean": 0.04318480094994063,
+      "std": 0.20327290502389792
+    },
+    {
+      "name": "device_user_count_norm",
+      "transform": "clip(nunique(payer_id | device_id) / 10, 0, 1)",
+      "mean": 0.10096869098008494,
+      "std": 0.015840483349575527
+    },
+    {
+      "name": "ip_user_count_norm",
+      "transform": "clip(nunique(payer_id | ip_address) / 10, 0, 1)",
+      "mean": 0.10154365505339853,
+      "std": 0.017520639655584574
+    },
+    {
+      "name": "payer_device_new",
+      "transform": "1.0 if this payer has not used this device in any earlier txn (backward-looking) else 0.0",
+      "mean": 0.29654396600212485,
+      "std": 0.4567336666262467
+    },
+    {
+      "name": "amount_vs_payer_median",
+      "transform": "clip(amount_ngn / median(amount_ngn | payer) - 1, -5, 5) / 5; NaN->0",
+      "mean": 0.08346537729459973,
+      "std": 0.2820280408371577
+    }
+  ],
+  "input_order": {
+    "x_cat": [
+      "state",
+      "commodity",
+      "channel",
+      "type",
+      "payer_bin",
+      "payee_bin"
+    ],
+    "x_num": [
+      "log_amount_norm",
+      "hour_sin",
+      "hour_cos",
+      "is_weekend",
+      "log_qty_norm",
+      "price_dev",
+      "payer_prior_txn_velocity",
+      "sub_threshold_flag",
+      "is_cancelled",
+      "device_user_count_norm",
+      "ip_user_count_norm",
+      "payer_device_new",
+      "amount_vs_payer_median"
+    ]
+  },
+  "output": "sigmoid fraud probability (float, [0,1])"
+}

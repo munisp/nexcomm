@@ -167,12 +167,12 @@ uvicorn main:app --host 0.0.0.0 --port 8086
 
 ```bash
 # Matching Engine
-cd services/matching-engine
+cd matching-engine
 cargo build --release
 ./target/release/matching-engine
 
 # Settlement Engine
-cd services/settlement-engine
+cd settlement-engine
 cargo build --release
 ./target/release/settlement-engine
 
@@ -196,7 +196,7 @@ pnpm db:push
 ## Health Checks
 
 - Portal: `GET /api/health`
-- Matching Engine: `GET http://localhost:8080/health`
+- Matching Engine: `GET http://localhost:18080/health` (host port 18080; 8080 is Keycloak)
 - Channel Gateway: `GET http://localhost:8082/health`
 - Bot Logic: `GET http://localhost:8083/health`
 - USSD Engine: `GET http://localhost:8084/health`

@@ -17,10 +17,9 @@ import LanguageDetector from "i18next-browser-languagedetector";
 // Static imports for bundling (no lazy loading needed at this scale)
 import enCommon from "./locales/en/common.json";
 import haCommon from "./locales/ha/common.json";
-
-// Yoruba and Igbo translations — placeholder (same as English until translated)
-const yoCommon = { ...enCommon };
-const igCommon = { ...enCommon };
+import yoCommon from "./locales/yo/common.json";
+import igCommon from "./locales/ig/common.json";
+import pcmCommon from "./locales/pcm/common.json";
 
 i18n
   .use(LanguageDetector)
@@ -31,6 +30,7 @@ i18n
       ha: { common: haCommon },
       yo: { common: yoCommon },
       ig: { common: igCommon },
+      pcm: { common: pcmCommon },
     },
     fallbackLng: "en",
     defaultNS: "common",
@@ -63,6 +63,7 @@ export const SUPPORTED_LOCALES = [
   { code: "ha", name: "Hausa", nativeName: "Hausa" },
   { code: "yo", name: "Yoruba", nativeName: "Yorùbá" },
   { code: "ig", name: "Igbo", nativeName: "Igbo" },
+  { code: "pcm", name: "Nigerian Pidgin", nativeName: "Naijá" },
 ] as const;
 
 export type SupportedLocale = typeof SUPPORTED_LOCALES[number]["code"];

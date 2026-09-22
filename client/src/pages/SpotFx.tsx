@@ -6,7 +6,6 @@
  * Calls the matching-engine REST API via tRPC proxy (spotFx router).
  */
 import { useState, useMemo } from "react";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -164,7 +163,7 @@ export default function SpotFx() {
   );
 
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -438,9 +437,7 @@ export default function SpotFx() {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm text-white">Recent Trades — {selectedPair}</CardTitle>
-                      <Button variant="ghost" size="sm" className="text-slate-400 h-7">
-                        <RefreshCw className="h-3 w-3" />
-                      </Button>
+                      <Button variant="ghost" size="sm" className="text-slate-400 h-7" aria-label="Refresh quotes"><RefreshCw className="h-3 w-3" /></Button>
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
@@ -509,6 +506,6 @@ export default function SpotFx() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

@@ -14,6 +14,57 @@ let _pgClient: ReturnType<typeof postgres> | null = null;
 let _readDb: ReturnType<typeof drizzle> | null = null;
 let _readPgClient: ReturnType<typeof postgres> | null = null;
 
+// ─── Env-tunable pool configuration ───────────────────────────────────────────
+// The postgres (porsager) driver takes pool sizes in connections and timeouts
+// in seconds; `connection` parameters are sent as PostgreSQL startup options
+// (applied per connection, so statement_timeout/idle_in_transaction_session_
+// timeout guard every pooled session).
+const PG_POOL_MAX = Math.max(1, parseInt(process.env.PG_POOL_MAX ?? "20", 10));
+const PG_READ_POOL_MAX = Math.max(1, parseInt(process.env.PG_READ_POOL_MAX ?? "10", 10));
+const PG_POOL_IDLE_MS = Math.max(1_000, parseInt(process.env.PG_POOL_IDLE_MS ?? "10000", 10));
+const PG_POOL_CONNECT_TIMEOUT_MS = Math.max(500, parseInt(process.env.PG_POOL_CONNECT_TIMEOUT_MS ?? "5000", 10));
+const PG_STATEMENT_TIMEOUT_MS = Math.max(0, parseInt(process.env.PG_STATEMENT_TIMEOUT_MS ?? "15000", 10));
+const PG_IDLE_TX_TIMEOUT_MS = Math.max(0, parseInt(process.env.PG_IDLE_IN_TRANSACTION_TIMEOUT_MS ?? "30000", 10));
+
+function poolOptions(isLocal: boolean, max: number, extraConnection?: Record<string, string>) {
+  return {
+    max,
+    idle_timeout: Math.round(PG_POOL_IDLE_MS / 1_000),           // close idle connections (seconds)
+    connect_timeout: Math.ceil(PG_POOL_CONNECT_TIMEOUT_MS / 1_000), // fail fast if DB is unreachable (seconds)
+    max_lifetime: 1800,                                          // recycle connections every 30 minutes
+    ssl: isLocal ? (false as const) : ("require" as const),
+    onnotice: () => {},                                          // suppress NOTICE messages
+    connection: {
+      // Server-side guards: abort runaway statements and forgotten transactions.
+      // postgres.js types these known startup params as numbers; a bare integer
+      // is milliseconds in PostgreSQL (e.g. statement_timeout = 15000 → 15s).
+      ...(PG_STATEMENT_TIMEOUT_MS > 0 ? { statement_timeout: PG_STATEMENT_TIMEOUT_MS } : {}),
+      ...(PG_IDLE_TX_TIMEOUT_MS > 0 ? { idle_in_transaction_session_timeout: PG_IDLE_TX_TIMEOUT_MS } : {}),
+      ...extraConnection,
+    },
+  };
+}
+
+/** Pool/config stats for the /api/perf/snapshot endpoint. */
+export function getDbPoolStats() {
+  return {
+    driver: "postgres (porsager)",
+    primary: {
+      connected: _db !== null,
+      max: PG_POOL_MAX,
+      idleTimeoutMs: PG_POOL_IDLE_MS,
+      connectTimeoutMs: PG_POOL_CONNECT_TIMEOUT_MS,
+      statementTimeoutMs: PG_STATEMENT_TIMEOUT_MS,
+      idleInTransactionTimeoutMs: PG_IDLE_TX_TIMEOUT_MS,
+    },
+    readReplica: {
+      configured: hasReadReplica(),
+      connected: _readDb !== null,
+      max: PG_READ_POOL_MAX,
+    },
+  };
+}
+
 // Resolve the PostgreSQL connection URL.
 // In development, use the local PostgreSQL instance.
 // In production, DATABASE_URL must be a valid postgresql:// or postgres:// URL.
@@ -24,8 +75,15 @@ function resolveDbUrl(): string {
     console.log("[Database] Using NEXCOM_PG_URL");
     return pgUrl;
   }
-  // Fall back to local PostgreSQL (development sandbox)
-  console.log("[Database] Using local PostgreSQL postgresql://127.0.0.1:5432/nexcom");
+  // Fail fast in production — no hardcoded credentials.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "[Database] FATAL: NEXCOM_PG_URL is required in production; no default database credentials exist."
+    );
+  }
+  // DEV-ONLY fallback: local docker-compose Postgres (password matches the
+  // compose dev default; never usable in production because of the guard above).
+  console.warn("[Database] DEV-ONLY fallback: using local PostgreSQL default credentials (set NEXCOM_PG_URL!)");
   return "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom";
 }
 
@@ -50,18 +108,11 @@ export async function getDb() {
     try {
       const dbUrl = resolveDbUrl();
       const isLocal = dbUrl.includes("localhost") || dbUrl.includes("127.0.0.1");
-      _pgClient = postgres(dbUrl, {
-        max: 20,                    // max pool size
-        idle_timeout: 30,           // close idle connections after 30s
-        connect_timeout: 10,        // fail fast if DB is unreachable
-        max_lifetime: 1800,         // recycle connections every 30 minutes
-        ssl: isLocal ? false : "require",
-        onnotice: () => {},         // suppress NOTICE messages
-      });
+      _pgClient = postgres(dbUrl, poolOptions(isLocal, PG_POOL_MAX));
       _db = drizzle(_pgClient);
       // Startup validation: run a cheap query to confirm connectivity
       await _db.execute(sql`SELECT 1`);
-      console.log("[Database] PostgreSQL connection pool established (max=20)");
+      console.log(`[Database] PostgreSQL connection pool established (max=${PG_POOL_MAX}, idle=${PG_POOL_IDLE_MS}ms, connectTimeout=${PG_POOL_CONNECT_TIMEOUT_MS}ms, statementTimeout=${PG_STATEMENT_TIMEOUT_MS}ms)`);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -85,22 +136,16 @@ export async function getReadDb() {
       const readUrl = resolveReadDbUrl();
       const isPrimary = readUrl === resolveDbUrl();
       const isLocal = readUrl.includes("localhost") || readUrl.includes("127.0.0.1");
-      _readPgClient = postgres(readUrl, {
-        max: 10,                    // read replicas get a smaller pool
-        idle_timeout: 30,
-        connect_timeout: 10,
-        max_lifetime: 1800,
-        ssl: isLocal ? false : "require",
-        onnotice: () => {},
+      _readPgClient = postgres(readUrl, poolOptions(isLocal, PG_READ_POOL_MAX, {
         // Read-only hint: prevents accidental writes to the replica
-        connection: { options: "-c default_transaction_read_only=on" },
-      });
+        options: "-c default_transaction_read_only=on",
+      }));
       _readDb = drizzle(_readPgClient);
       await _readDb.execute(sql`SELECT 1`);
       if (isPrimary) {
         console.log("[Database] Read replica not configured — using primary for reads");
       } else {
-        console.log("[Database] Read replica connection pool established (max=10)");
+        console.log(`[Database] Read replica connection pool established (max=${PG_READ_POOL_MAX})`);
       }
     } catch (error) {
       console.warn("[Database] Read replica connection failed, falling back to primary:", error);

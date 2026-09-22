@@ -2,13 +2,68 @@ import { TRPCError } from "@trpc/server";
 import { createHmac } from "crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { webhookConfigs, type SecurityEvent } from "../../drizzle/schema";
+import { webhookConfigs, webhookDeadLetters, type SecurityEvent } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { adminProcedure, router } from "../_core/trpc";
 import { writeAuditLog } from "../audit";
 
-// ── In-memory fallback store ──────────────────────────────────────────────────
 // ─── Webhook Dispatch ─────────────────────────────────────────────────────────
+
+const WEBHOOK_MAX_ATTEMPTS = 3;
+const WEBHOOK_BACKOFF_BASE_MS = 1000; // 1s, 2s between attempts (exponential)
+
+interface DeliveryResult {
+  statusCode: number;
+  failed: boolean;
+  lastError: string | null;
+  attempts: number;
+}
+
+/**
+ * Deliver a webhook payload with up to WEBHOOK_MAX_ATTEMPTS attempts and
+ * exponential backoff (1s, 2s). Deliveries that exhaust all attempts are
+ * recorded in the webhook_dead_letters table for manual replay.
+ */
+async function deliverWithRetries(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  cfg: typeof webhookConfigs.$inferSelect,
+  payload: string,
+  headers: Record<string, string>,
+): Promise<DeliveryResult> {
+  let statusCode = 0;
+  let lastError: string | null = null;
+  let failed = false;
+
+  for (let attempt = 1; attempt <= WEBHOOK_MAX_ATTEMPTS; attempt++) {
+    failed = false;
+    try {
+      const res = await fetch(cfg.url, {
+        method: "POST",
+        headers,
+        body: payload,
+        signal: AbortSignal.timeout(10_000),
+      });
+      statusCode = res.status;
+      if (res.ok) {
+        return { statusCode, failed: false, lastError: null, attempts: attempt };
+      }
+      failed = true;
+      lastError = `HTTP ${res.status}: ${res.statusText}`;
+      // 4xx is a permanent caller error — retrying will not help.
+      if (res.status >= 400 && res.status < 500) break;
+    } catch (err) {
+      failed = true;
+      statusCode = 0;
+      lastError = err instanceof Error ? err.message : "Network error";
+    }
+    if (attempt < WEBHOOK_MAX_ATTEMPTS) {
+      await new Promise((r) => setTimeout(r, WEBHOOK_BACKOFF_BASE_MS * 2 ** (attempt - 1)));
+    }
+  }
+
+  return { statusCode, failed, lastError, attempts: WEBHOOK_MAX_ATTEMPTS };
+}
+
 export async function dispatchSecurityEventWebhooks(event: SecurityEvent): Promise<void> {
   const db = await getDb();
   if (!db) return;
@@ -56,32 +111,33 @@ export async function dispatchSecurityEventWebhooks(event: SecurityEvent): Promi
         headers["X-NEXCOM-Signature"] = `sha256=${sig}`;
       }
 
-      let statusCode = 0;
-      let failed = false;
-
-      try {
-        const res = await fetch(cfg.url, {
-          method: "POST",
-          headers,
-          body: payload,
-          signal: AbortSignal.timeout(10_000),
-        });
-        statusCode = res.status;
-        failed = !res.ok;
-      } catch {
-        failed = true;
-        statusCode = 0;
-      }
+      const result = await deliverWithRetries(db, cfg, payload, headers);
 
       await db
         .update(webhookConfigs)
         .set({
           lastTriggeredAt: new Date(),
-          lastStatusCode: statusCode,
-          failureCount: failed ? cfg.failureCount + 1 : 0,
+          lastStatusCode: result.statusCode,
+          failureCount: result.failed ? cfg.failureCount + 1 : 0,
           updatedAt: new Date(),
         })
         .where(eq(webhookConfigs.id, cfg.id));
+
+      if (result.failed) {
+        // Dead-letter: all retries exhausted — persist for manual replay.
+        await db.insert(webhookDeadLetters).values({
+          webhookConfigId: cfg.id,
+          url: cfg.url,
+          event: "security_alert",
+          payload,
+          attempts: result.attempts,
+          lastStatusCode: result.statusCode,
+          lastError: result.lastError,
+        });
+        console.error(
+          `[Webhook] DEAD-LETTER config=${cfg.id} url=${cfg.url} attempts=${result.attempts} error=${result.lastError}`,
+        );
+      }
     })
   );
 }

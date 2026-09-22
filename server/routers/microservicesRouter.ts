@@ -555,7 +555,7 @@ const daprRouter = router({
 });
 
 // ─── Permify RBAC ─────────────────────────────────────────────────────────────
-const PERMIFY_TENANT = process.env.PERMIFY_TENANT ?? "nexcom";
+const PERMIFY_TENANT = process.env.PERMIFY_TENANT ?? process.env.PERMIFY_TENANT_ID ?? "t1";
 const permifyRouter = router({
   getHealth: publicProcedure.query(async () => {
     const result = await callService<{ status: string }>(ENV.permifyUrl, "/healthz");

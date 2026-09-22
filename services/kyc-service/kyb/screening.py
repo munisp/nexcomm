@@ -190,31 +190,44 @@ class KYBScreeningEngine:
                     issues.append("Company incorporated less than 6 months ago")
             except ValueError:
                 pass
-        if app.country_of_incorporation:
-            country_key = app.country_of_incorporation.lower().replace(" ", "_")
+        # FIX-KYB: country_of_incorporation is optional on the pydantic model —
+        # use getattr so rule-based screening never crashes on missing attrs.
+        country_of_incorporation = getattr(app, "country_of_incorporation", None)
+        if country_of_incorporation:
+            country_key = country_of_incorporation.lower().replace(" ", "_")
             if country_key in self.HIGH_RISK_JURISDICTIONS:
-                issues.append(f"High-risk jurisdiction: {app.country_of_incorporation}")
+                issues.append(f"High-risk jurisdiction: {country_of_incorporation}")
         if app.shareholders:
-            corporate_shareholders = [s for s in app.shareholders if s.shareholder_type == "corporate"]
+            corporate_shareholders = [
+                s for s in app.shareholders
+                if getattr(s, "shareholder_type", None) == "corporate" or getattr(s, "is_corporate", False)
+            ]
             if len(corporate_shareholders) > 3:
                 issues.append("Complex corporate ownership structure (potential layering)")
         return len(issues) == 0
 
     def _sanctions_check(self, app: KYBApplication) -> dict[str, Any]:
         company_name = getattr(app, "company_name", None) or getattr(app, "business_name", "")
-        company_result = _opensanctions_match_company(company_name, country=app.country_of_incorporation)
+        # FIX-KYB: optional model attrs accessed defensively (getattr).
+        company_result = _opensanctions_match_company(company_name, country=getattr(app, "country_of_incorporation", None))
         if company_result["matched"]:
             datasets = ", ".join(company_result.get("datasets", []))
             return {"passed": False, "detail": f"Company '{company_name}' matched sanctions list(s): {datasets}", "source": company_result["source"]}
 
         for director in (app.directors or []):
-            result = _opensanctions_match(director.full_name, birth_date=director.date_of_birth, country=director.nationality, entity_type="Person")
+            result = _opensanctions_match(
+                director.full_name,
+                birth_date=getattr(director, "date_of_birth", None),
+                country=getattr(director, "nationality", None),
+                entity_type="Person",
+            )
             if result["matched"] and "sanction" in result.get("topics", []):
                 datasets = ", ".join(result.get("datasets", []))
                 return {"passed": False, "detail": f"Director '{director.full_name}' matched sanctions list(s): {datasets}", "source": result["source"]}
 
         for shareholder in (app.shareholders or []):
-            result = _opensanctions_match(shareholder.name, entity_type="Person" if shareholder.shareholder_type == "individual" else "Company")
+            sh_type = getattr(shareholder, "shareholder_type", None) or ("corporate" if getattr(shareholder, "is_corporate", False) else "individual")
+            result = _opensanctions_match(shareholder.name, entity_type="Person" if sh_type == "individual" else "Company")
             if result["matched"] and "sanction" in result.get("topics", []):
                 datasets = ", ".join(result.get("datasets", []))
                 return {"passed": False, "detail": f"Shareholder '{shareholder.name}' matched sanctions list(s): {datasets}", "source": result["source"]}
@@ -226,12 +239,22 @@ class KYBScreeningEngine:
         pep_topics = {"pep", "pep-class-1", "pep-class-2", "pep-class-3", "pep-class-4"}
 
         for director in (app.directors or []):
-            result = _opensanctions_match(director.full_name, birth_date=director.date_of_birth, country=director.nationality, entity_type="Person")
+            result = _opensanctions_match(
+                director.full_name,
+                birth_date=getattr(director, "date_of_birth", None),
+                country=getattr(director, "nationality", None),
+                entity_type="Person",
+            )
             if result["matched"] and pep_topics.intersection(set(result.get("topics", []))):
                 pep_matches.append(f"Director '{director.full_name}' is a PEP [score={result['score']:.2f}, source={result['source']}]")
 
         for ubo in (app.ultimate_beneficial_owners or []):
-            result = _opensanctions_match(ubo.full_name, birth_date=ubo.date_of_birth, country=ubo.nationality, entity_type="Person")
+            result = _opensanctions_match(
+                ubo.full_name,
+                birth_date=getattr(ubo, "date_of_birth", None),
+                country=getattr(ubo, "nationality", None),
+                entity_type="Person",
+            )
             if result["matched"] and pep_topics.intersection(set(result.get("topics", []))):
                 pep_matches.append(f"UBO '{ubo.full_name}' is a PEP [score={result['score']:.2f}, source={result['source']}]")
 
@@ -241,7 +264,7 @@ class KYBScreeningEngine:
 
     def _adverse_media_check(self, app: KYBApplication) -> bool:
         company_name = getattr(app, "company_name", None) or getattr(app, "business_name", "")
-        result = _opensanctions_match_company(company_name, country=app.country_of_incorporation)
+        result = _opensanctions_match_company(company_name, country=getattr(app, "country_of_incorporation", None))
         adverse_topics = {"debarment", "crime", "wanted", "terrorism", "money-laundering"}
         if result["matched"] and adverse_topics.intersection(set(result.get("topics", []))):
             logger.warning("[KYB] Adverse media flag for '%s': topics=%s", company_name, result.get("topics"))
@@ -259,10 +282,10 @@ class KYBScreeningEngine:
                 ubo = UBOInfo(
                     full_name=sh.name,
                     ownership_percentage=sh.ownership_percentage,
-                    nationality=getattr(sh, "nationality", None),
+                    nationality=getattr(sh, "nationality", None) or "Nigerian",
                     date_of_birth=getattr(sh, "date_of_birth", None),
-                    is_pep=False,
-                    is_sanctioned=False,
+                    pep_status=False,
+                    sanctions_match=False,
                 )
                 ubos.append(ubo)
         return ubos
@@ -275,11 +298,12 @@ class KYBScreeningEngine:
             score += 0.3
             factors.append(f"High-risk industry: {application.industry}")
 
-        if application.country_of_incorporation:
-            country_key = application.country_of_incorporation.lower().replace(" ", "_")
+        country_of_incorporation = getattr(application, "country_of_incorporation", None)
+        if country_of_incorporation:
+            country_key = country_of_incorporation.lower().replace(" ", "_")
             if country_key in self.HIGH_RISK_JURISDICTIONS:
                 score += 0.25
-                factors.append(f"High-risk jurisdiction: {application.country_of_incorporation}")
+                factors.append(f"High-risk jurisdiction: {country_of_incorporation}")
 
         if application.incorporation_date:
             try:

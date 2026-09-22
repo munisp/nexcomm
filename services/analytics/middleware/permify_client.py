@@ -12,7 +12,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 PERMIFY_URL = os.getenv("PERMIFY_URL", "http://permify:3476")
-PERMIFY_TENANT = os.getenv("PERMIFY_TENANT", "nexcom")
+PERMIFY_TENANT = os.getenv("PERMIFY_TENANT", os.getenv("PERMIFY_TENANT_ID", "t1"))
 
 
 class PermifyClient:

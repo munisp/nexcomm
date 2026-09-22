@@ -19,6 +19,12 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import {
+  OFFLINE_DB_NAME,
+  OFFLINE_DB_VERSION,
+  OFFLINE_STORE_NAME,
+  OFFLINE_TRPC_ENDPOINTS,
+} from "@/lib/offlineConstants";
 
 export type OfflineOpType =
   | "place_order"
@@ -38,9 +44,9 @@ export interface OfflineQueueItem {
   lastError?: string;
 }
 
-const DB_NAME = "nexcom-offline-queue";
-const STORE_NAME = "operations";
-const DB_VERSION = 1;
+const DB_NAME = OFFLINE_DB_NAME;
+const STORE_NAME = OFFLINE_STORE_NAME;
+const DB_VERSION = OFFLINE_DB_VERSION;
 
 // ─── IndexedDB helpers ────────────────────────────────────────────────────────
 function openDB(): Promise<IDBDatabase> {
@@ -90,15 +96,8 @@ async function dbDelete(id: string): Promise<void> {
 }
 
 // ─── Flush logic (called on reconnect or by SW background sync) ──────────────
-const TRPC_ENDPOINT_MAP: Record<OfflineOpType, string> = {
-  place_order: "/api/trpc/orders.place",
-  cancel_order: "/api/trpc/orders.cancel",
-  amend_order: "/api/trpc/orders.amend",
-  kyc_submit: "/api/trpc/kyc.submit",
-  receipt_create: "/api/trpc/warehouseReceipts.create",
-  alert_create: "/api/trpc/priceAlerts.create",
-  profile_update: "/api/trpc/profile.update",
-};
+// Mirrors client/src/lib/offlineConstants.ts — kept in sync automatically.
+const TRPC_ENDPOINT_MAP: Record<OfflineOpType, string> = OFFLINE_TRPC_ENDPOINTS as Record<OfflineOpType, string>;
 
 async function flushQueue(onProgress?: (remaining: number) => void): Promise<{ succeeded: number; failed: number }> {
   const items = await dbGetAll();

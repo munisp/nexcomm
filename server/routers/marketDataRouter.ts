@@ -19,6 +19,18 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { writeAuditLog } from "../audit";
+import { cacheWrap, CacheKeys, TTL, type CacheStatus } from "../cache";
+
+/** Set the X-Cache marker header when the express response object is reachable. */
+function setCacheHeader(res: { setHeader?: (k: string, v: string) => void } | undefined) {
+  return (status: CacheStatus) => {
+    try {
+      res?.setHeader?.("X-Cache", status);
+    } catch {
+      // headers already sent — non-critical
+    }
+  };
+}
 import {
   getMarketDepth,
   listSymbols,
@@ -81,21 +93,29 @@ export const marketDataRouter = router({
 
   // ─── Exchange Status ────────────────────────────────────────────────────────
 
-  exchangeStatus: publicProcedure.query(async () => {
-    try {
-      return await getExchangeStatus();
-    } catch {
-      return { status: "unavailable", error: "Matching engine offline" };
-    }
+  exchangeStatus: publicProcedure.query(async ({ ctx }) => {
+    return cacheWrap("market:exchange_status", 5, async () => {
+      try {
+        return await getExchangeStatus();
+      } catch {
+        return { status: "unavailable", error: "Matching engine offline" };
+      }
+    }, { staleTtl: 15, onStatus: setCacheHeader(ctx.res) });
   }),
 
   // ─── Order Book Depth ───────────────────────────────────────────────────────
 
   depth: publicProcedure
     .input(z.object({ symbol: z.string().min(1).max(64) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       try {
-        return await getMarketDepth(input.symbol);
+        // Key matches CacheKeys.orderBook — orders.create/cancel invalidate it.
+        return await cacheWrap(
+          CacheKeys.orderBook(input.symbol),
+          TTL.ORDER_BOOK,
+          () => getMarketDepth(input.symbol),
+          { staleTtl: 10, onStatus: setCacheHeader(ctx.res) },
+        );
       } catch (e) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -104,12 +124,14 @@ export const marketDataRouter = router({
       }
     }),
 
-  symbols: publicProcedure.query(async () => {
-    try {
-      return await listSymbols();
-    } catch {
-      return [] as string[];
-    }
+  symbols: publicProcedure.query(async ({ ctx }) => {
+    return cacheWrap("market:symbols", 15, async () => {
+      try {
+        return await listSymbols();
+      } catch {
+        return [] as string[];
+      }
+    }, { staleTtl: 120, onStatus: setCacheHeader(ctx.res) });
   }),
 
   // ─── Futures ────────────────────────────────────────────────────────────────
@@ -397,20 +419,24 @@ export const marketDataRouter = router({
 
   // ─── Indices ────────────────────────────────────────────────────────────────
 
-  indices: publicProcedure.query(async () => {
-    try {
-      return await listIndices();
-    } catch {
-      return [];
-    }
+  indices: publicProcedure.query(async ({ ctx }) => {
+    return cacheWrap(CacheKeys.indices(), TTL.INDICES, async () => {
+      try {
+        return await listIndices();
+      } catch {
+        return [];
+      }
+    }, { staleTtl: 120, onStatus: setCacheHeader(ctx.res) });
   }),
 
-  indexValues: publicProcedure.query(async () => {
-    try {
-      return await getIndexValues();
-    } catch {
-      return [];
-    }
+  indexValues: publicProcedure.query(async ({ ctx }) => {
+    return cacheWrap("indices:values", 15, async () => {
+      try {
+        return await getIndexValues();
+      } catch {
+        return [];
+      }
+    }, { staleTtl: 60, onStatus: setCacheHeader(ctx.res) });
   }),
 
   index: publicProcedure

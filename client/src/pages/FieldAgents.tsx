@@ -172,7 +172,19 @@ export default function FieldAgents() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {leaderboard.map((agent: { rank: number; agentCode: string; name: string; state: string; farmersOnboarded: number; loansOriginated: number; commissionNgn: number }) => (
+            {/* leaderboard rows come from the DB (fullName/stateOfOperation/loansValueNgn)
+                or the demo fallback (name/state/commissionNgn) — normalise before render */}
+            {leaderboard.map((raw, idx) => {
+              const agent = {
+                rank: "rank" in raw ? raw.rank : idx + 1,
+                agentCode: raw.agentCode,
+                name: "name" in raw ? raw.name : raw.fullName,
+                state: "state" in raw ? raw.state : (raw.stateOfOperation ?? "—"),
+                farmersOnboarded: raw.farmersOnboarded ?? 0,
+                loansOriginated: raw.loansOriginated ?? 0,
+                valueNgn: "commissionNgn" in raw ? raw.commissionNgn : Number(raw.loansValueNgn ?? 0),
+              };
+              return (
               <div key={agent.agentCode} className="flex items-center gap-3 bg-[#0a0e1a] rounded-lg p-3 border border-border/30">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                   agent.rank === 1 ? "bg-amber-500/20 text-amber-400" :
@@ -185,11 +197,12 @@ export default function FieldAgents() {
                   <p className="text-xs text-muted-foreground">{agent.agentCode} · {agent.state}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-green-400">₦{(agent.commissionNgn / 1e6).toFixed(2)}M</p>
+                  <p className="text-sm font-bold text-green-400">₦{(agent.valueNgn / 1e6).toFixed(2)}M</p>
                   <p className="text-xs text-muted-foreground">{agent.farmersOnboarded} farmers</p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
 

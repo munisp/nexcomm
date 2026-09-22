@@ -6,6 +6,7 @@ import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from "react-nat
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import { COLORS, FONTS, SPACING } from "../../constants/config";
+import { ScreenState } from "../../components/ScreenState";
 import { trpc } from "../../lib/trpc";
 
 export default function WarehouseDetailScreen() {
@@ -19,7 +20,9 @@ export default function WarehouseDetailScreen() {
         <View style={s.header}>
           <Text style={s.title}>EWR-{id?.padStart(6, "0")}</Text>
         </View>
-        {receiptQ.isLoading ? (
+        {receiptQ.isError ? (
+          <ScreenState error={receiptQ.error} onRetry={() => receiptQ.refetch()}>{null}</ScreenState>
+        ) : receiptQ.isLoading ? (
           <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
         ) : receiptQ.error ? (
           <Text style={s.error}>Failed to load receipt: {receiptQ.error.message}</Text>

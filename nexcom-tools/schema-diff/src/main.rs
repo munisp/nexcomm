@@ -4,6 +4,7 @@ use std::collections::HashSet;
 fn get_dsn() -> String {
     std::env::var("NEXCOM_SCHEMA_DSN")
         .or_else(|_| std::env::var("DATABASE_URL"))
+        // DEV-ONLY fallback (dev compose password); this is a local schema-diff tool
         .unwrap_or_else(|_| "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom".to_string())
 }
 

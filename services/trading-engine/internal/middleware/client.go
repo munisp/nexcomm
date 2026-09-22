@@ -42,7 +42,7 @@ func NewClient(logger *zap.Logger) *Client {
 	return &Client{
 		gatewayURL:   getEnv("CORE_BANKING_URL", "http://core-banking:8080"),
 		kafkaURL:     getEnv("KAFKA_HTTP_PROXY_URL", "http://kafka-rest:8082"),
-		fluvioURL:    getEnv("FLUVIO_HTTP_URL", "http://fluvio-proxy:8090"),
+		fluvioURL:    getEnv("FLUVIO_HTTP_URL", "http://fluvio-sidecar:8090"),
 		temporalURL:  getEnv("TEMPORAL_HTTP_URL", "http://temporal-proxy:8091"),
 		daprURL:      getEnv("DAPR_HTTP_URL", "http://localhost:3500"),
 		lakehouseURL: getEnv("LAKEHOUSE_URL", "http://nexcom-portal:3000"),

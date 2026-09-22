@@ -3,6 +3,7 @@
  * All 5 asset classes: Commodities, Forex, Equities, Digital Assets, Indices
  * Live price feeds with 2-second ticks, search, and one-click Trade.
  */
+import { formatMoney } from "@/lib/format";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Link } from "wouter";
 import { Search, TrendingUp, TrendingDown, Wifi, BarChart2, Coins, Globe, LineChart, Cpu, Activity, ArrowUpRight, ArrowDownRight } from "lucide-react";
@@ -140,7 +141,7 @@ function CommodityPanel({ query }: { query: string }) {
               {tick.isLive && <Badge variant="outline" className="text-[10px] border-positive/40 text-positive flex-shrink-0">LIVE</Badge>}
             </div>
             <div className={`font-mono text-sm font-semibold ${tick.direction === "up" ? "text-positive" : tick.direction === "down" ? "text-negative" : ""}`}>
-              ${tick.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {formatMoney(tick.price, "currency" in tick && typeof tick.currency === "string" ? tick.currency : "USD", { decimals: true })}
             </div>
             <div className={`flex items-center gap-1 text-sm font-mono ${isUp ? "text-positive" : "text-negative"}`}>
               {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
@@ -350,7 +351,7 @@ function DigitalAssetsPanel({ query }: { query: string }) {
               </div>
             </div>
             <div className={`font-mono text-sm font-semibold ${tick.direction === "up" ? "text-positive" : tick.direction === "down" ? "text-negative" : ""}`}>
-              ${tick.price.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp })}
+              {formatMoney(tick.price, "currency" in tick && typeof tick.currency === "string" ? tick.currency : "USD", { decimals: true })}
             </div>
             <div className={`flex items-center gap-1 text-sm font-mono ${isUp ? "text-positive" : "text-negative"}`}>
               {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}

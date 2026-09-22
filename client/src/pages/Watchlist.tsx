@@ -89,27 +89,77 @@ function TradeModal({ symbol, currentPrice, open, onClose }: TradeModalProps) {
 
   useEffect(() => {
     if (!open) return;
-    // Connect to Fluvio SSE stream for price-updates
-    const es = new EventSource(`/api/v1/fluvio/stream/price-updates`);
-    esRef.current = es;
-    es.onopen = () => setSseConnected(true);
-    es.onmessage = (evt) => {
-      try {
-        const payload = JSON.parse(evt.data) as { symbol?: string; price?: number };
-        if (payload.symbol === symbol && typeof payload.price === "number") {
-          setLivePrice(payload.price);
-          // Auto-update limit price field only if user hasn't manually edited it
-          setPrice((prev) => {
-            const prevNum = parseFloat(prev);
-            // Only auto-update if the field is empty or matches the last known price
-            if (!prev || prevNum === currentPrice) return String(payload.price);
-            return prev;
-          });
-        }
-      } catch { /* ignore malformed events */ }
+    // Connect to Fluvio SSE stream for price-updates.
+    // OFFLINE-RES: manual exponential backoff + jitter (1s → 60s cap) instead
+    // of EventSource's fixed ~3s retry; paused while hidden/offline, resumed
+    // on online/visibility events.
+    let disposed = false;
+    let attempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const shouldBeConnected = () => !disposed && navigator.onLine && !document.hidden;
+
+    const closeStream = () => {
+      if (esRef.current) { esRef.current.close(); esRef.current = null; }
     };
-    es.onerror = () => setSseConnected(false);
-    return () => { es.close(); esRef.current = null; setSseConnected(false); };
+
+    const connect = () => {
+      if (!shouldBeConnected()) return;
+      closeStream();
+      const es = new EventSource(`/api/v1/fluvio/stream/price-updates`);
+      esRef.current = es;
+      es.onopen = () => { attempts = 0; setSseConnected(true); };
+      es.onmessage = (evt) => {
+        try {
+          const payload = JSON.parse(evt.data) as { symbol?: string; price?: number };
+          if (payload.symbol === symbol && typeof payload.price === "number") {
+            setLivePrice(payload.price);
+            // Auto-update limit price field only if user hasn't manually edited it
+            setPrice((prev) => {
+              const prevNum = parseFloat(prev);
+              // Only auto-update if the field is empty or matches the last known price
+              if (!prev || prevNum === currentPrice) return String(payload.price);
+              return prev;
+            });
+          }
+        } catch { /* ignore malformed events */ }
+      };
+      es.onerror = () => {
+        setSseConnected(false);
+        closeStream(); // suppress native fixed-cadence retry; drive our own
+        if (!shouldBeConnected() || reconnectTimer) return;
+        const exp = Math.min(1_000 * 2 ** attempts, 60_000);
+        const delay = Math.max(1_000, exp + exp * 0.3 * (Math.random() * 2 - 1));
+        attempts += 1;
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, delay);
+      };
+    };
+
+    const handleOnline = () => { attempts = 0; connect(); };
+    const handleOffline = () => {
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      closeStream();
+      setSseConnected(false);
+    };
+    const handleVisibility = () => {
+      if (document.hidden) handleOffline();
+      else handleOnline();
+    };
+
+    connect();
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      closeStream();
+      setSseConnected(false);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [open, symbol, currentPrice]);
 
   // Reset step when modal opens

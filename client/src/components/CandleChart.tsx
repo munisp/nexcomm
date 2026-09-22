@@ -86,6 +86,7 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
   const wsRef = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attemptsRef = useRef(0); // OFFLINE-RES: backoff attempt counter
 
   // ── Fetch historical candles ─────────────────────────────────────────────
   useEffect(() => {
@@ -115,6 +116,12 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
   // ── WebSocket streaming — update latest candle on each tick ─────────────
   const connectWS = useCallback(() => {
     if (!mountedRef.current) return;
+    // OFFLINE-RES: don't connect while offline or the tab is hidden —
+    // reconnection resumes via the online/visibilitychange listeners below.
+    if (!navigator.onLine || document.hidden) {
+      setStreamStatus("disconnected");
+      return;
+    }
     if (wsRef.current) {
       wsRef.current.onclose = null;
       wsRef.current.onerror = null;
@@ -122,6 +129,18 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
       wsRef.current.close();
       wsRef.current = null;
     }
+    // OFFLINE-RES: exponential backoff + jitter (1s → 60s cap) instead of the
+    // previous fixed 3s retry that hammered flaky rural links.
+    const scheduleReconnect = () => {
+      if (!mountedRef.current || reconnectTimerRef.current) return;
+      const exp = Math.min(1_000 * 2 ** attemptsRef.current, 60_000);
+      const delay = Math.max(1_000, exp + exp * 0.3 * (Math.random() * 2 - 1));
+      attemptsRef.current += 1;
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null;
+        connectWS();
+      }, delay);
+    };
     setStreamStatus("connecting");
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -132,6 +151,7 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
 
       ws.onopen = () => {
         if (!mountedRef.current) return;
+        attemptsRef.current = 0; // healthy connection — reset backoff
         setStreamStatus("live");
         ws.send(JSON.stringify({ type: "subscribe", symbols: [symbol] }));
       };
@@ -161,7 +181,7 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
       ws.onclose = () => {
         if (!mountedRef.current) return;
         setStreamStatus("disconnected");
-        reconnectTimerRef.current = setTimeout(connectWS, 3000);
+        scheduleReconnect();
       };
 
       ws.onerror = () => {
@@ -169,13 +189,29 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
       };
     } catch {
       setStreamStatus("disconnected");
-      reconnectTimerRef.current = setTimeout(connectWS, 3000);
+      scheduleReconnect();
     }
   }, [symbol]);
 
   useEffect(() => {
     mountedRef.current = true;
     connectWS();
+
+    // OFFLINE-RES: pause the stream while hidden/offline, resume on return
+    const handleOnline = () => { attemptsRef.current = 0; connectWS(); };
+    const handleOffline = () => {
+      if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
+      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); wsRef.current = null; }
+      setStreamStatus("disconnected");
+    };
+    const handleVisibility = () => {
+      if (document.hidden) handleOffline();
+      else handleOnline();
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
       mountedRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
@@ -184,6 +220,9 @@ export default function CandleChart({ symbol, interval: defaultInterval = "5m", 
         wsRef.current.close();
         wsRef.current = null;
       }
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [connectWS]);
 

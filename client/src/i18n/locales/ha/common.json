@@ -7,7 +7,42 @@
     "wallet": "Walat",
     "compliance": "Biyayya",
     "settings": "Saiti",
-    "logout": "Fita"
+    "logout": "Fita",
+    "allMarkets": "Duk Kasuwanni",
+    "analytics": "Bincike",
+    "commodities": "Kayayyaki",
+    "forex": "Canjin Kudi (FX)",
+    "equities": "Hannun Jari (NGX/NYSE)",
+    "digitalAssets": "Dukiya Ta Dijital",
+    "indices": "Alamomi",
+    "warehouseReceipts": "Takardar Ajiya",
+    "deposits": "Depositi",
+    "payments": "Biya",
+    "warehouses": "Ma'ajiya",
+    "delivery": "Isarwa",
+    "marketMakers": "Masu Kasuwanci",
+    "brokers": "Dillalai",
+    "corporateActions": "Ayyukan Kamfani",
+    "surveillance": "Sa ido",
+    "policyManagement": "Gudanar da Manufofi",
+    "fixedIncome": "Kudaden Shiga na Tabbaci",
+    "abcpMarkets": "Kasuwar ABCP",
+    "ledger": "Ledge",
+    "workbench": "WorkBench (SaaS)",
+    "inputFinancing": "Kudaden Noma",
+    "fieldAgents": "Jami'an Gona",
+    "cropReports": "Rahoton Amfanin Gona",
+    "account": "Asusu",
+    "notifications": "Sanarwa",
+    "priceAlerts": "Faɗakarwar Farashi",
+    "kycOnboarding": "KYC / Rajista",
+    "grpOverview": "Bayyani",
+    "grpAssets": " Kasuwanci ta Nau'in Dukiya",
+    "grpWarehouse": "Aikin Ma'ajiya",
+    "grpStructure": "Tsarin Kasuwa",
+    "grpCapitalMarkets": "Kasuwar Babban Jari",
+    "grpAgri": "Muhallin Noma",
+    "grpMarkets": "Kasuwa"
   },
   "auth": {
     "login": "Shiga",
@@ -17,7 +52,8 @@
     "password": "Kalmar sirri",
     "forgotPassword": "Manta kalmar sirri?",
     "loginWithPasskey": "Shiga da Makullin Wucewa",
-    "loginWithManus": "Shiga da Manus"
+    "loginWithManus": "Shiga da Manus",
+    "authenticating": "Ana tantancewa…"
   },
   "kyc": {
     "title": "Tabbatar da Asali (KYC)",
@@ -83,5 +119,11 @@
     "title": "Sanarwa",
     "markAllRead": "Nuna duka an karanta",
     "noNotifications": "Babu sanarwa tukuna"
+  },
+  "onboarding": {
+    "badge": "Babbar Kasuwar Kayayyaki ta Najeriya",
+    "title": "Shiga NEXCOM Exchange",
+    "subtitle": "Zaɓi matsayinka a kasuwa. Kowane nau'in mai kasuwa yana da tsarin rajista, KYC da allon aiki na musamman.",
+    "signInNote": "Za a bukace ka ka shiga kafin ka kammala bayanan ka."
   }
 }

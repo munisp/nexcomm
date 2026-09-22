@@ -28,6 +28,16 @@ import (
 	"github.com/nexcom/mojaloop-adapter/internal/settlement"
 )
 
+// outboundTransport is a process-wide tuned HTTP transport shared by all
+// outbound FSPIOP callbacks (hub, ALS, portal) for connection reuse.
+var outboundTransport = &http.Transport{
+	MaxIdleConns:          100,
+	MaxIdleConnsPerHost:   32,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   5 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
+
 // Handler holds shared dependencies for all FSPIOP handlers.
 type Handler struct {
 	store       *db.Store
@@ -60,7 +70,8 @@ func New(
 		logger:      logger,
 		reconciler:  settlement.NewReconciler(portalURL, logger),
 		httpClient: &http.Client{
-			Timeout: 15 * time.Second,
+			Transport: outboundTransport,
+			Timeout:   15 * time.Second,
 		},
 	}
 }

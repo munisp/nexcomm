@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -996,18 +997,59 @@ func (s *Server) closePosition(c *gin.Context) {
 	}})
 }
 
+// getPortfolioHistory derives the caller's portfolio value history from their
+// real recorded trades (store layer) plus the current portfolio summary.
+// No fabricated series: users with no trade history get an empty series
+// (plus today's real portfolio value) rather than hard-coded numbers.
 func (s *Server) getPortfolioHistory(c *gin.Context) {
-	// Return mock portfolio history
+	userID := s.getUserID(c)
+	period := c.DefaultQuery("period", "1M")
+
+	// Real query: all trades for this user, oldest first.
+	trades := s.store.GetTrades(userID, "", 0)
+	for i, j := 0, len(trades)-1; i < j; i, j = i+1, j-1 {
+		trades[i], trades[j] = trades[j], trades[i]
+	}
+
+	// Net invested value per calendar day: BUY adds notional, SELL subtracts.
+	daily := map[string]float64{}
+	running := 0.0
+	var dates []string
+	for _, t := range trades {
+		day := t.Timestamp.Format("2006-01-02")
+		notional := t.Price * t.Quantity
+		if t.Side == models.SideSell {
+			running -= notional
+		} else {
+			running += notional
+		}
+		running -= t.Fee
+		if _, seen := daily[day]; !seen {
+			dates = append(dates, day)
+		}
+		daily[day] = running
+	}
+
+	history := make([]gin.H, 0, len(dates)+1)
+	for _, day := range dates {
+		history = append(history, gin.H{"date": day, "value": math.Round(daily[day]*100) / 100})
+	}
+
+	// Anchor the series at today's real portfolio value.
+	portfolio := s.store.GetPortfolio(userID)
+	today := time.Now().Format("2006-01-02")
+	if len(dates) == 0 || dates[len(dates)-1] != today {
+		history = append(history, gin.H{"date": today, "value": portfolio.TotalValue})
+	} else {
+		history[len(history)-1] = gin.H{"date": today, "value": portfolio.TotalValue}
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Data: gin.H{
-			"period": c.DefaultQuery("period", "1M"),
-			"history": []gin.H{
-				{"date": time.Now().Add(-30 * 24 * time.Hour).Format("2006-01-02"), "value": 145000},
-				{"date": time.Now().Add(-20 * 24 * time.Hour).Format("2006-01-02"), "value": 148500},
-				{"date": time.Now().Add(-10 * 24 * time.Hour).Format("2006-01-02"), "value": 152000},
-				{"date": time.Now().Format("2006-01-02"), "value": 156000},
-			},
+			"period":  period,
+			"history": history,
+			"source":  "trades+portfolio",
 		},
 	})
 }

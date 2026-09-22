@@ -168,21 +168,34 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
     // ── Production build optimizations ──────────────────────────────────────
-    target: "es2020",
+    // OFFLINE-RES: es2018 for low-end Android WebViews in the field (Chrome 63+
+    // era WebViews lack es2020 syntax such as optional chaining helpers).
+    target: "es2018",
     minify: "esbuild",
     cssMinify: true,
     sourcemap: false,
-    // Chunk splitting strategy for optimal long-term caching
+    reportCompressedSize: true, // keep gzip/brotli sizes visible in build output
+    // Chunk splitting strategy for optimal long-term caching. Order matters:
+    // @tanstack/react-query and @trpc paths contain "react", so the more
+    // specific vendor buckets are matched FIRST to keep react itself lean.
     rollupOptions: {
       output: {
         manualChunks: (id) => {
           if (id.includes("node_modules")) {
-            if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
-            if (id.includes("recharts") || id.includes("d3") || id.includes("lightweight-charts")) return "vendor-charts";
+            if (id.includes("@tanstack")) return "vendor-query";
+            if (id.includes("@trpc")) return "vendor-trpc";
+            if (id.includes("recharts")) return "vendor-recharts";
+            if (id.includes("react-dom") || id.includes("/react/") || id.includes("scheduler")) return "vendor-react";
             if (id.includes("@radix-ui") || id.includes("lucide")) return "vendor-ui";
-            if (id.includes("@trpc") || id.includes("@tanstack")) return "vendor-trpc";
             if (id.includes("date-fns") || id.includes("dayjs") || id.includes("luxon")) return "vendor-date";
-            return "vendor";
+            // Route-scoped heavy libs — lazy pages only; keep out of the
+            // entry-preloaded catch-all chunk (2G/low-bandwidth budget).
+            if (id.includes("maplibre-gl") || id.includes("terra-draw")) return "vendor-map";
+            // No catch-all "vendor" group: a named chunk shared by eager and
+            // lazy importers becomes eager, dragging route-scoped libs
+            // (jspdf ~700KB, katex, canvg) into the first-paint preload.
+            // Returning undefined lets Rollup split by import graph instead.
+            return undefined;
           }
         },
         chunkFileNames: "assets/[name]-[hash].js",

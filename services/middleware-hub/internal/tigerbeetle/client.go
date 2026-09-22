@@ -1,6 +1,14 @@
-// Package tigerbeetle provides TigerBeetle double-entry ledger integration for NEXCOM.
-// TigerBeetle is used for high-throughput, ACID-compliant financial accounting.
-// All settlement amounts are recorded as immutable double-entry transfers.
+// Package tigerbeetle provides double-entry ledger integration for NEXCOM.
+//
+// IMPORTANT: TigerBeetle speaks a binary protocol — it has NO HTTP/JSON API.
+// The previous version of this client POSTed JSON to the TigerBeetle port,
+// which could never succeed. All ledger operations are now routed through the
+// gateway-service ledger API (/api/v1/ledger/*), which owns the official
+// TigerBeetle SDK client (see gateway-service/internal/tigerbeetle/client.go
+// and gateway-service/internal/api/ledger_handlers.go).
+//
+// Fail-closed: any transport or gateway error fails the operation. No local
+// or simulated ledger state is ever fabricated.
 package tigerbeetle
 
 import (
@@ -8,25 +16,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
 )
 
-// Ledger IDs for different asset classes
-const (
-	LedgerFiat        = 1  // Fiat currency (USD, EUR, KES, NGN, etc.)
-	LedgerCommodity   = 2  // Commodity tokens (grain, coffee, etc.)
-	LedgerFee         = 3  // Exchange fee collection
-	LedgerMargin      = 4  // Margin/collateral accounts
-	LedgerSettlement  = 5  // Settlement clearing accounts
-)
-
-// Transfer codes for categorization
+// Transfer codes for categorization (must match gateway-service ledger codes)
 const (
 	CodeTradeBuy         = 1001 // Buyer pays for trade
 	CodeTradeSell        = 1002 // Seller receives payment
@@ -40,59 +37,57 @@ const (
 	CodeSettlementDebit  = 1010 // Settlement debit
 )
 
-// Account represents a TigerBeetle account
+// Account mirrors the gateway ledger API account shape
+// (gateway-service/internal/tigerbeetle/client.go Account).
 type Account struct {
-	ID             uint64 `json:"id"`
-	UserData       string `json:"user_data"` // External reference (user ID, DFSP ID)
-	Ledger         uint32 `json:"ledger"`
-	Code           uint16 `json:"code"`
-	Flags          uint16 `json:"flags"`
-	DebitsPending  uint64 `json:"debits_pending"`
-	DebitsPosted   uint64 `json:"debits_posted"`
-	CreditsPending uint64 `json:"credits_pending"`
-	CreditsPosted  uint64 `json:"credits_posted"`
-	Timestamp      uint64 `json:"timestamp"`
+	ID       string `json:"id"`
+	UserID   string `json:"userId"`
+	Type     string `json:"type"`
+	Currency string `json:"currency"`
+	Balance  int64  `json:"balance"`
+	Pending  int64  `json:"pending"`
 }
 
-// Transfer represents a TigerBeetle double-entry transfer
+// Transfer mirrors the gateway ledger API transfer shape.
 type Transfer struct {
-	ID              uint64 `json:"id"`
-	DebitAccountID  uint64 `json:"debit_account_id"`
-	CreditAccountID uint64 `json:"credit_account_id"`
-	Amount          uint64 `json:"amount"` // Amount in smallest unit (cents)
-	PendingID       uint64 `json:"pending_id,omitempty"`
-	UserData        string `json:"user_data"` // External reference
-	Ledger          uint32 `json:"ledger"`
+	ID              string `json:"id"`
+	DebitAccountID  string `json:"debitAccountId"`
+	CreditAccountID string `json:"creditAccountId"`
+	Amount          int64  `json:"amount"` // smallest unit (cents)
 	Code            uint16 `json:"code"`
-	Flags           uint16 `json:"flags"`
-	Timeout         uint32 `json:"timeout,omitempty"`
-	Timestamp       uint64 `json:"timestamp"`
+	Timestamp       int64  `json:"timestamp"`
+	Status          string `json:"status"`
 }
 
-// SettlementRecord represents a complete settlement entry in TigerBeetle
+// SettlementRecord represents a complete settlement entry to record.
 type SettlementRecord struct {
 	TradeID      string
-	BuyerAccID   uint64
-	SellerAccID  uint64
-	FeeAccID     uint64
+	BuyerAccID   string // gateway ledger account UUID
+	SellerAccID  string // gateway ledger account UUID
+	FeeAccID     string // gateway ledger account UUID
 	Amount       float64
 	FeeAmount    float64
 	Currency     string
 	MojaloopTxID string
 }
 
-// Client wraps TigerBeetle HTTP API calls
+// Client calls the gateway-service ledger API.
 type Client struct {
 	httpClient *http.Client
-	baseURL    string
+	baseURL    string // gateway base URL, e.g. http://gateway:8200
 	logger     *zap.SugaredLogger
 }
 
-// NewClient creates a new TigerBeetle client
+// NewClient creates a ledger client targeting the gateway-service ledger API.
+// Configuration: GATEWAY_URL (or LEDGER_API_URL), default http://localhost:8200.
+// TIGERBEETLE_HTTP_URL is no longer used — TigerBeetle has no HTTP interface.
 func NewClient(logger *zap.SugaredLogger) *Client {
-	baseURL := os.Getenv("TIGERBEETLE_HTTP_URL")
+	baseURL := os.Getenv("GATEWAY_URL")
 	if baseURL == "" {
-		baseURL = "http://localhost:3003"
+		baseURL = os.Getenv("LEDGER_API_URL")
+	}
+	if baseURL == "" {
+		baseURL = "http://localhost:8200"
 	}
 	return &Client{
 		httpClient: &http.Client{Timeout: 10 * time.Second},
@@ -101,171 +96,172 @@ func NewClient(logger *zap.SugaredLogger) *Client {
 	}
 }
 
-// CreateAccount creates a new account in TigerBeetle
-func (c *Client) CreateAccount(ctx context.Context, userID string, ledger uint32, code uint16) (uint64, error) {
-	accountID := rand.Uint64()
-	payload := map[string]interface{}{
-		"accounts": []map[string]interface{}{
-			{
-				"id":        accountID,
-				"user_data": userID,
-				"ledger":    ledger,
-				"code":      code,
-				"flags":     0,
-			},
-		},
-	}
-
+func (c *Client) post(ctx context.Context, path string, payload interface{}, out interface{}) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return 0, fmt.Errorf("marshal error: %w", err)
+		return fmt.Errorf("marshal error: %w", err)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("%s/api/v1/accounts", c.baseURL),
-		strings.NewReader(string(data)),
-	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(data))
 	if err != nil {
-		return 0, fmt.Errorf("request creation error: %w", err)
+		return fmt.Errorf("request creation error: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("tigerbeetle error: %w", err)
+		return fmt.Errorf("gateway ledger API error: %w", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return 0, fmt.Errorf("tigerbeetle returned status %d", resp.StatusCode)
+		return fmt.Errorf("gateway ledger API returned status %d for %s", resp.StatusCode, path)
 	}
-
-	c.logger.Debugw("Created TigerBeetle account", "account_id", accountID, "user_id", userID)
-	return accountID, nil
+	if out != nil {
+		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+			return fmt.Errorf("decode error: %w", err)
+		}
+	}
+	return nil
 }
 
-// GetAccount retrieves account balance from TigerBeetle
-func (c *Client) GetAccount(ctx context.Context, accountID uint64) (*Account, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/api/v1/accounts/%d", c.baseURL, accountID),
-		nil,
-	)
+func (c *Client) get(ctx context.Context, path string, out interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
-		return nil, fmt.Errorf("request creation error: %w", err)
+		return fmt.Errorf("request creation error: %w", err)
 	}
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("tigerbeetle error: %w", err)
+		return fmt.Errorf("gateway ledger API error: %w", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, nil
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("gateway ledger API returned status %d for %s", resp.StatusCode, path)
 	}
+	if out != nil {
+		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+			return fmt.Errorf("decode error: %w", err)
+		}
+	}
+	return nil
+}
 
+// CreateAccount creates a ledger account via POST /api/v1/ledger/accounts.
+// accountType must be one of the gateway-supported types: margin, settlement,
+// fee, clearing.
+func (c *Client) CreateAccount(ctx context.Context, userID, accountType, currency string) (*Account, error) {
 	var account Account
-	if err := json.NewDecoder(resp.Body).Decode(&account); err != nil {
-		return nil, fmt.Errorf("decode error: %w", err)
+	err := c.post(ctx, "/api/v1/ledger/accounts", map[string]interface{}{
+		"user_id":      userID,
+		"account_type": accountType,
+		"currency":     currency,
+	}, &account)
+	if err != nil {
+		return nil, err
 	}
-
+	c.logger.Debugw("Created ledger account via gateway", "account_id", account.ID, "user_id", userID)
 	return &account, nil
 }
 
-// RecordSettlement records a complete trade settlement as double-entry transfers
-// This creates 3 transfers: buyer→seller (principal), buyer→fee account (fee), audit trail
-func (c *Client) RecordSettlement(ctx context.Context, record SettlementRecord) ([]uint64, error) {
-	principalAmount := uint64(record.Amount * 100)    // Convert to cents
-	feeAmount := uint64(record.FeeAmount * 100)
-
-	transfers := []map[string]interface{}{
-		// Transfer 1: Buyer pays seller (principal amount)
-		{
-			"id":               rand.Uint64(),
-			"debit_account_id": record.BuyerAccID,
-			"credit_account_id": record.SellerAccID,
-			"amount":           principalAmount,
-			"user_data":        record.MojaloopTxID,
-			"ledger":           LedgerFiat,
-			"code":             CodeTradeBuy,
-			"flags":            0,
-		},
-		// Transfer 2: Buyer pays exchange fee
-		{
-			"id":               rand.Uint64(),
-			"debit_account_id": record.BuyerAccID,
-			"credit_account_id": record.FeeAccID,
-			"amount":           feeAmount,
-			"user_data":        fmt.Sprintf("FEE-%s", record.TradeID),
-			"ledger":           LedgerFee,
-			"code":             CodeFeeCollection,
-			"flags":            0,
-		},
+// GetAccountsByUser lists a user's accounts via GET /api/v1/ledger/accounts/:user_id.
+func (c *Client) GetAccountsByUser(ctx context.Context, userID string) ([]Account, error) {
+	var resp struct {
+		Accounts []Account `json:"accounts"`
+		Count    int       `json:"count"`
 	}
+	if err := c.get(ctx, "/api/v1/ledger/accounts/"+userID, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Accounts, nil
+}
 
-	payload := map[string]interface{}{"transfers": transfers}
-	data, err := json.Marshal(payload)
+// GetAccountBalance returns the posted balance for an account (in smallest
+// units) via GET /api/v1/ledger/accounts/:account_id/balance.
+func (c *Client) GetAccountBalance(ctx context.Context, accountID string) (int64, error) {
+	var resp struct {
+		AccountID string `json:"account_id"`
+		Balance   int64  `json:"balance"`
+		Currency  string `json:"currency"`
+	}
+	if err := c.get(ctx, "/api/v1/ledger/accounts/"+accountID+"/balance", &resp); err != nil {
+		return 0, err
+	}
+	return resp.Balance, nil
+}
+
+// CreateTransfer posts an immediate double-entry transfer via
+// POST /api/v1/ledger/transfers. Account IDs are gateway ledger UUIDs.
+func (c *Client) CreateTransfer(ctx context.Context, debitAccountID, creditAccountID string, amount int64, code uint16, reference string) (*Transfer, error) {
+	if amount <= 0 {
+		return nil, fmt.Errorf("transfer amount must be positive")
+	}
+	var transfer Transfer
+	err := c.post(ctx, "/api/v1/ledger/transfers", map[string]interface{}{
+		"debit_account_id":  debitAccountID,
+		"credit_account_id": creditAccountID,
+		"amount":            amount,
+		"code":              code,
+		"reference":         reference,
+	}, &transfer)
 	if err != nil {
-		return nil, fmt.Errorf("marshal error: %w", err)
+		return nil, err
 	}
+	return &transfer, nil
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("%s/api/v1/transfers", c.baseURL),
-		strings.NewReader(string(data)),
-	)
+// CreatePendingTransfer creates a two-phase (pending) transfer via
+// POST /api/v1/ledger/transfers/pending.
+func (c *Client) CreatePendingTransfer(ctx context.Context, debitAccountID, creditAccountID string, amount int64, code uint16, reference string) (*Transfer, error) {
+	if amount <= 0 {
+		return nil, fmt.Errorf("transfer amount must be positive")
+	}
+	var transfer Transfer
+	err := c.post(ctx, "/api/v1/ledger/transfers/pending", map[string]interface{}{
+		"debit_account_id":  debitAccountID,
+		"credit_account_id": creditAccountID,
+		"amount":            amount,
+		"code":              code,
+		"reference":         reference,
+	}, &transfer)
 	if err != nil {
-		return nil, fmt.Errorf("request creation error: %w", err)
+		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	return &transfer, nil
+}
 
-	resp, err := c.httpClient.Do(req)
+// RecordSettlement records a trade settlement as two double-entry transfers
+// (principal buyer→seller, fee buyer→fee account) via the gateway ledger API.
+// If the fee leg fails after the principal leg posted, the error propagates —
+// reconciliation is handled by the calling Temporal workflow's compensation.
+func (c *Client) RecordSettlement(ctx context.Context, record SettlementRecord) ([]string, error) {
+	principalAmount := int64(record.Amount * 100) // cents
+	feeAmount := int64(record.FeeAmount * 100)
+
+	ids := make([]string, 0, 2)
+
+	principal, err := c.CreateTransfer(ctx, record.BuyerAccID, record.SellerAccID, principalAmount, CodeTradeBuy, record.MojaloopTxID)
 	if err != nil {
-		return nil, fmt.Errorf("tigerbeetle error: %w", err)
+		return nil, fmt.Errorf("principal leg failed: %w", err)
 	}
-	defer resp.Body.Close()
+	ids = append(ids, principal.ID)
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("tigerbeetle returned status %d", resp.StatusCode)
-	}
-
-	var result struct {
-		TransferIDs []uint64 `json:"transfer_ids"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode error: %w", err)
+	if feeAmount > 0 && record.FeeAccID != "" {
+		fee, err := c.CreateTransfer(ctx, record.BuyerAccID, record.FeeAccID, feeAmount, CodeFeeCollection, fmt.Sprintf("FEE-%s", record.TradeID))
+		if err != nil {
+			return ids, fmt.Errorf("fee leg failed (principal posted as %s): %w", principal.ID, err)
+		}
+		ids = append(ids, fee.ID)
 	}
 
-	c.logger.Infow("Recorded settlement in TigerBeetle",
+	c.logger.Infow("Recorded settlement via gateway ledger API",
 		"trade_id", record.TradeID,
 		"amount", record.Amount,
 		"fee", record.FeeAmount,
-		"transfer_count", len(result.TransferIDs),
+		"transfer_count", len(ids),
 	)
-
-	return result.TransferIDs, nil
+	return ids, nil
 }
 
-// GetAccountBalance returns the net balance (credits - debits) for an account
-func (c *Client) GetAccountBalance(ctx context.Context, accountID uint64) (int64, error) {
-	account, err := c.GetAccount(ctx, accountID)
-	if err != nil {
-		return 0, err
-	}
-	if account == nil {
-		return 0, fmt.Errorf("account %d not found", accountID)
-	}
-
-	// Net balance = credits_posted - debits_posted (in cents)
-	balance := int64(account.CreditsPosted) - int64(account.DebitsPosted)
-	return balance, nil
-}
-
-// HealthCheck verifies TigerBeetle connectivity
+// HealthCheck verifies gateway (and thus ledger path) connectivity.
 func (c *Client) HealthCheck(ctx context.Context) bool {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/api/v1/health", c.baseURL),
-		nil,
-	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
 	if err != nil {
 		return false
 	}
@@ -275,31 +271,4 @@ func (c *Client) HealthCheck(ctx context.Context) bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
-}
-
-// CreateTransfer creates a double-entry transfer in TigerBeetle.
-func (c *Client) CreateTransfer(ctx context.Context, transferID uint64, debitAccount uint64, creditAccount uint64, amount uint64, ledger uint32, code uint16) error {
-	payload := map[string]interface{}{
-		"transfer_id":    transferID,
-		"debit_account":  debitAccount,
-		"credit_account": creditAccount,
-		"amount":         amount,
-		"ledger":         ledger,
-		"code":           code,
-	}
-	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/transfers", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("tigerbeetle CreateTransfer: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("tigerbeetle CreateTransfer: status %d", resp.StatusCode)
-	}
-	return nil
 }

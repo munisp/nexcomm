@@ -39,37 +39,6 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- PWA Service Worker Registration -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js', { scope: '/' })
-            .then(function(reg) {
-              console.log('[NEXCOM SW] Registered, scope:', reg.scope);
-              // Check for updates every 60 seconds
-              setInterval(function() { reg.update(); }, 60000);
-              // On new SW activation, clear all caches so stale assets are purged
-              reg.addEventListener('updatefound', function() {
-                var newWorker = reg.installing;
-                if (newWorker) {
-                  newWorker.addEventListener('statechange', function() {
-                    if (newWorker.state === 'activated') {
-                      if ('caches' in window) {
-                        caches.keys().then(function(names) {
-                          names.forEach(function(name) { caches.delete(name); });
-                        });
-                      }
-                      console.log('[NEXCOM SW] New version activated — caches cleared');
-                    }
-                  });
-                }
-              });
-            })
-            .catch(function(err) {
-              console.warn('[NEXCOM SW] Registration failed:', err);
-            });
-        });
-      }
-    </script>
+    <!-- Service worker is registered exactly once by src/lib/registerSW.ts (via main.tsx) -->
   </body>
 </html>

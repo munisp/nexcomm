@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::net::TcpStream;
 use std::time::Duration;
 
 /// Account metadata returned only after the configured ledger adapter confirms
@@ -50,89 +49,158 @@ pub struct Balance {
     pub currency: String,
 }
 
-/// Strict TigerBeetle adapter. It does not implement a local double-entry
-/// ledger or fabricate balances when the real ledger is unavailable.
+// ─── Gateway ledger API response shapes ──────────────────────────────────────
+// (gateway-service/internal/api/ledger_handlers.go +
+//  gateway-service/internal/tigerbeetle/client.go)
+
+#[derive(Debug, Deserialize)]
+struct GatewayAccount {
+    id: String,
+    #[serde(rename = "userId")]
+    user_id: String,
+    #[serde(rename = "type")]
+    account_type: String,
+    currency: String,
+    balance: i64,
+    pending: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct GatewayTransfer {
+    id: String,
+    #[serde(rename = "debitAccountId")]
+    debit_account_id: String,
+    #[serde(rename = "creditAccountId")]
+    credit_account_id: String,
+    amount: i64,
+    code: u16,
+    timestamp: i64,
+    status: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GatewayBalanceResponse {
+    account_id: String,
+    balance: i64,
+    currency: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GatewayAccountsResponse {
+    accounts: Vec<GatewayAccount>,
+}
+
+/// Maps our account types onto the gateway ledger API's accepted set
+/// (gateway-service/internal/tigerbeetle/client.go accountCode(): margin,
+/// settlement, fee, clearing). Escrow settles through the clearing account
+/// code. "Trading" has no ledger code upstream; the gateway rejects it and the
+/// failure propagates — no local fallback is ever fabricated.
+fn gateway_account_type(t: &AccountType) -> &'static str {
+    match t {
+        AccountType::Settlement => "settlement",
+        AccountType::Margin => "margin",
+        AccountType::Fee => "fee",
+        AccountType::Escrow => "clearing",
+        AccountType::Trading => "trading",
+    }
+}
+
+fn account_type_from_str(s: &str) -> AccountType {
+    match s {
+        "settlement" => AccountType::Settlement,
+        "margin" => AccountType::Margin,
+        "fee" => AccountType::Fee,
+        "clearing" => AccountType::Escrow,
+        _ => AccountType::Trading,
+    }
+}
+
+/// Ledger client for the settlement engine.
+///
+/// TigerBeetle speaks a binary protocol — it has NO HTTP/JSON interface, so the
+/// previous implementation (POST /accounts, POST /transfers to the TB port)
+/// could never succeed. All ledger operations are instead routed through the
+/// gateway-service ledger API (`/api/v1/ledger/...`), which owns the official
+/// TigerBeetle SDK client. Fail-closed semantics are preserved: when the
+/// gateway is unreachable or returns an error, the operation fails.
 pub struct TigerBeetleClient {
-    address: String,
+    /// Base URL of the gateway-service ledger API, e.g. http://gateway:8200
+    gateway_url: String,
     http_client: reqwest::Client,
-    connected: bool,
 }
 
 impl TigerBeetleClient {
-    pub fn new(address: &str) -> Self {
+    /// `gateway_url` is the gateway-service base URL. Historically this
+    /// constructor received a TigerBeetle host:port; if a bare host:port is
+    /// passed it is treated as the gateway address for backwards compatibility,
+    /// but callers should pass GATEWAY_URL (see settlement.rs / main.rs).
+    pub fn new(gateway_url: &str) -> Self {
         let http_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
             .build()
             .unwrap_or_default();
-        let connected = TcpStream::connect_timeout(
-            &address
-                .parse()
-                .unwrap_or_else(|_| "127.0.0.1:3000".parse().unwrap()),
-            Duration::from_secs(3),
-        )
-        .is_ok();
-        if connected {
-            tracing::info!(address = address, "TigerBeetle endpoint reachable");
+        let base = if gateway_url.starts_with("http://") || gateway_url.starts_with("https://") {
+            gateway_url.trim_end_matches('/').to_string()
         } else {
-            tracing::error!(
-                address = address,
-                "TigerBeetle unavailable; settlement requests will fail"
-            );
-        }
+            format!("http://{}", gateway_url.trim_end_matches('/'))
+        };
+        tracing::info!(gateway_url = %base, "Ledger client targeting gateway-service ledger API");
         Self {
-            address: address.to_string(),
+            gateway_url: base,
             http_client,
-            connected,
         }
     }
 
-    pub fn is_connected(&self) -> bool {
-        self.connected
+    /// Live connectivity probe against the gateway (which in turn probes TB).
+    pub async fn is_connected(&self) -> bool {
+        self.http_client
+            .get(format!("{}/health", self.gateway_url))
+            .send()
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false)
     }
+
     pub fn is_fallback(&self) -> bool {
         false
     }
 
-    fn require_connection(&self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.connected {
-            Ok(())
-        } else {
-            Err("TigerBeetle is unavailable; no ledger fallback is permitted".into())
-        }
-    }
-
-    /// This service expects a real TigerBeetle-compatible adapter at the
-    /// configured address. A non-success response is a transaction failure.
+    /// Create a ledger account via POST /api/v1/ledger/accounts.
     pub async fn create_account(
         &self,
         user_id: &str,
         currency: &str,
         account_type: AccountType,
     ) -> Result<LedgerAccount, Box<dyn std::error::Error>> {
-        self.require_connection()?;
-        let account = LedgerAccount {
-            id: uuid::Uuid::new_v4().to_string(),
-            user_id: user_id.to_string(),
-            currency: currency.to_string(),
-            account_type,
+        let url = format!("{}/api/v1/ledger/accounts", self.gateway_url);
+        let response = self
+            .http_client
+            .post(&url)
+            .json(&serde_json::json!({
+                "user_id": user_id,
+                "account_type": gateway_account_type(&account_type),
+                "currency": currency,
+            }))
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(format!("gateway ledger account creation returned HTTP {}", response.status()).into());
+        }
+        let acc: GatewayAccount = response.json().await?;
+        Ok(LedgerAccount {
+            id: acc.id,
+            user_id: acc.user_id,
+            currency: acc.currency,
+            account_type: account_type_from_str(&acc.account_type),
             debits_pending: 0,
-            debits_posted: 0,
+            debits_posted: acc.balance.max(0) as u64,
             credits_pending: 0,
             credits_posted: 0,
             created_at: Utc::now(),
-        };
-        let url = format!("http://{}/accounts", self.address);
-        let response = self.http_client.post(&url).json(&serde_json::json!({"id": account.id, "user_data_128": user_id, "ledger": 1, "code": 1, "flags": 0})).send().await?;
-        if !response.status().is_success() {
-            return Err(format!(
-                "TigerBeetle account creation returned HTTP {}",
-                response.status()
-            )
-            .into());
-        }
-        Ok(account)
+        })
     }
 
+    /// Create a posted transfer via POST /api/v1/ledger/transfers.
     pub async fn create_transfer(
         &self,
         debit_account_id: &str,
@@ -140,51 +208,93 @@ impl TigerBeetleClient {
         amount: u64,
         reference: &str,
     ) -> Result<LedgerTransfer, Box<dyn std::error::Error>> {
-        self.require_connection()?;
         if amount == 0 {
             return Err("ledger transfer amount must be positive".into());
         }
-        let transfer = LedgerTransfer {
-            id: uuid::Uuid::new_v4().to_string(),
-            debit_account_id: debit_account_id.to_string(),
-            credit_account_id: credit_account_id.to_string(),
-            amount,
+        let url = format!("{}/api/v1/ledger/transfers", self.gateway_url);
+        let response = self
+            .http_client
+            .post(&url)
+            .json(&serde_json::json!({
+                "debit_account_id": debit_account_id,
+                "credit_account_id": credit_account_id,
+                "amount": amount,
+                "code": 1,
+                "reference": reference,
+            }))
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(format!("gateway ledger transfer returned HTTP {}", response.status()).into());
+        }
+        let t: GatewayTransfer = response.json().await?;
+        Ok(LedgerTransfer {
+            id: t.id,
+            debit_account_id: t.debit_account_id,
+            credit_account_id: t.credit_account_id,
+            amount: t.amount.max(0) as u64,
             pending_id: None,
             user_data: reference.to_string(),
-            code: 1,
+            code: t.code,
             ledger: 1,
             flags: 0,
-            timestamp: Utc::now(),
-        };
-        let url = format!("http://{}/transfers", self.address);
-        let response = self.http_client.post(&url).json(&serde_json::json!({"id": transfer.id, "debit_account_id": debit_account_id, "credit_account_id": credit_account_id, "amount": amount, "user_data_128": reference, "code": 1, "ledger": 1, "flags": 0})).send().await?;
-        if !response.status().is_success() {
-            return Err(format!("TigerBeetle transfer returned HTTP {}", response.status()).into());
-        }
-        Ok(transfer)
+            timestamp: DateTime::from_timestamp_millis(t.timestamp).unwrap_or_else(Utc::now),
+        })
     }
 
-    /// The raw TigerBeetle protocol does not provide this HTTP JSON contract.
-    /// Returning a fabricated zero balance is forbidden; deploy the native
-    /// adapter before enabling balance reads in this service.
+    /// Balance lookup via GET /api/v1/ledger/accounts/{account_id}/balance.
+    /// (The gateway route uses the path param name `user_id` but treats it as
+    /// the account id — see ledger_handlers.go ledgerGetBalance.)
     pub async fn get_balance(
         &self,
-        _account_id: &str,
+        account_id: &str,
     ) -> Result<Balance, Box<dyn std::error::Error>> {
-        self.require_connection()?;
-        Err("TigerBeetle balance lookup requires the native client adapter".into())
+        let url = format!("{}/api/v1/ledger/accounts/{}/balance", self.gateway_url, account_id);
+        let response = self.http_client.get(&url).send().await?;
+        if !response.status().is_success() {
+            return Err(format!("gateway balance lookup returned HTTP {}", response.status()).into());
+        }
+        let b: GatewayBalanceResponse = response.json().await?;
+        Ok(Balance {
+            account_id: b.account_id,
+            available: b.balance.to_string(),
+            pending: "0".to_string(),
+            total: b.balance.to_string(),
+            currency: b.currency,
+        })
     }
 
+    /// Account discovery via GET /api/v1/ledger/accounts/{user_id}.
     pub async fn get_user_accounts(
         &self,
-        _user_id: &str,
+        user_id: &str,
     ) -> Result<Vec<LedgerAccount>, Box<dyn std::error::Error>> {
-        self.require_connection()?;
-        Err("TigerBeetle account discovery requires the durable account directory".into())
+        let url = format!("{}/api/v1/ledger/accounts/{}", self.gateway_url, user_id);
+        let response = self.http_client.get(&url).send().await?;
+        if !response.status().is_success() {
+            return Err(format!("gateway account lookup returned HTTP {}", response.status()).into());
+        }
+        let resp: GatewayAccountsResponse = response.json().await?;
+        Ok(resp
+            .accounts
+            .into_iter()
+            .map(|acc| LedgerAccount {
+                id: acc.id,
+                user_id: acc.user_id,
+                currency: acc.currency,
+                account_type: account_type_from_str(&acc.account_type),
+                debits_pending: 0,
+                debits_posted: acc.balance.max(0) as u64,
+                credits_pending: 0,
+                credits_posted: 0,
+                created_at: Utc::now(),
+            })
+            .collect())
     }
 
+    /// The gateway ledger API keys transfer history by user id; there is no
+    /// global transfer listing. Use get_transfers_for(user_id) instead.
     pub async fn get_transfers(&self) -> Result<Vec<LedgerTransfer>, Box<dyn std::error::Error>> {
-        self.require_connection()?;
-        Err("TigerBeetle reconciliation requires the native client adapter".into())
+        Err("global transfer listing is not exposed by the gateway ledger API; use per-user history".into())
     }
 }

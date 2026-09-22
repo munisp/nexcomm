@@ -215,7 +215,7 @@ export const settlementsRouter = router({
     .mutation(async ({ ctx }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return { success: true };
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — settlement not processed" });
       const now = new Date();
       const due = await db
         .select({ id: settlements.id })
@@ -248,7 +248,7 @@ export const settlementsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-            if (!db) return { success: true };
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — settlement not processed" });
       const now = new Date();
       await db
         .update(settlements)

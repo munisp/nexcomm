@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 import { eq, desc, and, inArray } from "drizzle-orm";
+import { timingSafeEqual } from "crypto";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -13,6 +14,40 @@ import { notifyOwner } from "../_core/notification";
 import { storagePut } from "../storage";
 import { validateFileUpload } from "../security-middleware";
 import { writeAuditLog } from "../audit";
+import { ENV } from "../_core/env";
+import { applyKycDecisionSideEffects } from "../kycReview";
+
+// ─── Account type mapping ─────────────────────────────────────────────────────
+// Each stakeholder type maps to its own account_type enum value (previously
+// WAREHOUSE_OPERATOR / MARKET_MAKER / ADMIN were all misclassified as PROCESSOR).
+const STAKEHOLDER_ACCOUNT_TYPE = {
+  FARMER: "FARMER",
+  TRADER: "TRADER",
+  BROKER: "BROKER",
+  WAREHOUSE_OPERATOR: "WAREHOUSE_OPERATOR",
+  MARKET_MAKER: "MARKET_MAKER",
+  ADMIN: "ADMIN",
+} as const;
+
+/**
+ * Timing-safe validation of the admin invite code submitted with an ADMIN
+ * onboarding application. The code only admits the application into the review
+ * queue — an existing admin must still approve it before any role is granted.
+ */
+function assertValidAdminCode(code: string | undefined): void {
+  const expected = ENV.adminInviteCode;
+  if (!expected) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Admin onboarding is not open. Contact an existing administrator.",
+    });
+  }
+  const a = Buffer.from(code ?? "");
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Invalid admin authorization code." });
+  }
+}
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 const personalInfoSchema = z.object({
@@ -79,6 +114,81 @@ const onboardingSubmitSchema = z.object({
   agreedToKyc: z.boolean(),
 });
 
+// ─── Cooperative bulk-upload member identity ──────────────────────────────────
+
+type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+interface BulkMemberRow {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  bvn?: string | undefined;
+  nin?: string | undefined;
+  state: string;
+  address: string;
+  email?: string | undefined;
+}
+
+/**
+ * Find or create the member's own `users` account for a cooperative bulk
+ * upload. Identity is phone-based (USSD-loginable); we deduplicate on BVN
+ * (profiles.bvn) first, then on the normalised phone-derived openId, so the
+ * same person never gets two accounts across repeated uploads.
+ */
+async function findOrCreateMemberUser(db: Db, member: BulkMemberRow): Promise<number> {
+  const phoneDigits = member.phone.replace(/\D/g, "");
+  const memberOpenId = `coop-member:${phoneDigits}`;
+
+  // Dedup on BVN — strongest identity signal
+  if (member.bvn) {
+    const [byBvn] = await db
+      .select({ userId: profiles.userId })
+      .from(profiles)
+      .where(eq(profiles.bvn, member.bvn))
+      .limit(1);
+    if (byBvn) return byBvn.userId;
+  }
+
+  // Dedup on phone-derived identity
+  const [existingUser] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.openId, memberOpenId))
+    .limit(1);
+  if (existingUser) return existingUser.id;
+
+  const [newUser] = await db
+    .insert(users)
+    .values({
+      openId: memberOpenId,
+      name: `${member.firstName} ${member.lastName}`,
+      email: member.email ?? null,
+      loginMethod: "phone",
+      role: "user",
+    })
+    .returning({ id: users.id });
+
+  // Provision the member's generic profile so KYC review screens can see them
+  await db
+    .insert(profiles)
+    .values({
+      userId: newUser.id,
+      accountType: "FARMER",
+      firstName: member.firstName,
+      lastName: member.lastName,
+      phone: member.phone,
+      bvn: member.bvn ?? null,
+      nin: member.nin ?? null,
+      state: member.state,
+      address: member.address,
+      stakeholderType: "FARMER",
+      kycStatus: "PENDING",
+    })
+    .onConflictDoNothing({ target: profiles.userId });
+
+  return newUser.id;
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 export const onboardingRouter = router({
   /**
@@ -92,6 +202,12 @@ export const onboardingRouter = router({
 
       if (!input.agreedToTerms || !input.agreedToKyc) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "You must agree to the terms and KYC policy." });
+      }
+
+      // ADMIN applications require a valid server-side invite code. The code is
+      // never stored or logged; approval still requires existing-admin review.
+      if (input.stakeholderType === "ADMIN") {
+        assertValidAdminCode(input.stakeholderSpecific.adminCode);
       }
 
       // Check for existing pending application
@@ -131,10 +247,7 @@ export const onboardingRouter = router({
         country: input.personalInfo.country,
         state: input.personalInfo.state,
         address: input.personalInfo.address,
-        accountType: input.stakeholderType === "FARMER" ? "FARMER"
-          : input.stakeholderType === "TRADER" ? "TRADER"
-          : input.stakeholderType === "BROKER" ? "BROKER"
-          : "PROCESSOR",
+        accountType: STAKEHOLDER_ACCOUNT_TYPE[input.stakeholderType],
         kycStatus: "PENDING",
         bvn: input.personalInfo.bvn,
         nin: input.personalInfo.nin,
@@ -150,6 +263,7 @@ export const onboardingRouter = router({
           country: input.personalInfo.country,
           state: input.personalInfo.state,
           address: input.personalInfo.address,
+          accountType: STAKEHOLDER_ACCOUNT_TYPE[input.stakeholderType],
           kycStatus: "PENDING",
           updatedAt: new Date(),
         },
@@ -287,11 +401,31 @@ export const onboardingRouter = router({
         })
         .where(eq(kycQueue.id, input.applicationId));
 
-      // Update user's KYC status in profile
+      // Update user's KYC status in profile + notify the applicant in-app
       if (input.decision === "APPROVED" || input.decision === "REJECTED") {
-        await db.update(profiles)
-          .set({ kycStatus: input.decision === "APPROVED" ? "VERIFIED" : "REJECTED", updatedAt: new Date() })
-          .where(eq(profiles.userId, application.userId));
+        await applyKycDecisionSideEffects(db, {
+          userId: application.userId,
+          decision: input.decision,
+          reviewerId: ctx.user.id,
+          notes: input.notes,
+          stakeholderLabel: "onboarding",
+          metadata: { applicationId: input.applicationId },
+        });
+      }
+
+      // Grant the platform admin role only after this existing-admin review
+      // approves an ADMIN application (the invite code alone never grants it).
+      if (input.decision === "APPROVED") {
+        try {
+          const docs = typeof application.documents === "string"
+            ? JSON.parse(application.documents)
+            : application.documents as { stakeholderType?: string } | null;
+          if (docs?.stakeholderType === "ADMIN") {
+            await db.update(users)
+              .set({ role: "admin", updatedAt: new Date() })
+              .where(eq(users.id, application.userId));
+          }
+        } catch { /* non-parseable documents blob — skip role grant */ }
       }
 
       // Write audit log
@@ -360,12 +494,15 @@ export const onboardingRouter = router({
       let successRows = 0;
       let failedRows = 0;
 
-      // Process each member row
+      // Process each member row — each member gets their OWN users account
+      // (phone-based identity, deduplicated on BVN/phone) so they can log in
+      // via USSD/portal themselves instead of hanging off the uploader's account.
       for (let i = 0; i < input.members.length; i++) {
         const member = input.members[i];
         try {
+          const memberUserId = await findOrCreateMemberUser(db, member);
           const [entry] = await db.insert(kycQueue).values({
-            userId: ctx.user.id, // cooperative admin is the submitter
+            userId: memberUserId,
             status: "PENDING",
             submittedAt: new Date(),
             documents: JSON.stringify({
@@ -373,6 +510,7 @@ export const onboardingRouter = router({
               source: "COOPERATIVE_BULK_UPLOAD",
               cooperativeName: input.cooperativeName,
               uploadId: upload.id,
+              submittedByUserId: ctx.user.id, // cooperative admin is the submitter
               personalInfo: {
                 firstName: member.firstName,
                 lastName: member.lastName,
@@ -517,7 +655,7 @@ export const onboardingRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
       }
       const db = await getDb();
-            if (!db) return { success: true };
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — decision not recorded. Please retry." });
 
       const newStatus = input.action === "APPROVE" ? "APPROVED" : "REJECTED";
 
@@ -535,13 +673,19 @@ export const onboardingRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "KYC application not found" });
       }
 
-      // Update the farmer's profile KYC status
+      // Update the farmer's profile KYC status + grant the farmer role on approval
       await db.update(profiles)
         .set({
           kycStatus: input.action === "APPROVE" ? "VERIFIED" : "REJECTED",
           updatedAt: new Date(),
         })
         .where(eq(profiles.userId, updated.userId));
+
+      if (input.action === "APPROVE") {
+        await db.update(users)
+          .set({ role: "farmer", updatedAt: new Date() })
+          .where(and(eq(users.id, updated.userId), eq(users.role, "user")));
+      }
 
       // Send in-app notification to the farmer
       const notifTitle = input.action === "APPROVE"
@@ -649,14 +793,26 @@ export const onboardingRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
       }
       const db = await getDb();
-      if (!db) return { approved: 0, message: "Database unavailable — no records processed" };
+      if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable — no records processed" });
 
-      // Fetch all PENDING kycQueue rows for this upload
-      // The upload links members via review_notes containing the uploadId marker
+      // Scope strictly to this upload's applications via createdApplicationIds.
+      // NEVER scan the global PENDING queue — that mass-approves strangers.
+      const [upload] = await db
+        .select()
+        .from(cooperativeBulkUploads)
+        .where(eq(cooperativeBulkUploads.id, input.uploadId))
+        .limit(1);
+      if (!upload) throw new TRPCError({ code: "NOT_FOUND", message: "Bulk upload not found" });
+
+      const applicationIds = (upload.createdApplicationIds as number[] | null) ?? [];
+      if (applicationIds.length === 0) {
+        return { approved: 0 };
+      }
+
       const pendingRows = await db
         .select({ id: kycQueue.id, userId: kycQueue.userId })
         .from(kycQueue)
-        .where(eq(kycQueue.status, "PENDING"))
+        .where(and(eq(kycQueue.status, "PENDING"), inArray(kycQueue.id, applicationIds)))
         .limit(500);
 
       let approved = 0;
@@ -671,11 +827,15 @@ export const onboardingRouter = router({
           })
           .where(eq(kycQueue.id, row.id));
 
-        // Update farmer profile KYC status
+        // Update farmer profile KYC status + grant farmer role
         await db
           .update(profiles)
           .set({ kycStatus: "VERIFIED", updatedAt: new Date() })
           .where(eq(profiles.userId, row.userId));
+        await db
+          .update(users)
+          .set({ role: "farmer", updatedAt: new Date() })
+          .where(and(eq(users.id, row.userId), eq(users.role, "user")));
 
         // Send in-app notification to the farmer
         try {

@@ -29,7 +29,9 @@ import OrderBookDepthChart from "@/components/OrderBookDepthChart";
 import { TotpChallengeModal } from "@/components/TotpChallengeModal";
 import { usePreferences } from "@/contexts/PreferencesContext";
 import { useOfflineQueue } from "@/hooks/useOfflineQueue";
+import { useFormDraft } from "@/hooks/useFormDraft";
 import SmartFormFill from "@/components/SmartFormFill";
+import { OrderRiskAssessment } from "@/components/OrderRiskAssessment";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n: number, dp = 2) {
@@ -162,7 +164,7 @@ function OrderBookSide({ levels, side, maxTotal }: {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Trade() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { t, formatCurrency } = usePreferences();
   const { enqueue: enqueueOffline, queueDepth } = useOfflineQueue();
 
@@ -258,6 +260,23 @@ export default function Trade() {
   const [orderType, setOrderType] = useState<"LIMIT" | "MARKET" | "STOP_LIMIT">("LIMIT");
   const [orderPrice, setOrderPrice] = useState("");
   const [orderQty, setOrderQty] = useState("");
+
+  // OFFLINE-RES: autosave the order ticket. A farmer mid-order on a flaky
+  // connection gets their side/type/price/qty back after a browser kill or
+  // outage — but the draft is cleared the moment an order is placed so a
+  // stale ticket can never be double-submitted (server-side clientOrderId
+  // dedupe is the second line of defence).
+  const orderDraft = useFormDraft({
+    formKey: "trade-order-ticket",
+    scope: user?.id != null ? String(user.id) : "anon",
+    value: { orderSide, orderType, orderPrice, orderQty },
+    onRestore: (d) => {
+      if (d?.orderSide === "BUY" || d?.orderSide === "SELL") setOrderSide(d.orderSide);
+      if (d?.orderType === "LIMIT" || d?.orderType === "MARKET" || d?.orderType === "STOP_LIMIT") setOrderType(d.orderType);
+      if (typeof d?.orderPrice === "string") setOrderPrice(d.orderPrice);
+      if (typeof d?.orderQty === "string") setOrderQty(d.orderQty);
+    },
+  });
   const [chartInterval, setChartInterval] = useState(() =>
     localStorage.getItem("nexcom:chartInterval:commodity") ?? "1m"
   );
@@ -440,6 +459,7 @@ export default function Trade() {
     onSuccess: (_data, vars) => {
       setConfirmSubmitted(true);
       setOrderQty("");
+      orderDraft.clearDraft(); // placed — the ticket draft must never resurface
       playOrderSound("success");
       toast.success(`${vars.side} order placed`, {
         description: `${vars.quantity} × ${vars.symbol} submitted to the matching engine`,
@@ -727,6 +747,13 @@ export default function Trade() {
                   </div>
                 )}
 
+                <OrderRiskAssessment
+                  commodity={selectedCommodity.name}
+                  amount={orderValue}
+                  quantity={parseFloat(orderQty) || undefined}
+                  channel="web"
+                />
+
                 <SmartFormFill
                   fields={[
                     { key: "side", label: "Side", type: "select", options: ["BUY", "SELL"] },
@@ -742,22 +769,8 @@ export default function Trade() {
                   }}
                   placeholder='e.g. "Buy 500 bags of white maize at ₦85,000 per tonne, GTC limit order"'
                 />
-                                <SmartFormFill
-                  fields={[
-                    { key: "side", label: "Side", type: "select", options: ["BUY", "SELL"] },
-                    { key: "orderType", label: "Order Type", type: "select", options: ["LIMIT", "MARKET", "STOP_LIMIT"] },
-                    { key: "quantity", label: "Quantity", type: "number" },
-                    { key: "price", label: "Price", type: "number" },
-                  ]}
-                  onFill={(vals) => {
-                    if (vals.side === "BUY" || vals.side === "SELL") setOrderSide(vals.side);
-                    if (vals.orderType && ["LIMIT","MARKET","STOP_LIMIT"].includes(vals.orderType)) setOrderType(vals.orderType as "LIMIT"|"MARKET"|"STOP_LIMIT");
-                    if (vals.quantity) setOrderQty(vals.quantity);
-                    if (vals.price) setOrderPrice(vals.price);
-                  }}
-                  placeholder='e.g. "Buy 500 bags of white maize at ₦85,000 per tonne, GTC limit order"'
-                />
-                                <Button onClick={handleSubmitOrder}
+
+                <Button onClick={handleSubmitOrder}
                   className={`w-full h-10 font-semibold text-sm transition-all ${orderSide === "BUY" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-red-600 hover:bg-red-500 text-white"}`}>
                   {`${orderSide === "BUY" ? t("trade.buy") : t("trade.sell")} ${selectedCommodity.name}`}
                 </Button>

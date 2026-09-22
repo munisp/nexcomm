@@ -115,7 +115,7 @@ Update `constants/config.ts` with your NEXCOM Exchange server URL:
 
 ```typescript
 export const CONFIG = {
-  BASE_URL: 'https://your-nexcom-exchange.manus.space',
+  BASE_URL: Constants.expoConfig?.extra?.apiUrl ?? 'https://nexcom.exchange',
   // ...
 };
 ```
@@ -154,7 +154,7 @@ The mobile app connects to the NEXCOM Exchange backend via tRPC:
 
 ```typescript
 // lib/trpc.ts
-const trpcClient = getTRPCClient('https://nexcom-exchange.manus.space');
+const trpcClient = getTRPCClient(CONFIG.BASE_URL); // env-driven, see README-mobile.md
 
 // Usage in components
 const { data: markets } = trpc.markets.getAll.useQuery();

@@ -34,6 +34,22 @@ func main() {
 	defer logger.Sync()
 
 	sugar := logger.Sugar()
+
+	// ── Deprecated-service guard ──────────────────────────────────────────────
+	// This Go trading engine is DEPRECATED (superseded by the Rust matching
+	// engine at services/matching-engine/). Refuse to start unless explicitly
+	// allowed, so accidental deployment is loud instead of silent.
+	if os.Getenv("ALLOW_DEPRECATED") != "true" {
+		sugar.Fatalw("REFUSING TO START: services/trading-engine is DEPRECATED — "+
+			"use the Rust matching engine (services/matching-engine). "+
+			"Set ALLOW_DEPRECATED=true ONLY for local reference/testing.",
+			"replacement", "services/matching-engine")
+	}
+	sugar.Warnw("╔══════════════════════════════════════════════════════════════════╗")
+	sugar.Warnw("║  WARNING: DEPRECATED trading-engine starting (ALLOW_DEPRECATED)  ║")
+	sugar.Warnw("║  Canonical engine: services/matching-engine (Rust). DO NOT DEPLOY║")
+	sugar.Warnw("╚══════════════════════════════════════════════════════════════════╝")
+
 	sugar.Info("Starting NEXCOM Trading Engine...")
 
 	// Initialize matching engine with all configured symbols

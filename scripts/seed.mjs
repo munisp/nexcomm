@@ -13,6 +13,7 @@ import crypto from "crypto";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
+  // DEV-ONLY local default (dev compose password)
   "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom";
 
 const sql = postgres(DATABASE_URL, {

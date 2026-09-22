@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"net/http"
+	_ "net/http/pprof" // pprof admin endpoints; served only when GO_PPROF=1
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,6 +35,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/nexcom/channel-gateway/internal/db"
+	"github.com/nexcom/channel-gateway/internal/dedup"
 	"github.com/nexcom/channel-gateway/internal/kafka"
 	"github.com/nexcom/channel-gateway/internal/middleware"
 	"github.com/nexcom/channel-gateway/internal/telegram"
@@ -50,7 +52,13 @@ func main() {
 	sugar := logger.Sugar()
 
 	// Database
-	dbURL := getEnv("DATABASE_URL", "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom")
+	dbURL := getEnv("DATABASE_URL", "")
+	if dbURL == "" {
+		if getEnv("ENVIRONMENT", "development") == "production" {
+			sugar.Fatal("FATAL: DATABASE_URL is required in production - no default DB credentials exist")
+		}
+		dbURL = "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom" // DEV-ONLY local default
+	}
 	pool, err := db.Connect(dbURL)
 	if err != nil {
 		sugar.Fatalf("DB connect failed: %v", err)
@@ -70,12 +78,22 @@ func main() {
 		BotLogicURL:    getEnv("BOT_LOGIC_URL", "http://localhost:8040"),
 	})
 
-	// Telegram handler
+	// Telegram handler (with Redis-backed update_id idempotency when REDIS_URL is set)
 	tgHandler := telegram.NewHandler(pool, kp, sugar, telegram.Config{
 		BotToken:    getEnv("TELEGRAM_BOT_TOKEN", ""),
 		WebhookPath: getEnv("TELEGRAM_WEBHOOK_PATH", "/webhook/telegram"),
 		BotLogicURL: getEnv("BOT_LOGIC_URL", "http://localhost:8040"),
 	})
+	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
+		if dc, err := dedup.NewRedisClient(redisURL); err != nil {
+			sugar.Errorf("Redis dedup client init failed (Telegram dedup disabled): %v", err)
+		} else {
+			tgHandler.SetDedup(dc)
+			sugar.Info("Telegram webhook update_id dedup enabled (Redis SET NX, 24h TTL)")
+		}
+	} else {
+		sugar.Warn("REDIS_URL not set — Telegram webhook update_id dedup DISABLED")
+	}
 
 	// Gin router
 	if os.Getenv("GIN_MODE") == "" {
@@ -106,13 +124,27 @@ func main() {
 	})
 	r.GET("/metrics", middleware.PrometheusHandler())
 
+	// Optional pprof admin server (GO_PPROF=1 only; loopback by default).
+	if os.Getenv("GO_PPROF") == "1" {
+		pprofAddr := getEnv("PPROF_ADDR", "127.0.0.1:6060")
+		go func() {
+			sugar.Infof("pprof admin server listening on %s", pprofAddr)
+			// handlers registered on http.DefaultServeMux by the net/http/pprof import
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				sugar.Warnf("pprof server exited: %v", err)
+			}
+		}()
+	}
+
 	port := getEnv("CHANNEL_GATEWAY_PORT", "8030")
 	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              ":" + port,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 16,
 	}
 
 	// Start server

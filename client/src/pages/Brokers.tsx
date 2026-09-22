@@ -128,7 +128,7 @@ export default function Brokers() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">Licensed commodity brokers and intermediaries on NEXCOM Exchange</p>
         </div>
-        <Button size="sm" className="bg-primary hover:bg-primary/90 text-white" onClick={() => navigate("/onboarding/broker")}>
+        <Button size="sm" className="bg-primary hover:bg-primary/90 text-white" onClick={() => navigate("/broker-onboarding")}>
           Register as Broker
         </Button>
       </div>

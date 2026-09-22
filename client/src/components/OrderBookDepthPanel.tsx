@@ -218,6 +218,12 @@ export default function OrderBookDepthPanel({ symbol, maxLevels = 10, className 
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
+    // OFFLINE-RES: don't connect while offline or the tab is hidden — resumed
+    // via the online/visibilitychange listeners in the mount effect.
+    if (!navigator.onLine || document.hidden) {
+      setStatus("disconnected");
+      return;
+    }
 
     // Clean up existing connection
     if (wsRef.current) {
@@ -273,8 +279,11 @@ export default function OrderBookDepthPanel({ symbol, maxLevels = 10, className 
         if (!mountedRef.current) return;
         setStatus("disconnected");
         wsRef.current = null;
-        // Exponential back-off reconnect (max 30s)
-        const delay = Math.min(1000 * 2 ** reconnectCount, 30_000);
+        // OFFLINE-RES: don't spin reconnects while hidden/offline
+        if (!navigator.onLine || document.hidden) return;
+        // Exponential back-off reconnect with ±30% jitter (max 30s)
+        const exp = Math.min(1000 * 2 ** reconnectCount, 30_000);
+        const delay = Math.max(1000, exp + exp * 0.3 * (Math.random() * 2 - 1));
         reconnectTimerRef.current = setTimeout(() => {
           setReconnectCount(c => c + 1);
           connect();
@@ -289,6 +298,22 @@ export default function OrderBookDepthPanel({ symbol, maxLevels = 10, className 
   useEffect(() => {
     mountedRef.current = true;
     connect();
+
+    // OFFLINE-RES: pause while hidden/offline, resume with reset backoff
+    const handleOnline = () => { setReconnectCount(0); connect(); };
+    const handleOffline = () => {
+      if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
+      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); wsRef.current = null; }
+      setStatus("disconnected");
+    };
+    const handleVisibility = () => {
+      if (document.hidden) handleOffline();
+      else handleOnline();
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
       mountedRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
@@ -297,6 +322,9 @@ export default function OrderBookDepthPanel({ symbol, maxLevels = 10, className 
         wsRef.current.close();
         wsRef.current = null;
       }
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol]);

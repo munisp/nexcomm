@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -108,7 +108,9 @@ const STATUS_LABELS: Record<string, string> = {
   RELEASED: 'Released',
 };
 
-function ReceiptCard({ item }: { item: InventoryItem }) {
+/** Memoized card: inventory lists re-render on search/filter keystrokes;
+ * unchanged rows skip reconciliation entirely. */
+const ReceiptCard = memo(function ReceiptCard({ item }: { item: InventoryItem }) {
   const statusColor = STATUS_COLORS[item.status] || COLORS.textMuted;
   const value = Number(item.estimatedValue ?? 0);
   return (
@@ -177,7 +179,7 @@ function ReceiptCard({ item }: { item: InventoryItem }) {
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 export default function WarehouseScreen() {
   const [search, setSearch] = useState('');
@@ -187,7 +189,10 @@ export default function WarehouseScreen() {
 
   const filters = ['All', 'Active', 'Pledged', 'Inspection Due'];
 
-  const filtered = allItems.filter((r) => {
+  const renderCard = useCallback(({ item }: { item: InventoryItem }) => <ReceiptCard item={item} />, []);
+  const keyExtractor = useCallback((item: InventoryItem) => String(item.id), []);
+
+  const filtered = useMemo(() => allItems.filter((r) => {
     const matchSearch =
       search === '' ||
       r.receiptNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -198,10 +203,12 @@ export default function WarehouseScreen() {
       (filter === 'Pledged' && r.status === 'PLEDGED') ||
       (filter === 'Inspection Due' && r.status === 'INSPECTION_DUE');
     return matchSearch && matchFilter;
-  });
+  }), [allItems, search, filter]);
 
-  const totalValue = allItems.reduce((sum, r) => sum + Number(r.estimatedValue ?? 0), 0);
-  const totalQty = allItems.reduce((sum, r) => sum + Number(r.quantity), 0);
+  const { totalValue, totalQty } = useMemo(() => ({
+    totalValue: allItems.reduce((sum, r) => sum + Number(r.estimatedValue ?? 0), 0),
+    totalQty: allItems.reduce((sum, r) => sum + Number(r.quantity), 0),
+  }), [allItems]);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -256,11 +263,16 @@ export default function WarehouseScreen() {
         ))}
       </View>
 
-      {/* Receipt List */}
+      {/* Receipt List — tuned windowing for low-end devices */}
       <FlatList
         data={filtered}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => <ReceiptCard item={item} />}
+        keyExtractor={keyExtractor}
+        renderItem={renderCard}
+        windowSize={7}
+        maxToRenderPerBatch={8}
+        initialNumToRender={10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         refreshControl={

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { WAREHOUSES, COMMODITIES, GRADE_SPECS } from "../../../shared/commodities";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { ReceiptTwin } from "@/components/ReceiptTwin";
 import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 
 const STATUS_CONFIG = {
@@ -255,6 +256,9 @@ export default function WarehouseReceipts() {
                     {grade.description}
                   </div>
                 )}
+
+                {/* Digital twin: custody timeline + public verification QR */}
+                <ReceiptTwin receiptId={selectedReceipt.id} />
                 {selectedReceipt.status === "ACTIVE" && (
                   <div className="flex gap-2 pt-2">
                     <Button

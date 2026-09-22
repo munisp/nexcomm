@@ -7,11 +7,12 @@ Implements multi-horizon price forecasting for commodity symbols using:
   - Ensemble of LSTM + Gradient Boosting + ARIMA components
   - Confidence intervals via Monte Carlo dropout simulation
 
-In production this module loads pre-trained weights from the model registry
-(Delta Lake `models.registry` table) and pulls live features from the Gold
-layer via DataFusion queries.  The current implementation uses the same
-feature engineering logic with a calibrated numpy-based inference path so
-the API contract and feature pipeline are production-identical.
+This module prefers real predictions from the ML platform
+(services/ml-platform, versioned PriceLSTM champion — a real 2-layer LSTM +
+attention trained on gold price sequences) via ``src.mlplatform_client``.
+When the platform is unreachable it falls back to the legacy numpy forecaster.
+Every response carries an honest ``model_source``:
+``"ml-platform@<name>:<version>"`` or ``"legacy-synthetic"``.
 """
 from __future__ import annotations
 
@@ -19,11 +20,13 @@ import hashlib
 import math
 import time
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Literal, Optional
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+from src import mlplatform_client
 
 router = APIRouter()
 
@@ -121,3 +124,120 @@ def _lstm_attention_inference(features: dict, horizon: int, n_mc_samples: int = 
         n_mc_samples=n_mc_samples,
     )
 
+
+
+# ─── API Endpoints ────────────────────────────────────────────────────────────
+
+class ForecastRequest(BaseModel):
+    symbol: str
+    horizon: int = Field(default=7, ge=1, le=90)  # days
+    model: Literal["ARIMA", "LSTM", "PROPHET", "ENSEMBLE"] = "ENSEMBLE"
+    # Optional caller-supplied recent closes; when omitted the ML platform
+    # serves from its gold-layer price history.
+    recent_prices: Optional[list[float]] = None
+
+
+def _ml_platform_forecast(req: ForecastRequest) -> Optional[dict]:
+    """Forecast via the ML platform PriceLSTM champion; None when unavailable."""
+    result = mlplatform_client.predict_price(
+        req.symbol, horizon=req.horizon, sequence=req.recent_prices,
+    )
+    if result is None:
+        return None
+    last_close = result.get("last_close")
+    mean = float(result.get("expected_log_return", 0.0))
+    std = float(result.get("return_std", 0.01))
+    base = float(last_close or _BASE_PRICES.get(req.symbol.upper(), 100.0))
+    now = time.time()
+    forecasts = []
+    for day in range(1, req.horizon + 1):
+        scale = math.sqrt(day)
+        expected = base * math.exp(mean * day)
+        forecasts.append({
+            "step": day,
+            "timestamp": now + day * 86400,
+            "price": round(expected, 4),
+            "lower_95": round(base * math.exp(mean * day - 1.96 * std * scale), 4),
+            "upper_95": round(base * math.exp(mean * day + 1.96 * std * scale), 4),
+            "confidence": round(max(0.0, min(1.0, 1.0 - std * scale / 0.2)), 4),
+            "return_pct": round((math.exp(mean * day) - 1) * 100, 4),
+        })
+    return {
+        "forecasts": forecasts,
+        "model_version": result.get("model_version", "unknown"),
+        "model_source": result.get("model_source", "ml-platform"),
+        "variant": result.get("variant"),
+    }
+
+
+@router.post("/forecast")
+async def forecast_price(request: ForecastRequest):
+    """
+    Multi-day price forecast for a commodity symbol.
+
+    Preferred path: ML platform PriceLSTM (versioned PyTorch artifact served on
+    CPU). Fallback: legacy numpy LSTM-Attention forecaster, marked
+    ``model_source: "legacy-synthetic"``.
+    """
+    symbol = request.symbol.upper()
+
+    ml_result = _ml_platform_forecast(request)
+    if ml_result is not None:
+        return {
+            "symbol": symbol,
+            "horizon_days": request.horizon,
+            "model": request.model,
+            "forecasts": ml_result["forecasts"],
+            "model_version": ml_result["model_version"],
+            "model_source": ml_result["model_source"],
+            "variant": ml_result["variant"],
+            "computed_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # Legacy path (numpy LSTM + Monte Carlo).
+    features = _build_feature_vector(symbol, request.horizon * 24)
+    features["symbol"] = symbol
+    forecasts = _lstm_attention_inference(features, horizon=request.horizon * 24)
+    # Downsample hourly MC path to daily points to match the response contract.
+    daily = forecasts[23::24][: request.horizon] if forecasts else []
+    return {
+        "symbol": symbol,
+        "horizon_days": request.horizon,
+        "model": request.model,
+        "forecasts": daily,
+        "model_version": "lstm-attention-numpy-1.0",
+        "model_source": "legacy-synthetic",
+        "computed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/forecast/models")
+async def list_forecast_models():
+    """List forecasting models, including live ML platform availability."""
+    platform = mlplatform_client.health()
+    models = [
+        {
+            "id": "price_lstm_platform",
+            "name": "PriceLSTM (2-layer LSTM + additive attention, PyTorch CPU)",
+            "type": "forecasting",
+            "framework": "pytorch",
+            "served_by": "ml-platform",
+            "status": "available" if platform["reachable"] else "unavailable",
+            "circuit_breaker": platform["circuit_breaker"],
+        },
+        {
+            "id": "lstm_attention_forecaster",
+            "name": "LSTM-Attention Price Forecaster (legacy numpy)",
+            "type": "forecasting",
+            "framework": "numpy (CPU-native)",
+            "hidden_dim": 64,
+            "attention_heads": 4,
+            "seq_len": 24,
+            "inference": "cpu",
+            "status": "fallback",
+        },
+    ]
+    registered = mlplatform_client.list_models()
+    if registered:
+        models[0]["registered"] = registered.get("registered", [])
+    return {"models": models, "ml_platform": platform}

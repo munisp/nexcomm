@@ -37,9 +37,29 @@ const packageDef = protoLoader.loadSync(PROTO_PATH, {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const proto = (grpc.loadPackageDefinition(packageDef) as any).nexcom;
 
-// ─── In-memory order book (per symbol) ───────────────────────────────────────
-// In production this would be replaced by a dedicated matching engine (e.g. Aeron, Disruptor).
-// For this implementation we maintain a simple sorted order book in memory.
+// ─── Mock order book gate ─────────────────────────────────────────────────────
+// The in-memory order book below is a DEVELOPMENT-ONLY mock: it instantly
+// "fills" MARKET orders at the requested price and maintains a parallel,
+// unsynchronized book that bypasses the canonical Rust matching engine
+// (see server/matchingEngineClient.ts). It is DISABLED by default and only
+// active when GRPC_MOCK_ORDERBOOK=true is explicitly set for local development.
+// With the flag off, order-execution and order-book endpoints fail closed with
+// an error pointing at the real matching engine path.
+const GRPC_MOCK_ORDERBOOK = process.env.GRPC_MOCK_ORDERBOOK === "true";
+const MATCHING_ENGINE_HINT =
+  "gRPC in-memory mock order book is disabled (GRPC_MOCK_ORDERBOOK is not set). " +
+  "Route order submission/matching through the canonical Rust matching engine " +
+  "(server/matchingEngineClient.ts → matching-engine service). " +
+  "Set GRPC_MOCK_ORDERBOOK=true ONLY for local development.";
+
+if (GRPC_MOCK_ORDERBOOK) {
+  console.warn(
+    "[gRPC] WARNING: GRPC_MOCK_ORDERBOOK=true — in-memory mock order book ACTIVE. " +
+    "MARKET orders will be instantly 'filled' without the matching engine. DEV ONLY."
+  );
+}
+
+// ─── In-memory order book (per symbol) — DEV ONLY (gated above) ──────────────
 interface BookLevel { price: number; qty: number; count: number }
 const orderBooks = new Map<string, { bids: BookLevel[]; asks: BookLevel[]; lastPrice: number }>();
 const orderBookSubscribers = new Map<string, Set<grpc.ServerWritableStream<unknown, unknown>>>();
@@ -95,6 +115,14 @@ const matchingEngineImpl = {
         quantity: number; price: number; stop_price: number;
         time_in_force: string; notes: string;
       };
+
+      // Fail closed: this gRPC path must not accept orders it cannot honestly
+      // match. Orders accepted here would sit OPEN forever (or worse, be
+      // instantly fake-filled) because no real engine consumes them.
+      if (!GRPC_MOCK_ORDERBOOK) {
+        callback({ code: grpc.status.FAILED_PRECONDITION, message: MATCHING_ENGINE_HINT });
+        return;
+      }
 
       const db = await getDb();
       if (!db) {
@@ -234,6 +262,10 @@ const matchingEngineImpl = {
     call: grpc.ServerUnaryCall<Record<string, unknown>, unknown>,
     callback: grpc.sendUnaryData<unknown>
   ) {
+    if (!GRPC_MOCK_ORDERBOOK) {
+      callback({ code: grpc.status.UNAVAILABLE, message: MATCHING_ENGINE_HINT });
+      return;
+    }
     const req = call.request as { symbol: string; depth: number };
     const book = getOrCreateBook(req.symbol);
     const depth = req.depth || 20;
@@ -251,6 +283,11 @@ const matchingEngineImpl = {
   },
 
   StreamOrderBook(call: grpc.ServerWritableStream<Record<string, unknown>, unknown>) {
+    if (!GRPC_MOCK_ORDERBOOK) {
+      call.emit("error", { code: grpc.status.UNAVAILABLE, message: MATCHING_ENGINE_HINT });
+      call.end();
+      return;
+    }
     const req = call.request as { symbol: string };
     const symbol = req.symbol;
 

@@ -18,6 +18,7 @@ const rawUrl = process.env.DATABASE_URL ?? "";
 const DATABASE_URL =
   rawUrl.startsWith("postgresql://") || rawUrl.startsWith("postgres://")
     ? rawUrl
+    // DEV-ONLY local default (dev compose password)
     : "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom";
 
 const isLocal =

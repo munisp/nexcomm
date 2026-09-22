@@ -1,0 +1,37 @@
+# NEXCOM ML platform — full production dependency set.
+# Core (required, offline-CPU runnable): torch CPU, fastapi, uvicorn, pydantic,
+# numpy, pandas, scikit-learn, scipy, networkx, joblib, httpx.
+# Optional (guarded imports; features activate automatically when installed):
+# pyarrow, ray[default], mlflow, psycopg2-binary, neo4j, prometheus-client,
+# confluent-kafka.
+
+# ── Core serving/training ────────────────────────────────────────────────────
+# CPU wheel: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch==2.8.0
+fastapi==0.116.1
+uvicorn==0.34.2
+pydantic==2.11.4
+numpy==2.2.5
+pandas==2.3.2
+scikit-learn==1.7.2
+scipy==1.16.2
+networkx==3.5
+joblib==1.5.2
+httpx==0.28.1
+
+# ── Optional: lakehouse / storage ───────────────────────────────────────────
+pyarrow==19.0.1           # parquet; CSV partition fallback when absent
+
+# ── Optional: distributed compute ───────────────────────────────────────────
+ray[default]==2.49.1      # RAY_ADDRESS activates RayBackend; else local pool
+
+# ── Optional: experiment tracking / registry ────────────────────────────────
+mlflow==2.22.0            # MLFLOW_TRACKING_URI activates MlflowRegistry; else local
+
+# ── Optional: production data sources ───────────────────────────────────────
+psycopg2-binary==2.9.10   # Postgres extractor; else CSV export contract
+neo4j==5.28.1             # live graph load; else neo4j-admin import CSVs
+
+# ── Optional: metrics / streaming ───────────────────────────────────────────
+prometheus-client==0.22.1
+confluent-kafka==2.8.0

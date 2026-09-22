@@ -26,6 +26,7 @@ import { notificationsRouter } from "./routers/notificationsRouter";
 import { receiptsRouter } from "./routers/receipts";
 import { depositsRouter } from "./routers/depositsRouter";
 import { stripeRouter } from "./routers/stripeRouter";
+import { paymentsRouter } from "./routers/paymentsRouter";
 import { deliveryRouter } from "./routers/deliveryRouter";
 import { analyticsRouter } from "./routers/analyticsRouter";
 import { apiKeysRouter } from "./routers/apiKeysRouter";
@@ -39,6 +40,7 @@ import { disputesRouter } from "./routers/disputesRouter";
 import { securityRouter } from "./routers/securityRouter";
 import { withdrawalVerificationRouter } from "./routers/withdrawalVerificationRouter";
 import { webhookRouter } from "./routers/webhookRouter";
+import { privacyRouter } from "./routers/privacyRouter";
 import { ipAllowlistRouter } from "./routers/ipAllowlistRouter";
 import { totpRouter } from "./routers/totpRouter";
 import { deviceSessionRouter } from "./routers/deviceSessionRouter";
@@ -65,6 +67,8 @@ import { marketDataRouter } from "./routers/marketDataRouter";
 import { riskManagementRouter } from "./routers/riskManagement";
 import { tradingEngineRouter } from "./routers/tradingEngine";
 import { kycServiceRouter } from "./routers/kycServiceRouter";
+import { kybRouter } from "./routers/kybRouter";
+import { kycLifecycleRouter } from "./routers/kycLifecycleRouter";
 import { aiMlRouter } from "./routers/aiMlRouter";
 import { blockchainRouter } from "./routers/blockchainRouter";
 import { analyticsEngineRouter } from "./routers/analyticsEngineRouter";
@@ -104,6 +108,17 @@ import { smartFillRouter } from "./routers/smartFillRouter";
 import { marketAssistantRouter } from "./routers/marketAssistantRouter";
 import { fileManagerRouter } from "./routers/fileManagerRouter";
 import { journeyRouter } from "./routers/journeyRouter";
+import { forecastRouter } from "./routers/forecastRouter";
+import { riskShieldRouter } from "./routers/riskShieldRouter";
+import { creditPassportRouter } from "./routers/creditPassportRouter";
+import { offlineSyncRouter } from "./routers/offlineSyncRouter";
+import { marketStreamRouter } from "./routers/marketStreamRouter";
+import { livenessRouter } from "./routers/livenessRouter";
+import { channelBridgeRouter } from "./routers/channelBridgeRouter";
+import { logisticsRouter } from "./routers/logisticsRouter";
+import { receiptTwinRouter } from "./routers/receiptTwinRouter";
+import { transparencyRouter } from "./routers/transparencyRouter";
+import { feedsRouter } from "./routers/feedsRouter";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts
@@ -130,6 +145,7 @@ export const appRouter = router({
   receipts: receiptsRouter,
   deposits: depositsRouter,
   stripe: stripeRouter,
+  payments: paymentsRouter,
   delivery: deliveryRouter,
   analytics: analyticsRouter,
   apiKeys: apiKeysRouter,
@@ -143,6 +159,7 @@ export const appRouter = router({
   security: securityRouter,
   withdrawalVerification: withdrawalVerificationRouter,
   webhook: webhookRouter,
+  privacy: privacyRouter,
   ipAllowlist: ipAllowlistRouter,
   totp: totpRouter,
   deviceSession: deviceSessionRouter,
@@ -170,6 +187,8 @@ export const appRouter = router({
   riskManagement: riskManagementRouter,
   tradingEngine: tradingEngineRouter,
   kycService: kycServiceRouter,
+  kyb: kybRouter,
+  kycLifecycle: kycLifecycleRouter,
   aiMl: aiMlRouter,
   blockchain: blockchainRouter,
   analyticsEngine: analyticsEngineRouter,
@@ -208,6 +227,17 @@ export const appRouter = router({
   marketAssistant: marketAssistantRouter,
   fileManager: fileManagerRouter,
   journey: journeyRouter,
+  forecast: forecastRouter,
+  riskShield: riskShieldRouter,
+  creditPassport: creditPassportRouter,
+  offlineSync: offlineSyncRouter,
+  marketStream: marketStreamRouter,
+  liveness: livenessRouter,
+  channelBridge: channelBridgeRouter,
+  logistics: logisticsRouter,
+  receiptTwin: receiptTwinRouter,
+  transparency: transparencyRouter,
+  feeds: feedsRouter,
   // ── KYC Audit Log ──────────────────────────────────────────────────────────
   kycAudit: router({
     getLog: adminProcedure

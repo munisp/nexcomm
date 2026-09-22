@@ -20,7 +20,7 @@ from .keycloak import TokenClaims, get_current_user
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 PERMIFY_URL = os.getenv("PERMIFY_URL", "http://localhost:3476")
-PERMIFY_TENANT_ID = os.getenv("PERMIFY_TENANT_ID", "nexcom")
+PERMIFY_TENANT_ID = os.getenv("PERMIFY_TENANT_ID", "t1")
 
 # ── Permify Schema (Zanzibar-style) ────────────────────────────────────────────
 # This schema is loaded into Permify on bootstrap.

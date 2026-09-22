@@ -24,8 +24,14 @@ const MIDDLEWARE_SERVICES = [
   { name: "temporal",      label: "Temporal Workflow",  healthUrl: `${ENV.temporalUrl ?? "http://temporal:7233"}/health` },
   { name: "redis",         label: "Redis Cache",        healthUrl: null /* checked via Redis client */ },
   { name: "lakehouse",     label: "MinIO / S3 Storage", healthUrl: null /* checked via AWS SDK HeadBucket */ },
-  { name: "openappsec",    label: "OpenAppsec WAF",     healthUrl: "http://openappsec:8090/health" },
-  { name: "fluvio",        label: "Fluvio Streaming",   healthUrl: "http://fluvio:9003/health" },
+  // openappsec-agent only runs with `docker compose --profile waf` and shares the
+  // apisix network namespace (network_mode: service:apisix), so its in-cluster
+  // hostname is "apisix". The agent image exposes no HTTP /health (its container
+  // healthcheck is log-file based), so a failed probe is reported as "degraded"
+  // (optional component), never "down" — see pingService special-case below.
+  { name: "openappsec",    label: "OpenAppsec WAF",     healthUrl: process.env.OPENAPPSEC_HEALTH_URL ?? "http://apisix:8090/health" },
+  // Fluvio health is served by the fluvio-sidecar HTTP bridge, not raw SC :9003.
+  { name: "fluvio",        label: "Fluvio Streaming",   healthUrl: `${process.env.FLUVIO_HTTP_URL ?? "http://fluvio-sidecar:8090"}/health` },
 ];
 
 type ServiceName = typeof MIDDLEWARE_SERVICES[number]["name"];
@@ -90,8 +96,13 @@ async function pingService(service: MiddlewareService): Promise<{
     return { service: service.name, label: service.label, status: "degraded", latencyMs, error: `HTTP ${res.status}` };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    const status = msg.includes("abort") ? "degraded" : "down";
-    return { service: service.name, label: service.label, status, latencyMs: Date.now() - start, error: msg };
+    // openappsec is an optional (`--profile waf`) component whose agent has no
+    // HTTP health endpoint — never report it as hard "down".
+    const status = service.name === "openappsec" || msg.includes("abort") ? "degraded" : "down";
+    const error = service.name === "openappsec"
+      ? `${msg} (optional: start with docker compose --profile waf)`
+      : msg;
+    return { service: service.name, label: service.label, status, latencyMs: Date.now() - start, error };
   }
 }
 

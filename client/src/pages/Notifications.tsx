@@ -311,7 +311,10 @@ export default function Notifications() {
                   return (
                     <div
                       key={n.id}
-                      className={"flex items-start gap-4 px-4 py-4 exchange-row transition-colors cursor-pointer " + (!n.read ? "bg-primary/5" : "")}
+                      // PERF-CLIENT: content-visibility lets the browser skip
+                      // layout/paint for off-screen rows (up to 100 fetched) —
+                      // cheap list virtualization with zero DOM restructuring.
+                      className={"flex items-start gap-4 px-4 py-4 exchange-row transition-colors cursor-pointer [content-visibility:auto] [contain-intrinsic-size:auto_92px] " + (!n.read ? "bg-primary/5" : "")}
                       onClick={() => {
                         if (!n.read) handleMarkRead(n.id);
                         if (n.link) setLocation(n.link);

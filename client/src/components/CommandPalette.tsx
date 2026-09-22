@@ -141,7 +141,7 @@ function useRecentlyVisited() {
 
 // ── Quick-nav items (always shown when query is empty) ────────────────────────
 const QUICK_NAV = [
-  { label: "Dashboard", href: "/dashboard", icon: <BarChart2 className="h-4 w-4" /> },
+  { label: "Dashboard", href: "/", icon: <BarChart2 className="h-4 w-4" /> },
   { label: "Orders", href: "/orders", icon: <ShoppingCart className="h-4 w-4" /> },
   { label: "Warehouse Receipts", href: "/warehouse-receipts", icon: <Warehouse className="h-4 w-4" /> },
   { label: "Deposits", href: "/deposits", icon: <ArrowDownCircle className="h-4 w-4" /> },

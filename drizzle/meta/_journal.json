@@ -441,6 +441,139 @@
       "when": 1786507200000,
       "tag": "0063_schema_reconciliation",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1786507201000,
+      "tag": "0064_cloudy_ogun",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1786507202000,
+      "tag": "0065_tan_talkback",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1786507203000,
+      "tag": "0066_light_amazoness",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1786507204000,
+      "tag": "0067_margin_alert_thresholds",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1786507205000,
+      "tag": "0068_missing_tables_and_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1786507206000,
+      "tag": "0069_ledger_accounts_and_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1786507207000,
+      "tag": "0070_receipt_pledge_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1786507208000,
+      "tag": "0071_webhook_dead_letters",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1786507209000,
+      "tag": "0072_privacy_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1786507210000,
+      "tag": "0073_drop_orphan_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1786507211000,
+      "tag": "0074_stakeholder_onboarding_fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1786507212000,
+      "tag": "0075_kyb_workflows",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790063783940,
+      "tag": "0076_credit_passports",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1790063783940,
+      "tag": "0077_offline_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790063783940,
+      "tag": "0078_receipt_verifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1790063783940,
+      "tag": "0079_channel_handoffs",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1790063783940,
+      "tag": "0080_payment_transactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1790063783941,
+      "tag": "0081_performance_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1790063783942,
+      "tag": "0082_market_feeds",
+      "breakpoints": true
     }
   ]
 }

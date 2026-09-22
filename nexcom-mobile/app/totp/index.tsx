@@ -14,15 +14,15 @@ export default function TotpScreen() {
 
   const statusQ = trpc.security.getTotpStatus.useQuery();
   const setupMut = trpc.security.setupTotp.useMutation({
-    onError: (e) => Alert.alert("Error", e.message),
+    onError: (e: any) => Alert.alert("Error", e.message),
   });
   const verifyMut = trpc.security.verifyTotp.useMutation({
     onSuccess: () => { Alert.alert("Success", "2FA enabled!"); utils.security.getTotpStatus.invalidate(); setCode(""); },
-    onError: (e) => Alert.alert("Error", e.message),
+    onError: (e: any) => Alert.alert("Error", e.message),
   });
   const disableMut = trpc.security.disableTotp.useMutation({
     onSuccess: () => { Alert.alert("Disabled", "2FA has been disabled."); utils.security.getTotpStatus.invalidate(); },
-    onError: (e) => Alert.alert("Error", e.message),
+    onError: (e: any) => Alert.alert("Error", e.message),
   });
 
   const status = statusQ.data as any;

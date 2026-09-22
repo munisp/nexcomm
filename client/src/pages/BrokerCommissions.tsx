@@ -219,7 +219,7 @@ export default function BrokerCommissions() {
       {/* Header */}
       <div className="border-b border-white/10 bg-[#0d1426] px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/broker/dashboard")} className="text-muted-foreground hover:text-white">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/broker-dashboard")} className="text-muted-foreground hover:text-white">
             <ArrowLeft className="w-4 h-4 mr-1" /> Back
           </Button>
           <div>

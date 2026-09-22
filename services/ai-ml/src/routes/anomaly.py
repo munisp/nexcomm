@@ -11,10 +11,13 @@ Implements multi-layer anomaly detection for commodity exchange surveillance:
   3. Behavioural Pattern Matching — rule-based detection for known manipulation
      patterns (layering, momentum ignition, quote stuffing)
 
-In production the GNN uses a PyTorch Geometric GraphSAGE model trained on
-historical order-flow graphs from the Lakehouse Bronze layer.  The current
-implementation uses the same detection logic with scikit-learn Isolation
-Forest and numpy-based graph statistics so the API contract is identical.
+This module now prefers the real pure-torch GraphSAGE classifier served by
+the ML platform (services/ml-platform, trained on the actual order-flow graph)
+via ``src.mlplatform_client``: pass an ``account_id`` to the symbol endpoint
+or use ``POST /anomalies/score-account`` for a genuine GNN fraud-ring
+probability.  Without an account context or when the platform is unreachable,
+the legacy numpy graph-statistics path runs and responses are marked
+``model_source: "legacy-synthetic"`` (vs ``"ml-platform@graph:<version>"``).
 """
 from __future__ import annotations
 
@@ -22,11 +25,13 @@ import hashlib
 import math
 import time
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Literal, Optional
 
 import numpy as np
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+
+from src import mlplatform_client
 
 router = APIRouter()
 
@@ -101,7 +106,26 @@ def _isolation_forest_score(features: np.ndarray) -> float:
 
 # ─── GNN-style Graph Anomaly Detection ───────────────────────────────────────
 
-def _compute_graph_anomaly_score(symbol: str) -> tuple[float, list[str]]:
+def _ml_gnn_account_score(account_id: str) -> Optional[dict]:
+    """Real GraphSAGE fraud-ring probability from the ML platform; None when
+    the platform or the graph champion is unavailable."""
+    return mlplatform_client.predict_graph(account_id)
+
+
+def _compute_graph_anomaly_score(symbol: str, account_id: Optional[str] = None) -> tuple[float, list[str], str]:
+    if account_id:
+        ml = _ml_gnn_account_score(account_id)
+        if ml is not None:
+            prob = float(ml.get("fraud_ring_probability", 0.0))
+            patterns: list[str] = []
+            if prob >= _config["graph_anomaly_threshold"]:
+                patterns.append("wash_trading")
+            return prob, patterns, str(ml.get("model_source", "ml-platform"))
+    score, patterns = _legacy_graph_anomaly_score(symbol)
+    return score, patterns, "legacy-synthetic"
+
+
+def _legacy_graph_anomaly_score(symbol: str) -> tuple[float, list[str]]:
     """
     GNN-style graph anomaly detection on the order-flow graph.
     Production: GraphSAGE(64) trained on Bronze layer order-flow graphs.
@@ -152,21 +176,25 @@ def _compute_graph_anomaly_score(symbol: str) -> tuple[float, list[str]]:
 
 # ─── Anomaly Event Generation ────────────────────────────────────────────────
 
-def _generate_anomaly_events(symbol: str, hours: int) -> list[dict]:
+def _generate_anomaly_events(symbol: str, hours: int, account_id: Optional[str] = None) -> list[dict]:
     """
     Generate anomaly events for a symbol over the lookback window.
     Combines Isolation Forest + GNN scores to produce unified anomaly events.
+    When account_id is provided and the ML platform graph champion is
+    available, the GNN component is the real GraphSAGE fraud-ring probability.
     """
     seed = int(hashlib.md5(f"events{symbol}{int(time.time() // 3600)}".encode()).hexdigest(), 16) % (2**32)
     rng = np.random.default_rng(seed)
 
     events = []
+    # GNN component: one score per request (per account when provided), not
+    # per event — the ML platform call would otherwise fire hours*2 times.
+    gnn_score, gnn_patterns, gnn_source = _compute_graph_anomaly_score(symbol, account_id)
     # Probabilistic event generation based on sensitivity config
     n_potential = int(hours * 2)  # check every 30 min
     for i in range(n_potential):
         features = _extract_isolation_features(symbol)
         if_score = _isolation_forest_score(features)
-        gnn_score, gnn_patterns = _compute_graph_anomaly_score(symbol)
 
         combined_score = 0.6 * if_score + 0.4 * gnn_score
         sensitivity = _config["sensitivity"]
@@ -198,6 +226,7 @@ def _generate_anomaly_events(symbol: str, hours: int) -> list[dict]:
                 "estimated_impact_usd": round(float(rng.uniform(1000, 50000)), 2),
                 "detection_models": ["isolation_forest", "gnn_graph_sage"],
                 "lakehouse_source": "bronze.order_flow",
+                "model_source": gnn_source,
             })
 
     return sorted(events, key=lambda e: e["detected_at"], reverse=True)[:20]
@@ -261,15 +290,21 @@ async def get_recent_anomalies(limit: int = 50):
              "patterns": _ANOMALY_TYPES},
         ],
         "lakehouse_sources": ["gold.features", "bronze.order_flow", "silver.trades"],
+        "model_source": "legacy-synthetic",
         "config": _config,
     }
 
 
 @router.get("/anomalies/symbol/{symbol}")
-async def get_symbol_anomalies(symbol: str, hours: int = 24):
-    """Get anomalies for a specific symbol over the lookback window."""
+async def get_symbol_anomalies(symbol: str, hours: int = 24, account_id: Optional[str] = None):
+    """Get anomalies for a specific symbol over the lookback window.
+
+    Pass account_id to score the graph component with the real ML platform
+    GraphSAGE champion for that account; otherwise the legacy numpy graph
+    statistics path is used (marked in each event's model_source).
+    """
     symbol = symbol.upper()
-    events = _generate_anomaly_events(symbol, hours=hours)
+    events = _generate_anomaly_events(symbol, hours=hours, account_id=account_id)
 
     risk_level = "normal"
     if events:
@@ -286,6 +321,8 @@ async def get_symbol_anomalies(symbol: str, hours: int = 24):
         "anomalies": events,
         "total": len(events),
         "risk_level": risk_level,
+        "model_source": events[0]["model_source"] if events else (
+            "legacy-synthetic" if not account_id else "unavailable"),
         "detection_summary": {
             "isolation_forest_triggers": sum(1 for e in events if e["isolation_forest_score"] > 0.7),
             "gnn_graph_triggers": sum(1 for e in events if e["gnn_graph_score"] > 0.7),
@@ -296,6 +333,40 @@ async def get_symbol_anomalies(symbol: str, hours: int = 24):
             "graph_source": "bronze.order_flow",
             "lookback_window_hours": hours,
         },
+    }
+
+
+class AccountScoreRequest(BaseModel):
+    account_id: str
+
+
+@router.post("/anomalies/score-account")
+async def score_account(request: AccountScoreRequest):
+    """Score an account with the real GraphSAGE GNN served by the ML platform.
+
+    Returns 503 when the platform or graph champion is unavailable — no
+    synthetic substitute is served for account-level fraud-ring scoring.
+    """
+    ml = _ml_gnn_account_score(request.account_id)
+    if ml is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=503,
+            detail="ml-platform graph model unavailable; train and register the "
+                   "GNN via mlplatform.pipelines.end_to_end",
+        )
+    prob = float(ml.get("fraud_ring_probability", 0.0))
+    return {
+        "account_id": request.account_id,
+        "gnn_graph_score": round(prob, 6),
+        "is_suspicious": bool(ml.get("is_suspicious", prob >= 0.5)),
+        "severity": "critical" if prob > 0.9 else (
+            "high" if prob > 0.75 else ("medium" if prob > 0.5 else "low")),
+        "model_version": ml.get("model_version"),
+        "model_source": ml.get("model_source", "ml-platform"),
+        "variant": ml.get("variant"),
+        "detected_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

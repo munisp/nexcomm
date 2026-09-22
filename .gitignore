@@ -131,3 +131,18 @@ test-results/
 # Python bytecode
 __pycache__/
 *.py[cod]
+
+# ─── Build artifacts / binaries (FIX-INFRA) ────────────────────────────────
+# Rust build outputs (were accidentally committed: ~2.9GB across services)
+target/
+**/target/
+# Committed compiled binary — build via `cargo build --release` instead
+settlement-engine-binary
+settlement-engine/settlement-engine-binary
+# ML model weights — committed reference weights under services/ml-platform
+# are intentionally exempted (small, curated)
+*.pt
+*.pkl
+!services/ml-platform/**/*.pt
+!services/ml-platform/**/*.pkl
+!services/ml-platform/weights/

@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -10,10 +10,13 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { ScreenState } from '../../components/ScreenState';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
 import { trpc } from '../../lib/trpc';
+import { useConnectionQuality, refetchIntervalFor } from '../../lib/connectionQuality';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CATEGORIES = ['All', 'COMMODITY', 'EQUITY', 'FIXED_INCOME', 'INDEX'];
@@ -24,7 +27,9 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 type PriceRow = { id: number; symbol: string; name: string | null; assetClass: string; lastPrice: string | null; changePct: string | null; volume24h: string | null; unit: string | null };
 
-function CommodityRow({ item }: { item: PriceRow }) {
+/** Memoized row: with live prices polling, only rows whose data changed
+ * re-render — critical for 60fps scrolling on 2–3GB devices. */
+const CommodityRow = memo(function CommodityRow({ item }: { item: PriceRow }) {
   const change = Number(item.changePct ?? 0);
   const isPositive = change >= 0;
   const price = Number(item.lastPrice ?? 0);
@@ -52,13 +57,21 @@ function CommodityRow({ item }: { item: PriceRow }) {
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 export default function MarketsScreen() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const pricesQuery = trpc.livePrices.getAll.useQuery();
-  const allPrices = pricesQuery.data ?? [];
+  // Adaptive polling: back off on slow links, pause when offline.
+  const connectionQuality = useConnectionQuality();
+  const pricesQuery = trpc.livePrices.getAll.useQuery(undefined, {
+    refetchInterval: refetchIntervalFor(connectionQuality),
+  });
+  const allPrices = (pricesQuery.data ?? []) as PriceRow[];
+
+  const renderRow = useCallback(({ item }: { item: PriceRow }) => <CommodityRow item={item} />, []);
+  const keyExtractor = useCallback((item: PriceRow) => String(item.id), []);
+  const handleRefresh = useCallback(() => pricesQuery.refetch(), [pricesQuery]);
 
   const filtered = useMemo(() => {
     return allPrices.filter((c) => {
@@ -77,6 +90,12 @@ export default function MarketsScreen() {
       {pricesQuery.isLoading && (
         <ActivityIndicator color={COLORS.primary} style={{ marginTop: 20 }} />
       )}
+      {pricesQuery.isError && (
+        <ScreenState
+          error={pricesQuery.error}
+          onRetry={() => pricesQuery.refetch()}
+        >{null}</ScreenState>
+      )}
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Text style={styles.searchIcon}>🔍</Text>
@@ -90,32 +109,28 @@ export default function MarketsScreen() {
         />
       </View>
 
-      {/* Category Filter */}
-      <FlatList
-        data={CATEGORIES}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item}
-        contentContainerStyle={styles.categoryList}
-          renderItem={({ item }) => (
-            <TouchableOpacity
+      {/* Category Filter (fixed 5 items — plain map is cheaper than a list) */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
+        {CATEGORIES.map((item) => (
+          <TouchableOpacity
+            key={item}
+            style={[
+              styles.categoryBtn,
+              activeCategory === item && styles.categoryBtnActive,
+            ]}
+            onPress={() => setActiveCategory(item)}
+          >
+            <Text
               style={[
-                styles.categoryBtn,
-                activeCategory === item && styles.categoryBtnActive,
+                styles.categoryText,
+                activeCategory === item && styles.categoryTextActive,
               ]}
-              onPress={() => setActiveCategory(item)}
             >
-              <Text
-                style={[
-                  styles.categoryText,
-                  activeCategory === item && styles.categoryTextActive,
-                ]}
-              >
-                {CATEGORY_LABELS[item] ?? item}
-              </Text>
-            </TouchableOpacity>
-          )}
-      />
+              {CATEGORY_LABELS[item] ?? item}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {/* Market Stats Bar */}
       <View style={styles.statsBar}>
@@ -147,26 +162,32 @@ export default function MarketsScreen() {
         <Text style={[styles.columnHeader, { textAlign: 'right' }]}>Price / Change</Text>
       </View>
 
-      {/* Commodity List */}
-      <FlatList
+      {/* Commodity List — FlashList: cell recycling keeps 60fps on low-end
+          devices even while live prices poll in the background. */}
+      <FlashList
         data={filtered}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => <CommodityRow item={item} />}
+        estimatedItemSize={73}
+        keyExtractor={keyExtractor}
+        renderItem={renderRow}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={pricesQuery.isFetching}
-            onRefresh={() => pricesQuery.refetch()}
+            onRefresh={handleRefresh}
             tintColor={COLORS.primary}
             colors={[COLORS.primary]}
           />
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>
-              {pricesQuery.isLoading ? 'Loading...' : 'No prices found'}
-            </Text>
-          </View>
+          !pricesQuery.isLoading && !pricesQuery.isError ? (
+            <ScreenState
+              isEmpty
+              emptyIcon="🔍"
+              emptyTitle="No prices found"
+              emptyMessage="Try a different search or category."
+              onRetry={() => pricesQuery.refetch()}
+            >{null}</ScreenState>
+          ) : null
         }
       />
     </SafeAreaView>

@@ -17,7 +17,15 @@ import { Loader2 } from "lucide-react";
 const Dashboard         = lazy(() => import("./pages/Dashboard"));
 const Home              = lazy(() => import("./pages/Home"));
 const ComponentShowcase = lazy(() => import("./pages/ComponentShowcase"));
+const KybOnboarding   = lazy(() => import("./pages/KybOnboarding"));
+const AdminKybReview  = lazy(() => import("./pages/AdminKybReview"));
 const Markets           = lazy(() => import("./pages/Markets"));
+const MarketDepth       = lazy(() => import("./pages/MarketDepth"));
+const CommodityForecast = lazy(() => import("./pages/CommodityForecast"));
+const CreditPassport    = lazy(() => import("./pages/CreditPassport"));
+const DeliveryTracking  = lazy(() => import("./pages/DeliveryTracking"));
+const Transparency      = lazy(() => import("./pages/Transparency"));
+const VerifyReceipt     = lazy(() => import("./pages/VerifyReceipt"));
 const Trade             = lazy(() => import("./pages/Trade"));
 const Orders            = lazy(() => import("./pages/Orders"));
 const Portfolio         = lazy(() => import("./pages/Portfolio"));
@@ -32,6 +40,7 @@ const Indices           = lazy(() => import("./pages/Indices"));
 const WarehouseReceipts = lazy(() => import("./pages/WarehouseReceipts"));
 const Deposits          = lazy(() => import("./pages/Deposits"));
 const Payments          = lazy(() => import("./pages/Payments"));
+const PaymentCallback   = lazy(() => import("./pages/PaymentCallback"));
 const Warehouses        = lazy(() => import("./pages/Warehouses"));
 const Delivery          = lazy(() => import("./pages/Delivery"));
 
@@ -57,6 +66,7 @@ const Admin             = lazy(() => import("./pages/Admin"));
 const BulkKycAdmin      = lazy(() => import("./pages/BulkKycAdmin"));
 const AdminKycDocumentReview = lazy(() => import("./pages/AdminKycDocumentReview"));
 const GingerPriceHistory = lazy(() => import("./pages/GingerPriceHistory"));
+const MarketWeather      = lazy(() => import("./pages/MarketWeather"));
 const Settlements       = lazy(() => import("./pages/Settlements"));
 const Settings          = lazy(() => import("./pages/Settings"));
 const Architecture      = lazy(() => import("./pages/Architecture"));
@@ -178,6 +188,15 @@ function Router() {
         <Route path="/home"               component={Home} />
         <Route path="/showcase"           component={ComponentShowcase} />
         <Route path="/markets"           component={Markets} />
+        <Route path="/market-depth"      component={MarketDepth} />
+        <Route path="/market-depth/:symbol" component={MarketDepth} />
+        <Route path="/forecast"          component={CommodityForecast} />
+        <Route path="/credit-passport"   component={CreditPassport} />
+        <Route path="/delivery-tracking" component={DeliveryTracking} />
+        <Route path="/transparency"      component={Transparency} />
+        <Route path="/market-weather"    component={MarketWeather} />
+        <Route path="/verify-receipt"    component={VerifyReceipt} />
+        <Route path="/verify-receipt/:code" component={VerifyReceipt} />
         <Route path="/trade"             component={Trade} />
         <Route path="/trade/:symbol"     component={Trade} />
         <Route path="/orders"            component={Orders} />
@@ -193,6 +212,7 @@ function Router() {
         <Route path="/receipts"          component={WarehouseReceipts} />
         <Route path="/deposits"          component={Deposits} />
         <Route path="/payments"          component={Payments} />
+        <Route path="/payment/callback" component={PaymentCallback} />
         <Route path="/warehouses"        component={Warehouses} />
         <Route path="/delivery"          component={Delivery} />
 
@@ -219,6 +239,8 @@ function Router() {
          <Route path="/admin"             component={Admin} />
          <Route path="/admin/bulk-kyc"    component={BulkKycAdmin} />
          <Route path="/admin/kyc-review"   component={AdminKycDocumentReview} />
+         <Route path="/admin/kyb-review"  component={AdminKybReview} />
+         <Route path="/kyb-onboarding"    component={KybOnboarding} />
         <Route path="/settlements"        component={Settlements} />
         <Route path="/settings"           component={Settings} />
         <Route path="/architecture"        component={Architecture} />

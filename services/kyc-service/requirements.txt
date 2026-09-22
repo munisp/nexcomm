@@ -1,10 +1,14 @@
 fastapi>=0.104.0
 uvicorn>=0.24.0
-paddleocr>=2.7.0
-paddlepaddle>=2.5.0
-docling>=2.5.0
+# DOCAI pins (verified resolvable on Python 3.12 via pip resolver):
+paddlepaddle==3.2.2
+paddleocr==3.2.0
+docling==2.105.0
+# DOCAI liveness: shared challenge state + silent anti-spoof runtime
+redis>=5.0.0
+onnxruntime>=1.17.0
 Pillow>=10.0.0
-numpy>=1.24.0
+numpy>=1.26.0,<3.0.0
 pydantic>=2.0.0
 python-multipart>=0.0.6
 aiofiles>=23.0.0

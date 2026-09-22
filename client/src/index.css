@@ -53,6 +53,67 @@
 :root {
   --radius: 0.5rem;
 
+  /* === Light theme (default tokens; app boots into .dark — see ThemeContext) === */
+  --background: oklch(0.985 0.003 90);
+  --foreground: oklch(0.22 0.02 240);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 240);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 240);
+
+  /* Primary: Emerald Green (darkened for AA contrast on light surfaces) */
+  --primary: oklch(0.50 0.13 158);
+  --primary-foreground: oklch(0.985 0.005 158);
+
+  /* Secondary: muted warm surface */
+  --secondary: oklch(0.95 0.005 90);
+  --secondary-foreground: oklch(0.28 0.02 240);
+
+  /* Muted */
+  --muted: oklch(0.95 0.005 90);
+  --muted-foreground: oklch(0.46 0.02 240);
+
+  /* Accent: Gold */
+  --accent: oklch(0.72 0.12 75);
+  --accent-foreground: oklch(0.22 0.02 60);
+
+  /* Destructive: Red */
+  --destructive: oklch(0.52 0.2 27);
+  --destructive-foreground: oklch(0.985 0.005 27);
+
+  --border: oklch(0.90 0.005 90);
+  --input: oklch(0.92 0.005 90);
+  --ring: oklch(0.50 0.13 158);
+
+  /* Charts */
+  --chart-1: oklch(0.50 0.13 158);
+  --chart-2: oklch(0.72 0.12 75);
+  --chart-3: oklch(0.52 0.2 27);
+  --chart-4: oklch(0.55 0.15 220);
+  --chart-5: oklch(0.58 0.13 300);
+
+  /* Sidebar */
+  --sidebar: oklch(0.97 0.004 90);
+  --sidebar-foreground: oklch(0.30 0.02 240);
+  --sidebar-primary: oklch(0.50 0.13 158);
+  --sidebar-primary-foreground: oklch(0.985 0.005 158);
+  --sidebar-accent: oklch(0.94 0.005 90);
+  --sidebar-accent-foreground: oklch(0.28 0.02 240);
+  --sidebar-border: oklch(0.89 0.005 90);
+  --sidebar-ring: oklch(0.50 0.13 158);
+
+  /* Custom exchange colors */
+  --bid-color: oklch(0.50 0.15 158);
+  --ask-color: oklch(0.52 0.2 27);
+  --positive: oklch(0.50 0.15 158);
+  --negative: oklch(0.52 0.2 27);
+  --gold: oklch(0.65 0.12 75);
+  --gold-dim: oklch(0.60 0.10 75);
+}
+
+.dark {
   /* === Dark Exchange Theme (default) === */
   --background: oklch(0.10 0.02 220);
   --foreground: oklch(0.95 0.01 220);
@@ -110,8 +171,7 @@
   --positive: oklch(0.60 0.18 158);
   --negative: oklch(0.55 0.22 25);
   --gold: oklch(0.75 0.15 75);
-  --gold-dim: oklch(0.65 0.12 75);
-}
+  --gold-dim: oklch(0.65 0.12 75);}
 
 @layer base {
   * {

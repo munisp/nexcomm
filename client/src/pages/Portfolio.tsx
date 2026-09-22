@@ -2,6 +2,7 @@
  * NEXCOM Exchange — Portfolio Page
  * Holdings, P&L, trade history, and performance metrics
  */
+import { formatNGN } from "@/lib/format";
 import { useState, useEffect, useMemo } from "react";
 import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, BarChart3, RefreshCw } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -106,11 +107,11 @@ export default function Portfolio() {
         <div className="stat-card col-span-2 sm:col-span-1">
           <div className="text-xs text-muted-foreground mb-1">Total Portfolio Value</div>
           <div className="text-2xl font-bold font-mono text-foreground">
-            {summaryLoading ? "—" : `$${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+            {summaryLoading ? "—" : formatNGN(totalValue)}
           </div>
           <div className={"text-sm font-mono flex items-center gap-1 mt-1 " + (totalPnl >= 0 ? "text-positive" : "text-negative")}>
             {totalPnl >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-            {totalPnl >= 0 ? "+" : ""}${Math.abs(totalPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })} ({totalPnlPct.toFixed(2)}%)
+            {totalPnl >= 0 ? "+" : "−"}{formatNGN(Math.abs(totalPnl))} ({totalPnlPct.toFixed(2)}%)
           </div>
         </div>
         <div className="stat-card text-center">

@@ -58,7 +58,7 @@ func Load() *Services {
 		USSDEngineURL:      getenv("USSD_ENGINE_URL", "http://ussd-engine:8020"),
 		MiddlewareHubURL:   getenv("MIDDLEWARE_HUB_URL", "http://middleware-hub:8013"),
 		MojaloopURL:        getenv("MOJALOOP_HUB_URL", "http://mojaloop-adapter:4001"),
-		FluvioURL:          getenv("FLUVIO_HTTP_URL", "http://fluvio-proxy:8090"),
+		FluvioURL:          getenv("FLUVIO_HTTP_URL", "http://fluvio-sidecar:8090"),
 		TemporalAddr:       getenv("TEMPORAL_ADDRESS", "temporal:7233"),
 		TemporalNS:         getenv("TEMPORAL_NAMESPACE", "nexcom"),
 		KafkaBrokers:       getenv("KAFKA_BROKERS", "kafka:9092"),

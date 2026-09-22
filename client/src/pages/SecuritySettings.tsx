@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1225,16 +1224,16 @@ export default function SecuritySettings() {
   if (loading) return <PageSkeleton cards={4} tableRows={6} tableCols={3} />;
   if (!user || user.role !== "admin") {
     return (
-      <DashboardLayout>
+      <>
         <div className="flex items-center justify-center h-64">
           <p className="text-muted-foreground">Admin access required.</p>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <Settings className="h-6 w-6 text-primary" />
@@ -1285,6 +1284,6 @@ export default function SecuritySettings() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

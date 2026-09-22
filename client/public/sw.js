@@ -1,13 +1,35 @@
 /**
  * NEXCOM Exchange — Service Worker
- * Offline-first strategy: cache-first for static assets, network-first for API calls
- * Push notification support for price alerts and order fills
+ * Static assets: cache-first. Navigation: network-first with offline.html fallback.
+ * /api/* (tRPC): network-only EXCEPT a strict allowlist of read-only public
+ * market-data GETs (CACHEABLE_READ_ENDPOINTS below) served stale-while-
+ * revalidate with a 24h offline cap — personalised financial data is never
+ * cached (all POSTs/mutations/user-specific routers stay network-only).
+ * Push notifications (price alerts, order fills) + background sync of the
+ * offline operation queue (shared with client/src/lib/offlineConstants.ts).
+ *
+ * Registered exactly once by client/src/lib/registerSW.ts.
+ *
+ * PERF-CLIENT v5 (additive only — every v4 behaviour is preserved):
+ *   - CACHE_VERSION bumped v4 → v5 (old caches are deleted on activate,
+ *     forcing a clean refresh of every client).
+ *   - Install precache is now fault-tolerant: each URL is cached with its own
+ *     catch so a single missing asset can never fail SW installation.
+ *   - Runtime caching is split into two dedicated caches with TTL + entry
+ *     caps (hand-rolled, no workbox):
+ *       nexcom-assets-v5 — /assets/* + *.js/*.css (Vite-hashed, immutable,
+ *                          30d backstop TTL)
+ *       nexcom-media-v5  — fonts/images/icons (7d TTL, 60 entries FIFO)
  */
 
-const CACHE_VERSION = "v2";
-const CACHE_NAME = `nexcom-${CACHE_VERSION}`;
+const CACHE_VERSION = "v5";
 const STATIC_CACHE = `nexcom-static-${CACHE_VERSION}`;
-const API_CACHE = `nexcom-api-${CACHE_VERSION}`;
+// OFFLINE-RES: separate cache for allowlisted public market-data reads so a
+// deploy can invalidate it independently of the app shell.
+const READ_CACHE = `nexcom-read-${CACHE_VERSION}`;
+// PERF-CLIENT: dedicated runtime caches (see header).
+const ASSETS_CACHE = `nexcom-assets-${CACHE_VERSION}`;
+const MEDIA_CACHE = `nexcom-media-${CACHE_VERSION}`;
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -18,18 +40,28 @@ const PRECACHE_URLS = [
   "/icons/icon-512.png",
 ];
 
+// PERF-CLIENT: runtime cache policy constants.
+const ASSETS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30d (hashed = immutable backstop)
+const MEDIA_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;   // 7d
+const MEDIA_MAX_ENTRIES = 60;
+
 // ─── Install ─────────────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
+    caches.open(STATIC_CACHE).then(async (cache) => {
+      // PERF-CLIENT: precache each URL with its own catch — one missing
+      // asset (e.g. offline.html not yet deployed) must never reject the
+      // whole install and leave the app without a service worker.
+      await Promise.all(
+        PRECACHE_URLS.map((url) => cache.add(url).catch(() => undefined))
+      );
     }).then(() => self.skipWaiting())
   );
 });
 
 // ─── Activate ────────────────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
-  const validCaches = [STATIC_CACHE, API_CACHE];
+  const validCaches = [STATIC_CACHE, READ_CACHE, ASSETS_CACHE, MEDIA_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -41,6 +73,176 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// ─── Message handling (registerSW.ts posts SKIP_WAITING for instant updates) ─
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+// ─── OFFLINE-RES: cached market-data reads (stale-while-revalidate) ─────────
+// STRICT allowlist of read-only PUBLIC tRPC procedures. These return market
+// reference data identical for every user — safe to cache. NEVER add any
+// procedure that varies by user (auth.*, orders.*, portfolio.*, kycService.*,
+// notifications.*, profile.*, receipts.*, priceAlerts.mine, …). The allowlist
+// is the security boundary: anything not listed here falls through to
+// network-only above.
+const CACHEABLE_READ_ENDPOINTS = [
+  "/api/trpc/livePrices.getAll",
+  "/api/trpc/commodities.list",
+  "/api/trpc/commodities.priceHistory",
+  "/api/trpc/marketStream.tickerSnapshot",
+  "/api/trpc/transparency.marketStats",
+  "/api/trpc/transparency.priceDiscovery",
+  "/api/trpc/priceAlerts.currentPrice",
+  // DATA-FEEDS: public agro-weather + reference-price reads (identical for every user)
+  "/api/trpc/feeds.getWeather",
+  "/api/trpc/feeds.listWeatherLocations",
+  "/api/trpc/feeds.getReferencePrices",
+  "/api/trpc/feeds.getStatistics",
+  "/api/trpc/feeds.referencePricesHistory",
+];
+// Max age for offline fallback: 24h. Older data is treated as absent — we
+// fail closed rather than show a farmer a dangerously stale price.
+const READ_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function isCacheableMarketRead(url) {
+  // tRPC GET batch format: /api/trpc/<procA>,<procB>?batch=1&input=…
+  // Cacheable ONLY if EVERY procedure in the batch is on the allowlist —
+  // a single user-specific procedure in the batch disqualifies the request.
+  const prefix = "/api/trpc/";
+  if (!url.pathname.startsWith(prefix)) return false;
+  const procs = url.pathname.slice(prefix.length).split(",");
+  return procs.length > 0 && procs.every((proc) => CACHEABLE_READ_ENDPOINTS.includes(prefix + proc));
+}
+
+/**
+ * Stale-while-revalidate:
+ *   1. Serve the cached response immediately (if any) — annotated with the
+ *      original store time via X-SW-Cached-At.
+ *   2. Revalidate in the background and refresh the cache.
+ *   3. When the network fails (offline), serve cache up to 24h with an
+ *      X-Served-Offline: 1 header so the client can badge the data as stale.
+ *   4. No cache + network down → rethrow; React Query surfaces its normal
+ *      error state (fail-closed, never fabricated data).
+ */
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(READ_CACHE);
+  const cached = await cache.match(request);
+  const cachedAt = cached ? Number(cached.headers.get("X-SW-Cached-At")) || 0 : 0;
+  // Enforce the 24h cap — beyond it the cache is treated as absent.
+  const cachedUsable = cached && Date.now() - cachedAt <= READ_CACHE_MAX_AGE_MS ? cached : null;
+
+  // Definitively offline: serve the cache immediately with the marker header
+  // the client keys its "OFFLINE — cached prices" badge on. No network attempt.
+  if (self.navigator.onLine === false) {
+    if (cachedUsable) return markOfflineServed(cachedUsable);
+    throw new TypeError("Offline and no cached market data");
+  }
+
+  const networkPromise = fetch(request)
+    .then((response) => {
+      if (response.ok) {
+        cache.put(request, stampCachedResponse(response)).catch(() => undefined);
+      }
+      return response;
+    })
+    .catch(() => null);
+
+  if (cachedUsable) {
+    // Stale-while-revalidate: serve cache now, refresh in the background.
+    // (Lie-fi 2G case: if the background revalidation fails, the client still
+    // has the cached payload + X-SW-Cached-At to reason about staleness.)
+    networkPromise.then(() => undefined);
+    return cachedUsable;
+  }
+
+  // No usable cache — we must hit the network.
+  const networkResponse = await networkPromise;
+  if (networkResponse) return networkResponse;
+
+  // Offline with nothing cached for this exact query — fail closed.
+  throw new TypeError("Network unavailable and no cached market data");
+}
+
+// Rebuild a cached response with the offline marker header (cached response
+// headers are immutable post-construction).
+function markOfflineServed(response) {
+  const headers = new Headers(response.headers);
+  headers.set("X-Served-Offline", "1");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+// Store a copy of the response with a server-observed cache timestamp so the
+// client can reason about staleness; mark offline-served responses. Headers
+// on cached responses are immutable post-construction, so rebuild.
+function stampCachedResponse(response) {
+  const clone = response.clone();
+  const headers = new Headers(clone.headers);
+  headers.set("X-SW-Cached-At", String(Date.now()));
+  return new Response(clone.body, {
+    status: clone.status,
+    statusText: clone.statusText,
+    headers,
+  });
+}
+
+// ─── PERF-CLIENT: hand-rolled CacheFirst with TTL + entry cap (no workbox) ──
+/**
+ * Cache-first with a TTL backstop and an optional max-entries trim.
+ *   - Fresh cached entry (younger than maxAgeMs) → served without network.
+ *   - Stale cached entry → refresh from network; on network failure the
+ *     STALE copy is still served (hashed assets stay valid across deploys
+ *     because a deploy bumps CACHE_VERSION and wipes the cache anyway).
+ *   - Miss → network; successful responses are stored (stamped with
+ *     X-SW-Cached-At) and the cache trimmed to maxEntries (FIFO; keys() is
+ *     in insertion order).
+ * maxAgeMs === Infinity means "immutable — never expire on age".
+ */
+async function cacheFirstWithExpiry(request, cacheName, maxAgeMs, maxEntries) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) {
+    const cachedAt = Number(cached.headers.get("X-SW-Cached-At")) || 0;
+    const fresh =
+      maxAgeMs === Infinity || (cachedAt > 0 && Date.now() - cachedAt <= maxAgeMs);
+    if (fresh) return cached;
+    // Stale — try to refresh, but never strand the user without the asset.
+    try {
+      const response = await fetch(request);
+      if (response.ok) {
+        await cache.put(request, stampCachedResponse(response));
+        if (maxEntries) trimCache(cache, maxEntries).catch(() => undefined);
+        return response;
+      }
+      return cached;
+    } catch {
+      return cached;
+    }
+  }
+  const response = await fetch(request);
+  if (response.ok) {
+    try {
+      await cache.put(request, stampCachedResponse(response));
+      if (maxEntries) trimCache(cache, maxEntries).catch(() => undefined);
+    } catch {
+      // Quota exceeded etc. — serve the network response regardless.
+    }
+  }
+  return response;
+}
+
+// Evict oldest entries (insertion order) beyond maxEntries.
+async function trimCache(cache, maxEntries) {
+  const keys = await cache.keys();
+  const excess = keys.length - maxEntries;
+  for (let i = 0; i < excess; i++) {
+    await cache.delete(keys[i]);
+  }
+}
+
 // ─── Fetch Strategy ──────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   const { request } = event;
@@ -51,44 +253,43 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API calls — network-first, fallback to cache
+  // API calls.
+  // OFFLINE-RES: a STRICT ALLOWLIST of read-only, public (non-personalised)
+  // market-data tRPC GET endpoints is served stale-while-revalidate so the
+  // app still has price data when connectivity drops. EVERYTHING else under
+  // /api/* — every POST, every mutation, every authenticated/user-specific
+  // router (balances, KYC status, positions, orders…) — stays NETWORK-ONLY.
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(API_CACHE).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(request))
-    );
+    if (isCacheableMarketRead(url)) {
+      event.respondWith(staleWhileRevalidate(request));
+    } else {
+      event.respondWith(fetch(request));
+    }
     return;
   }
 
-  // Static assets — cache-first
+  // PERF-CLIENT: hashed build assets (Vite emits /assets/*.<hash>.js|css) —
+  // CacheFirst, effectively immutable, 30d TTL backstop. Same behaviour as
+  // v4's cache-first branch, now with expiry + its own cache namespace.
   if (
     url.pathname.startsWith("/assets/") ||
-    url.pathname.startsWith("/icons/") ||
     url.pathname.endsWith(".js") ||
-    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".css")
+  ) {
+    event.respondWith(cacheFirstWithExpiry(request, ASSETS_CACHE, ASSETS_MAX_AGE_MS, 0));
+    return;
+  }
+
+  // PERF-CLIENT: fonts and images — CacheFirst, 7d TTL, 60 entries (FIFO
+  // eviction) so a long session of receipt/QR images can't grow the cache
+  // unboundedly on low-storage devices.
+  if (
+    url.pathname.startsWith("/icons/") ||
     url.pathname.endsWith(".woff2") ||
     url.pathname.endsWith(".png") ||
     url.pathname.endsWith(".svg")
   ) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        });
-      })
-    );
+    event.respondWith(cacheFirstWithExpiry(request, MEDIA_CACHE, MEDIA_MAX_AGE_MS, MEDIA_MAX_ENTRIES));
     return;
   }
 
@@ -184,22 +385,70 @@ self.addEventListener("sync", (event) => {
   }
 });
 
+// IMPORTANT: these values MUST match client/src/lib/offlineConstants.ts
+// (OFFLINE_DB_NAME / OFFLINE_DB_VERSION / OFFLINE_STORE_NAME /
+//  OFFLINE_TRPC_ENDPOINTS). The app writes queued operations to this exact
+// database/store; if the two drift apart, offline orders silently never sync.
+const OFFLINE_DB_NAME = "nexcom-offline-queue";      // keep in sync with offlineConstants.ts
+const OFFLINE_DB_VERSION = 1;                        // keep in sync with offlineConstants.ts
+const OFFLINE_STORE_NAME = "operations";             // keep in sync with offlineConstants.ts
+const OFFLINE_TRPC_ENDPOINTS = {                     // keep in sync with offlineConstants.ts
+  place_order: "/api/trpc/orders.create",
+  cancel_order: "/api/trpc/orders.cancel",
+  amend_order: "/api/trpc/orders.amend",
+  kyc_submit: "/api/trpc/kycService.submitApplication",
+  receipt_create: "/api/trpc/receipts.create",
+  alert_create: "/api/trpc/priceAlerts.create",
+  profile_update: "/api/trpc/profile.update",
+};
+const OFFLINE_MAX_RETRIES = 5;
+
 async function syncPendingOrders() {
-  // Retrieve pending orders from IndexedDB and retry submission
+  // Drain the offline operation queue written by the app (useOfflineQueue.ts)
+  // and retry each operation against its tRPC endpoint.
   try {
     const db = await openDB();
-    const pending = await getFromDB(db, "pending-orders");
-    for (const order of pending || []) {
+    const pending = await getFromDB(db, OFFLINE_STORE_NAME);
+    for (const item of pending || []) {
+      const endpoint = OFFLINE_TRPC_ENDPOINTS[item.type];
+      if (!endpoint) {
+        await deleteFromDB(db, OFFLINE_STORE_NAME, item.id);
+        continue;
+      }
       try {
-        await fetch("/api/trpc/trading.placeOrder", {
+        // Idempotency: the queued item's idempotencyKey (written by
+        // lib/offlineOrderQueue.ts / hooks/useOfflineQueue.ts) is forwarded as
+        // clientOrderId so orders.create's server-side dedupe catches replays
+        // of operations the server already accepted before connectivity dropped.
+        const body =
+          item.type === "place_order" && item.idempotencyKey
+            ? { ...item.payload, clientOrderId: item.idempotencyKey }
+            : item.payload;
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(order),
+          body: JSON.stringify(body),
+          credentials: "include",
         });
-        await deleteFromDB(db, "pending-orders", order.id);
+        if (res.ok) {
+          await deleteFromDB(db, OFFLINE_STORE_NAME, item.id);
+        } else {
+          const retries = (item.retries || 0) + 1;
+          if (retries >= OFFLINE_MAX_RETRIES) {
+            await deleteFromDB(db, OFFLINE_STORE_NAME, item.id); // drop poisoned item
+          } else {
+            await putToDB(db, OFFLINE_STORE_NAME, { ...item, retries, lastError: `HTTP ${res.status}` });
+          }
+        }
       } catch {
-        // Will retry on next sync
+        // Network still down — will retry on next sync event
       }
+    }
+    // Tell open clients the queue changed so UI badges can refresh
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const remaining = (await getFromDB(db, OFFLINE_STORE_NAME)).length;
+    for (const client of clients) {
+      client.postMessage({ type: "OFFLINE_QUEUE_FLUSHED", remaining });
     }
   } catch {
     // IndexedDB not available
@@ -209,11 +458,13 @@ async function syncPendingOrders() {
 // Simple IndexedDB helpers
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("nexcom-offline", 1);
+    const req = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains("pending-orders")) {
-        db.createObjectStore("pending-orders", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(OFFLINE_STORE_NAME)) {
+        const store = db.createObjectStore(OFFLINE_STORE_NAME, { keyPath: "id" });
+        store.createIndex("enqueuedAt", "enqueuedAt", { unique: false });
+        store.createIndex("type", "type", { unique: false });
       }
     };
     req.onsuccess = (e) => resolve(e.target.result);
@@ -226,6 +477,15 @@ function getFromDB(db, storeName) {
     const tx = db.transaction(storeName, "readonly");
     const req = tx.objectStore(storeName).getAll();
     req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = reject;
+  });
+}
+
+function putToDB(db, storeName, value) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const req = tx.objectStore(storeName).put(value);
+    req.onsuccess = resolve;
     req.onerror = reject;
   });
 }

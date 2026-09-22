@@ -13,7 +13,11 @@ _pool: asyncpg.Pool | None = None
 
 async def init_db():
     global _pool
-    url = os.getenv("DATABASE_URL", "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom")
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        if os.getenv("APP_ENV") == "production" or os.getenv("ENVIRONMENT") == "production":
+            raise RuntimeError("FATAL: DATABASE_URL is required in production - no default DB credentials exist")
+        url = "postgresql://nexcom:nexcom_secure_2026@localhost:5432/nexcom"  # DEV-ONLY local default
     try:
         _pool = await asyncpg.create_pool(url, min_size=2, max_size=10)
         logger.info("PostgreSQL connection pool initialized")

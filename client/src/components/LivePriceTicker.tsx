@@ -10,7 +10,7 @@
  * - Configurable symbol list (defaults to key NEXCOM instruments)
  * - Connection status indicator
  */
-import { useEffect, useRef, useState, useCallback } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { Wifi, WifiOff, Pause, Play } from "lucide-react";
 
@@ -65,7 +65,10 @@ function formatPrice(price: number): string {
   return price.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 5 });
 }
 
-export function LivePriceTicker({
+// PERF-CLIENT: memoised at the bottom (both named + default export) — with
+// the default symbols/speed props the ticker subtree is skipped whenever the
+// parent page re-renders for unrelated state.
+function LivePriceTickerComponent({
   symbols = DEFAULT_SYMBOLS,
   className,
   speed = 60,
@@ -87,6 +90,9 @@ export function LivePriceTicker({
 
   const connectSSE = useCallback(() => {
     if (sseRef.current) return;
+    // OFFLINE-RES: don't connect while offline or hidden — resumed via the
+    // online/visibilitychange listeners in the mount effect.
+    if (!navigator.onLine || document.hidden) return;
     const url = `/api/v1/fluvio/stream/nexcom.price-updates?from_offset=latest`;
     const es = new EventSource(url);
     sseRef.current = es;
@@ -141,6 +147,8 @@ export function LivePriceTicker({
   // Also maintain WebSocket connection as secondary data source
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    // OFFLINE-RES: don't connect while offline or hidden
+    if (!navigator.onLine || document.hidden) return;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const url = `${protocol}//${window.location.host}/ws/orderbook`;
     const ws = new WebSocket(url);
@@ -182,10 +190,37 @@ export function LivePriceTicker({
   useEffect(() => {
     connectSSE(); // Primary: Fluvio SSE
     connect();    // Secondary: WebSocket fallback
+
+    // OFFLINE-RES: pause both streams while hidden/offline, resume with reset backoff
+    const pause = () => {
+      if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
+      sseRef.current?.close();
+      sseRef.current = null;
+      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); wsRef.current = null; }
+      setConnected(false);
+    };
+    const resume = () => {
+      reconnectDelayRef.current = 1000;
+      connectSSE();
+      connect();
+    };
+    const handleOnline = () => resume();
+    const handleOffline = () => pause();
+    const handleVisibility = () => {
+      if (document.hidden) pause();
+      else resume();
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       sseRef.current?.close();
       wsRef.current?.close();
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [connectSSE, connect]);
 
@@ -221,7 +256,10 @@ export function LivePriceTicker({
   }, [paused, speed]);
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const items = symbols.map((sym) => {
+  // PERF-CLIENT: memoise the ticker item list — it is only a function of
+  // (symbols, prices, prevPrices), so re-renders triggered by the parent or
+  // by the pause/connected flags no longer rebuild 2×20 ticker cells.
+  const items = useMemo(() => symbols.map((sym) => {
     const tick = prices.get(sym.symbol);
     const prev = prevPrices.get(sym.symbol);
     const price = tick?.price ?? null;
@@ -264,7 +302,7 @@ export function LivePriceTicker({
         <span className="text-blue-800 ml-2">|</span>
       </span>
     );
-  });
+  }), [symbols, prices, prevPrices]);
 
   return (
     <div
@@ -309,4 +347,5 @@ export function LivePriceTicker({
   );
 }
 
+export const LivePriceTicker = memo(LivePriceTickerComponent);
 export default LivePriceTicker;

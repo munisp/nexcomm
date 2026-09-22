@@ -27,15 +27,26 @@ Environment variables:
   ALERT_WEBHOOK_URL             — URL to POST fraud alerts to
   RISK_THRESHOLD_HIGH           — score above which = HIGH risk (default: 0.7)
   RISK_THRESHOLD_MEDIUM         — score above which = MEDIUM risk (default: 0.4)
+  ML_PLATFORM_URL               — ml-platform serving API (default http://ml-platform:8015)
+  ML_PLATFORM_TIMEOUT           — seconds per ml-platform call (default: 2.0)
+  MODEL_REGISTRY_PATH           — local artifact dir fallback (default: /tmp/nexcom_models)
+
+ML scoring prefers the ml-platform FraudNet champion (versioned PyTorch
+artifact, services/ml-platform). If the platform is unreachable it falls back
+to locally persisted IsolationForest artifacts (trained offline by the
+pipeline, loaded from MODEL_REGISTRY_PATH). No synthetic training data is
+generated at boot anymore (audit A3 §fraud-engine).
 """
 
 import os
 import json
 import logging
 import hashlib
+import pickle
 import time
 from datetime import datetime, timezone
 from collections import defaultdict, deque
+from pathlib import Path
 from typing import Optional
 from threading import Lock
 
@@ -55,9 +66,80 @@ RISK_THRESHOLD_MEDIUM = float(os.getenv("RISK_THRESHOLD_MEDIUM", "0.4"))
 ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "")
 MAX_ALERTS = int(os.getenv("MAX_ALERTS", "10000"))
 VELOCITY_WINDOW_SECONDS = int(os.getenv("VELOCITY_WINDOW_SECONDS", "300"))  # 5 min
+ML_PLATFORM_URL = os.getenv("ML_PLATFORM_URL", "http://ml-platform:8015").rstrip("/")
+ML_PLATFORM_TIMEOUT = float(os.getenv("ML_PLATFORM_TIMEOUT", "2.0"))
+MODEL_REGISTRY_PATH = Path(os.getenv("MODEL_REGISTRY_PATH", "/tmp/nexcom_models"))
+_CB_FAILURES = int(os.getenv("ML_PLATFORM_CB_FAILURES", "3"))
+_CB_COOLDOWN = float(os.getenv("ML_PLATFORM_CB_COOLDOWN", "30"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fraud-engine")
+
+# ── ML platform client (httpx, 2s timeout, circuit breaker) ──────────────────
+
+class _PlatformBreaker:
+    def __init__(self):
+        self._lock = Lock()
+        self._failures = 0
+        self._opened_at: Optional[float] = None
+
+    def allow(self) -> bool:
+        with self._lock:
+            if self._opened_at is None:
+                return True
+            return (time.monotonic() - self._opened_at) >= _CB_COOLDOWN
+
+    def success(self):
+        with self._lock:
+            self._failures = 0
+            self._opened_at = None
+
+    def failure(self):
+        with self._lock:
+            self._failures += 1
+            if self._failures >= _CB_FAILURES and self._opened_at is None:
+                self._opened_at = time.monotonic()
+                logger.warning("[FraudEngine] ml-platform circuit breaker OPEN (cooldown %.0fs)", _CB_COOLDOWN)
+
+    def state(self) -> str:
+        with self._lock:
+            if self._opened_at is None:
+                return "closed"
+            return "half-open" if (time.monotonic() - self._opened_at) >= _CB_COOLDOWN else "open"
+
+
+_platform_breaker = _PlatformBreaker()
+_platform_state = {"last_model_source": None, "last_model_version": None, "last_ok_at": None}
+
+
+def ml_platform_post(path: str, payload: dict) -> Optional[dict]:
+    """POST to ml-platform with circuit breaker; None on any failure."""
+    if not _platform_breaker.allow():
+        return None
+    try:
+        import httpx
+
+        with httpx.Client(base_url=ML_PLATFORM_URL, timeout=ML_PLATFORM_TIMEOUT) as client:
+            resp = client.post(path, json=payload)
+        if resp.status_code != 200:
+            if resp.status_code != 503:  # 503 = model not trained yet, not a fault
+                _platform_breaker.failure()
+            return None
+        _platform_breaker.success()
+        return resp.json()
+    except Exception as exc:
+        _platform_breaker.failure()
+        logger.info("[FraudEngine] ml-platform %s failed: %s", path, exc)
+        return None
+
+
+def ml_platform_fraud_score(payload: dict) -> Optional[dict]:
+    result = ml_platform_post("/v1/predict/fraud", payload)
+    if result is not None:
+        _platform_state["last_model_source"] = result.get("model_source")
+        _platform_state["last_model_version"] = result.get("model_version")
+        _platform_state["last_ok_at"] = datetime.now(timezone.utc).isoformat()
+    return result
 
 # ── Request/Response Models ───────────────────────────────────────────────────
 
@@ -123,45 +205,45 @@ class FraudState:
         self.transaction_scaler: Optional[StandardScaler] = None
         self.model_trained_at: Optional[str] = None
         self.training_samples: int = 0
-        # Initialize with synthetic baseline data
+        # Load real artifacts (no synthetic baseline seeding — audit A3)
         self._initialize_models()
 
     def _initialize_models(self):
-        """Initialize ML models with synthetic baseline data representing normal behavior."""
-        logger.info("[FraudEngine] Initializing ML models with baseline data...")
-        np.random.seed(42)
-        n_samples = 1000
+        """Load locally persisted IsolationForest artifacts as the offline
+        fallback for the ml-platform FraudNet champion.
 
-        # Normal order features: [quantity, price, orders_per_min, avg_quantity, price_deviation, side_ratio]
-        order_features = np.column_stack([
-            np.random.lognormal(3, 1, n_samples),      # quantity (log-normal)
-            np.random.lognormal(5, 0.5, n_samples),    # price
-            np.random.poisson(2, n_samples),            # orders per minute
-            np.random.lognormal(3, 0.8, n_samples),    # avg quantity
-            np.random.normal(0, 0.02, n_samples),      # price deviation from market
-            np.random.uniform(0.3, 0.7, n_samples),    # buy/sell ratio
-        ])
-        self.order_scaler = StandardScaler()
-        order_scaled = self.order_scaler.fit_transform(order_features)
-        self.order_model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
-        self.order_model.fit(order_scaled)
-
-        # Normal transaction features: [amount, hour_of_day, transactions_per_hour, amount_deviation, is_round_number]
-        transaction_features = np.column_stack([
-            np.random.lognormal(4, 1.5, n_samples),    # amount
-            np.random.uniform(0, 23, n_samples),        # hour of day
-            np.random.poisson(1, n_samples),            # transactions per hour
-            np.random.normal(0, 0.3, n_samples),       # amount deviation from user avg
-            np.random.binomial(1, 0.1, n_samples),     # is round number (suspicious)
-        ])
-        self.transaction_scaler = StandardScaler()
-        transaction_scaled = self.transaction_scaler.fit_transform(transaction_features)
-        self.transaction_model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
-        self.transaction_model.fit(transaction_scaled)
-
+        Artifacts (produced by the ml-platform pipeline, e.g. exported to the
+        model_registry_data volume):
+          fraud_order_if.pkl        — {"model": IsolationForest, "scaler": StandardScaler}
+          fraud_transaction_if.pkl  — same layout
+        When absent, ML scoring simply defers to ml-platform / rule detectors;
+        no random synthetic baseline is trained.
+        """
+        loaded = []
+        for attr_model, attr_scaler, fname in (
+            ("order_model", "order_scaler", "fraud_order_if.pkl"),
+            ("transaction_model", "transaction_scaler", "fraud_transaction_if.pkl"),
+        ):
+            path = MODEL_REGISTRY_PATH / fname
+            if not path.is_file():
+                continue
+            try:
+                with open(path, "rb") as fh:
+                    bundle = pickle.load(fh)
+                setattr(self, attr_model, bundle["model"])
+                setattr(self, attr_scaler, bundle["scaler"])
+                loaded.append(fname)
+            except Exception as exc:
+                logger.error("[FraudEngine] failed to load %s: %s", path, exc)
         self.model_trained_at = datetime.now(timezone.utc).isoformat()
-        self.training_samples = n_samples
-        logger.info(f"[FraudEngine] Models initialized with {n_samples} baseline samples")
+        self.training_samples = 0
+        if loaded:
+            logger.info("[FraudEngine] Loaded local fallback artifacts: %s", loaded)
+        else:
+            logger.info(
+                "[FraudEngine] No local artifacts under %s; ML scoring via ml-platform "
+                "(%s) with rule-detector fallback", MODEL_REGISTRY_PATH, ML_PLATFORM_URL,
+            )
 
     def add_alert(self, alert: dict):
         with self.lock:
@@ -282,8 +364,20 @@ def detect_velocity_anomaly(user_id: str, amount: float) -> tuple[float, list[st
 
     return risk, signals
 
-def ml_order_anomaly_score(quantity: float, price: float, orders_per_min: float, avg_quantity: float, price_deviation: float, side_ratio: float) -> float:
-    """Use Isolation Forest to score order anomaly."""
+def ml_order_anomaly_score(quantity: float, price: float, orders_per_min: float, avg_quantity: float, price_deviation: float, side_ratio: float, user_id: str = "", symbol: str = "", side: str = "") -> float:
+    """Order anomaly score: ml-platform FraudNet first, local IsolationForest
+    artifact fallback, else 0.0 (rules still apply)."""
+    platform = ml_platform_fraud_score({
+        "account_id": user_id or "unknown",
+        "amount": quantity * price,
+        "currency": "NGN",
+        "transaction_type": "order",
+        "channel": "api",
+        "commodity": symbol or None,
+        "txns_last_1h": float(orders_per_min) * 60.0,
+    })
+    if platform is not None:
+        return float(platform.get("fraud_probability", 0.0))
     if state.order_model is None or state.order_scaler is None:
         return 0.0
     try:
@@ -298,8 +392,23 @@ def ml_order_anomaly_score(quantity: float, price: float, orders_per_min: float,
         logger.warning(f"[FraudEngine] ML scoring error: {e}")
         return 0.0
 
-def ml_transaction_anomaly_score(amount: float, hour_of_day: float, txns_per_hour: float, amount_deviation: float, is_round: float) -> float:
-    """Use Isolation Forest to score transaction anomaly."""
+def ml_transaction_anomaly_score(amount: float, hour_of_day: float, txns_per_hour: float, amount_deviation: float, is_round: float, user_id: str = "", transaction_type: str = "", destination: Optional[str] = None, timestamp_ms: Optional[int] = None) -> float:
+    """Transaction anomaly score: ml-platform FraudNet first, local artifact
+    fallback, else 0.0."""
+    platform = ml_platform_fraud_score({
+        "account_id": user_id or "unknown",
+        "amount": amount,
+        "currency": "NGN",
+        "transaction_type": transaction_type or "transfer",
+        "timestamp": timestamp_ms,
+        "txns_last_1h": float(txns_per_hour),
+        "amount_vs_user_avg": float(1.0 + amount_deviation),
+        "payee_id": destination,
+        "new_payee": bool(destination),
+        "features": {"is_round_amount": float(is_round)},
+    })
+    if platform is not None:
+        return float(platform.get("fraud_probability", 0.0))
     if state.transaction_model is None or state.transaction_scaler is None:
         return 0.0
     try:
@@ -335,6 +444,16 @@ async def health():
         "version": "1.0.0",
         "model_trained_at": state.model_trained_at,
         "training_samples": state.training_samples,
+        "ml_platform": {
+            "url": ML_PLATFORM_URL,
+            "circuit_breaker": _platform_breaker.state(),
+            "last_model_source": _platform_state.get("last_model_source"),
+            "last_ok_at": _platform_state.get("last_ok_at"),
+        },
+        "local_fallback_artifacts": {
+            "order_model": state.order_model is not None,
+            "transaction_model": state.transaction_model is not None,
+        },
     }
 
 @app.post("/analyze/order")
@@ -361,10 +480,14 @@ async def analyze_order(req: OrderAnalysisRequest):
     avg_qty = np.mean([o.get("quantity", req.quantity) for o in user_orders[-50:]]) if user_orders else req.quantity
     buy_orders = [o for o in user_orders[-100:] if o.get("side") == "buy"]
     side_ratio = len(buy_orders) / max(len(user_orders[-100:]), 1)
-    ml_risk = ml_order_anomaly_score(req.quantity, req.price, orders_per_min, avg_qty, 0.0, side_ratio)
+    ml_risk = ml_order_anomaly_score(
+        req.quantity, req.price, orders_per_min, avg_qty, 0.0, side_ratio,
+        user_id=req.user_id, symbol=req.symbol, side=req.side,
+    )
     risk_scores.append(ml_risk)
     if ml_risk > RISK_THRESHOLD_HIGH:
-        signals.append(f"ML_ANOMALY: Order pattern anomaly score {ml_risk:.3f}")
+        source = _platform_state.get("last_model_source") or "local-artifact"
+        signals.append(f"ML_ANOMALY: Order pattern anomaly score {ml_risk:.3f} ({source})")
 
     # Composite risk score (max of all signals, weighted)
     composite_risk = max(risk_scores) if risk_scores else 0.0
@@ -432,10 +555,15 @@ async def analyze_transaction(req: TransactionAnalysisRequest):
     all_amounts = [t.get("amount", req.amount) for t in txns[-100:]]
     avg_amount = np.mean(all_amounts) if all_amounts else req.amount
     amount_dev = (req.amount - avg_amount) / max(avg_amount, 1)
-    ml_risk = ml_transaction_anomaly_score(req.amount, hour, txns_per_hour, amount_dev, is_round)
+    ml_risk = ml_transaction_anomaly_score(
+        req.amount, hour, txns_per_hour, amount_dev, is_round,
+        user_id=req.user_id, transaction_type=req.transaction_type,
+        destination=req.destination, timestamp_ms=now_ms,
+    )
     risk_scores.append(ml_risk)
     if ml_risk > RISK_THRESHOLD_HIGH:
-        signals.append(f"ML_ANOMALY: Transaction pattern anomaly score {ml_risk:.3f}")
+        source = _platform_state.get("last_model_source") or "local-artifact"
+        signals.append(f"ML_ANOMALY: Transaction pattern anomaly score {ml_risk:.3f} ({source})")
 
     # 4. Withdrawal to new destination
     if req.transaction_type == "withdrawal" and req.destination:
@@ -572,10 +700,20 @@ async def analyze_batch(events: list[dict]):
 @app.get("/model/status")
 async def model_status():
     return {
-        "order_model": "trained" if state.order_model else "not_trained",
-        "transaction_model": "trained" if state.transaction_model else "not_trained",
-        "trained_at": state.model_trained_at,
-        "training_samples": state.training_samples,
+        "primary_ml": {
+            "type": "ml-platform FraudNet (versioned PyTorch champion)",
+            "url": ML_PLATFORM_URL,
+            "circuit_breaker": _platform_breaker.state(),
+            "last_model_source": _platform_state.get("last_model_source"),
+            "last_model_version": _platform_state.get("last_model_version"),
+            "last_ok_at": _platform_state.get("last_ok_at"),
+        },
+        "local_fallback": {
+            "order_model": "artifact_loaded" if state.order_model else "absent",
+            "transaction_model": "artifact_loaded" if state.transaction_model else "absent",
+            "path": str(MODEL_REGISTRY_PATH),
+        },
+        "loaded_at": state.model_trained_at,
         "thresholds": {
             "high": RISK_THRESHOLD_HIGH,
             "medium": RISK_THRESHOLD_MEDIUM,
@@ -584,9 +722,45 @@ async def model_status():
 
 @app.post("/model/retrain")
 async def retrain_model():
-    """Trigger model retraining with accumulated data."""
-    state._initialize_models()
-    return {"status": "retrained", "trained_at": state.model_trained_at}
+    """Trigger real retraining via the ml-platform pipeline (train → register
+    → promotion gate). No local synthetic reseeding (audit A3 §fraud-engine).
+
+    Order of attempts:
+      1. POST ml-platform /v1/admin/retrain (async pipeline on the platform)
+      2. Local `python -m mlplatform.pipelines.end_to_end` when the
+         mlplatform package is importable in this container
+      3. 503 — nothing was retrained, reported honestly
+    """
+    platform = ml_platform_post("/v1/admin/retrain", {"transactions": 20000, "epochs": 3})
+    if platform is not None:
+        return {
+            "status": "pipeline_started",
+            "via": "ml-platform",
+            "detail": platform,
+            "requested_at": datetime.now(timezone.utc).isoformat(),
+        }
+    try:
+        import mlplatform.pipelines.end_to_end  # noqa: F401
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="ml-platform unreachable and mlplatform package not installed "
+                   "locally; retraining not possible from this container",
+        )
+    import subprocess
+    import sys
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "mlplatform.pipelines.end_to_end",
+         "--transactions", "20000", "--epochs", "3"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return {
+        "status": "pipeline_started",
+        "via": "local-subprocess",
+        "pid": proc.pid,
+        "requested_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 @app.get("/alerts")
 async def get_alerts(limit: int = 100, severity: Optional[str] = None):

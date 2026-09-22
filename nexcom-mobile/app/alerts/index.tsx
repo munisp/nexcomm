@@ -63,11 +63,11 @@ export default function AlertsScreen() {
       setShowAddModal(false);
       setTargetPriceInput('');
     },
-    onError: (err) => Alert.alert('Error', err.message),
+    onError: (err: any) => Alert.alert('Error', err.message),
   });
   const deleteAlertMutation = trpc.priceAlerts.delete.useMutation({
     onSuccess: () => utils.priceAlerts.list.invalidate(),
-    onError: (err) => Alert.alert('Error', err.message),
+    onError: (err: any) => Alert.alert('Error', err.message),
   });
   const updateAlertMutation = trpc.priceAlerts.update.useMutation({
     onSuccess: () => utils.priceAlerts.list.invalidate(),

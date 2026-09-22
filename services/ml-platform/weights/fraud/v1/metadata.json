@@ -1,0 +1,10 @@
+{
+  "kind": "fraud",
+  "task": "transaction_fraud",
+  "seed": 42,
+  "epochs_run": 6,
+  "name": "fraud",
+  "version": "v1",
+  "registered_at": 1790018240.5818324,
+  "registry": "local"
+}

@@ -11,7 +11,6 @@
  */
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -107,7 +106,7 @@ export default function ComplianceDashboard() {
 
   if (kycQueueQuery.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6 bg-background min-h-screen">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -437,6 +436,6 @@ export default function ComplianceDashboard() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

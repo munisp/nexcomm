@@ -5,8 +5,10 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as Crypto from "expo-crypto";
 import { useLocalSearchParams } from "expo-router";
 import { COLORS, FONTS, SPACING } from "../../constants/config";
+import { ScreenState } from "../../components/ScreenState";
 import { trpc } from "../../lib/trpc";
 
 export default function TradingScreen() {
@@ -26,7 +28,7 @@ export default function TradingScreen() {
       setQuantity(""); setPrice("");
       utils.orders.list.invalidate();
     },
-    onError: (e) => Alert.alert("Error", e.message),
+    onError: (e: any) => Alert.alert("Error", e.message),
   });
 
   const prices: any[] = (livePricesQ.data as any) ?? [];
@@ -36,7 +38,8 @@ export default function TradingScreen() {
   function handlePlace() {
     if (!quantity || Number(quantity) <= 0) { Alert.alert("Error", "Enter a valid quantity"); return; }
     if (orderType === "LIMIT" && (!price || Number(price) <= 0)) { Alert.alert("Error", "Enter a limit price"); return; }
-    placeMutation.mutate({ symbol: sym, side, orderType, quantity: Number(quantity), ...(orderType === "LIMIT" ? { price: Number(price) } : {}) });
+    // clientOrderId: idempotency key per user intent (portal Trade.tsx parity).
+    placeMutation.mutate({ symbol: sym, side, orderType, quantity: Number(quantity), ...(orderType === "LIMIT" ? { price: Number(price) } : {}), clientOrderId: Crypto.randomUUID() });
   }
 
   return (
@@ -74,7 +77,9 @@ export default function TradingScreen() {
 
         <View style={s.card}>
           <Text style={s.cardTitle}>My Open Orders for {sym} ({openOrders.length})</Text>
-          {openOrdersQ.isLoading ? <ActivityIndicator color={COLORS.primary} /> : openOrders.map((o: any) => (
+          {openOrdersQ.isError ? (
+            <ScreenState error={openOrdersQ.error} onRetry={() => openOrdersQ.refetch()}>{null}</ScreenState>
+          ) : openOrdersQ.isLoading ? <ActivityIndicator color={COLORS.primary} /> : openOrders.map((o: any) => (
             <View key={o.id} style={s.row}>
               <Text style={[s.symbol, o.side === "BUY" ? s.pos : s.neg]}>{o.side}</Text>
               <Text style={s.muted}>{o.orderType} · {Number(o.quantity).toLocaleString()} MT</Text>

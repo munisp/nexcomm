@@ -24,7 +24,6 @@ import {
   Minus,
 } from "lucide-react";
 import { toast } from "sonner";
-import DashboardLayout from "@/components/DashboardLayout";
 import { PageSkeleton } from "@/components/PageSkeleton";
 
 const KYC_COLORS: Record<string, string> = {
@@ -152,7 +151,7 @@ export default function FarmerAdmin() {
 
   if (farmerDetailQ.isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={5} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Farmer Administration</h1>
@@ -492,6 +491,6 @@ export default function FarmerAdmin() {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 }

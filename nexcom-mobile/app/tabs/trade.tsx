@@ -12,9 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
 import { trpc } from '../../lib/trpc';
+import { useOfflineOrderQueue } from '../../lib/useOfflineOrderQueue';
 
 const COMMODITIES = ['MAIZE', 'SOYBEAN', 'COCOA', 'SESAME', 'SORGHUM', 'CASHEW', 'COTTON'];
-const ORDER_TYPES = ['LIMIT', 'MARKET', 'STOP', 'STOP_LIMIT'];
+// Matches the orders.create server enum (server/routers/orders.ts).
+const ORDER_TYPES = ['LIMIT', 'MARKET', 'STOP_LIMIT'] as const;
 const MARKET_TYPES = ['SPOT', 'FUTURES', 'OPTIONS'];
 
 const PRICES: Record<string, number> = {
@@ -51,17 +53,10 @@ export default function TradeScreen() {
     setPrice(String(PRICES[sym] || 0));
   };
 
-  const createOrder = trpc.orders.create.useMutation({
-    onSuccess: () => {
-      setIsSubmitting(false);
-      setQuantity('');
-      Alert.alert('Order Submitted', `Your ${side} order for ${qty} MT of ${commodity} has been placed.`);
-    },
-    onError: (err) => {
-      setIsSubmitting(false);
-      Alert.alert('Order Failed', err.message);
-    },
-  });
+  const utils = trpc.useUtils();
+  // Offline-first submission: direct orders.create with idempotency key when
+  // the link is up; MMKV queue + automatic replay when it is not.
+  const { submitOrder, queuedCount, isPending } = useOfflineOrderQueue();
 
   const handleSubmit = () => {
     if (!quantity || !price) {
@@ -83,16 +78,32 @@ export default function TradeScreen() {
           style: side === 'SELL' ? 'destructive' : 'default',
           onPress: () => {
             setIsSubmitting(true);
-            createOrder.mutate({
+            submitOrder({
               symbol: commodity,
               side,
-              orderType: orderType as 'LIMIT' | 'MARKET' | 'STOP' | 'STOP_LIMIT',
-              marketType: marketType as 'SPOT' | 'FUTURES' | 'OPTIONS',
-              quantity: String(qty),
-              price: orderType !== 'MARKET' ? String(lmt) : undefined,
-              stopPrice: stopPrice ? String(parseFloat(stopPrice)) : undefined,
-              tif: tif as 'GTC' | 'DAY' | 'IOC' | 'FOK',
-            });
+              orderType: orderType as (typeof ORDER_TYPES)[number],
+              quantity: qty,
+              price: orderType !== 'MARKET' ? lmt : undefined,
+              stopPrice: stopPrice ? parseFloat(stopPrice) : undefined,
+              timeInForce: tif as 'GTC' | 'DAY' | 'IOC' | 'FOK',
+            })
+              .then((res) => {
+                setIsSubmitting(false);
+                setQuantity('');
+                if (res.status === 'queued') {
+                  Alert.alert(
+                    'Order Queued',
+                    `No connection right now. Your ${side} order for ${qty} MT of ${commodity} will send when online.`,
+                  );
+                } else {
+                  utils.orders.list.invalidate();
+                  Alert.alert('Order Submitted', `Your ${side} order for ${qty} MT of ${commodity} has been placed.`);
+                }
+              })
+              .catch((err: Error) => {
+                setIsSubmitting(false);
+                Alert.alert('Order Failed', err.message);
+              });
           },
         },
       ]
@@ -301,18 +312,27 @@ export default function TradeScreen() {
           </View>
         )}
 
+        {/* Queued offline orders badge */}
+        {queuedCount > 0 && (
+          <View style={styles.queuedBadge}>
+            <Text style={styles.queuedBadgeText}>
+              ⏳ {queuedCount} order{queuedCount === 1 ? '' : 's'} queued — will send when online
+            </Text>
+          </View>
+        )}
+
         {/* Submit Button */}
         <TouchableOpacity
           style={[
             styles.submitBtn,
             side === 'BUY' ? styles.submitBtnBuy : styles.submitBtnSell,
-            isSubmitting && styles.submitBtnDisabled,
+            (isSubmitting || isPending) && styles.submitBtnDisabled,
           ]}
           onPress={handleSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isPending}
         >
           <Text style={styles.submitBtnText}>
-            {isSubmitting
+            {isSubmitting || isPending
               ? 'Submitting...'
               : `Place ${side} Order`}
           </Text>
@@ -498,6 +518,22 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: TYPOGRAPHY.sizes.base,
     fontWeight: '700',
+  },
+
+  queuedBadge: {
+    backgroundColor: `${COLORS.warning}20`,
+    borderWidth: 1,
+    borderColor: COLORS.warning,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  queuedBadgeText: {
+    color: COLORS.warning,
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 
   submitBtn: {

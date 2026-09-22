@@ -1,8 +1,13 @@
 /**
  * NEXCOM Exchange — Deposits Page
  * Register and track commodity deposits at certified warehouses — fully wired to tRPC backend
+ *
+ * PERF-CLIENT: the list fetches up to 100 heavy deposit cards. Rendering is
+ * windowed via useWindowedList (only ~viewport+overscan rows are mounted) and
+ * the per-row COMMODITIES/WAREHOUSES .find() scans are replaced by
+ * module-level Map lookups (O(1) instead of O(n·m) per render).
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Package, Plus, CheckCircle2, Clock, AlertCircle,
   MapPin, Scale, Search, ChevronRight, Loader2, X,
@@ -21,6 +26,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { WAREHOUSES, COMMODITIES, GRADE_SPECS, CATEGORY_ICONS } from "../../../shared/commodities";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { useWindowedList } from "@/hooks/useWindowedList";
 
 const STATUS_CONFIG = {
   PENDING:  { label: "Pending",  icon: Clock,        className: "badge-pending" },
@@ -33,6 +39,14 @@ const STATUS_CONFIG = {
 type DepositStatus = keyof typeof STATUS_CONFIG;
 
 const STEPS = ["Pending", "Received", "Graded", "Stored"];
+
+// PERF-CLIENT: static reference data — index once at module scope instead of
+// running Array.find() per row per render.
+const COMMODITY_BY_SYMBOL = new Map(COMMODITIES.map((c) => [c.symbol, c]));
+const WAREHOUSE_BY_ID = new Map(WAREHOUSES.map((w) => [w.id, w]));
+
+/** Estimated rendered height of one deposit card (px) for windowing spacers. */
+const DEPOSIT_ROW_HEIGHT = 118;
 
 function DepositProgress({ status }: { status: DepositStatus }) {
   const stepIndex = { PENDING: 0, RECEIVED: 1, GRADED: 2, STORED: 3, REJECTED: -1 }[status];
@@ -82,9 +96,16 @@ export default function Deposits() {
     onError: (e) => toast.error(e.message),
   });
 
-  const filtered = deposits.filter(d =>
-    !query || String(d.id).includes(query) || d.commodity.toLowerCase().includes(query.toLowerCase())
+  const filtered = useMemo(
+    () =>
+      deposits.filter(d =>
+        !query || String(d.id).includes(query) || d.commodity.toLowerCase().includes(query.toLowerCase())
+      ),
+    [deposits, query],
   );
+
+  // PERF-CLIENT: only mount rows near the viewport (overscan 5 handled inside).
+  const win = useWindowedList({ itemCount: filtered.length, estimatedRowHeight: DEPOSIT_ROW_HEIGHT });
 
   const availableGrades = form.commodity ? GRADE_SPECS.filter(g => g.commodity === form.commodity) : [];
   const availableWarehouses = form.commodity ? WAREHOUSES.filter(w => w.commodities.includes(form.commodity)) : WAREHOUSES;
@@ -94,7 +115,7 @@ export default function Deposits() {
       toast.error("Please fill in all required fields");
       return;
     }
-    const wh = WAREHOUSES.find(w => w.id === form.warehouse);
+    const wh = WAREHOUSE_BY_ID.get(form.warehouse);
     createMutation.mutate({
       commodity: form.commodity,
       grade: form.grade || undefined,
@@ -142,20 +163,21 @@ export default function Deposits() {
           <Loader2 className="w-6 h-6 animate-spin mr-2" />Loading deposits...
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3" ref={win.containerRef}>
           {filtered.length === 0 && (
             <div className="py-12 text-center text-muted-foreground text-sm rounded-xl border border-border">
               {deposits.length === 0 ? "No deposits yet. Click New Deposit to get started." : "No deposits match your search."}
             </div>
           )}
-          {filtered.map(dep => {
-            const commodity = COMMODITIES.find(c => c.symbol === dep.commodity);
-            const warehouse = WAREHOUSES.find(w => w.id === dep.warehouseId);
+          {win.topSpacer > 0 && <div style={{ height: win.topSpacer }} aria-hidden="true" />}
+          {filtered.slice(win.start, win.end).map(dep => {
+            const commodity = COMMODITY_BY_SYMBOL.get(dep.commodity);
+            const warehouse = WAREHOUSE_BY_ID.get(dep.warehouseId ?? "");
             const statusCfg = STATUS_CONFIG[dep.status as DepositStatus] ?? STATUS_CONFIG.PENDING;
             const StatusIcon = statusCfg.icon;
             const catIcon = commodity ? CATEGORY_ICONS[commodity.category as keyof typeof CATEGORY_ICONS] : "\u{1F4E6}";
             return (
-              <div key={dep.id} className="rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-colors">
+              <div key={dep.id} className="rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_118px]">
                 <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 text-xl">{catIcon}</div>
@@ -195,6 +217,7 @@ export default function Deposits() {
               </div>
             );
           })}
+          {win.bottomSpacer > 0 && <div style={{ height: win.bottomSpacer }} aria-hidden="true" />}
         </div>
       )}
 
@@ -248,7 +271,7 @@ export default function Deposits() {
             <div className="space-y-1.5">
               <Label>Warehouse *</Label>
               <Select value={form.warehouse} onValueChange={v => setForm(f => ({ ...f, warehouse: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="max-h-64">
                   {availableWarehouses.map(w => (
                     <SelectItem key={w.id} value={w.id}>
@@ -284,8 +307,8 @@ export default function Deposits() {
             </DialogDescription>
           </DialogHeader>
           {detailDep && (() => {
-            const commodity = COMMODITIES.find(c => c.symbol === detailDep.commodity);
-            const warehouse = WAREHOUSES.find(w => w.id === detailDep.warehouseId);
+            const commodity = COMMODITY_BY_SYMBOL.get(detailDep.commodity);
+            const warehouse = WAREHOUSE_BY_ID.get(detailDep.warehouseId ?? "");
             const statusCfg = STATUS_CONFIG[detailDep.status as DepositStatus] ?? STATUS_CONFIG.PENDING;
             const StatusIcon = statusCfg.icon;
   if (isLoading) return <PageSkeleton cards={4} tableRows={8} tableCols={4} />;

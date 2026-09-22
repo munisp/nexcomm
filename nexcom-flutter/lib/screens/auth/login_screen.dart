@@ -17,7 +17,9 @@ import '../../theme.dart';
 class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
 
-  static const _oauthUrl = String.fromEnvironment('OAUTH_URL', defaultValue: 'https://nexcom-exchange.manus.space/api/oauth/login?returnPath=/');
+  // Configurable via --dart-define=OAUTH_URL=... ; default is the live portal.
+// The server registers GET /api/auth/login (server/_core/oauth.ts).
+static const _oauthUrl = String.fromEnvironment('OAUTH_URL', defaultValue: 'https://nexcom.exchange/api/auth/login?returnPath=/');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

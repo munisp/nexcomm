@@ -12,7 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { COLORS, TYPOGRAPHY } from '../../constants/config';
+import { ScreenState } from '../../components/ScreenState';
 import { trpc } from '../../lib/trpc';
+import { signOut } from '../../lib/auth';
 import { useAuthStore } from '../../lib/store';
 
 const MENU_SECTIONS = [
@@ -96,7 +98,11 @@ export default function ProfileScreen() {
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: () => router.replace('/auth' as any),
+          onPress: async () => {
+            await signOut(); // Keycloak logout + SecureStore wipe
+            useAuthStore.getState().logout();
+            router.replace('/auth' as any);
+          },
         },
       ]
     );
@@ -105,6 +111,12 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView showsVerticalScrollIndicator={false}>
+        {profileQuery.isError && (
+          <ScreenState
+            error={profileQuery.error}
+            onRetry={() => profileQuery.refetch()}
+          >{null}</ScreenState>
+        )}
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.avatar}>

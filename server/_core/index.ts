@@ -14,6 +14,7 @@ import { randomUUID } from "crypto";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStripeWebhook } from "../routers/stripeRouter";
+import { paymentWebhooksRouter } from "../routes/paymentWebhooks";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -39,8 +40,12 @@ import { mojaloopSettlementCallbackRouter } from "../routes/mojaloopSettlementCa
 import { startKafkaConsumer, stopKafkaConsumer } from "../kafka/kafkaConsumer";
 import { disconnectKafkaProducer } from "../kafka/kafkaProducer";
 import { startMojaloopHubHealthJob } from "../jobs/mojaloopHubHealthJob";
+import { startFeedRefreshJob } from "../jobs/feedRefreshJob";
+import { startRefreshMaterializedViewsJob } from "../jobs/refreshMaterializedViewsJob";
 import { spatialProxyRouter } from "../routes/spatialProxy";
 import { haStatusRouter } from "../routes/haStatusRoute";
+import { perfMiddleware } from "./perfMiddleware";
+import { perfMetricsRouter } from "../routes/perfMetrics";
 import { sseRouter } from "../sseRouter";
 import { suspiciousPatternDetector, ipBlocklistMiddleware, securityHeaders } from "../security";
 import { ddosProtection, slowLorisGuard, tradingLimiter, transferLimiter, applyDDoSProtections } from "../ddos-protection";
@@ -82,18 +87,8 @@ async function startServer() {
   // '1' means trust the first hop (the Manus edge proxy).
   app.set('trust proxy', 1);
 
-  // ── Response compression (gzip/brotli) ──────────────────────────────────────
-  // Applied before all other middleware to compress all responses > 1KB.
-  // Excludes SSE streams and WebSocket upgrades.
-  app.use(compression({
-    level: 6, // balanced speed vs compression ratio
-    threshold: 1024, // only compress responses > 1KB
-    filter: (req, res) => {
-      // Don't compress SSE streams or WebSocket upgrades
-      if (req.headers.accept === 'text/event-stream') return false;
-      return compression.filter(req, res);
-    },
-  }));
+  // ── Perf measurement: X-Response-Time header + per-route latency histogram ──
+  app.use(perfMiddleware);
 
   // ── Security headers (Helmet with nonce-based CSP) ────────────────────────
   // P1-B: Replaced unsafe-inline/unsafe-eval with per-request nonces.
@@ -175,6 +170,22 @@ async function startServer() {
   app.use(additionalSecurityHeaders);      // Additional security headers: referrer policy, permissions
   app.use(sessionFixationPrevention);      // Session fixation: regenerate session on privilege escalation
 
+  // ── Response compression (gzip/brotli) ──────────────────────────────────────
+  // Mounted after security headers, before routes/static. Level 6, 1KB threshold.
+  // Excludes SSE streams, WebSocket upgrades, and payment webhooks (raw bodies).
+  app.use(compression({
+    level: 6,
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers.accept === 'text/event-stream') return false;
+      const p = req.path ?? '';
+      if (p.startsWith('/api/sse')) return false;                       // SSE order-fill stream
+      if (p === '/api/stripe/webhook') return false;                    // Stripe raw-body webhook
+      if (/^\/api\/payments\/[^/]+\/webhook/.test(p)) return false;     // payment provider webhooks
+      return compression.filter(req, res);
+    },
+  }));
+
   // ── Request ID correlation ────────────────────────────────────────────────
   // Assigns a UUID to every request for distributed tracing and log correlation.
   app.use((req, res, next) => {
@@ -236,6 +247,9 @@ async function startServer() {
   app.use("/api/trpc/crossBorderFx", multiCurrencyLimiter);
   // Stripe webhook MUST be registered before express.json() to preserve raw body for signature verification
   registerStripeWebhook(app);
+  // Payment-rail webhooks MUST be mounted before express.json() — the raw body
+  // is required for HMAC signature verification (mirrors registerStripeWebhook).
+  app.use("/api/payments", express.raw({ type: "application/json" }), paymentWebhooksRouter);
 
   // Configure body parser — 10 MB is sufficient for JSON payloads; file uploads use multipart
   app.use(express.json({ limit: "10mb" }));
@@ -275,6 +289,8 @@ async function startServer() {
 
   // HA status REST endpoint — /api/ha/status, /api/ha/status/metrics, /api/ha/status/engines
   app.use(haStatusRouter);
+  // Perf snapshot endpoint — GET /api/perf/snapshot (X-Perf-Token or loopback)
+  app.use(perfMetricsRouter);
   // SSE real-time order fill notifications — GET /api/sse/order-fills
   app.use(sseRouter);
   // CSRF token endpoint — SPA calls this on boot to get a fresh token
@@ -367,6 +383,10 @@ async function startServer() {
   // to settle all active futures contracts, update position P&L, and credit/debit
   // clearing accounts. Sends owner notification with daily P&L summary.
   startMarkToMarketJob();
+  // ── Materialized view refresh (PERF-DB) ───────────────────────────────────
+  // Refreshes mv_market_summary_24h + mv_trader_portfolio_summary every 60s
+  // (env MV_REFRESH_SECONDS). CONCURRENT refresh, non-blocking dashboard reads.
+  startRefreshMaterializedViewsJob();
 
   // ── Expiry Notification Job ──────────────────────────────────────────────
   // Runs daily at 09:00 WAT (08:00 UTC); identifies futures and options contracts
@@ -388,6 +408,13 @@ async function startServer() {
   // Polls the Go mojaloop-adapter /health endpoint every 5 minutes.
   // Sends owner notification if the hub transitions ONLINE→OFFLINE or OFFLINE→ONLINE.
   const stopMojaloopHealthJob = startMojaloopHubHealthJob();
+
+  // ── External Data-Feed Refresh Job (DATA-FEEDS) ───────────────────────────
+  // Starts the pluggable feed registry: agro-weather (Open-Meteo, default),
+  // AFEX reference prices, NBS statistics, operator CSV — per FEEDS_ENABLED.
+  // Jittered intervals, exponential backoff (cap 15min), circuit breaker,
+  // last-known-good stale serving (offline-first). Never throws.
+  startFeedRefreshJob();
 
   // ── gRPC inter-service communication layer (TypeScript fallback) ────────────
   // The TypeScript gRPC server handles PriceAlertService streaming.

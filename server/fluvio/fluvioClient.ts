@@ -14,7 +14,13 @@
  * Falls back gracefully when Fluvio is unavailable (Kafka handles durability).
  */
 
-const FLUVIO_BASE = process.env.FLUVIO_ENDPOINT ?? "http://localhost:9003";
+// Base URL of the fluvio-sidecar HTTP bridge (see fluvio-sidecar/main.py).
+// The sidecar serves /health, /topics, /produce/{topic}, /produce-batch/{topic},
+// /consume/{topic} (SSE) and /ws/consume/{topic} — NOT the old /api/v1/* surface
+// (that targeted a "fluvio-proxy" service that was never deployed).
+// In docker-compose the sidecar is reachable at http://fluvio-sidecar:8090.
+const FLUVIO_BASE =
+  process.env.FLUVIO_HTTP_URL ?? process.env.FLUVIO_ENDPOINT ?? "http://localhost:8090";
 const FLUVIO_API_KEY = process.env.FLUVIO_API_KEY ?? "";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,18 +115,18 @@ export interface FluvioHealthStatus {
 
 export async function getFluvioHealth(): Promise<FluvioHealthStatus> {
   try {
-    const resp = await fetch(`${FLUVIO_BASE}/api/v1/health`, {
+    const resp = await fetch(`${FLUVIO_BASE}/health`, {
       headers: FLUVIO_API_KEY ? { Authorization: `Bearer ${FLUVIO_API_KEY}` } : {},
       signal: AbortSignal.timeout(3000),
     });
 
     if (!resp.ok) return { available: false, error: `HTTP ${resp.status}` };
 
-    const data = await resp.json() as { version?: string; topics?: number };
+    // Sidecar shape: { status: "ok"|"degraded", connected, fallback_mode, endpoint, sdk, uptime_seconds }
+    const data = await resp.json() as { status?: string; sdk?: string };
     return {
       available: true,
-      version: data.version,
-      topicCount: data.topics,
+      version: data.sdk,
     };
   } catch (err) {
     return {
@@ -176,39 +182,48 @@ export async function ensureTopicsExist(): Promise<{
     [FLUVIO_TOPICS.SYSTEM_EVENTS]: { partitions: 2, retentionMs: 2_592_000_000 },       // 30d
   };
 
+  // The sidecar has no GET /topics/{name}; fetch the topic list once and
+  // create anything missing via POST /topics/{name}.
+  let existingTopics: Set<string> = new Set();
+  try {
+    const listResp = await fetch(`${FLUVIO_BASE}/topics`, {
+      headers: FLUVIO_API_KEY ? { Authorization: `Bearer ${FLUVIO_API_KEY}` } : {},
+      signal: AbortSignal.timeout(3000),
+    });
+    if (listResp.ok) {
+      const data = await listResp.json() as { topics?: string[] };
+      existingTopics = new Set(data.topics ?? []);
+    }
+  } catch {
+    // Sidecar unreachable — every create below will fail fast and be recorded
+  }
+
   for (const [topic, config] of Object.entries(topicConfigs)) {
     try {
-      const checkResp = await fetch(`${FLUVIO_BASE}/api/v1/topics/${encodeURIComponent(topic)}`, {
-        headers: FLUVIO_API_KEY ? { Authorization: `Bearer ${FLUVIO_API_KEY}` } : {},
-        signal: AbortSignal.timeout(3000),
-      });
-
-      if (checkResp.ok) {
+      if (existingTopics.has(topic)) {
         existing.push(topic);
         continue;
       }
 
-      if (checkResp.status === 404) {
-        const createResp = await fetch(`${FLUVIO_BASE}/api/v1/topics`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(FLUVIO_API_KEY ? { Authorization: `Bearer ${FLUVIO_API_KEY}` } : {}),
-          },
-          body: JSON.stringify({
-            name: topic,
-            partitions: config.partitions,
-            replicationFactor: 1,
-            retentionMs: config.retentionMs,
-          }),
-          signal: AbortSignal.timeout(5000),
-        });
+      // Sidecar TopicCreateRequest: { partitions, replication, retention_ms }
+      const createResp = await fetch(`${FLUVIO_BASE}/topics/${encodeURIComponent(topic)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(FLUVIO_API_KEY ? { Authorization: `Bearer ${FLUVIO_API_KEY}` } : {}),
+        },
+        body: JSON.stringify({
+          partitions: config.partitions,
+          replication: 1,
+          retention_ms: config.retentionMs,
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
 
-        if (createResp.ok) {
-          created.push(topic);
-        } else {
-          failed.push(topic);
-        }
+      if (createResp.ok) {
+        created.push(topic);
+      } else {
+        failed.push(topic);
       }
     } catch {
       failed.push(topic);
@@ -231,22 +246,49 @@ export async function produce(
   record: FluvioRecord
 ): Promise<FluvioProduceResult | null> {
   try {
-    const resp = await fetch(`${FLUVIO_BASE}/api/v1/topics/${encodeURIComponent(topic)}/produce`, {
+    // Sidecar ProduceRequest: { key, value, headers } on POST /produce/{topic}
+    const resp = await fetch(`${FLUVIO_BASE}/produce/${encodeURIComponent(topic)}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(FLUVIO_API_KEY ? { Authorization: `Bearer ${FLUVIO_API_KEY}` } : {}),
       },
       body: JSON.stringify({
-        key: record.key,
-        value: JSON.stringify(record.value),
-        timestamp: record.timestamp ?? Date.now(),
+        key: record.key ?? "",
+        value: record.value,
       }),
       signal: AbortSignal.timeout(3000),
     });
 
     if (!resp.ok) return null;
-    return await resp.json() as FluvioProduceResult;
+    // Sidecar responds { status: "ok", topic, source: "fluvio"|"fallback" } —
+    // there is no partition/offset, so map onto FluvioProduceResult.
+    const data = await resp.json() as { topic?: string };
+    const result: FluvioProduceResult = { topic: data.topic ?? topic, partition: 0, offset: 0 };
+
+    // Real audit trail: fluvio_event_log (FIX-MOCKWARE — was an orphan,
+    // never-written table). Best-effort — logging must never break production.
+    try {
+      const { getDb } = await import("../db");
+      const { fluvioEventLog } = await import("../../drizzle/schema");
+      const db = await getDb();
+      if (db) {
+        await db.insert(fluvioEventLog).values({
+          topic,
+          eventKey: record.key ?? null,
+          payload: JSON.parse(JSON.stringify(record.value ?? {})),
+          partition: result.partition ?? null,
+          offset: result.offset ?? null,
+        });
+      }
+    } catch (logErr) {
+      console.error(
+        `[fluvio_event_log] failed to log event to ${topic}:`,
+        logErr instanceof Error ? logErr.message : logErr,
+      );
+    }
+
+    return result;
   } catch {
     // Fluvio unavailable — Kafka consumer will handle durability
     return null;

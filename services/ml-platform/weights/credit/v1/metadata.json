@@ -1,0 +1,9 @@
+{
+  "kind": "credit",
+  "task": "credit_scoring",
+  "seed": 42,
+  "name": "credit",
+  "version": "v1",
+  "registered_at": 1790018238.514489,
+  "registry": "local"
+}

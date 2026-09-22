@@ -155,6 +155,10 @@ export function useWebSocketFeed(symbols: string[]): WSFeedState {
       setQuality("offline");
       return;
     }
+    if (typeof document !== "undefined" && document.hidden) {
+      // OFFLINE-RES: background tabs don't connect — resumed on visibilitychange
+      return;
+    }
     if (wsRef.current) {
       wsRef.current.onclose = null;
       wsRef.current.onerror = null;
@@ -256,8 +260,26 @@ export function useWebSocketFeed(symbols: string[]): WSFeedState {
       setError("Device is offline — waiting for network");
     };
 
+    // OFFLINE-RES: pause the socket while the tab is hidden (saves battery +
+    // metered data on background tabs), resume with a fresh backoff on return.
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+        stopHeartbeat();
+        if (wsRef.current) {
+          wsRef.current.onclose = null; // don't schedule a reconnect from a deliberate close
+          wsRef.current.close();
+        }
+        setConnected(false);
+      } else if (isOnline.current) {
+        reconnectAttempts.current = 0;
+        connect();
+      }
+    };
+
     window.addEventListener("online",  handleOnline);
     window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       unmounted.current = true;
@@ -269,6 +291,7 @@ export function useWebSocketFeed(symbols: string[]): WSFeedState {
       }
       window.removeEventListener("online",  handleOnline);
       window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [connect, stopHeartbeat]);
 

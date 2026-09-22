@@ -16,7 +16,7 @@ upstreams:
     name: nexcom-portal-backend
     type: roundrobin
     nodes:
-      - host: portal-backend
+      - host: portal  # compose service name (was portal-backend — unresolvable)
         port: 3000
         weight: 100
     health_check:
@@ -36,8 +36,9 @@ upstreams:
     name: nexcom-trading-engine
     type: roundrobin
     nodes:
-      - host: trading-engine
-        port: 8001
+      # FIX-MOCKWARE removed trading-engine from compose; canonical engine is matching-engine
+      - host: matching-engine
+        port: 8080
         weight: 100
     health_check:
       active:
@@ -63,15 +64,16 @@ upstreams:
     type: roundrobin
     nodes:
       - host: kyc-service
-        port: 8002
+        port: 8003  # compose container port (was 8002)
         weight: 100
 
   - id: market-data
     name: nexcom-market-data
     type: roundrobin
     nodes:
-      - host: market-data
-        port: 8003
+      # FIX-MOCKWARE removed market-data from compose; canonical feed is ingestion-engine
+      - host: ingestion-engine
+        port: 8009
         weight: 100
 
   - id: risk-management
@@ -86,16 +88,17 @@ upstreams:
     name: nexcom-ai-ml
     type: roundrobin
     nodes:
-      - host: ai-ml-service
-        port: 8006
+      - host: ai-ml  # compose service name (was ai-ml-service — unresolvable)
+        port: 8007  # compose container port (was 8006)
         weight: 100
 
   - id: analytics-engine
     name: nexcom-analytics
     type: roundrobin
     nodes:
-      - host: analytics-engine
-        port: 8007
+      # FIX-MOCKWARE removed analytics-engine (superseded); canonical service is analytics
+      - host: analytics
+        port: 8006
         weight: 100
 
   - id: middleware-hub
@@ -103,7 +106,7 @@ upstreams:
     type: roundrobin
     nodes:
       - host: middleware-hub
-        port: 8080
+        port: 8093  # compose container port (was 8080)
         weight: 100
 
 consumers:
@@ -163,10 +166,10 @@ routes:
     upstream_id: trading-engine
     plugins:
       jwt-auth:
-        key: "${KEYCLOAK_JWKS_URI}"
+        key: "http://keycloak:8080/realms/nexcom/protocol/openid-connect/certs" # was ${KEYCLOAK_JWKS_URI} — unresolved placeholder; concrete in-cluster Keycloak JWKS default
         algorithm: RS256
       forward-auth:
-        uri: http://permify-sidecar:3476/v1/authz/check
+        uri: http://permify:3476/v1/tenants/t1/permissions/check  # was permify-sidecar (nonexistent host + nonexistent /v1/authz/check path)
         request_headers: [Authorization, X-User-ID, X-User-Role]
         upstream_headers: [X-Authz-Result]
       limit-req:
@@ -185,6 +188,11 @@ routes:
     uri: /api/v1/orderbook/*
     methods: [GET]
     upstream_id: trading-engine
+    # SSE/long-poll exception: override the 30s proxy_read_timeout default.
+    timeout:
+      connect: 5
+      send: 30
+      read: 300
     plugins:
       limit-req:
         rate: 200
@@ -215,10 +223,10 @@ routes:
     upstream_id: settlement-engine
     plugins:
       jwt-auth:
-        key: "${KEYCLOAK_JWKS_URI}"
+        key: "http://keycloak:8080/realms/nexcom/protocol/openid-connect/certs" # was ${KEYCLOAK_JWKS_URI} — unresolved placeholder; concrete in-cluster Keycloak JWKS default
         algorithm: RS256
       forward-auth:
-        uri: http://permify-sidecar:3476/v1/authz/check
+        uri: http://permify:3476/v1/tenants/t1/permissions/check  # was permify-sidecar (nonexistent host + nonexistent /v1/authz/check path)
         request_headers: [Authorization, X-User-ID, X-User-Role]
         upstream_headers: [X-Authz-Result]
       limit-req:
@@ -234,7 +242,7 @@ routes:
     upstream_id: kyc-service
     plugins:
       jwt-auth:
-        key: "${KEYCLOAK_JWKS_URI}"
+        key: "http://keycloak:8080/realms/nexcom/protocol/openid-connect/certs" # was ${KEYCLOAK_JWKS_URI} — unresolved placeholder; concrete in-cluster Keycloak JWKS default
         algorithm: RS256
       limit-req:
         rate: 10
@@ -251,10 +259,10 @@ routes:
     upstream_id: risk-management
     plugins:
       jwt-auth:
-        key: "${KEYCLOAK_JWKS_URI}"
+        key: "http://keycloak:8080/realms/nexcom/protocol/openid-connect/certs" # was ${KEYCLOAK_JWKS_URI} — unresolved placeholder; concrete in-cluster Keycloak JWKS default
         algorithm: RS256
       forward-auth:
-        uri: http://permify-sidecar:3476/v1/authz/check
+        uri: http://permify:3476/v1/tenants/t1/permissions/check  # was permify-sidecar (nonexistent host + nonexistent /v1/authz/check path)
         request_headers: [Authorization, X-User-ID, X-User-Role]
         upstream_headers: [X-Authz-Result]
       limit-req:
@@ -270,7 +278,7 @@ routes:
     upstream_id: ai-ml-service
     plugins:
       jwt-auth:
-        key: "${KEYCLOAK_JWKS_URI}"
+        key: "http://keycloak:8080/realms/nexcom/protocol/openid-connect/certs" # was ${KEYCLOAK_JWKS_URI} — unresolved placeholder; concrete in-cluster Keycloak JWKS default
         algorithm: RS256
       limit-req:
         rate: 10
@@ -290,7 +298,7 @@ routes:
     upstream_id: analytics-engine
     plugins:
       jwt-auth:
-        key: "${KEYCLOAK_JWKS_URI}"
+        key: "http://keycloak:8080/realms/nexcom/protocol/openid-connect/certs" # was ${KEYCLOAK_JWKS_URI} — unresolved placeholder; concrete in-cluster Keycloak JWKS default
         algorithm: RS256
       proxy-cache:
         cache_zone: analytics_cache

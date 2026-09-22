@@ -35,11 +35,11 @@ export default function ExchangeOperatorsScreen() {
 
   const activateMut = trpc.exchangeOperator.activate.useMutation({
     onSuccess: () => utils.exchangeOperator.list.invalidate(),
-    onError: (e) => Alert.alert("Error", e.message),
+    onError: (e: any) => Alert.alert("Error", e.message),
   });
   const suspendMut = trpc.exchangeOperator.suspend.useMutation({
     onSuccess: () => utils.exchangeOperator.list.invalidate(),
-    onError: (e) => Alert.alert("Error", e.message),
+    onError: (e: any) => Alert.alert("Error", e.message),
   });
 
   const handleActivate = (id: number, code: string) => {

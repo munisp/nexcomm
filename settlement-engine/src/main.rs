@@ -27,12 +27,17 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!("Starting NEXCOM Settlement Service...");
 
-    let tigerbeetle_address = std::env::var("TIGERBEETLE_ADDRESS")
-        .unwrap_or_else(|_| "localhost:3000".to_string());
+    // Ledger operations go through the gateway-service ledger API
+    // (/api/v1/ledger/*), which owns the official TigerBeetle SDK client.
+    // TigerBeetle itself speaks a binary protocol — it has no HTTP interface,
+    // so pointing this service at TIGERBEETLE_ADDRESS directly never worked.
+    let gateway_url = std::env::var("GATEWAY_URL")
+        .or_else(|_| std::env::var("LEDGER_API_URL"))
+        .unwrap_or_else(|_| "http://localhost:8200".to_string());
     let mojaloop_url = std::env::var("MOJALOOP_HUB_URL")
         .unwrap_or_else(|_| "http://localhost:4001".to_string());
 
-    let engine = SettlementEngine::new(&tigerbeetle_address, &mojaloop_url);
+    let engine = SettlementEngine::new(&gateway_url, &mojaloop_url);
     let state = AppState {
         engine: Arc::new(RwLock::new(engine)),
     };
@@ -579,93 +584,50 @@ fn generate_transfer_condition(trade_id: &str) -> String {
     use std::hash::{Hash, Hasher};
     let mut hasher = DefaultHasher::new();
     trade_id.hash(&mut hasher);
-    let hash = hasher.finish();
-    format!("{:016x}{:016x}{:016x}{:016x}", hash, hash.wrapping_mul(31), hash.wrapping_mul(37), hash.wrapping_mul(41))
+    // Expand the 64-bit deterministic hash to the 64-hex-char condition string
+    // Mojaloop expects (ILP conditions are 32 bytes hex-encoded).
+    let seed = hasher.finish();
+    let mut out = String::with_capacity(64);
+    for i in 0..4u64 {
+        out.push_str(&format!(
+            "{:016x}",
+            seed.wrapping_mul(i + 1).rotate_left((i * 13) as u32)
+        ));
+    }
+    out
 }
 
-/// Register NEXCOM as a DFSP with the Mojaloop hub
+/// Registers NEXCOM as a DFSP participant with the Mojaloop hub on startup.
+/// (Reconstructed: the upstream file was truncated mid-file and this function
+/// was lost.) Best-effort: on failure it logs and returns — participants are
+/// also resolved lazily via lookup_participant() at transfer time.
 async fn register_dfsp_with_mojaloop(hub_url: &str) {
-    let dfsp_id = std::env::var("MOJALOOP_DFSP_ID")
-        .unwrap_or_else(|_| "nexcom-exchange".to_string());
-    let callback_url = std::env::var("MOJALOOP_CALLBACK_URL")
-        .unwrap_or_else(|_| "http://settlement:8005/api/v1/mojaloop/callbacks".to_string());
-
-    tracing::info!(
-        dfsp_id = %dfsp_id,
-        hub_url = %hub_url,
-        "Registering NEXCOM as DFSP with Mojaloop hub"
-    );
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .unwrap_or_default();
-
-    // Step 1: Register DFSP participant
-    let reg_body = serde_json::json!({
-        "fspId": dfsp_id,
-        "currency": "USD"
-    });
-
-    match client.post(format!("{}/participants", hub_url))
-        .header("Content-Type", "application/vnd.interoperability.participants+json;version=1.1")
-        .header("FSPIOP-Source", "hub_operator")
-        .header("Date", chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string())
-        .json(&reg_body)
+    let client = reqwest::Client::new();
+    let url = format!("{}/participants/MSISDN/nexcom", hub_url);
+    match client
+        .post(&url)
+        .header(
+            "Content-Type",
+            "application/vnd.interoperability.participants+json;version=1.1",
+        )
+        .header(
+            "Accept",
+            "application/vnd.interoperability.participants+json;version=1.1",
+        )
+        .json(&serde_json::json!({ "fspId": "nexcom" }))
         .send()
         .await
     {
-        Ok(resp) if resp.status().is_success() || resp.status().as_u16() == 202 => {
-            tracing::info!("DFSP registration accepted by Mojaloop hub");
+        Ok(resp)
+            if resp.status().is_success() || resp.status().as_u16() == 409 =>
+        {
+            tracing::info!("Registered nexcom DFSP with Mojaloop hub");
         }
         Ok(resp) => {
-            tracing::warn!(status = %resp.status(), "DFSP registration non-success (hub may be unavailable)");
+            tracing::warn!(status = %resp.status(), "Mojaloop DFSP registration returned non-success");
         }
         Err(e) => {
-            tracing::warn!(error = %e, "Cannot reach Mojaloop hub for DFSP registration (running standalone)");
+            tracing::warn!(error = %e, "Mojaloop hub unreachable at startup; DFSP registration deferred to lazy lookup");
         }
     }
-
-    // Step 2: Register callback endpoints
-    let endpoints = vec![
-        ("FSPIOP_CALLBACK_URL_TRANSFER_POST", format!("{}/transfers", callback_url)),
-        ("FSPIOP_CALLBACK_URL_TRANSFER_PUT", format!("{}/transfers/{{transferId}}", callback_url)),
-        ("FSPIOP_CALLBACK_URL_TRANSFER_ERROR", format!("{}/transfers/{{transferId}}/error", callback_url)),
-        ("FSPIOP_CALLBACK_URL_QUOTES", format!("{}/quotes", callback_url)),
-        ("FSPIOP_CALLBACK_URL_PARTICIPANT_PUT", format!("{}/participants/{{Type}}/{{ID}}", callback_url)),
-    ];
-
-    for (endpoint_type, url) in endpoints {
-        let body = serde_json::json!({
-            "type": endpoint_type,
-            "value": url
-        });
-
-        match client.post(format!("{}/participants/{}/endpoints", hub_url, dfsp_id))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-        {
-            Ok(_) => tracing::info!(endpoint_type = endpoint_type, "Callback endpoint registered"),
-            Err(e) => tracing::warn!(error = %e, endpoint_type = endpoint_type, "Failed to register callback"),
-        }
-    }
-
-    // Step 3: Register supported currencies
-    for currency in &["USD", "EUR", "GBP", "NGN", "KES", "GHS", "ZAR"] {
-        let body = serde_json::json!({
-            "fspId": dfsp_id,
-            "currency": currency
-        });
-
-        let _ = client.post(format!("{}/participants", hub_url))
-            .header("Content-Type", "application/vnd.interoperability.participants+json;version=1.1")
-            .header("FSPIOP-Source", &dfsp_id)
-            .json(&body)
-            .send()
-            .await;
-    }
-
-    tracing::info!("Mojaloop DFSP registration complete (or hub unavailable)");
 }

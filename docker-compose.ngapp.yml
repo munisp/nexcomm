@@ -399,7 +399,7 @@ services:
   # ==========================================================================
   matching-engine:
     build:
-      context: ./services/matching-engine
+      context: ./matching-engine # real path: matching-engine/ at repo root (services/matching-engine does not exist)
       dockerfile: Dockerfile
     container_name: nexcom-matching-engine
     restart: unless-stopped
@@ -415,50 +415,6 @@ services:
 
   # ==========================================================================
   # NEXCOM Trading Engine (Go)
-  # ==========================================================================
-  trading-engine:
-    build:
-      context: ./services/trading-engine
-      dockerfile: Dockerfile
-    container_name: nexcom-trading-engine
-    restart: unless-stopped
-    ports:
-      - "8011:8011"
-    environment:
-      PORT: "8011"
-      KAFKA_BROKERS: kafka:9092
-      REDIS_URL: redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
-    depends_on:
-      - kafka
-      - redis
-    networks:
-      - nexcom-network
-
-  # ==========================================================================
-  # NEXCOM Market Data (Go)
-  # ==========================================================================
-  market-data:
-    build:
-      context: ./services/market-data
-      dockerfile: Dockerfile
-    container_name: nexcom-market-data
-    restart: unless-stopped
-    ports:
-      - "8012:8002"
-      - "8013:8003"
-    environment:
-      KAFKA_BROKERS: kafka:9092
-      REDIS_URL: redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexcom_dev}
-    depends_on:
-      - kafka
-      - redis
-    networks:
-      - nexcom-network
-
-  # ==========================================================================
-  # NEXCOM Risk Management (Go)
   # ==========================================================================
   risk-management:
     build:
@@ -483,7 +439,7 @@ services:
   # ==========================================================================
   settlement:
     build:
-      context: ./services/settlement
+      context: ./settlement-engine # real path: settlement-engine/ at repo root (services/settlement does not exist)
       dockerfile: Dockerfile
     container_name: nexcom-settlement
     restart: unless-stopped
@@ -610,7 +566,7 @@ services:
   # ==========================================================================
   gateway:
     build:
-      context: ./services/gateway
+      context: ./gateway-service # real path: gateway-service/ at repo root (services/gateway does not exist)
       dockerfile: Dockerfile
     container_name: nexcom-gateway
     restart: unless-stopped

@@ -5,6 +5,7 @@
  */
 import postgres from "postgres";
 
+// DEV-ONLY fallback (dev compose password); set NEXCOM_PG_URL in any real environment
 const url = process.env.NEXCOM_PG_URL ?? "postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom";
 const sql = postgres(url, { max: 1 });
 

@@ -10,7 +10,7 @@
  *   book     — OrderBook from useOrderBook hook
  *   height   — chart height in px (default 140)
  */
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import {
   createChart,
   ColorType,
@@ -26,7 +26,10 @@ interface Props {
   height?: number;
 }
 
-export default function OrderBookDepthChart({ book, height = 140 }: Props) {
+// PERF-CLIENT: memoised — MarketDepth/Trade re-render on every order-book
+// tick and every parent state change; when `book` is referentially unchanged
+// the whole lightweight-charts reconciliation is skipped.
+function OrderBookDepthChart({ book, height = 140 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const bidSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
@@ -170,3 +173,5 @@ export default function OrderBookDepthChart({ book, height = 140 }: Props) {
     </div>
   );
 }
+
+export default memo(OrderBookDepthChart);

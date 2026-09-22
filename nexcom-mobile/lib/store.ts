@@ -26,7 +26,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
   setUser: (user) => set({ user, isAuthenticated: !!user }),
-  setToken: (token) => set({ token }),
+  // Setting a token marks the session authenticated; clearing it logs out.
+  setToken: (token) => set({ token, isAuthenticated: !!token }),
   setLoading: (isLoading) => set({ isLoading }),
   logout: () => set({ user: null, token: null, isAuthenticated: false }),
 }));

@@ -4,7 +4,6 @@
  * repayment schedules, and crop insurance policies.
  */
 import { useState } from "react";
-import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -331,7 +330,7 @@ export default function CreditScore() {
   const scorePercent = Math.min(100, Math.max(0, ((score - 300) / (900 - 300)) * 100));
 
   return (
-    <DashboardLayout>
+    <>
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -620,7 +619,7 @@ export default function CreditScore() {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
+    </>
   );
 }
 

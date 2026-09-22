@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -184,59 +185,99 @@ func (w *ActivityWorker) InitiateMojaloopTransfer(ctx context.Context, input Set
 	return result.TransferID, nil
 }
 
-// RecordTigerBeetle records the settlement in the TigerBeetle double-entry ledger
-func (w *ActivityWorker) RecordTigerBeetle(ctx context.Context, input SettlementInput, mojaloopTxID string) (uint64, error) {
-	tbURL := os.Getenv("TIGERBEETLE_HTTP_URL")
-	if tbURL == "" {
-		tbURL = "http://localhost:3003"
+// gatewayLedgerURL returns the base URL of the gateway-service ledger API.
+// Ledger operations go through the gateway (official TigerBeetle SDK client);
+// TigerBeetle itself has no HTTP interface, so the old TIGERBEETLE_HTTP_URL
+// sham is gone.
+func gatewayLedgerURL() string {
+	if u := os.Getenv("GATEWAY_URL"); u != "" {
+		return u
+	}
+	if u := os.Getenv("LEDGER_API_URL"); u != "" {
+		return u
+	}
+	return "http://localhost:8200"
+}
+
+// firstLedgerAccount resolves a user's first gateway ledger account UUID.
+func (w *ActivityWorker) firstLedgerAccount(ctx context.Context, userID string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/ledger/accounts/%s", gatewayLedgerURL(), userID), nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := w.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("gateway ledger account lookup: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("gateway ledger account lookup: status %d", resp.StatusCode)
+	}
+	var result struct {
+		Accounts []struct {
+			ID string `json:"id"`
+		} `json:"accounts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode error: %w", err)
+	}
+	if len(result.Accounts) == 0 {
+		return "", fmt.Errorf("no ledger account for user %s", userID)
+	}
+	return result.Accounts[0].ID, nil
+}
+
+// RecordTigerBeetle records the settlement in the double-entry ledger via the
+// gateway ledger API (POST /api/v1/ledger/transfers). Returns the real
+// gateway-issued transfer ID. Fail-closed: any error aborts the workflow step.
+func (w *ActivityWorker) RecordTigerBeetle(ctx context.Context, input SettlementInput, mojaloopTxID string) (string, error) {
+	buyerAcc, err := w.firstLedgerAccount(ctx, input.BuyerID)
+	if err != nil {
+		return "", fmt.Errorf("buyer ledger account: %w", err)
+	}
+	sellerAcc, err := w.firstLedgerAccount(ctx, input.SellerID)
+	if err != nil {
+		return "", fmt.Errorf("seller ledger account: %w", err)
 	}
 
-	// TigerBeetle transfer: debit buyer account, credit seller account
 	payload := map[string]interface{}{
-		"transfers": []map[string]interface{}{
-			{
-				"id":             rand.Uint64(),
-				"debit_account":  fmt.Sprintf("ACC-%s", input.BuyerID),
-				"credit_account": fmt.Sprintf("ACC-%s", input.SellerID),
-				"amount":         int64(input.Total * 100), // Store in cents
-				"ledger":         1,
-				"code":           1001, // TRADE_SETTLEMENT
-				"user_data":      mojaloopTxID,
-				"pending_id":     0,
-				"timeout":        0,
-				"flags":          0,
-			},
-		},
+		"debit_account_id":  buyerAcc,
+		"credit_account_id": sellerAcc,
+		"amount":            int64(input.Total * 100), // minor units
+		"code":              1001,                     // TRADE_SETTLEMENT
+		"reference":         mojaloopTxID,
 	}
-
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return 0, fmt.Errorf("marshal error: %w", err)
+		return "", fmt.Errorf("marshal error: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("%s/api/v1/transfers", tbURL),
+		fmt.Sprintf("%s/api/v1/ledger/transfers", gatewayLedgerURL()),
 		strings.NewReader(string(data)),
 	)
 	if err != nil {
-		return 0, fmt.Errorf("request creation error: %w", err)
+		return "", fmt.Errorf("request creation error: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := w.httpClient.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("tigerbeetle service error: %w", err)
+		return "", fmt.Errorf("gateway ledger API error: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("gateway ledger transfer returned status %d", resp.StatusCode)
+	}
 
 	var result struct {
-		TransferID uint64 `json:"transfer_id"`
+		ID string `json:"id"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, fmt.Errorf("decode error: %w", err)
+		return "", fmt.Errorf("decode error: %w", err)
 	}
-
-	return result.TransferID, nil
+	return result.ID, nil
 }
 
 // TransferCommodityToken transfers commodity tokens on the blockchain after payment confirmation
@@ -282,7 +323,7 @@ func (w *ActivityWorker) TransferCommodityToken(ctx context.Context, input Settl
 }
 
 // EmitSettlementEvent publishes the settlement completion event to Kafka
-func (w *ActivityWorker) EmitSettlementEvent(ctx context.Context, input SettlementInput, mojaloopTxID string, tbID uint64) error {
+func (w *ActivityWorker) EmitSettlementEvent(ctx context.Context, input SettlementInput, mojaloopTxID string, tbID string) error {
 	// This calls the Kafka producer via HTTP to the middleware hub's own endpoint
 	// (avoids circular dependency by using HTTP instead of direct Go call)
 	hubURL := os.Getenv("MIDDLEWARE_HUB_URL")
@@ -567,50 +608,65 @@ func (w *ActivityWorker) CreditCheck(ctx context.Context, input LoanDisbursement
 }
 
 // ReserveFundsActivity creates a pending TigerBeetle transfer to reserve loan funds
-func (w *ActivityWorker) ReserveFunds(ctx context.Context, input LoanDisbursementInput) (uint64, error) {
-	tbURL := os.Getenv("TIGERBEETLE_URL")
-	if tbURL == "" {
-		tbURL = "http://localhost:3001"
+// ReserveFunds creates a PENDING (two-phase) ledger transfer via the gateway
+// ledger API to reserve loan funds. Fail-closed: no simulated transfer IDs —
+// if the gateway/ledger is unavailable the workflow step fails and Temporal
+// retries/compensates.
+func (w *ActivityWorker) ReserveFunds(ctx context.Context, input LoanDisbursementInput) (string, error) {
+	// The loan pool ledger account must be provisioned out-of-band; without it
+	// there is no real source of funds and the reservation cannot be made.
+	poolAcc := os.Getenv("LOAN_POOL_ACCOUNT_ID")
+	if poolAcc == "" {
+		return "", fmt.Errorf("LOAN_POOL_ACCOUNT_ID is not set; cannot reserve funds without a real pool ledger account")
+	}
+	userAcc, err := w.firstLedgerAccount(ctx, input.UserID)
+	if err != nil {
+		return "", fmt.Errorf("user ledger account: %w", err)
 	}
 
-	// Generate a deterministic transfer ID from loan ID
-	transferID := uint64(time.Now().UnixNano() % 1_000_000_000)
-
 	payload := map[string]interface{}{
-		"transfer_id":    transferID,
-		"debit_account":  1001,                       // loan disbursement pool account
-		"credit_account": 1002,                       // pending disbursement account
-		"amount":         uint64(input.Amount * 100), // convert to minor units
-		"ledger":         1,
-		"code":           100, // loan reservation code
+		"debit_account_id":  poolAcc,
+		"credit_account_id": userAcc,
+		"amount":            int64(input.Amount * 100), // minor units
+		"code":              100,                       // loan reservation code
+		"reference":         input.LoanID,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return 0, fmt.Errorf("marshal error: %w", err)
+		return "", fmt.Errorf("marshal error: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("%s/ledger/transfer", tbURL),
+		fmt.Sprintf("%s/api/v1/ledger/transfers/pending", gatewayLedgerURL()),
 		strings.NewReader(string(data)),
 	)
 	if err != nil {
-		return 0, fmt.Errorf("request creation error: %w", err)
+		return "", fmt.Errorf("request creation error: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := w.httpClient.Do(req)
 	if err != nil {
-		w.logger.Warnw("TigerBeetle unavailable, using simulated transfer ID", "error", err)
-		return transferID, nil // graceful degradation
+		return "", fmt.Errorf("gateway ledger API error: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("gateway pending transfer returned status %d", resp.StatusCode)
+	}
 
-	w.logger.Infow("Funds reserved in TigerBeetle", "transfer_id", transferID, "loan_id", input.LoanID)
-	return transferID, nil
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode error: %w", err)
+	}
+
+	w.logger.Infow("Funds reserved in ledger (pending transfer)", "transfer_id", result.ID, "loan_id", input.LoanID)
+	return result.ID, nil
 }
 
 // DisburseLoanActivity calls core-banking to execute the actual loan disbursement
-func (w *ActivityWorker) DisburseLoan(ctx context.Context, input LoanDisbursementInput, tbID uint64) (string, error) {
+func (w *ActivityWorker) DisburseLoan(ctx context.Context, input LoanDisbursementInput, tbID string) (string, error) {
 	cbURL := os.Getenv("CORE_BANKING_URL")
 	if cbURL == "" {
 		cbURL = "http://localhost:8090"
@@ -643,13 +699,37 @@ func (w *ActivityWorker) DisburseLoan(ctx context.Context, input LoanDisbursemen
 
 	resp, err := w.httpClient.Do(req)
 	if err != nil {
-		w.logger.Warnw("Core banking unavailable, using simulated disbursement ID", "error", err)
-		return disbursementID, nil // graceful degradation
+		// Fail closed: never fabricate a disbursement ID. Returning an error
+		// lets Temporal retry the activity or run saga compensation.
+		w.logger.Errorw("Core banking disbursement failed; refusing to simulate a disbursement ID",
+			"error", err, "loan_id", input.LoanID)
+		return "", fmt.Errorf("core banking disbursement failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	w.logger.Infow("Loan disbursed via core banking", "disbursement_id", disbursementID, "loan_id", input.LoanID)
-	return disbursementID, nil
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		w.logger.Errorw("Core banking rejected disbursement",
+			"status", resp.StatusCode, "body", string(body), "loan_id", input.LoanID)
+		return "", fmt.Errorf("core banking disbursement rejected: status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Prefer the disbursement ID confirmed by core banking over our proposal.
+	var result struct {
+		DisbursementID string `json:"disbursement_id"`
+		ID             string `json:"id"`
+	}
+	confirmedID := disbursementID
+	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+		if result.DisbursementID != "" {
+			confirmedID = result.DisbursementID
+		} else if result.ID != "" {
+			confirmedID = result.ID
+		}
+	}
+
+	w.logger.Infow("Loan disbursed via core banking", "disbursement_id", confirmedID, "loan_id", input.LoanID)
+	return confirmedID, nil
 }
 
 // EmitLoanEventActivity publishes a loan disbursement event to Kafka

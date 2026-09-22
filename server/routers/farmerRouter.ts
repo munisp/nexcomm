@@ -16,16 +16,81 @@ import {
   cooperativeBulkUploads,
   kycAuditLog,
   farmerOnboardingDrafts,
+  kycLivenessSessions,
   type FarmerProfile,
   type FarmProfile,
   type CropListing,
 } from "../../drizzle/schema";
+import { ENV } from "../_core/env";
+import { applyKycDecisionSideEffects } from "../kycReview";
 
 
 // ─── in-memory fallback stores (used when DB is unavailable, e.g. in tests) ─
 export const _memFarmerProfiles = new Map<number, Record<string, unknown>>();
 const _memFarmProfiles = new Map<number, Record<string, unknown>>();
 const _memCropListings = new Map<number, Record<string, unknown>>();
+
+// ─── KYC microservice integration (biometric liveness) ────────────────────────
+// The farmer liveness flow needs a REAL application in the Python KYC service —
+// a fabricated id makes /liveness/start return 404. We create the application
+// here and persist its id on farmer_profiles.kyc_application_id.
+
+const KYC_SERVICE_URL = ENV.kycServiceUrl;
+
+/**
+ * Create a KYC application in the Python kyc-service for this farmer.
+ * Returns the service-issued application id, or null when the service is
+ * unreachable (callers must handle this honestly — never fabricate an id).
+ */
+async function createKycServiceApplication(
+  profile: Pick<FarmerProfile, "userId" | "fullName" | "phone" | "nin" | "bvn">,
+): Promise<string | null> {
+  try {
+    const resp = await fetch(`${KYC_SERVICE_URL}/api/v1/kyc/applications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        account_id: String(profile.userId),
+        stakeholder_type: "farmer",
+        full_name: profile.fullName,
+        phone_number: profile.phone,
+        nin: profile.nin ?? undefined,
+        bvn: profile.bvn ?? undefined,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!resp.ok) {
+      console.warn(`[farmerRouter] kyc-service application create failed: HTTP ${resp.status}`);
+      return null;
+    }
+    const data = (await resp.json()) as { data?: { id?: string } };
+    return data?.data?.id ?? null;
+  } catch (err) {
+    console.warn(`[farmerRouter] kyc-service unreachable: ${(err as Error).message}`);
+    return null;
+  }
+}
+
+/**
+ * Ensure the farmer has a real kyc-service application id persisted on their
+ * profile. Returns { applicationId, serviceAvailable }.
+ */
+async function ensureKycServiceApplication(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  profile: FarmerProfile,
+): Promise<{ applicationId: string | null; serviceAvailable: boolean }> {
+  if (profile.kycApplicationId) {
+    return { applicationId: profile.kycApplicationId, serviceAvailable: true };
+  }
+  const applicationId = await createKycServiceApplication(profile);
+  if (!applicationId) return { applicationId: null, serviceAvailable: false };
+  await db
+    .update(farmerProfiles)
+    .set({ kycApplicationId: applicationId, updatedAt: new Date() })
+    .where(eq(farmerProfiles.id, profile.id));
+  return { applicationId, serviceAvailable: true };
+}
+
 // ─── router ─────────────────────────────────────────────────────────────────
 
 export const farmerRouter = router({
@@ -158,6 +223,34 @@ export const farmerRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "KYC already approved" });
       }
 
+      // ── Biometric liveness gate ──────────────────────────────────────────
+      // When the KYC microservice is reachable, the farmer must hold a real
+      // application there and have PASSED active liveness before submission.
+      // When the service is unreachable we cannot verify liveness — the
+      // submission is still accepted but explicitly flagged for the reviewer
+      // (no silent pass).
+      const { applicationId, serviceAvailable } = await ensureKycServiceApplication(db, existing);
+      let livenessFlag = "LIVENESS_NOT_VERIFIED_SERVICE_OFFLINE";
+      if (serviceAvailable && applicationId) {
+        const sessions = await db
+          .select({ overallResult: kycLivenessSessions.overallResult, createdAt: kycLivenessSessions.createdAt })
+          .from(kycLivenessSessions)
+          .where(and(
+            eq(kycLivenessSessions.userId, ctx.user.id),
+            eq(kycLivenessSessions.applicationId, applicationId),
+          ))
+          .orderBy(desc(kycLivenessSessions.createdAt))
+          .limit(1);
+        const latest = sessions[0];
+        if (latest?.overallResult !== "PASS") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Biometric liveness verification has not been passed for this application. Complete the liveness check before submitting.",
+          });
+        }
+        livenessFlag = "LIVENESS_PASSED";
+      }
+
       // Build document JSON from individual URLs or use provided blob
       const docs = input.kycDocuments ?? JSON.stringify({
         ninDocumentUrl: input.ninDocumentUrl,
@@ -169,6 +262,7 @@ export const farmerRouter = router({
         .set({
           kycDocuments: docs,
           kycStatus: "UNDER_REVIEW",
+          kycNotes: serviceAvailable ? null : "Biometric liveness could not be verified — KYC service offline at submission time. Requires manual liveness review.",
           updatedAt: new Date(),
         })
         .where(eq(farmerProfiles.userId, ctx.user.id))
@@ -176,9 +270,37 @@ export const farmerRouter = router({
       // Notify exchange operations team of new KYC submission
       notifyOwner({
         title: "[Farmer KYC] New submission under review",
-        content: `Farmer profile ID ${updated.id} (user ${ctx.user.id}, ${updated.fullName}) has submitted KYC documents and is now UNDER_REVIEW. Please review at /admin/stakeholders.`,
+        content: `Farmer profile ID ${updated.id} (user ${ctx.user.id}, ${updated.fullName}) has submitted KYC documents and is now UNDER_REVIEW. Liveness: ${livenessFlag}. Please review at /admin/stakeholders.`,
       }).catch(e => console.warn("[farmerRouter] notifyOwner failed:", (e as Error).message));
       return updated;
+    }),
+
+  // ── ensureKycApplication ──────────────────────────────────────────────────
+  // Called by the web client before opening the liveness modal. Creates (or
+  // returns) the farmer's real kyc-service application so liveness sessions
+  // resolve against it instead of a fabricated id that always 404s.
+  ensureKycApplication: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
+
+      const [profile] = await db
+        .select()
+        .from(farmerProfiles)
+        .where(eq(farmerProfiles.userId, ctx.user.id))
+        .limit(1);
+      if (!profile) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Farmer profile not found. Please register first." });
+      }
+
+      const { applicationId, serviceAvailable } = await ensureKycServiceApplication(db, profile);
+      if (!serviceAvailable || !applicationId) {
+        throw new TRPCError({
+          code: "SERVICE_UNAVAILABLE",
+          message: "Identity verification service is temporarily unavailable. Please try again later.",
+        });
+      }
+      return { applicationId };
     }),
   // ── adminListFarmerProfiless ────────────────────────────────────────────────
   adminListFarmerProfiles: adminProcedure
@@ -251,6 +373,8 @@ export const farmerRouter = router({
           kycNotes: input.notes,
           kycReviewedAt: new Date(),
           kycReviewedBy: ctx.user.id,
+          // Account lifecycle parity with other stakeholders
+          accountStatus: input.decision === "APPROVED" ? "ACTIVE" : "SUSPENDED",
           updatedAt: new Date(),
         })
         .where(eq(farmerProfiles.id, input.farmerProfileId))
@@ -264,6 +388,20 @@ export const farmerRouter = router({
         reviewerName: ctx.user.name ?? null,
         decision: input.decision,
         notes: input.notes ?? null,
+      });
+
+      // Sync the generic profile store, grant the farmer role on approval,
+      // and notify the applicant in-app.
+      await applyKycDecisionSideEffects(db, {
+        userId: profile.userId,
+        decision: input.decision,
+        reviewerId: ctx.user.id,
+        reviewerName: ctx.user.name,
+        notes: input.notes,
+        stakeholderLabel: "Farmer",
+        approvedRole: "farmer",
+        accountType: "FARMER",
+        metadata: { farmerProfileId: input.farmerProfileId },
       });
 
       // ── Notify the farmer via owner notification channel ──────────────────
@@ -369,15 +507,18 @@ export const farmerRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable — please try again" });
 
-      // Must have an approved KYC to add farms
+      // Must have an approved KYC and a non-suspended account to add farms
       const [profile] = await db
-        .select({ kycStatus: farmerProfiles.kycStatus })
+        .select({ kycStatus: farmerProfiles.kycStatus, accountStatus: farmerProfiles.accountStatus })
         .from(farmerProfiles)
         .where(eq(farmerProfiles.userId, ctx.user.id))
         .limit(1);
 
       if (!profile || profile.kycStatus !== "APPROVED") {
         throw new TRPCError({ code: "FORBIDDEN", message: "KYC must be approved before adding farms" });
+      }
+      if (profile.accountStatus !== "ACTIVE") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Account is suspended — contact support" });
       }
 
       // Build PostGIS geometry WKT strings if coordinates are provided
@@ -1076,6 +1217,9 @@ export const farmerRouter = router({
       if (farmer.kycStatus !== "APPROVED") {
         throw new TRPCError({ code: "FORBIDDEN", message: "KYC must be approved to create cooperative listings" });
       }
+      if (farmer.accountStatus !== "ACTIVE") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Account is suspended — contact support" });
+      }
       // Verify cooperative exists
       const [cooperative] = await db
         .select()
@@ -1151,7 +1295,7 @@ export const farmerRouter = router({
   // ── deleteDraft ────────────────────────────────────────────────────────────
   deleteDraft: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-        if (!db) return { success: true };
+        if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
     await db
       .delete(farmerOnboardingDrafts)
       .where(eq(farmerOnboardingDrafts.userId, ctx.user.id));
@@ -1169,7 +1313,7 @@ export const farmerRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return { success: true };
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       const [updated] = await db
         .update(farmerProfiles)
         .set({
@@ -1230,7 +1374,7 @@ export const farmerRouter = router({
     .input(z.object({ step: z.number().int().min(1).max(5) }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-            if (!db) return { success: true };
+            if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Database unavailable" });
       await db
         .update(farmerProfiles)
         .set({

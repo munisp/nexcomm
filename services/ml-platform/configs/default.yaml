@@ -1,0 +1,57 @@
+# NEXCOM ML Platform — default configuration
+# All values can be overridden by environment variables (see mlplatform/settings.py).
+# Loaded only when PyYAML is importable; env vars always win.
+
+paths:
+  lakehouse: /data/lakehouse
+  registry: /tmp/nexcom_models/registry
+  risk_training_data: null          # defaults to {lakehouse}/gold/risk_training.npz
+
+integrations:
+  mlflow_tracking_uri: null         # e.g. http://mlflow:5000 — activates MlflowRegistry
+  ray_address: null                 # e.g. ray://ray-head:10001 — activates RayBackend
+  database_url: null                # postgres://... — activates psycopg2 extractor
+  neo4j_uri: null                   # bolt://neo4j:7687 — activates live graph load
+  neo4j_user: neo4j
+  neo4j_password: null
+  alert_webhook_url: null           # middleware-hub webhook for promotions/drift
+
+serving:
+  port: 8015
+
+training:
+  seed: 42
+  promotion_margin: 0.01            # challenger must beat champion by >= this on val metric
+  degradation_tolerance: 0.05
+  retrain_interval_seconds: 3600
+  torch_num_threads: 2              # 2-CPU validation box
+  fraud_epochs: 5
+  credit_epochs: 10
+  price_epochs: 5
+  gnn_epochs: 10
+  batch_size: 256
+  learning_rate: 0.001
+
+synthetic:
+  transactions: 50000
+  users: 5000
+  days: 180
+  seed: 42
+
+models:
+  fraud_net:
+    emb_dim: 8
+    hidden: [64, 32]
+    dropout: 0.1
+  credit_net:
+    hidden: [64, 32]
+    dropout: 0.1
+  price_lstm:
+    hidden: 32
+    num_layers: 2
+    seq_len: 20
+    dropout: 0.1
+  graphsage:
+    hidden: 32
+    layers: 2
+    dropout: 0.1

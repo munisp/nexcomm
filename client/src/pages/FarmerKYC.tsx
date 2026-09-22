@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFormDraft } from "@/hooks/useFormDraft";
 import { KycAnalysisPanel } from "@/components/KycAnalysisPanel";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import LivenessChallengeModal, { LivenessResult } from "@/components/LivenessChallengeModal";
@@ -74,7 +75,18 @@ export default function FarmerKYC() {
   // Liveness state
   const [livenessOpen, setLivenessOpen] = useState(false);
   const [livenessResult, setLivenessResult] = useState<LivenessResult | null>(null);
-  const [applicationId] = useState(() => `farmer-kyc-${Date.now()}`);
+  // Real kyc-service application id — resolved server-side, never fabricated
+  const [applicationId, setApplicationId] = useState<string | null>(null);
+  const ensureAppMut = trpc.farmer.ensureKycApplication.useMutation({
+    onSuccess: (data) => {
+      setApplicationId(data.applicationId);
+      setLivenessOpen(true);
+    },
+    onError: (e) => {
+      // Honest error — do NOT fall back to a fabricated id (it 404s downstream)
+      toast.error("Identity verification unavailable", { description: e.message });
+    },
+  });
 
   // Hidden file inputs — one per doc
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -96,6 +108,7 @@ export default function FarmerKYC() {
   const submitKYCMut = trpc.farmer.submitKYC.useMutation({
     onSuccess: () => {
       setSubmitted(true);
+      draft.clearDraft(); // submitted — the checklist draft must never resurface
       toast.success(
         "KYC submitted successfully!",
         {
@@ -118,6 +131,22 @@ export default function FarmerKYC() {
         : (profile.kycDocuments as Record<string, string>))
     : {};
   const allDocs = { ...serverDocs, ...uploadedDocs };
+
+  // OFFLINE-RES: autosave the document checklist so a dropped connection or
+  // killed browser doesn't lose track of which uploads completed (doc URLs,
+  // not file bytes — uploads hit S3 immediately and are idempotent). Restored
+  // on remount (toast inside the hook); cleared after successful submission.
+  const draft = useFormDraft({
+    formKey: "farmer-kyc-docs",
+    scope: profile?.userId != null ? String(profile.userId) : "anon",
+    value: { uploadedDocs },
+    onRestore: (d) => {
+      if (d?.uploadedDocs && typeof d.uploadedDocs === "object") {
+        setUploadedDocs(d.uploadedDocs);
+      }
+    },
+    enabled: !submitted,
+  });
 
   function handleFileChange(docId: string, file: File) {
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
@@ -398,7 +427,8 @@ export default function FarmerKYC() {
               </div>
             ) : (
               <Button
-                onClick={() => setLivenessOpen(true)}
+                onClick={() => ensureAppMut.mutate()}
+                disabled={ensureAppMut.isPending}
                 variant="outline"
                 className="w-full h-11 border-border text-foreground hover:bg-muted"
               >
@@ -451,6 +481,7 @@ export default function FarmerKYC() {
         </div>
       )}
       {/* Liveness Modal */}
+      {applicationId && (
       <LivenessChallengeModal
         open={livenessOpen}
         onClose={() => setLivenessOpen(false)}
@@ -467,6 +498,7 @@ export default function FarmerKYC() {
         documentPhotoUrl={allDocs["passport_photo"]}
         title="Farmer Identity Verification"
       />
+      )}
     </div>
   );
 }

@@ -51,7 +51,7 @@ export interface LoanNotificationsState {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getWsUrl(): string {
-  const base = __DEV__ ? CONFIG.DEV_URL : CONFIG.BASE_URL;
+  const base = CONFIG.BASE_URL;
   return base.replace(/^http/, 'ws') + '/ws/orderbook';
 }
 

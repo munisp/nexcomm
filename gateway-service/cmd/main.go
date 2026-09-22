@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	_ "net/http/pprof" // pprof admin endpoints; served only when GO_PPROF=1
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,8 +28,11 @@ func main() {
 	// Initialize middleware clients
 	kafkaClient := kafkaclient.NewClient(cfg.KafkaBrokers)
 	redisClient := redisclient.NewClient(cfg.RedisURL)
-	temporalClient := temporal.NewClient(cfg.TemporalHost)
 	tigerBeetleClient := tigerbeetle.NewClient(cfg.TigerBeetleAddresses)
+	// Temporal activities get real dependencies (TigerBeetle ledger, kyc-service)
+	// so margin/settlement/KYC activities execute real operations or fail closed.
+	temporalClient := temporal.NewClient(cfg.TemporalHost,
+		temporal.NewActivities(tigerBeetleClient, cfg.KYCServiceURL))
 	daprClient := dapr.NewClient(cfg.DaprHTTPPort, cfg.DaprGRPCPort)
 	fluvioClient := fluvio.NewClient(cfg.FluvioEndpoint)
 	keycloakClient := keycloak.NewClient(cfg.KeycloakURL, cfg.KeycloakRealm, cfg.KeycloakClientID)
@@ -50,12 +54,31 @@ func main() {
 	// Setup routes
 	router := server.SetupRoutes()
 
+	// WriteTimeout stays at 30s: /api/v1/stream/* SSE endpoints rely on
+	// per-write keepalive events under that ceiling; do not lower it further.
 	httpServer := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 16,
+	}
+
+	// Optional pprof admin server (GO_PPROF=1 only; loopback by default).
+	if os.Getenv("GO_PPROF") == "1" {
+		pprofAddr := os.Getenv("PPROF_ADDR")
+		if pprofAddr == "" {
+			pprofAddr = "127.0.0.1:6060"
+		}
+		go func() {
+			log.Printf("pprof admin server listening on %s", pprofAddr)
+			// handlers registered on http.DefaultServeMux by the net/http/pprof import
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				log.Printf("pprof server exited: %v", err)
+			}
+		}()
 	}
 
 	// Graceful shutdown

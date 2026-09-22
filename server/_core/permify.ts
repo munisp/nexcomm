@@ -24,7 +24,7 @@ import { trpcMiddleware } from "./trpc";
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 const PERMIFY_URL = process.env.PERMIFY_URL ?? "http://localhost:3476";
-const PERMIFY_TENANT = process.env.PERMIFY_TENANT ?? "nexcom";
+const PERMIFY_TENANT = process.env.PERMIFY_TENANT ?? process.env.PERMIFY_TENANT_ID ?? "t1";
 const PERMIFY_TIMEOUT_MS = 3_000;
 
 // ── Types ─────────────────────────────────────────────────────────────────────

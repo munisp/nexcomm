@@ -2,23 +2,54 @@
  * Portfolio Screen — NEXCOM Mobile
  * Shows the user's commodity holdings, P&L, and allocation breakdown.
  */
-import React from "react";
+import React, { memo, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS } from "../../constants/config";
+import { ScreenState } from "../../components/ScreenState";
 import { trpc } from "../../lib/trpc";
+
+/** Memoized holding card: pull-refresh re-renders the screen; unchanged
+ * positions skip reconciliation on low-end devices. */
+const HoldingCard = memo(function HoldingCard({ h }: { h: any }) {
+  const value = Number(h.avgCost) * Number(h.quantity);
+  const pnl = Number(h.realizedPnl ?? 0);
+  return (
+    <View style={s.holdingCard}>
+      <View style={s.holdingTop}>
+        <View>
+          <Text style={s.holdingSymbol}>{h.symbol}</Text>
+          <Text style={s.holdingName}>{h.symbol}</Text>
+        </View>
+        <View style={s.holdingRight}>
+          <Text style={s.holdingValue}>₦{value.toLocaleString()}</Text>
+          <Text style={[s.holdingPnl, pnl >= 0 ? s.profit : s.loss]}>
+            {pnl >= 0 ? "+" : ""}₦{pnl.toLocaleString()}
+          </Text>
+        </View>
+      </View>
+      <View style={s.holdingBottom}>
+        <Text style={s.holdingDetail}>Qty: {Number(h.quantity).toLocaleString()}</Text>
+        <Text style={s.holdingDetail}>Avg: ₦{Number(h.avgCost).toLocaleString()}</Text>
+      </View>
+    </View>
+  );
+});
 
 export default function PortfolioScreen() {
   const summaryQuery = trpc.portfolio.summary.useQuery();
   const summary = summaryQuery.data;
   const positions: any[] = summary?.positions ?? [];
 
-  const totalCost = summary?.totalCost ?? 0;
   const totalRealizedPnl = summary?.totalRealizedPnl ?? 0;
-  const totalValue = positions.reduce((s: number, p: any) => s + Number(p.avgCost) * Number(p.quantity), 0);
+  // Memoize the aggregate walk — it re-ran on every render previously.
+  const totalValue = useMemo(
+    () => positions.reduce((s: number, p: any) => s + Number(p.avgCost) * Number(p.quantity), 0),
+    [positions],
+  );
 
   return (
     <SafeAreaView style={s.container}>
@@ -37,7 +68,9 @@ export default function PortfolioScreen() {
           <Text style={s.title}>Portfolio</Text>
         </View>
 
-        {summaryQuery.isLoading ? (
+        {summaryQuery.isError ? (
+          <ScreenState error={summaryQuery.error} onRetry={() => summaryQuery.refetch()}>{null}</ScreenState>
+        ) : summaryQuery.isLoading ? (
           <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
         ) : (
           <>
@@ -62,30 +95,9 @@ export default function PortfolioScreen() {
                   <Text style={s.emptySub}>Your commodity positions will appear here after trading.</Text>
                 </View>
               ) : (
-                positions.map((h: any) => {
-                  const value = Number(h.avgCost) * Number(h.quantity);
-                  const pnl = Number(h.realizedPnl ?? 0);
-                  return (
-                    <View key={h.id ?? h.symbol} style={s.holdingCard}>
-                      <View style={s.holdingTop}>
-                        <View>
-                          <Text style={s.holdingSymbol}>{h.symbol}</Text>
-                          <Text style={s.holdingName}>{h.symbol}</Text>
-                        </View>
-                        <View style={s.holdingRight}>
-                          <Text style={s.holdingValue}>₦{value.toLocaleString()}</Text>
-                          <Text style={[s.holdingPnl, pnl >= 0 ? s.profit : s.loss]}>
-                            {pnl >= 0 ? "+" : ""}₦{pnl.toLocaleString()}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={s.holdingBottom}>
-                        <Text style={s.holdingDetail}>Qty: {Number(h.quantity).toLocaleString()}</Text>
-                        <Text style={s.holdingDetail}>Avg: ₦{Number(h.avgCost).toLocaleString()}</Text>
-                      </View>
-                    </View>
-                  );
-                })
+                positions.map((h: any) => (
+                  <HoldingCard key={h.id ?? h.symbol} h={h} />
+                ))
               )}
             </View>
           </>

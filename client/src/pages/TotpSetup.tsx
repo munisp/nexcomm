@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +58,7 @@ export default function TotpSetup() {
 
   if (totpStatusLoading) return <PageSkeleton cards={2} tableRows={4} tableCols={3} />;
   return (
-    <DashboardLayout>
+    <>
       <div className="max-w-2xl mx-auto space-y-6 p-6">
         <div className="flex items-center gap-3">
           <ShieldCheck className="w-7 h-7 text-primary" />
@@ -246,6 +245,6 @@ export default function TotpSetup() {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

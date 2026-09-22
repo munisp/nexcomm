@@ -62,7 +62,7 @@ Create a `.env` file in the project root:
 
 ```env
 # Database (required)
-DATABASE_URL=postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom
+DATABASE_URL=postgresql://nexcom:nexcom_secure_2026@127.0.0.1:5432/nexcom  # DEV-ONLY default (compose dev password); production injects NEXCOM_PG_URL
 
 # Auth (auto-generated if not set)
 JWT_SECRET=your-jwt-secret-here
@@ -130,7 +130,7 @@ docker compose up -d
 | Kafka UI | 8090 | Kafka management |
 | RedisInsight | 8001 | Redis management |
 | **nexcom-web** | 3000 | Main web application |
-| **matching-engine** | 8001 | Rust order matching |
+| **matching-engine** | 18080 | Rust order matching (host port 18080 → container 8080; 8080 is Keycloak) |
 | **settlement-engine** | 8002 | Rust DvP settlement |
 | **blockchain** | 8003 | Hyperledger Fabric node |
 | **indices** | 8004 | Go commodity indices (gRPC) |

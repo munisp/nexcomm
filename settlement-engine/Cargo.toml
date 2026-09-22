@@ -18,3 +18,10 @@ reqwest = { version = "0.12", features = ["json"] }
 rust_decimal = { version = "1", features = ["serde-with-str"] }
 config = "0.14"
 thiserror = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "unwind"
+strip = true

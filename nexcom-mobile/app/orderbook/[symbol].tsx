@@ -8,11 +8,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import { COLORS, FONTS, SPACING } from "../../constants/config";
 import { trpc } from "../../lib/trpc";
+import { useConnectionQuality, refetchIntervalFor } from "../../lib/connectionQuality";
 
 export default function OrderBookScreen() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
   const sym = symbol ?? "MAIZE";
-  const obQ = trpc.orders.orderBook.useQuery({ symbol: sym });
+  // Adaptive polling: order books are the hottest read on the app — poll
+  // briskly on fast links, back off on 2G/3G, stop when offline.
+  const connectionQuality = useConnectionQuality();
+  const obQ = trpc.orders.orderBook.useQuery(
+    { symbol: sym },
+    { refetchInterval: refetchIntervalFor(connectionQuality, { fastMs: 10_000, slowMs: 45_000 }) },
+  );
   const ob = obQ.data as any;
   const bids: any[] = ob?.bids ?? [];
   const asks: any[] = ob?.asks ?? [];

@@ -25,12 +25,13 @@ export function usePWA(): UsePWAResult {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    // Register service worker
+    // SW registration is owned by lib/registerSW.ts (single registrar).
+    // Here we only observe registration state.
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
-        .register("/sw.js", { scope: "/" })
-        .then(() => setSwRegistered(true))
-        .catch((err) => console.warn("[PWA] SW registration failed:", err));
+        .getRegistration("/")
+        .then((reg) => setSwRegistered(!!reg))
+        .catch(() => setSwRegistered(false));
     }
 
     // Detect if already installed (standalone mode)

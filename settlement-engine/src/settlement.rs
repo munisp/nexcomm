@@ -55,9 +55,12 @@ pub struct SettlementEngine {
 }
 
 impl SettlementEngine {
-    pub fn new(tigerbeetle_address: &str, mojaloop_url: &str) -> Self {
+    /// `gateway_url` is the gateway-service base URL (e.g. http://gateway:8200);
+    /// the ledger client routes through its /api/v1/ledger/* endpoints which
+    /// wrap the official TigerBeetle SDK (TigerBeetle has no HTTP interface).
+    pub fn new(gateway_url: &str, mojaloop_url: &str) -> Self {
         Self {
-            tigerbeetle: TigerBeetleClient::new(tigerbeetle_address),
+            tigerbeetle: TigerBeetleClient::new(gateway_url),
             mojaloop: MojaloopClient::new(mojaloop_url),
             settlements: HashMap::new(),
         }

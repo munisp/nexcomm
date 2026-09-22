@@ -17,7 +17,7 @@ export default function PushNotificationsScreen() {
       Alert.alert("Success", "Push notifications enabled for this device.");
       utils.preferences.getNotifPrefs.invalidate();
     },
-    onError: (e) => Alert.alert("Error", e.message),
+    onError: (e: any) => Alert.alert("Error", e.message),
   });
 
   const notifPrefs = notifPrefsQ.data as any;
