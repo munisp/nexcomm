@@ -1,10 +1,10 @@
 module github.com/nexcom/core-banking
 
-go 1.22
+go 1.24
 
 require (
 	github.com/IBM/sarama v1.43.2
-	github.com/go-chi/chi/v5 v5.0.12
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/go-chi/cors v1.2.1
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.19.0
